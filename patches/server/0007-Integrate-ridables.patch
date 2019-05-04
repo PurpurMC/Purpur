@@ -1,0 +1,1205 @@
+From 9a086e607299747527b138c0f5227d1ca039560e Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Tue, 30 Apr 2019 19:17:21 -0500
+Subject: [PATCH] Integrate ridables
+
+---
+ .../net/minecraft/server/ControllerJump.java  |  1 +
+ .../java/net/minecraft/server/Entity.java     | 13 ++++
+ .../net/minecraft/server/EntityChicken.java   | 17 +++-
+ .../java/net/minecraft/server/EntityCow.java  | 14 ++++
+ .../net/minecraft/server/EntityCreeper.java   | 14 ++++
+ .../net/minecraft/server/EntityEnderman.java  | 15 ++++
+ .../net/minecraft/server/EntityGuardian.java  |  3 +-
+ .../net/minecraft/server/EntityHorse.java     | 10 ++-
+ .../minecraft/server/EntityHorseAbstract.java |  4 +-
+ .../server/EntityHorseChestedAbstract.java    | 18 +++--
+ .../minecraft/server/EntityHorseDonkey.java   |  3 +
+ .../net/minecraft/server/EntityHorseMule.java |  3 +
+ .../minecraft/server/EntityHorseSkeleton.java | 15 ++--
+ .../minecraft/server/EntityHorseZombie.java   | 15 ++--
+ .../net/minecraft/server/EntityHuman.java     | 14 +++-
+ .../minecraft/server/EntityInsentient.java    | 35 +++++++++
+ .../net/minecraft/server/EntityIronGolem.java | 15 ++++
+ .../net/minecraft/server/EntityLiving.java    | 20 ++++-
+ .../net/minecraft/server/EntityLlama.java     | 46 +++++++++--
+ .../net/minecraft/server/EntityMagmaCube.java |  2 +-
+ .../minecraft/server/EntityMushroomCow.java   | 14 ++++
+ .../net/minecraft/server/EntityOcelot.java    | 14 ++++
+ .../java/net/minecraft/server/EntityPig.java  | 25 ++++++
+ .../net/minecraft/server/EntityPolarBear.java | 15 ++++
+ .../net/minecraft/server/EntitySheep.java     | 14 ++++
+ .../net/minecraft/server/EntitySnowman.java   | 15 ++++
+ .../server/EntityTameableAnimal.java          | 13 ++--
+ .../net/minecraft/server/EntityTypes.java     |  6 ++
+ .../java/net/minecraft/server/EntityWolf.java | 14 ++++
+ .../net/minecraft/server/RecipeItemStack.java |  6 +-
+ .../java/net/pl3x/purpur/PurpurConfig.java    |  4 +
+ .../purpur/controller/ControllerLookWASD.java | 44 +++++++++++
+ .../purpur/controller/ControllerMoveWASD.java | 78 +++++++++++++++++++
+ .../craftbukkit/entity/CraftLivingEntity.java | 12 +++
+ 34 files changed, 506 insertions(+), 45 deletions(-)
+ create mode 100644 src/main/java/net/pl3x/purpur/PurpurConfig.java
+ create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
+ create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
+
+diff --git a/src/main/java/net/minecraft/server/ControllerJump.java b/src/main/java/net/minecraft/server/ControllerJump.java
+index 5d6260de..f9b71ac0 100644
+--- a/src/main/java/net/minecraft/server/ControllerJump.java
++++ b/src/main/java/net/minecraft/server/ControllerJump.java
+@@ -8,6 +8,7 @@ public class ControllerJump {
+         this.b = entityinsentient;
+     }
+ 
++    public void jump() { a(); } // Purpur - OBFHELPER
+     public void a() {
+         this.a = true;
+     }
+diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
+index fcf1560e..d5d7ae56 100644
+--- a/src/main/java/net/minecraft/server/Entity.java
++++ b/src/main/java/net/minecraft/server/Entity.java
+@@ -97,6 +97,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     private int id;
+     public boolean j; public boolean blocksEntitySpawning() { return j; } // Paper - OBFHELPER
+     public final List<Entity> passengers;
++    private EntityHuman rider; // Purpur
+     protected int k;
+     private Entity vehicle;
+     public boolean attachedToPlayer;
+@@ -2090,6 +2091,12 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+         return this.k <= 0;
+     }
+ 
++    // Purpur start
++    public EntityHuman getRider() {
++        return rider;
++    }
++    // Purpur end
++
+     public void ejectPassengers() {
+         for (int i = this.passengers.size() - 1; i >= 0; --i) {
+             ((Entity) this.passengers.get(i)).stopRiding();
+@@ -2139,6 +2146,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+             // Spigot end
+             if (!this.world.isClientSide && entity instanceof EntityHuman && !(this.bO() instanceof EntityHuman)) {
+                 this.passengers.add(0, entity);
++                this.rider = (EntityHuman) entity; // Purpur
+             } else {
+                 this.passengers.add(entity);
+             }
+@@ -2174,6 +2182,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+                 return false;
+             }
+             // Spigot end
++            // Purpur start
++            if (passengers.get(0) == rider) {
++                rider = null;
++            }
++            // Purpur end
+             this.passengers.remove(entity);
+             entity.k = 60;
+         }
+diff --git a/src/main/java/net/minecraft/server/EntityChicken.java b/src/main/java/net/minecraft/server/EntityChicken.java
+index 3bfbf475..67d0b8dc 100644
+--- a/src/main/java/net/minecraft/server/EntityChicken.java
++++ b/src/main/java/net/minecraft/server/EntityChicken.java
+@@ -18,6 +18,11 @@ public class EntityChicken extends EntityAnimal {
+         this.setSize(0.4F, 0.7F);
+         this.bI = this.random.nextInt(6000) + 6000;
+         this.a(PathType.WATER, 0.0F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -62,7 +67,7 @@ public class EntityChicken extends EntityAnimal {
+         }
+ 
+         this.bC += this.bH * 2.0F;
+-        if (!this.world.isClientSide && !this.isBaby() && !this.isChickenJockey() && --this.bI <= 0) {
++        if (!this.isBaby() && !this.isChickenJockey() && --this.bI <= 0 && getRider() == null) { // Purpur
+             this.a(SoundEffects.ENTITY_CHICKEN_EGG, 1.0F, (this.random.nextFloat() - this.random.nextFloat()) * 0.2F + 1.0F);
+             this.forceDrops = true; // CraftBukkit
+             this.a((IMaterial) Items.EGG);
+@@ -151,4 +156,14 @@ public class EntityChicken extends EntityAnimal {
+     public EntityAgeable createChild(EntityAgeable entityageable) {
+         return this.b(entityageable);
+     }
++
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/server/EntityCow.java b/src/main/java/net/minecraft/server/EntityCow.java
+index b4b22eed..30567242 100644
+--- a/src/main/java/net/minecraft/server/EntityCow.java
++++ b/src/main/java/net/minecraft/server/EntityCow.java
+@@ -11,6 +11,11 @@ public class EntityCow extends EntityAnimal {
+     protected EntityCow(EntityTypes<?> entitytypes, World world) {
+         super(entitytypes, world);
+         this.setSize(0.9F, 1.4F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     public EntityCow(World world) {
+@@ -62,6 +67,15 @@ public class EntityCow extends EntityAnimal {
+     private int mushroomsFed = 0; // Purpur
+ 
+     public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur start - processInteract
++        if (processInteract(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++
++    private boolean processInteract(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur end
+         ItemStack itemstack = entityhuman.b(enumhand);
+ 
+         if (itemstack.getItem() == Items.BUCKET && !entityhuman.abilities.canInstantlyBuild && !this.isBaby()) {
+diff --git a/src/main/java/net/minecraft/server/EntityCreeper.java b/src/main/java/net/minecraft/server/EntityCreeper.java
+index 72b4735d..d24420af 100644
+--- a/src/main/java/net/minecraft/server/EntityCreeper.java
++++ b/src/main/java/net/minecraft/server/EntityCreeper.java
+@@ -22,6 +22,11 @@ public class EntityCreeper extends EntityMonster {
+     public EntityCreeper(World world) {
+         super(EntityTypes.CREEPER, world);
+         this.setSize(0.6F, 1.7F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -175,6 +180,15 @@ public class EntityCreeper extends EntityMonster {
+     // CraftBukkit end
+ 
+     protected boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur start - processInteract
++        if (processInteract(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++
++    private boolean processInteract(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur end
+         ItemStack itemstack = entityhuman.b(enumhand);
+ 
+         if (itemstack.getItem() == Items.FLINT_AND_STEEL) {
+diff --git a/src/main/java/net/minecraft/server/EntityEnderman.java b/src/main/java/net/minecraft/server/EntityEnderman.java
+index c5747147..e3eab72e 100644
+--- a/src/main/java/net/minecraft/server/EntityEnderman.java
++++ b/src/main/java/net/minecraft/server/EntityEnderman.java
+@@ -22,6 +22,11 @@ public class EntityEnderman extends EntityMonster {
+         this.setSize(0.6F, 2.9F);
+         this.Q = 1.0F;
+         this.a(PathType.WATER, -1.0F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -251,6 +256,16 @@ public class EntityEnderman extends EntityMonster {
+         return LootTables.C;
+     }
+ 
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
++
+     public void setCarried(@Nullable IBlockData iblockdata) {
+         this.datawatcher.set(EntityEnderman.c, Optional.ofNullable(iblockdata));
+     }
+diff --git a/src/main/java/net/minecraft/server/EntityGuardian.java b/src/main/java/net/minecraft/server/EntityGuardian.java
+index 0383b2c0..2e9c5dce 100644
+--- a/src/main/java/net/minecraft/server/EntityGuardian.java
++++ b/src/main/java/net/minecraft/server/EntityGuardian.java
+@@ -351,8 +351,7 @@ public class EntityGuardian extends EntityMonster {
+             return (entityliving instanceof EntityHuman || entityliving instanceof EntitySquid) && entityliving.h(this.a) > 9.0D;
+         }
+ 
+-        // $FF: synthetic method
+-        public boolean test(@Nullable Object object) {
++        public boolean test(@Nullable EntityLiving object) { // Purpur - decompile error
+             return this.a((EntityLiving)object);
+         }
+     }
+diff --git a/src/main/java/net/minecraft/server/EntityHorse.java b/src/main/java/net/minecraft/server/EntityHorse.java
+index f2019638..ed264e7e 100644
+--- a/src/main/java/net/minecraft/server/EntityHorse.java
++++ b/src/main/java/net/minecraft/server/EntityHorse.java
+@@ -183,12 +183,14 @@ public class EntityHorse extends EntityHorseAbstract {
+                 }
+             }
+ 
+-            if (this.isBaby()) {
+-                return super.a(entityhuman, enumhand);
+-            } else {
++            // Purpur start - allow riding babies
++            //if (this.isBaby()) {
++            //    return super.a(entityhuman, enumhand);
++            //} else {
+                 this.g(entityhuman);
+                 return true;
+-            }
++            //}
++            // Purpur end
+         }
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityHorseAbstract.java b/src/main/java/net/minecraft/server/EntityHorseAbstract.java
+index 894f7bc9..890cc11d 100644
+--- a/src/main/java/net/minecraft/server/EntityHorseAbstract.java
++++ b/src/main/java/net/minecraft/server/EntityHorseAbstract.java
+@@ -80,7 +80,7 @@ public abstract class EntityHorseAbstract extends EntityAnimal implements IInven
+     }
+ 
+     public boolean isTamed() {
+-        return this.p(2);
++        return this.p(2) || isBaby(); // Purpur
+     }
+ 
+     @Nullable
+@@ -300,6 +300,7 @@ public abstract class EntityHorseAbstract extends EntityAnimal implements IInven
+         return true;
+     }
+ 
++    public boolean isSaddled() { return dV(); } // Purpur - OBFHELPER
+     public boolean dV() {
+         return this.p(4);
+     }
+@@ -611,6 +612,7 @@ public abstract class EntityHorseAbstract extends EntityAnimal implements IInven
+ 
+     }
+ 
++    public void makeMad() { dZ(); } // Purpur - OBFHELPER
+     public void dZ() {
+         this.dH();
+         SoundEffect soundeffect = this.dB();
+diff --git a/src/main/java/net/minecraft/server/EntityHorseChestedAbstract.java b/src/main/java/net/minecraft/server/EntityHorseChestedAbstract.java
+index dea95807..f40dc796 100644
+--- a/src/main/java/net/minecraft/server/EntityHorseChestedAbstract.java
++++ b/src/main/java/net/minecraft/server/EntityHorseChestedAbstract.java
+@@ -146,8 +146,12 @@ public abstract class EntityHorseChestedAbstract extends EntityHorseAbstract {
+                             return true;
+                         }
+ 
+-                        this.dZ();
+-                        return true;
++                        // Purpur start - don't make babies mad
++                        if (!this.isBaby()) {
++                            this.makeMad();
++                            return true;
++                        }
++                        // Purpur end
+                     }
+ 
+                     if (!this.isCarryingChest() && itemstack.getItem() == Blocks.CHEST.getItem()) {
+@@ -172,12 +176,14 @@ public abstract class EntityHorseChestedAbstract extends EntityHorseAbstract {
+                 }
+             }
+ 
+-            if (this.isBaby()) {
+-                return super.a(entityhuman, enumhand);
+-            } else {
++            // Purpur start - allow riding babies
++            //if (this.isBaby()) {
++            //    return super.a(entityhuman, enumhand);
++            //} else {
+                 this.g(entityhuman);
+                 return true;
+-            }
++            //}
++            // Purpur end
+         }
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityHorseDonkey.java b/src/main/java/net/minecraft/server/EntityHorseDonkey.java
+index 627ba103..d5939106 100644
+--- a/src/main/java/net/minecraft/server/EntityHorseDonkey.java
++++ b/src/main/java/net/minecraft/server/EntityHorseDonkey.java
+@@ -5,6 +5,9 @@ import javax.annotation.Nullable;
+ public class EntityHorseDonkey extends EntityHorseChestedAbstract {
+     public EntityHorseDonkey(World world) {
+         super(EntityTypes.DONKEY, world);
++        // Purpur start
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     @Nullable
+diff --git a/src/main/java/net/minecraft/server/EntityHorseMule.java b/src/main/java/net/minecraft/server/EntityHorseMule.java
+index e6bd20fb..7e7d0449 100644
+--- a/src/main/java/net/minecraft/server/EntityHorseMule.java
++++ b/src/main/java/net/minecraft/server/EntityHorseMule.java
+@@ -5,6 +5,9 @@ import javax.annotation.Nullable;
+ public class EntityHorseMule extends EntityHorseChestedAbstract {
+     public EntityHorseMule(World world) {
+         super(EntityTypes.MULE, world);
++        // Purpur start
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     @Nullable
+diff --git a/src/main/java/net/minecraft/server/EntityHorseSkeleton.java b/src/main/java/net/minecraft/server/EntityHorseSkeleton.java
+index 17850e85..3d3a7b27 100644
+--- a/src/main/java/net/minecraft/server/EntityHorseSkeleton.java
++++ b/src/main/java/net/minecraft/server/EntityHorseSkeleton.java
+@@ -9,6 +9,9 @@ public class EntityHorseSkeleton extends EntityHorseAbstract {
+ 
+     public EntityHorseSkeleton(World world) {
+         super(EntityTypes.SKELETON_HORSE, world);
++        // Purpur start
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void initAttributes() {
+@@ -141,18 +144,20 @@ public class EntityHorseSkeleton extends EntityHorseAbstract {
+         ItemStack itemstack = entityhuman.b(enumhand);
+         if (itemstack.getItem() instanceof ItemMonsterEgg) {
+             return super.a(entityhuman, enumhand);
+-        } else if (!this.isTamed()) {
++        // Purpur start - allow riding babies
++        } else if (!this.isTamed() && !this.isBaby()) {
+             return false;
+-        } else if (this.isBaby()) {
+-            return super.a(entityhuman, enumhand);
+-        } else if (entityhuman.isSneaking()) {
++        //} else if (this.isBaby()) {
++        //    return super.a(entityhuman, enumhand);
++        // Purpur end
++        } else if (entityhuman.isSneaking() && !this.isBaby()) { // Purpur - don't open inventory on babies
+             this.c(entityhuman);
+             return true;
+         } else if (this.isVehicle()) {
+             return super.a(entityhuman, enumhand);
+         } else {
+             if (!itemstack.isEmpty()) {
+-                if (itemstack.getItem() == Items.SADDLE && !this.dV()) {
++                if (!this.isBaby() && itemstack.getItem() == Items.SADDLE && !this.dV()) {// Purpur - don't open inventory on babies
+                     this.c(entityhuman);
+                     return true;
+                 }
+diff --git a/src/main/java/net/minecraft/server/EntityHorseZombie.java b/src/main/java/net/minecraft/server/EntityHorseZombie.java
+index 4b928d2c..554a5a25 100644
+--- a/src/main/java/net/minecraft/server/EntityHorseZombie.java
++++ b/src/main/java/net/minecraft/server/EntityHorseZombie.java
+@@ -5,6 +5,9 @@ import javax.annotation.Nullable;
+ public class EntityHorseZombie extends EntityHorseAbstract {
+     public EntityHorseZombie(World world) {
+         super(EntityTypes.ZOMBIE_HORSE, world);
++        // Purpur start
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void initAttributes() {
+@@ -47,18 +50,20 @@ public class EntityHorseZombie extends EntityHorseAbstract {
+         ItemStack itemstack = entityhuman.b(enumhand);
+         if (itemstack.getItem() instanceof ItemMonsterEgg) {
+             return super.a(entityhuman, enumhand);
+-        } else if (!this.isTamed()) {
++        // Purpur start - allow riding babies
++        } else if (!this.isTamed() && !this.isBaby()) {
+             return false;
+-        } else if (this.isBaby()) {
+-            return super.a(entityhuman, enumhand);
+-        } else if (entityhuman.isSneaking()) {
++        //} else if (this.isBaby()) {
++        //    return super.a(entityhuman, enumhand);
++        // Purpur end
++        } else if (entityhuman.isSneaking() && !this.isBaby()) { // Purpur - don't open inventory on babies
+             this.c(entityhuman);
+             return true;
+         } else if (this.isVehicle()) {
+             return super.a(entityhuman, enumhand);
+         } else {
+             if (!itemstack.isEmpty()) {
+-                if (!this.dV() && itemstack.getItem() == Items.SADDLE) {
++                if (!this.isBaby() && !this.dV() && itemstack.getItem() == Items.SADDLE) { // Purpur - don't open inventory on babies
+                     this.c(entityhuman);
+                     return true;
+                 }
+diff --git a/src/main/java/net/minecraft/server/EntityHuman.java b/src/main/java/net/minecraft/server/EntityHuman.java
+index 28700155..7ecd9d43 100644
+--- a/src/main/java/net/minecraft/server/EntityHuman.java
++++ b/src/main/java/net/minecraft/server/EntityHuman.java
+@@ -374,8 +374,20 @@ public abstract class EntityHuman extends EntityLiving {
+         this.activeContainer = this.defaultContainer;
+     }
+ 
++    // Purpur start
++    boolean mounting = false;
++
++    @Override
++    public void setSneaking(boolean sneaking) {
++        if (mounting && !sneaking) {
++            mounting = false;
++        }
++        super.setSneaking(sneaking);
++    }
++    // Purpur end
++
+     public void aH() {
+-        if (!this.world.isClientSide && this.isSneaking() && this.isPassenger()) {
++        if (this.isSneaking() && this.isPassenger() && !mounting) { // Purpur
+             this.stopRiding();
+             this.setSneaking(false);
+         } else {
+diff --git a/src/main/java/net/minecraft/server/EntityInsentient.java b/src/main/java/net/minecraft/server/EntityInsentient.java
+index fd4a77c1..7fa3ddcd 100644
+--- a/src/main/java/net/minecraft/server/EntityInsentient.java
++++ b/src/main/java/net/minecraft/server/EntityInsentient.java
+@@ -502,6 +502,7 @@ public abstract class EntityInsentient extends EntityLiving {
+         this.bh = f;
+     }
+ 
++    public void setSpeed(float speed) { o(speed); } // Purpur - OBFHELPER
+     public void o(float f) {
+         super.o(f);
+         this.r(f);
+@@ -1308,4 +1309,38 @@ public abstract class EntityInsentient extends EntityLiving {
+         }
+ 
+     }
++
++    // Purpur start
++    public boolean hasRidePermission(EntityHuman entityhuman) {
++        return entityhuman.getBukkitEntity().hasPermission("allow.ride." + getEntityType().getName());
++    }
++
++    public boolean tryRide(EntityHuman entityhuman, EnumHand enumhand) {
++        if (enumhand != EnumHand.MAIN_HAND) {
++            return false;
++        }
++        if (!entityhuman.isSneaking()) {
++            return false;
++        }
++        if (!passengers.isEmpty() || entityhuman.isPassenger()) {
++            return false;
++        }
++        if (!hasRidePermission(entityhuman)) {
++            entityhuman.getBukkitEntity().sendMessage("You cannot mount that mob");
++            return false;
++        }
++        return mountTo(entityhuman);
++    }
++
++    public boolean mountTo(EntityHuman entityhuman) {
++        entityhuman.mounting = true;
++        entityhuman.yaw = this.yaw;
++        entityhuman.pitch = this.pitch;
++        if (entityhuman.startRiding(this)) {
++            entityhuman.setJumping(false); // fixes jump on mount
++            return true;
++        }
++        return entityhuman.mounting = false;
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/server/EntityIronGolem.java b/src/main/java/net/minecraft/server/EntityIronGolem.java
+index 419c1aed..b3693393 100644
+--- a/src/main/java/net/minecraft/server/EntityIronGolem.java
++++ b/src/main/java/net/minecraft/server/EntityIronGolem.java
+@@ -15,6 +15,11 @@ public class EntityIronGolem extends EntityGolem {
+     public EntityIronGolem(World world) {
+         super(EntityTypes.IRON_GOLEM, world);
+         this.setSize(1.4F, 2.7F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -195,4 +200,14 @@ public class EntityIronGolem extends EntityGolem {
+ 
+         return iblockdata1.q() && SpawnerCreature.a(iblockdata2, iblockdata2.s()) && SpawnerCreature.a(iblockdata, FluidTypes.a.i()) && iworldreader.getCubes(this, this.getBoundingBox()) && iworldreader.a_(this, this.getBoundingBox());
+     }
++
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
+index 923bc0cc..6889e0ef 100644
+--- a/src/main/java/net/minecraft/server/EntityLiving.java
++++ b/src/main/java/net/minecraft/server/EntityLiving.java
+@@ -90,9 +90,9 @@ public abstract class EntityLiving extends Entity {
+     protected int be; protected int getKillCount() { return this.be; } // Paper - OBFHELPER
+     public float lastDamage;
+     protected boolean bg;
+-    public float bh;
+-    public float bi;
+-    public float bj;
++    public float bh; public float getStrafe() { return bh; } public void setStrafe(float strafe) { bh = strafe; } // Purpur - OBFHELPER
++    public float bi; public float getVertical() { return bi; } public void setVertical(float vertical) { bi = vertical; } // Purpur - OBFHELPER
++    public float bj; public float getForward() { return bj; } public void setForward(float forward) { bj = forward; } // Purpur - OBFHELPER
+     public float bk;
+     protected int bl;
+     protected double bm;
+@@ -346,8 +346,17 @@ public abstract class EntityLiving extends Entity {
+         return false;
+     }
+ 
++    // Purpur start
++    protected boolean canBeRiddenInWater = false;
++
++    public void setCanBeRiddenInWater(boolean canBeRiddenInWater) {
++        this.canBeRiddenInWater = canBeRiddenInWater;
++    }
++
++    public boolean canBeRiddenInWater() { return aY(); }
+     public boolean aY() {
+-        return false;
++        return canBeRiddenInWater;
++        // Purpur end
+     }
+ 
+     protected void cb() {
+@@ -2081,10 +2090,12 @@ public abstract class EntityLiving extends Entity {
+         this.aK += this.aJ;
+     }
+ 
++    public float getSpeed() { return cK(); } // Purpur - OBFHELPER
+     public float cK() {
+         return this.bI;
+     }
+ 
++    public void setSpeed(float speed) { o(speed); } // Purpur - OBFHELPER
+     public void o(float f) {
+         this.bI = f;
+     }
+@@ -2492,6 +2503,7 @@ public abstract class EntityLiving extends Entity {
+         this.fallDistance = 0.0F;
+     }
+ 
++    public void setJumping(boolean jumping) { o(jumping); } public boolean isJumping() { return bg; } // Purpur - OBFHELPER
+     public void o(boolean flag) {
+         this.bg = flag;
+     }
+diff --git a/src/main/java/net/minecraft/server/EntityLlama.java b/src/main/java/net/minecraft/server/EntityLlama.java
+index 0cf53b69..0ca06818 100644
+--- a/src/main/java/net/minecraft/server/EntityLlama.java
++++ b/src/main/java/net/minecraft/server/EntityLlama.java
+@@ -1,5 +1,7 @@
+ package net.minecraft.server;
+ 
++import org.bukkit.entity.Llama;
++
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
+ 
+@@ -16,6 +18,29 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+     public EntityLlama(World world) {
+         super(EntityTypes.LLAMA, world);
+         this.setSize(0.9F, 1.87F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this) {
++            @Override
++            protected void tick(EntityHuman rider) {
++                if (EntityLlama.this.isSaddled()) {
++                    super.tick(rider);
++                } else {
++                    super.tick();
++                }
++            }
++        };
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this) {
++            @Override
++            protected void tick(EntityHuman rider) {
++                if (EntityLlama.this.isSaddled()) {
++                    super.tick(rider);
++                } else {
++                    super.tick();
++                }
++            }
++        };
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     public void setStrength(int i) {
+@@ -271,7 +296,7 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+         return entityanimal != this && entityanimal instanceof EntityLlama && this.eb() && ((EntityLlama)entityanimal).eb();
+     }
+ 
+-    public EntityLlama b(EntityAgeable entityageable) {
++    public EntityLlama createChild(EntityAgeable entityageable) { // Purpur - decompile error
+         EntityLlama entityllama1 = EntityTypes.LLAMA.create(world); // Paper
+         this.a(entityageable, entityllama1);
+         EntityLlama entityllama2 = (EntityLlama)entityageable;
+@@ -323,6 +348,18 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+         }
+     }
+ 
++    // Purpur start
++    @Override
++    public boolean isLeashed() {
++        return getRider() != null || super.isLeashed();
++    }
++
++    @Override
++    public Entity getLeashHolder() {
++        return getRider() != null ? getRider() : super.getLeashHolder();
++    }
++    // Purpur end
++
+     public void ek() {
+         if (this.bQ != null) {
+             this.bQ.bR = null;
+@@ -337,7 +374,7 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+     }
+ 
+     public boolean el() {
+-        return this.bR != null;
++        return getRider() != null || this.bR != null; // Purpur
+     }
+ 
+     public boolean inCaravan() { return this.em(); } // Paper - OBFHELPER
+@@ -372,10 +409,7 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+     public void s(boolean var1) {
+     }
+ 
+-    // $FF: synthetic method
+-    public EntityAgeable createChild(EntityAgeable entityageable) {
+-        return this.b(entityageable);
+-    }
++    // Purpur - decompile error (removed ambiguous synthetic method)
+ 
+     static class a extends PathfinderGoalNearestAttackableTarget<EntityWolf> {
+         public a(EntityLlama entityllama) {
+diff --git a/src/main/java/net/minecraft/server/EntityMagmaCube.java b/src/main/java/net/minecraft/server/EntityMagmaCube.java
+index 8d61ae58..453b8144 100644
+--- a/src/main/java/net/minecraft/server/EntityMagmaCube.java
++++ b/src/main/java/net/minecraft/server/EntityMagmaCube.java
+@@ -21,7 +21,7 @@ public class EntityMagmaCube extends EntitySlime {
+         return iworldreader.a_(this, this.getBoundingBox()) && iworldreader.getCubes(this, this.getBoundingBox()) && !iworldreader.containsLiquid(this.getBoundingBox());
+     }
+ 
+-    protected void setSize(int i, boolean flag) {
++    public void setSize(int i, boolean flag) { // Purpur - decompile error (protected -> public)
+         super.setSize(i, flag);
+         this.getAttributeInstance(GenericAttributes.h).setValue((double)(i * 3));
+     }
+diff --git a/src/main/java/net/minecraft/server/EntityMushroomCow.java b/src/main/java/net/minecraft/server/EntityMushroomCow.java
+index 842ce472..23be71cf 100644
+--- a/src/main/java/net/minecraft/server/EntityMushroomCow.java
++++ b/src/main/java/net/minecraft/server/EntityMushroomCow.java
+@@ -9,9 +9,23 @@ public class EntityMushroomCow extends EntityCow {
+         super(EntityTypes.MOOSHROOM, world);
+         this.setSize(0.9F, 1.4F);
+         this.bF = Blocks.MYCELIUM;
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur start - processInteract
++        if (processInteract(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++
++    public boolean processInteract(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur end
+         ItemStack itemstack = entityhuman.b(enumhand);
+ 
+         if (itemstack.getItem() == Items.BOWL && this.getAge() >= 0 && !entityhuman.abilities.canInstantlyBuild) {
+diff --git a/src/main/java/net/minecraft/server/EntityOcelot.java b/src/main/java/net/minecraft/server/EntityOcelot.java
+index 90a7e00a..848e8f6e 100644
+--- a/src/main/java/net/minecraft/server/EntityOcelot.java
++++ b/src/main/java/net/minecraft/server/EntityOcelot.java
+@@ -15,6 +15,11 @@ public class EntityOcelot extends EntityTameableAnimal {
+     public EntityOcelot(World world) {
+         super(EntityTypes.OCELOT, world);
+         this.setSize(0.6F, 0.7F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -122,6 +127,15 @@ public class EntityOcelot extends EntityTameableAnimal {
+     }
+ 
+     public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur start - processInteract
++        if (processInteract(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return (!isTamed() && isOwner(entityhuman)) || tryRide(entityhuman, enumhand);
++    }
++
++    public boolean processInteract(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur end
+         ItemStack itemstack = entityhuman.b(enumhand);
+ 
+         if (this.isTamed()) {
+diff --git a/src/main/java/net/minecraft/server/EntityPig.java b/src/main/java/net/minecraft/server/EntityPig.java
+index b0802e12..c3f197e9 100644
+--- a/src/main/java/net/minecraft/server/EntityPig.java
++++ b/src/main/java/net/minecraft/server/EntityPig.java
+@@ -16,6 +16,11 @@ public class EntityPig extends EntityAnimal {
+     public EntityPig(World world) {
+         super(EntityTypes.PIG, world);
+         this.setSize(0.9F, 0.9F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -96,6 +101,15 @@ public class EntityPig extends EntityAnimal {
+     }
+ 
+     public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur start - processInteract
++        if (processInteract(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++
++    public boolean processInteract(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur end
+         if (!super.a(entityhuman, enumhand)) {
+             ItemStack itemstack = entityhuman.b(enumhand);
+ 
+@@ -111,6 +125,17 @@ public class EntityPig extends EntityAnimal {
+             } else if (itemstack.getItem() == Items.SADDLE) {
+                 itemstack.a(entityhuman, (EntityLiving) this, enumhand);
+                 return true;
++                // Purpur start - get saddle back
++            } else if (hasSaddle() && entityhuman.isSneaking() && itemstack.getItem() == Items.AIR) {
++                setSaddle(false);
++                if (!entityhuman.abilities.canInstantlyBuild) {
++                    ItemStack saddle = new ItemStack(Items.SADDLE);
++                    if (!entityhuman.inventory.pickup(saddle)) {
++                        entityhuman.drop(saddle, false);
++                    }
++                }
++                return true;
++                // Purpur end
+             } else {
+                 return false;
+             }
+diff --git a/src/main/java/net/minecraft/server/EntityPolarBear.java b/src/main/java/net/minecraft/server/EntityPolarBear.java
+index cb3e45f1..50c3e03d 100644
+--- a/src/main/java/net/minecraft/server/EntityPolarBear.java
++++ b/src/main/java/net/minecraft/server/EntityPolarBear.java
+@@ -12,6 +12,11 @@ public class EntityPolarBear extends EntityAnimal {
+     public EntityPolarBear(World world) {
+         super(EntityTypes.POLAR_BEAR, world);
+         this.setSize(1.3F, 1.4F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     public EntityAgeable createChild(EntityAgeable var1) {
+@@ -129,6 +134,16 @@ public class EntityPolarBear extends EntityAnimal {
+         return 0.98F;
+     }
+ 
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
++
+     public GroupDataEntity prepare(DifficultyDamageScaler var1, @Nullable GroupDataEntity object, @Nullable NBTTagCompound var3) {
+         if (object instanceof EntityPolarBear.b) {
+             if (((EntityPolarBear.b)object).a) {
+diff --git a/src/main/java/net/minecraft/server/EntitySheep.java b/src/main/java/net/minecraft/server/EntitySheep.java
+index db4c3aa6..05b0d4b2 100644
+--- a/src/main/java/net/minecraft/server/EntitySheep.java
++++ b/src/main/java/net/minecraft/server/EntitySheep.java
+@@ -69,6 +69,11 @@ public class EntitySheep extends EntityAnimal {
+     public EntitySheep(World world) {
+         super(EntityTypes.SHEEP, world);
+         this.setSize(0.9F, 1.3F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -167,6 +172,15 @@ public class EntitySheep extends EntityAnimal {
+     }
+ 
+     public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur start - processInteract
++        if (processInteract(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++
++    public boolean processInteract(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur end
+         ItemStack itemstack = entityhuman.b(enumhand);
+ 
+         if (itemstack.getItem() == Items.SHEARS && !this.isSheared() && !this.isBaby()) {
+diff --git a/src/main/java/net/minecraft/server/EntitySnowman.java b/src/main/java/net/minecraft/server/EntitySnowman.java
+index 7518d997..46b06256 100644
+--- a/src/main/java/net/minecraft/server/EntitySnowman.java
++++ b/src/main/java/net/minecraft/server/EntitySnowman.java
+@@ -13,6 +13,11 @@ public class EntitySnowman extends EntityGolem implements IRangedEntity {
+     public EntitySnowman(World world) {
+         super(EntityTypes.SNOW_GOLEM, world);
+         this.setSize(0.7F, 1.9F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -66,6 +71,7 @@ public class EntitySnowman extends EntityGolem implements IRangedEntity {
+                 return;
+             }
+ 
++            if (getRider() != null) return; // Purpur - don't leave snow trail when being ridden
+             IBlockData iblockdata = Blocks.SNOW.getBlockData();
+ 
+             for (int l = 0; l < 4; ++l) {
+@@ -105,6 +111,15 @@ public class EntitySnowman extends EntityGolem implements IRangedEntity {
+     }
+ 
+     protected boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur start - processInteract
++        if (processInteract(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++
++    public boolean processInteract(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur end
+         ItemStack itemstack = entityhuman.b(enumhand);
+ 
+         if (this.hasPumpkin()) { if (itemstack.getItem() == Items.SHEARS) { // Purpur
+diff --git a/src/main/java/net/minecraft/server/EntityTameableAnimal.java b/src/main/java/net/minecraft/server/EntityTameableAnimal.java
+index 02eb7eb6..9e8fafbf 100644
+--- a/src/main/java/net/minecraft/server/EntityTameableAnimal.java
++++ b/src/main/java/net/minecraft/server/EntityTameableAnimal.java
+@@ -126,6 +126,13 @@ public abstract class EntityTameableAnimal extends EntityAnimal implements Entit
+ 
+     }
+ 
++    // Purpur start
++    public boolean isOwner(EntityLiving entityliving) {
++        UUID owner = getOwnerUUID();
++        return owner != null && owner.equals(entityliving.getUniqueID());
++    }
++    // Purpur end
++
+     @Nullable
+     public EntityLiving getOwner() {
+         try {
+@@ -182,9 +189,5 @@ public abstract class EntityTameableAnimal extends EntityAnimal implements Entit
+         super.die(damagesource);
+     }
+ 
+-    // $FF: synthetic method
+-    @Nullable
+-    public Entity getOwner() {
+-        return this.getOwner();
+-    }
++    // Purpur - decompile error (removed ambiguous synthetic method)
+ }
+diff --git a/src/main/java/net/minecraft/server/EntityTypes.java b/src/main/java/net/minecraft/server/EntityTypes.java
+index 29d5ef4c..b832067e 100644
+--- a/src/main/java/net/minecraft/server/EntityTypes.java
++++ b/src/main/java/net/minecraft/server/EntityTypes.java
+@@ -253,6 +253,12 @@ public class EntityTypes<T extends Entity> {
+         return this.aS;
+     }
+ 
++    // Purpur start
++    public String getName() {
++        return IRegistry.ENTITY_TYPE.getKey(this).getKey();
++    }
++    // Purpur end
++
+     public String d() {
+         if (this.aW == null) {
+             this.aW = SystemUtils.a("entity", IRegistry.ENTITY_TYPE.getKey(this));
+diff --git a/src/main/java/net/minecraft/server/EntityWolf.java b/src/main/java/net/minecraft/server/EntityWolf.java
+index 68db6af6..93aea0b0 100644
+--- a/src/main/java/net/minecraft/server/EntityWolf.java
++++ b/src/main/java/net/minecraft/server/EntityWolf.java
+@@ -25,6 +25,11 @@ public class EntityWolf extends EntityTameableAnimal {
+         super(EntityTypes.WOLF, world);
+         this.setSize(0.6F, 0.85F);
+         this.setTamed(false);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -246,6 +251,15 @@ public class EntityWolf extends EntityTameableAnimal {
+     }
+ 
+     public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur start - processInteract
++        if (processInteract(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return (!isTamed() && isOwner(entityhuman)) || tryRide(entityhuman, enumhand);
++    }
++
++    public boolean processInteract(EntityHuman entityhuman, EnumHand enumhand) {
++        // Purpur end
+         ItemStack itemstack = entityhuman.b(enumhand);
+         Item item = itemstack.getItem();
+ 
+diff --git a/src/main/java/net/minecraft/server/RecipeItemStack.java b/src/main/java/net/minecraft/server/RecipeItemStack.java
+index b4c0ee88..29e99e67 100644
+--- a/src/main/java/net/minecraft/server/RecipeItemStack.java
++++ b/src/main/java/net/minecraft/server/RecipeItemStack.java
+@@ -44,6 +44,7 @@ public final class RecipeItemStack implements Predicate<ItemStack> {
+ 
+     }
+ 
++    public boolean test (@Nullable ItemStack itemstack) { return a(itemstack); } // Purpur - OBFHELPER
+     public boolean a(@Nullable ItemStack itemstack) {
+         if (itemstack == null) {
+             return false;
+@@ -172,10 +173,7 @@ public final class RecipeItemStack implements Predicate<ItemStack> {
+         }
+     }
+ 
+-    // $FF: synthetic method
+-    public boolean test(@Nullable Object object) {
+-        return this.a((ItemStack)object);
+-    }
++    // Purpur - decompile error (removed ambiguous synthetic method)
+ 
+     public interface Provider {
+         Collection<ItemStack> a();
+diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+new file mode 100644
+index 00000000..70e95544
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+@@ -0,0 +1,4 @@
++package net.pl3x.purpur;
++
++public class PurpurConfig {
++}
+diff --git a/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java b/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
+new file mode 100644
+index 00000000..22e45e81
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
+@@ -0,0 +1,44 @@
++package net.pl3x.purpur.controller;
++
++import net.minecraft.server.ControllerLook;
++import net.minecraft.server.EntityHuman;
++import net.minecraft.server.EntityInsentient;
++
++public class ControllerLookWASD extends ControllerLook {
++    protected final EntityInsentient entity;
++    private float yawOffset = 0;
++    private float pitchOffset = 0;
++
++    public ControllerLookWASD(EntityInsentient entity) {
++        super(entity);
++        this.entity = entity;
++    }
++
++    // tick
++    @Override
++    public void a() {
++        if (entity.getRider() != null) {
++            tick(entity.getRider());
++        } else {
++            tick();
++        }
++    }
++
++    protected void tick() {
++        super.a(); // tick
++    }
++
++    protected void tick(EntityHuman rider) {
++        setYawPitch(rider.yaw, rider.pitch);
++    }
++
++    public void setYawPitch(float yaw, float pitch) {
++        entity.aS = entity.aQ = entity.lastYaw = entity.yaw = (yaw + yawOffset) % 360.0F;
++        entity.pitch = (pitch + pitchOffset) % 360.0F;
++    }
++
++    public void setOffsets(float yaw, float pitch) {
++        yawOffset = yaw;
++        pitchOffset = pitch;
++    }
++}
+diff --git a/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java b/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
+new file mode 100644
+index 00000000..e1cec806
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
+@@ -0,0 +1,78 @@
++package net.pl3x.purpur.controller;
++
++import net.minecraft.server.ControllerMove;
++import net.minecraft.server.EntityHuman;
++import net.minecraft.server.EntityInsentient;
++import net.minecraft.server.GenericAttributes;
++
++public class ControllerMoveWASD extends ControllerMove {
++    protected final EntityInsentient entity;
++
++    public ControllerMoveWASD(EntityInsentient entity) {
++        super(entity);
++        this.entity = entity;
++    }
++
++    // isUpdating
++    @Override
++    public boolean b() {
++        return entity.getRider() != null || super.b();
++    }
++
++    // tick
++    @Override
++    public void a() {
++        if (entity.getRider() != null) {
++            tick(entity.getRider());
++        } else {
++            tick();
++        }
++    }
++
++    protected void tick() {
++        super.a(); // tick
++    }
++
++    protected void tick(EntityHuman rider) {
++        float forward = rider.getForward() * 0.5F;
++        float strafe = rider.getStrafe() * 0.25F;
++
++        if (forward <= 0.0F) {
++            forward *= 0.5F;
++        }
++
++        float yaw = rider.yaw;
++        if (strafe != 0) {
++            if (forward == 0) {
++                yaw += strafe > 0 ? -90 : 90;
++                forward = Math.abs(strafe * 2);
++            } else {
++                yaw += strafe > 0 ? -30 : 30;
++                strafe /= 2;
++                if (forward < 0) {
++                    yaw += strafe > 0 ? -110 : 110;
++                    forward *= -1;
++                }
++            }
++        } else if (forward < 0) {
++            yaw -= 180;
++            forward *= -1;
++        }
++
++        ((ControllerLookWASD) entity.getControllerLook()).setOffsets(yaw - rider.yaw, 0);
++
++        if (rider.isJumping()) {
++            //RidableSpacebarEvent event = new RidableSpacebarEvent(ridable);
++            //Bukkit.getPluginManager().callEvent(event);
++            if (/*!event.isCancelled() && !event.isHandled() && !ridable.onSpacebar() &&*/ entity.onGround) {
++                entity.getControllerJump().jump();
++            }
++        }
++
++        entity.setSpeed((float) (e = entity.getAttributeInstance(GenericAttributes.MOVEMENT_SPEED).getValue()));
++        entity.setForward(forward);
++
++        f = entity.getForward();
++        g = entity.getStrafe();
++    }
++}
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
+index d6a4bc64..7cfd33a7 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
+@@ -633,4 +633,16 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
+         return getHandle().isHandRaised();
+     }
+     // Paper end
++
++    // Purpur start
++    @Override
++    public boolean canBeRiddenInWater() {
++        return getHandle().canBeRiddenInWater();
++    }
++
++    @Override
++    public void setCanBeRiddenInWater(boolean canBeRiddenInWater) {
++        getHandle().setCanBeRiddenInWater(canBeRiddenInWater);
++    }
++    // Purpur end
+ }
+-- 
+2.20.1
+
