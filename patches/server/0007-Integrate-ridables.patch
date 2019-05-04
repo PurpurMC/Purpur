@@ -1,4 +1,4 @@
-From 1ba8a1d170a7a0d53b9c7ba04e50d775ee123b8e Mon Sep 17 00:00:00 2001
+From 39df59dec4551dc7158ee55aa26a54c5af731bd2 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
@@ -9,6 +9,7 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityChicken.java   | 17 +++-
  .../java/net/minecraft/server/EntityCow.java  | 14 ++++
  .../net/minecraft/server/EntityCreeper.java   | 14 ++++
+ .../net/minecraft/server/EntityDrowned.java   | 38 ++++++++-
  .../net/minecraft/server/EntityEnderman.java  | 15 ++++
  .../net/minecraft/server/EntityEndermite.java | 15 ++++
  .../net/minecraft/server/EntityHorse.java     | 10 ++-
@@ -21,22 +22,25 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityHuman.java     | 14 +++-
  .../minecraft/server/EntityInsentient.java    | 39 ++++++++++
  .../net/minecraft/server/EntityIronGolem.java | 15 ++++
- .../net/minecraft/server/EntityLiving.java    | 20 ++++-
+ .../net/minecraft/server/EntityLiving.java    | 21 ++++-
  .../net/minecraft/server/EntityLlama.java     | 37 ++++++++-
  .../minecraft/server/EntityMushroomCow.java   | 14 ++++
  .../net/minecraft/server/EntityOcelot.java    | 14 ++++
  .../java/net/minecraft/server/EntityPig.java  | 25 ++++++
  .../net/minecraft/server/EntityPolarBear.java | 15 ++++
  .../net/minecraft/server/EntitySheep.java     | 14 ++++
+ .../minecraft/server/EntitySilverfish.java    | 15 ++++
+ .../server/EntitySkeletonAbstract.java        | 15 ++++
  .../net/minecraft/server/EntitySnowman.java   | 15 ++++
  .../net/minecraft/server/EntitySpider.java    | 15 ++++
  .../server/EntityTameableAnimal.java          |  6 ++
  .../net/minecraft/server/EntityTypes.java     |  6 ++
  .../java/net/minecraft/server/EntityWolf.java | 14 ++++
- .../purpur/controller/ControllerLookWASD.java | 44 +++++++++++
+ .../net/minecraft/server/EntityZombie.java    | 15 ++++
+ .../purpur/controller/ControllerLookWASD.java | 46 +++++++++++
  .../purpur/controller/ControllerMoveWASD.java | 77 +++++++++++++++++++
  .../craftbukkit/entity/CraftLivingEntity.java | 12 +++
- 32 files changed, 522 insertions(+), 28 deletions(-)
+ 36 files changed, 606 insertions(+), 30 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
 
@@ -203,6 +207,68 @@ index 945a75dd..588bba0a 100644
          ItemStack itemstack = entityhuman.b(enumhand);
  
          if (itemstack.getItem() == Items.FLINT_AND_STEEL) {
+diff --git a/src/main/java/net/minecraft/server/EntityDrowned.java b/src/main/java/net/minecraft/server/EntityDrowned.java
+index 0e2b5ee7..522f7d61 100644
+--- a/src/main/java/net/minecraft/server/EntityDrowned.java
++++ b/src/main/java/net/minecraft/server/EntityDrowned.java
+@@ -6,14 +6,47 @@ import javax.annotation.Nullable;
+ 
+ public class EntityDrowned extends EntityZombie implements IRangedEntity {
+ 
+-    private boolean bC;
++    private boolean bC; public boolean isSwimmingUp() { return this.bC; } // Purpur - OBFHELPER
+     protected final NavigationGuardian a;
+     protected final Navigation b;
+ 
+     public EntityDrowned(World world) {
+         super(EntityTypes.DROWNED, world);
+         this.Q = 1.0F;
+-        this.moveController = new EntityDrowned.e(this);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this) {
++            @Override
++            public void tick() {
++                EntityDrowned drowned = EntityDrowned.this;
++                EntityLiving target = drowned.getGoalTarget();
++                if (drowned.isSwimmingUpOrTargetIsInWater() && drowned.isInWater()) {
++                    if (target != null && target.locY > drowned.locY || drowned.isSwimmingUp()) {
++                        drowned.motY += 0.002D;
++                    }
++                    if (h != Operation.MOVE_TO || drowned.getNavigation().p()) {
++                        drowned.setSpeed(0.0F);
++                        return;
++                    }
++                    double x = b - drowned.locX;
++                    double y = c - drowned.locY;
++                    double z = d - drowned.locZ;
++                    y /= (double) MathHelper.sqrt(x * x + y * y + z * z);
++                    drowned.yaw = a(drowned.yaw, (float) (MathHelper.c(z, x) * 57.2957763671875D) - 90.0F, 90.0F);
++                    drowned.setRenderYawOffset(drowned.yaw);
++                    float speed = (float) (e * drowned.getAttributeInstance(GenericAttributes.MOVEMENT_SPEED).getValue());
++                    drowned.setSpeed(drowned.getSpeed() + (speed - drowned.getSpeed()) * 0.125F);
++                    drowned.motY += (double) drowned.getSpeed() * y * 0.1D;
++                    drowned.motX += (double) drowned.getSpeed() * x * 0.005D;
++                    drowned.motZ += (double) drowned.getSpeed() * z * 0.005D;
++                } else {
++                    if (!drowned.onGround) {
++                        drowned.motY -= 0.008D;
++                    }
++                    super.tick();
++                }
++            }
++        };
++        // Purpur end
+         this.a(PathType.WATER, 0.0F);
+         this.a = new NavigationGuardian(this, world);
+         this.b = new Navigation(this, world);
+@@ -123,6 +156,7 @@ public class EntityDrowned extends EntityZombie implements IRangedEntity {
+         return !this.isSwimming();
+     }
+ 
++    public boolean isSwimmingUpOrTargetIsInWater() { return dI(); } // Purpur - OBFHELPER
+     private boolean dI() {
+         if (this.bC) {
+             return true;
 diff --git a/src/main/java/net/minecraft/server/EntityEnderman.java b/src/main/java/net/minecraft/server/EntityEnderman.java
 index 94504044..7ac728ba 100644
 --- a/src/main/java/net/minecraft/server/EntityEnderman.java
@@ -568,7 +634,7 @@ index ae269270..8140fa12 100644
 +    // Purpur end
  }
 diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
-index 4d5459d2..499d9210 100644
+index 4d5459d2..d44ac353 100644
 --- a/src/main/java/net/minecraft/server/EntityLiving.java
 +++ b/src/main/java/net/minecraft/server/EntityLiving.java
 @@ -90,9 +90,9 @@ public abstract class EntityLiving extends Entity {
@@ -630,6 +696,14 @@ index 4d5459d2..499d9210 100644
 +    public void setJumping(boolean jumping) { o(jumping); } public boolean isJumping() { return bg; } // Purpur - OBFHELPER
      public void o(boolean flag) {
          this.bg = flag;
+     }
+@@ -2546,6 +2558,7 @@ public abstract class EntityLiving extends Entity {
+         this.aS = f;
+     }
+ 
++    public void setRenderYawOffset(float renderYawOffset) { k(renderYawOffset); } // Purpur - OBFHELPER
+     public void k(float f) {
+         this.aQ = f;
      }
 diff --git a/src/main/java/net/minecraft/server/EntityLlama.java b/src/main/java/net/minecraft/server/EntityLlama.java
 index 82a32c61..12b68665 100644
@@ -868,6 +942,70 @@ index c35d1eef..78ce8211 100644
          ItemStack itemstack = entityhuman.b(enumhand);
  
          if (itemstack.getItem() == Items.SHEARS && !this.isSheared() && !this.isBaby()) {
+diff --git a/src/main/java/net/minecraft/server/EntitySilverfish.java b/src/main/java/net/minecraft/server/EntitySilverfish.java
+index ba40e03f..8f30ad66 100644
+--- a/src/main/java/net/minecraft/server/EntitySilverfish.java
++++ b/src/main/java/net/minecraft/server/EntitySilverfish.java
+@@ -10,6 +10,11 @@ public class EntitySilverfish extends EntityMonster {
+     public EntitySilverfish(World world) {
+         super(EntityTypes.SILVERFISH, world);
+         this.setSize(0.4F, 0.3F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -106,6 +111,16 @@ public class EntitySilverfish extends EntityMonster {
+         return EnumMonsterType.ARTHROPOD;
+     }
+ 
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
++
+     static class PathfinderGoalSilverfishHideInBlock extends PathfinderGoalRandomStroll {
+ 
+         private EnumDirection h;
+diff --git a/src/main/java/net/minecraft/server/EntitySkeletonAbstract.java b/src/main/java/net/minecraft/server/EntitySkeletonAbstract.java
+index 6e2ee04c..f62dfecf 100644
+--- a/src/main/java/net/minecraft/server/EntitySkeletonAbstract.java
++++ b/src/main/java/net/minecraft/server/EntitySkeletonAbstract.java
+@@ -24,6 +24,11 @@ public abstract class EntitySkeletonAbstract extends EntityMonster implements IR
+         super(entitytypes, world);
+         this.setSize(0.6F, 1.99F);
+         this.dz();
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     protected void n() {
+@@ -197,4 +202,14 @@ public abstract class EntitySkeletonAbstract extends EntityMonster implements IR
+     public void s(boolean flag) {
+         this.datawatcher.set(EntitySkeletonAbstract.a, flag);
+     }
++
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
+ }
 diff --git a/src/main/java/net/minecraft/server/EntitySnowman.java b/src/main/java/net/minecraft/server/EntitySnowman.java
 index 277ef077..0a7c8872 100644
 --- a/src/main/java/net/minecraft/server/EntitySnowman.java
@@ -1007,12 +1145,45 @@ index 46d8e0a1..1edba183 100644
          ItemStack itemstack = entityhuman.b(enumhand);
          Item item = itemstack.getItem();
  
+diff --git a/src/main/java/net/minecraft/server/EntityZombie.java b/src/main/java/net/minecraft/server/EntityZombie.java
+index bf2bed00..8d8ef643 100644
+--- a/src/main/java/net/minecraft/server/EntityZombie.java
++++ b/src/main/java/net/minecraft/server/EntityZombie.java
+@@ -37,6 +37,11 @@ public class EntityZombie extends EntityMonster {
+         this.bG = new PathfinderGoalBreakDoor(this);
+         this.bK = -1.0F;
+         this.setSize(0.6F, 1.95F);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASD(this);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this);
++        this.canBeRiddenInWater = true;
++        // Purpur end
+     }
+ 
+     public EntityZombie(World world) {
+@@ -454,6 +459,16 @@ public class EntityZombie extends EntityMonster {
+         return itemstack.getItem() == Items.EGG && this.isBaby() && this.isPassenger() ? false : super.d(itemstack);
+     }
+ 
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
++
+     @Nullable
+     public GroupDataEntity prepare(DifficultyDamageScaler difficultydamagescaler, @Nullable GroupDataEntity groupdataentity, @Nullable NBTTagCompound nbttagcompound) {
+         Object object = super.prepare(difficultydamagescaler, groupdataentity, nbttagcompound);
 diff --git a/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java b/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
 new file mode 100644
-index 00000000..22e45e81
+index 00000000..851ab80e
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
-@@ -0,0 +1,44 @@
+@@ -0,0 +1,46 @@
 +package net.pl3x.purpur.controller;
 +
 +import net.minecraft.server.ControllerLook;
@@ -1048,7 +1219,9 @@ index 00000000..22e45e81
 +    }
 +
 +    public void setYawPitch(float yaw, float pitch) {
-+        entity.aS = entity.aQ = entity.lastYaw = entity.yaw = (yaw + yawOffset) % 360.0F;
++        entity.lastYaw = entity.yaw = (yaw + yawOffset) % 360.0F;
++        entity.setRenderYawOffset(entity.lastYaw);
++        entity.setHeadRotation(entity.lastYaw);
 +        entity.pitch = (pitch + pitchOffset) % 360.0F;
 +    }
 +
