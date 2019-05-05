@@ -1,4 +1,4 @@
-From 99ec119821250b8f08e990bf5ee8b9e9271332c8 Mon Sep 17 00:00:00 2001
+From 6dbb74b0dff7c969469327c00739a0f8c00b5da6 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
@@ -37,6 +37,7 @@ Subject: [PATCH] Integrate ridables
  .../server/EntitySkeletonAbstract.java        | 15 ++++
  .../net/minecraft/server/EntitySnowman.java   | 15 ++++
  .../net/minecraft/server/EntitySpider.java    | 15 ++++
+ .../net/minecraft/server/EntitySquid.java     | 57 ++++++++++++++
  .../server/EntityTameableAnimal.java          |  6 ++
  .../net/minecraft/server/EntityTypes.java     |  6 ++
  .../java/net/minecraft/server/EntityWolf.java | 14 ++++
@@ -45,7 +46,7 @@ Subject: [PATCH] Integrate ridables
  .../purpur/controller/ControllerMoveWASD.java | 77 +++++++++++++++++++
  .../controller/ControllerMoveWASDWater.java   | 42 ++++++++++
  .../craftbukkit/entity/CraftLivingEntity.java | 12 +++
- 41 files changed, 734 insertions(+), 40 deletions(-)
+ 42 files changed, 791 insertions(+), 40 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDWater.java
@@ -1308,6 +1309,101 @@ index 9ef1c9ba..8ac330dc 100644
      @Nullable
      public GroupDataEntity prepare(DifficultyDamageScaler difficultydamagescaler, @Nullable GroupDataEntity groupdataentity, @Nullable NBTTagCompound nbttagcompound) {
          Object object = super.prepare(difficultydamagescaler, groupdataentity, nbttagcompound);
+diff --git a/src/main/java/net/minecraft/server/EntitySquid.java b/src/main/java/net/minecraft/server/EntitySquid.java
+index ab79317a..b783c073 100644
+--- a/src/main/java/net/minecraft/server/EntitySquid.java
++++ b/src/main/java/net/minecraft/server/EntitySquid.java
+@@ -24,6 +24,7 @@ public class EntitySquid extends EntityWaterAnimal {
+         this.setSize(0.8F, 0.8F);
+         //this.random.setSeed((long) (1 + this.getId())); // Paper
+         this.bI = 1.0F / (this.random.nextFloat() + 1.0F) * 0.2F;
++        this.canBeRiddenInWater = true; // Purpur
+     }
+ 
+     protected void n() {
+@@ -173,6 +174,7 @@ public class EntitySquid extends EntityWaterAnimal {
+         // Paper end
+     }
+ 
++    public void setMovementVector(float x, float y, float z) { c(x, y, z); } // Purpur - OBFHELPER
+     public void c(float f, float f1, float f2) {
+         this.bK = f;
+         this.bL = f1;
+@@ -183,6 +185,16 @@ public class EntitySquid extends EntityWaterAnimal {
+         return this.bK != 0.0F || this.bL != 0.0F || this.bM != 0.0F;
+     }
+ 
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
++
+     class a extends PathfinderGoal {
+ 
+         private int b;
+@@ -252,6 +264,39 @@ public class EntitySquid extends EntityWaterAnimal {
+         }
+ 
+         public void e() {
++            // Purpur start
++            EntityHuman rider = this.b.getRider();
++            if (rider != null) {
++                EntitySquid squid = this.b;
++                if (rider.isJumping()) {
++                    squid.onSpacebar();
++                }
++                float forward = rider.getForward();
++                float strafe = rider.getStrafe();
++                float speed = (float) squid.getAttributeInstance(GenericAttributes.MOVEMENT_SPEED).getValue() * 5F;
++                if (forward < 0.0F) {
++                    speed *= -0.5;
++                }
++                org.bukkit.util.Vector dir = rider.getBukkitEntity().getEyeLocation().getDirection().normalize().multiply(speed / 20.0F);
++                if (strafe != 0.0F) {
++                    if (forward == 0.0F) {
++                        dir.setY(0);
++                        rotateVectorAroundY(dir, strafe > 0.0F ? -90 : 90);
++                    } else if (forward < 0.0F) {
++                        rotateVectorAroundY(dir, strafe > 0.0F ? 45 : -45);
++                    } else {
++                        rotateVectorAroundY(dir, strafe > 0.0F ? -45 : 45);
++                    }
++                }
++                if (forward != 0.0F || strafe != 0.0F) {
++                    squid.setMovementVector((float) dir.getX(), (float) dir.getY(), (float) dir.getZ());
++                } else {
++                    squid.setMovementVector(0.0F, 0.0F, 0.0F);
++                }
++                return;
++            }
++            // Purpur end
++
+             int i = this.b.cj();
+ 
+             if (i > 100) {
+@@ -266,5 +311,17 @@ public class EntitySquid extends EntityWaterAnimal {
+             }
+ 
+         }
++
++        // Purpur start
++        private void rotateVectorAroundY(org.bukkit.util.Vector vector, double degrees) {
++            double rad = Math.toRadians(degrees);
++            double cos = Math.cos(rad);
++            double sine = Math.sin(rad);
++            double x = vector.getX();
++            double z = vector.getZ();
++            vector.setX(cos * x - sine * z);
++            vector.setZ(sine * x + cos * z);
++        }
++        // Purpur end
+     }
+ }
 diff --git a/src/main/java/net/minecraft/server/EntityTameableAnimal.java b/src/main/java/net/minecraft/server/EntityTameableAnimal.java
 index 5262ede2..d3d4c5df 100644
 --- a/src/main/java/net/minecraft/server/EntityTameableAnimal.java
