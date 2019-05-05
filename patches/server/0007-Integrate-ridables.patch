@@ -1,4 +1,4 @@
-From 6c445241a0b405492e77193cc149910a7cd0554c Mon Sep 17 00:00:00 2001
+From 99ec119821250b8f08e990bf5ee8b9e9271332c8 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
@@ -15,6 +15,7 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityEnderman.java  | 15 ++++
  .../net/minecraft/server/EntityEndermite.java | 15 ++++
  .../java/net/minecraft/server/EntityFish.java | 28 ++++++-
+ .../net/minecraft/server/EntityGuardian.java  | 36 ++++++++-
  .../net/minecraft/server/EntityHorse.java     | 10 ++-
  .../minecraft/server/EntityHorseAbstract.java |  4 +-
  .../server/EntityHorseChestedAbstract.java    | 18 +++--
@@ -44,7 +45,7 @@ Subject: [PATCH] Integrate ridables
  .../purpur/controller/ControllerMoveWASD.java | 77 +++++++++++++++++++
  .../controller/ControllerMoveWASDWater.java   | 42 ++++++++++
  .../craftbukkit/entity/CraftLivingEntity.java | 12 +++
- 40 files changed, 701 insertions(+), 37 deletions(-)
+ 41 files changed, 734 insertions(+), 40 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDWater.java
@@ -420,7 +421,7 @@ index 9a22e202..8e8d4cbc 100644
 +    // Purpur end
  }
 diff --git a/src/main/java/net/minecraft/server/EntityFish.java b/src/main/java/net/minecraft/server/EntityFish.java
-index 5da2d72a..58277bfe 100644
+index 5da2d72a..ecfcbe31 100644
 --- a/src/main/java/net/minecraft/server/EntityFish.java
 +++ b/src/main/java/net/minecraft/server/EntityFish.java
 @@ -7,6 +7,10 @@ public abstract class EntityFish extends EntityWaterAnimal implements IAnimal {
@@ -439,7 +440,7 @@ index 5da2d72a..58277bfe 100644
      public void a(float f, float f1, float f2) {
          if (this.cP() && this.isInWater()) {
 -            this.a(f, f1, f2, 0.01F);
-+            this.a(f, f1, f2, this.getSpeed()); // Purpur
++            this.a(f, f1, f2, getRider() == null ? 0.1F : getSpeed()); // Purpur
              this.move(EnumMoveType.SELF, this.motX, this.motY, this.motZ);
              this.motX *= 0.8999999761581421D;
              this.motY *= 0.8999999761581421D;
@@ -486,6 +487,81 @@ index 5da2d72a..58277bfe 100644
              if (this.i.a(TagsFluid.WATER)) {
                  this.i.motY += 0.005D;
              }
+diff --git a/src/main/java/net/minecraft/server/EntityGuardian.java b/src/main/java/net/minecraft/server/EntityGuardian.java
+index 072236ec..e04cb7c0 100644
+--- a/src/main/java/net/minecraft/server/EntityGuardian.java
++++ b/src/main/java/net/minecraft/server/EntityGuardian.java
+@@ -22,6 +22,15 @@ public class EntityGuardian extends EntityMonster {
+         this.b_ = 10;
+         this.setSize(0.85F, 0.85F);
+         this.moveController = new EntityGuardian.ControllerMoveGuardian(this);
++        // Purpur start
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this) {
++            @Override
++            public void setYawPitch(float yaw, float pitch) {
++                super.setYawPitch(yaw, pitch * 0.35F);
++            }
++        };
++        this.canBeRiddenInWater = true;
++        // Purpur end
+         this.a = this.random.nextFloat();
+         this.b = this.a;
+     }
+@@ -75,6 +84,7 @@ public class EntityGuardian extends EntityMonster {
+         return (Boolean) this.datawatcher.get(EntityGuardian.bF);
+     }
+ 
++    private void setMovingFlag(boolean movingFlag) { a(movingFlag); } // Purpur - OBFHELPER
+     private void a(boolean flag) {
+         this.datawatcher.set(EntityGuardian.bF, flag);
+     }
+@@ -282,7 +292,7 @@ public class EntityGuardian extends EntityMonster {
+ 
+     public void a(float f, float f1, float f2) {
+         if (this.cP() && this.isInWater()) {
+-            this.a(f, f1, f2, 0.1F);
++            this.a(f, f1, f2, getRider() == null ? 0.1F : getSpeed()); // Purpur
+             this.move(EnumMoveType.SELF, this.motX, this.motY, this.motZ);
+             this.motX *= 0.8999999761581421D;
+             this.motY *= 0.8999999761581421D;
+@@ -296,7 +306,17 @@ public class EntityGuardian extends EntityMonster {
+ 
+     }
+ 
+-    static class ControllerMoveGuardian extends ControllerMove {
++    // Purpur start - processInteract
++    @Override
++    public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (super.a(entityhuman, enumhand)) {
++            return true; // vanilla action handled
++        }
++        return tryRide(entityhuman, enumhand);
++    }
++    // Purpur end
++
++    static class ControllerMoveGuardian extends net.pl3x.purpur.controller.ControllerMoveWASDWater { // Purpur
+ 
+         private final EntityGuardian i;
+ 
+@@ -305,7 +325,17 @@ public class EntityGuardian extends EntityMonster {
+             this.i = entityguardian;
+         }
+ 
+-        public void a() {
++        // Purpur start
++        @Override
++        public void tick(EntityHuman rider) {
++            super.tick(rider);
++            this.i.motY += 0.005D;
++            this.i.setMovingFlag(this.i.getForward() > 0.0F); // control tail speed
++        }
++
++        @Override
++        public void tick() {
++            // Purpur end
+             if (this.h == ControllerMove.Operation.MOVE_TO && !this.i.getNavigation().p()) {
+                 double d0 = this.b - this.i.locX;
+                 double d1 = this.c - this.i.locY;
 diff --git a/src/main/java/net/minecraft/server/EntityHorse.java b/src/main/java/net/minecraft/server/EntityHorse.java
 index 1b9425f3..ff7f1a61 100644
 --- a/src/main/java/net/minecraft/server/EntityHorse.java
