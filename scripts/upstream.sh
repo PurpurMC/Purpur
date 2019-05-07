@@ -11,7 +11,7 @@ done
 if [[ "$1" == up* ]]; then
 	(
 		cd "$basedir/Paper/"
-		git fetch && git reset --hard origin/master
+		git fetch && git reset --hard origin/ver/1.14-pre5
 		cd ../
 		git add Paper
 	)
