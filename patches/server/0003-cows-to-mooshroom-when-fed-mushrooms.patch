@@ -1,12 +1,12 @@
-From a831a65545098083d533f3053354aef9e0d98a62 Mon Sep 17 00:00:00 2001
+From e6a82c5af231ce38496a394ea07227ad4ec578b6 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Sat, 4 May 2019 01:10:30 -0500
 Subject: [PATCH] cows to mooshroom when fed mushrooms
 
 ---
  .../java/net/minecraft/server/Entity.java     |  1 +
- .../java/net/minecraft/server/EntityCow.java  | 45 ++++++++++++++++++-
- 2 files changed, 45 insertions(+), 1 deletion(-)
+ .../java/net/minecraft/server/EntityCow.java  | 75 ++++++++++++++++++-
+ 2 files changed, 75 insertions(+), 1 deletion(-)
 
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
 index 3d60b5c28..9834a8928 100644
@@ -21,75 +21,110 @@ index 3d60b5c28..9834a8928 100644
          if (!this.isSilent()) {
              this.world.a((EntityHuman) null, this.locX, this.locY, this.locZ, soundeffect, this.getSoundCategory(), f, f1);
 diff --git a/src/main/java/net/minecraft/server/EntityCow.java b/src/main/java/net/minecraft/server/EntityCow.java
-index d2c2e3cc3..55169d564 100644
+index d2c2e3cc3..4b460a0a7 100644
 --- a/src/main/java/net/minecraft/server/EntityCow.java
 +++ b/src/main/java/net/minecraft/server/EntityCow.java
-@@ -16,7 +16,7 @@ public class EntityCow extends EntityAnimal {
+@@ -4,6 +4,10 @@ package net.minecraft.server;
+ import org.bukkit.craftbukkit.event.CraftEventFactory;
+ import org.bukkit.craftbukkit.inventory.CraftItemStack;
+ // CraftBukkit end
++// Purpur start
++import com.destroystokyo.paper.event.entity.EntityTransformedEvent;
++import org.bukkit.event.entity.EntityTransformEvent;
++// Purpur end
+ 
+ public class EntityCow extends EntityAnimal {
+ 
+@@ -16,7 +20,7 @@ public class EntityCow extends EntityAnimal {
          this.goalSelector.a(0, new PathfinderGoalFloat(this));
          this.goalSelector.a(1, new PathfinderGoalPanic(this, 2.0D));
          this.goalSelector.a(2, new PathfinderGoalBreed(this, 1.0D));
 -        this.goalSelector.a(3, new PathfinderGoalTempt(this, 1.25D, RecipeItemStack.a(Items.WHEAT), false));
-+        this.goalSelector.a(3, new PathfinderGoalTempt(this, 1.25D, RecipeItemStack.a(Items.WHEAT, Blocks.RED_MUSHROOM.getItem()), false));
++        this.goalSelector.a(3, new PathfinderGoalTempt(this, 1.25D, RecipeItemStack.a(Items.WHEAT, Blocks.RED_MUSHROOM.getItem(), Blocks.BROWN_MUSHROOM.getItem()), false));
          this.goalSelector.a(4, new PathfinderGoalFollowParent(this, 1.25D));
          this.goalSelector.a(5, new PathfinderGoalRandomStrollLand(this, 1.0D));
          this.goalSelector.a(6, new PathfinderGoalLookAtPlayer(this, EntityHuman.class, 6.0F));
-@@ -55,6 +55,8 @@ public class EntityCow extends EntityAnimal {
-         return 0.4F;
-     }
- 
-+    private int mushroomsFed = 0; // Purpur
-+
-     @Override
-     public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
-         ItemStack itemstack = entityhuman.b(enumhand);
-@@ -79,6 +81,47 @@ public class EntityCow extends EntityAnimal {
+@@ -79,11 +83,80 @@ public class EntityCow extends EntityAnimal {
              // CraftBukkit end
  
              return true;
 +            // Purpur start - feed mushroom to change to mooshroom
-+        } else if (getEntityType() != EntityTypes.MOOSHROOM && itemstack.getItem() == Blocks.RED_MUSHROOM.getItem()) {
-+            world.broadcastEntityEffect(this, (byte) 18); // hearts
-+            playSound(SoundEffects.ENTITY_COW_MILK, 1.0F, 1.0F);
-+            if (++mushroomsFed < 5) {
-+                if (!entityhuman.abilities.canInstantlyBuild) {
-+                    itemstack.subtract(1);
-+                }
-+                return true; // require 5 mushrooms to transform (prevents mushroom duping)
-+            }
-+            EntityMushroomCow mooshroom = EntityTypes.MOOSHROOM.create(world);
-+            if (mooshroom == null) {
-+                return false;
-+            }
-+            mooshroom.setPositionRotation(this.locX, this.locY, this.locZ, this.yaw, this.pitch);
-+            mooshroom.setHealth(this.getHealth());
-+            mooshroom.setAge(getAge());
-+            mooshroom.u(this);
-+            mooshroom.aK = this.aK;
-+            mooshroom.aM = this.aM;
-+            mooshroom.lastYaw = this.lastYaw;
-+            mooshroom.lastPitch = this.lastPitch;
-+            if (this.hasCustomName()) {
-+                mooshroom.setCustomName(this.getCustomName());
-+            }
-+            if (!new com.destroystokyo.paper.event.entity.EntityTransformedEvent(this.getBukkitEntity(), mooshroom.getBukkitEntity(), com.destroystokyo.paper.event.entity.EntityTransformedEvent.TransformedReason.SHROOMED).callEvent()) {
-+                mooshroom.die();
-+                return false;
-+            }
-+            this.world.addEntity(mooshroom);
-+            this.die();
-+            if (!entityhuman.abilities.canInstantlyBuild) {
-+                itemstack.subtract(1);
-+            }
-+            for (int i = 0; i < 15; ++i) {
-+                ((WorldServer) world).sendParticles(world.players, null, Particles.z,
-+                        locX + random.nextFloat(), locY + (random.nextFloat() * 2), locZ + random.nextFloat(), 1,
-+                        random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, 0, true);
-+            }
-+            return true;
++        } else if (getEntityType() != EntityTypes.MOOSHROOM && isMushroom(itemstack)) {
++            return feedMushroom(entityhuman, itemstack);
 +            // Purpur end
          } else {
              return super.a(entityhuman, enumhand);
          }
+     }
+ 
++    // Purpur start - feed mushroom to change to mooshroom
++    private int redMushroomsFed = 0;
++    private int brownMushroomsFed = 0;
++
++    private boolean isMushroom(ItemStack itemstack) {
++        return itemstack.getItem() == Blocks.RED_MUSHROOM.getItem() || itemstack.getItem() == Blocks.BROWN_MUSHROOM.getItem();
++    }
++
++    private int incrementFeedCount(ItemStack itemstack) {
++        if (itemstack.getItem() == Blocks.RED_MUSHROOM.getItem()) {
++            return ++redMushroomsFed;
++        } else {
++            return ++brownMushroomsFed;
++        }
++    }
++
++    private boolean feedMushroom(EntityHuman entityhuman, ItemStack itemstack) {
++        world.broadcastEntityEffect(this, (byte) 18); // hearts
++        playSound(SoundEffects.ENTITY_COW_MILK, 1.0F, 1.0F);
++        if (incrementFeedCount(itemstack) < 5) {
++            if (!entityhuman.abilities.canInstantlyBuild) {
++                itemstack.subtract(1);
++            }
++            return true; // require 5 mushrooms to transform (prevents mushroom duping)
++        }
++        EntityMushroomCow mooshroom = EntityTypes.MOOSHROOM.create(world);
++        if (mooshroom == null) {
++            return false;
++        }
++        if (itemstack.getItem() == Blocks.BROWN_MUSHROOM.getItem()) {
++            mooshroom.a(EntityMushroomCow.Type.BROWN);
++        } else {
++            mooshroom.a(EntityMushroomCow.Type.RED);
++        }
++        mooshroom.setPositionRotation(this.locX, this.locY, this.locZ, this.yaw, this.pitch);
++        mooshroom.setHealth(this.getHealth());
++        mooshroom.setAge(getAge());
++        mooshroom.u(this);
++        mooshroom.aK = this.aK;
++        mooshroom.aM = this.aM;
++        mooshroom.lastYaw = this.lastYaw;
++        mooshroom.lastPitch = this.lastPitch;
++        if (this.hasCustomName()) {
++            mooshroom.setCustomName(this.getCustomName());
++        }
++        if (CraftEventFactory.callEntityTransformEvent(this, mooshroom, EntityTransformEvent.TransformReason.SHROOMED).isCancelled()) {
++            return false;
++        }
++        if (!new EntityTransformedEvent(this.getBukkitEntity(), mooshroom.getBukkitEntity(), EntityTransformedEvent.TransformedReason.SHROOMED).callEvent()) {
++            return false;
++        }
++        this.world.addEntity(mooshroom);
++        this.die();
++        if (!entityhuman.abilities.canInstantlyBuild) {
++            itemstack.subtract(1);
++        }
++        for (int i = 0; i < 15; ++i) {
++            ((WorldServer) world).sendParticles(((WorldServer) world).players, null, Particles.HAPPY_VILLAGER,
++                    locX + random.nextFloat(), locY + (random.nextFloat() * 2), locZ + random.nextFloat(), 1,
++                    random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, 0, true);
++        }
++        return true;
++    }
++    // Purpur end
++
+     @Override
+     public EntityCow createChild(EntityAgeable entityageable) {
+         return (EntityCow) EntityTypes.COW.a(this.world);
 -- 
 2.20.1
 
