@@ -1,11 +1,11 @@
-From e4504b2ee0d50998f0d405860f5d34d6f1d08ec9 Mon Sep 17 00:00:00 2001
+From c9543a4248fea54a7443375e7074f7af940aec86 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
 
 ---
  .../server/ControllerLookDolphin.java         |  4 +-
- .../java/net/minecraft/server/Entity.java     |  9 ++-
+ .../java/net/minecraft/server/Entity.java     | 10 ++-
  .../net/minecraft/server/EntityAgeable.java   |  2 +-
  .../net/minecraft/server/EntityChicken.java   |  2 +-
  .../net/minecraft/server/EntityDolphin.java   | 17 +++-
@@ -31,12 +31,12 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntitySquid.java     | 46 +++++++++++
  .../server/EntityTameableAnimal.java          |  6 ++
  .../net/minecraft/server/EntityTypes.java     |  6 ++
- .../purpur/controller/ControllerLookWASD.java | 46 +++++++++++
+ .../purpur/controller/ControllerLookWASD.java | 74 ++++++++++++++++++
  .../purpur/controller/ControllerMoveWASD.java | 77 +++++++++++++++++++
  .../controller/ControllerMoveWASDFlying.java  | 58 ++++++++++++++
  .../controller/ControllerMoveWASDWater.java   | 42 ++++++++++
  .../craftbukkit/entity/CraftLivingEntity.java | 10 +++
- 32 files changed, 533 insertions(+), 72 deletions(-)
+ 32 files changed, 562 insertions(+), 72 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
@@ -64,10 +64,18 @@ index 454627f65..df3d6cf28 100644
              this.d = false;
              this.a.aM = this.a(this.a.aM, this.h() + 20.0F, this.b);
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index ab0995c2c..1490f95c4 100644
+index ab0995c2c..e39510e20 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
-@@ -101,6 +101,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -78,6 +78,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     protected CraftEntity bukkitEntity;
+ 
+     PlayerChunkMap.EntityTracker tracker; // Paper
++    public PlayerChunkMap.EntityTracker getTracker() { return tracker; } // Purpur
+     Throwable addedToWorldStack; // Paper - entity debug
+     public CraftEntity getBukkitEntity() {
+         if (bukkitEntity == null) {
+@@ -101,6 +102,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      private int id;
      public boolean i; public final boolean blocksEntitySpawning() { return this.i; } // Paper - OBFHELPER
      public final List<Entity> passengers;
@@ -75,7 +83,7 @@ index ab0995c2c..1490f95c4 100644
      protected int j;
      private Entity vehicle;
      public boolean attachedToPlayer;
-@@ -134,7 +135,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -134,7 +136,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      public double H;
      public double I;
      public double J;
@@ -84,7 +92,7 @@ index ab0995c2c..1490f95c4 100644
      public boolean noclip;
      public float M;
      protected final Random random;
-@@ -2067,6 +2068,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2067,6 +2069,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              // Spigot end
              if (!this.world.isClientSide && entity instanceof EntityHuman && !(this.getRidingPassenger() instanceof EntityHuman)) {
                  this.passengers.add(0, entity);
@@ -92,7 +100,7 @@ index ab0995c2c..1490f95c4 100644
              } else {
                  this.passengers.add(entity);
              }
-@@ -2105,6 +2107,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2105,6 +2108,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
                  return false;
              }
              // Spigot end
@@ -966,15 +974,17 @@ index 77d4bbce1..73116e48f 100644
              this.be = SystemUtils.a("entity", IRegistry.ENTITY_TYPE.getKey(this));
 diff --git a/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java b/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
 new file mode 100644
-index 000000000..851ab80e4
+index 000000000..99e184d36
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,74 @@
 +package net.pl3x.purpur.controller;
 +
 +import net.minecraft.server.ControllerLook;
 +import net.minecraft.server.EntityHuman;
 +import net.minecraft.server.EntityInsentient;
++import net.minecraft.server.MathHelper;
++import net.minecraft.server.PacketPlayOutEntity;
 +
 +public class ControllerLookWASD extends ControllerLook {
 +    protected final EntityInsentient entity;
@@ -1005,20 +1015,46 @@ index 000000000..851ab80e4
 +    }
 +
 +    public void setYawPitch(float yaw, float pitch) {
-+        entity.lastYaw = entity.yaw = (yaw + yawOffset) % 360.0F;
-+        entity.setRenderYawOffset(entity.lastYaw);
-+        entity.setHeadRotation(entity.lastYaw);
-+        entity.pitch = (pitch + pitchOffset) % 360.0F;
++        entity.yaw = normalizeYaw(yaw + yawOffset);
++        entity.lastYaw = entity.yaw;
++        entity.setRenderYawOffset(entity.yaw);
++        entity.setHeadRotation(entity.yaw);
++        entity.pitch = normalizePitch(pitch + pitchOffset);
++
++        entity.getTracker().broadcast(new PacketPlayOutEntity
++                .PacketPlayOutEntityLook(entity.getId(),
++                (byte) MathHelper.d(entity.yaw * 256.0F / 360.0F),
++                (byte) MathHelper.d(entity.pitch * 256.0F / 360.0F),
++                entity.onGround));
 +    }
 +
 +    public void setOffsets(float yaw, float pitch) {
 +        yawOffset = yaw;
 +        pitchOffset = pitch;
 +    }
++
++    public float normalizeYaw(float yaw) {
++        yaw %= 360.0f;
++        if (yaw >= 180.0f) {
++            yaw -= 360.0f;
++        } else if (yaw < -180.0f) {
++            yaw += 360.0f;
++        }
++        return yaw;
++    }
++
++    public float normalizePitch(float pitch) {
++        if (pitch > 90.0f) {
++            pitch = 90.0f;
++        } else if (pitch < -90.0f) {
++            pitch = -90.0f;
++        }
++        return pitch;
++    }
 +}
 diff --git a/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java b/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
 new file mode 100644
-index 000000000..4f7dec9bc
+index 000000000..d64a66274
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
 @@ -0,0 +1,77 @@
@@ -1065,25 +1101,25 @@ index 000000000..4f7dec9bc
 +            forward *= 0.5F;
 +        }
 +
-+        float yaw = rider.yaw;
++        float yawOffset = 0;
 +        if (strafe != 0) {
 +            if (forward == 0) {
-+                yaw += strafe > 0 ? -90 : 90;
++                yawOffset += strafe > 0 ? -90 : 90;
 +                forward = Math.abs(strafe * 2);
 +            } else {
-+                yaw += strafe > 0 ? -30 : 30;
++                yawOffset += strafe > 0 ? -30 : 30;
 +                strafe /= 2;
 +                if (forward < 0) {
-+                    yaw += strafe > 0 ? -110 : 110;
++                    yawOffset += strafe > 0 ? -110 : 110;
 +                    forward *= -1;
 +                }
 +            }
 +        } else if (forward < 0) {
-+            yaw -= 180;
++            yawOffset -= 180;
 +            forward *= -1;
 +        }
 +
-+        ((ControllerLookWASD) entity.getControllerLook()).setOffsets(yaw - rider.yaw, 0);
++        ((ControllerLookWASD) entity.getControllerLook()).setOffsets(yawOffset, 0);
 +
 +        if (rider.isJumping()) {
 +            //RidableSpacebarEvent event = new RidableSpacebarEvent(entity);
