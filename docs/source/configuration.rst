@@ -2,7 +2,7 @@
 Configuration
 =============
 
-This page details the various configuration settings exposed by Purpur.
+This page details the various configuration settings exposed by Purpur in the purpur.yml file.
 
 .. contents::
    :depth: 1
@@ -20,7 +20,7 @@ their respective documentation pages.
 .. warning::
     Configuration values change frequently at times. It is possible for the
     information here to be incomplete. If you cannot find what you're looking for
-    or think something may be wrong, :doc:`../about/contact`
+    or think something may be wrong, :doc:`contact`
 
 Global Settings
 ===============
@@ -42,7 +42,7 @@ logger
 
 * show-unknown-attribute-warnings
     - **default**: true
-    - **description**:: Controls if warnings about unkown attributes are shown in console/logs
+    - **description**:: Controls if warnings about unknown attributes are shown in console/logs
 
 mobs
 ~~~~
