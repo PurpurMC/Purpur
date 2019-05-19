@@ -1,6 +1,12 @@
 Purpur documentation
 ====================
 
+.. image:: https://repository-images.githubusercontent.com/184300222/cb576500-74d1-11e9-9c48-9c61b85597a0
+    :width: 500px
+    :height: 250px
+    :alt: Purpur logo
+    :align: center
+
 .. warning::
     This documentation is a work in progress. Some things are still missing. If
     you'd like to see it completed faster, you can contribute to the documentation
