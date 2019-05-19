@@ -18,6 +18,7 @@ need to be granted the permissions you want them to have using a permissions plu
     - **description**: This permission gives the ability to ride a certain mob by shift
     right clicking it. Once mounted you can use WASD to move around, and spacebar to jump
     or fly. Just replace "<mob_id>" with the mob's Entity ID.
+
     - **examples**:
         - `allow.ride.cow`
         - `allow.ride.zombie_pigman`
