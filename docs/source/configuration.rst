@@ -31,8 +31,7 @@ functionality itself.
 verbose
 ~~~~~~~
 * **default**: false
-* **description**: Sets whether the server should dump all configuration values
-  to the server log on startup.
+* **description**: Sets whether the server should dump all configuration values to the server log on startup.
 
 logger
 ~~~~~~
@@ -68,3 +67,37 @@ mobs
     * pumpkin-can-be-added-back
         - **default**: true
         - **description**: Control if pumpkins can be placed back onto snowmen
+
+World Settings
+==============
+
+World settings are on a per-world basis. The child-node `default` is used for all worlds that do not have their own specific settings.
+
+* campfire-regen
+    * interval
+        - **default**: 40
+        - **description**: Time (in ticks) that campfires scan for player and apply regen on. Regen buff only gets applied if campfire is lit. Set to 0 to disable
+
+    * duration
+        - **default**: 80
+        - **description**: How long (in ticks) the regen buff lasts
+
+    * range
+        - **default**: 5
+        - **description**: Distance (in blocks) a player must be within to receive the regen buff
+
+    * amplifier
+        - **default**: 0
+        - **description**: The amplifier on the regen buff. `0` for level 1, `1` for level 2
+
+    * boost-duration
+        - **default**: 80
+        - **description**: How long (in ticks) the regen buff lasts when the campfire is in smoke signal mode
+
+    * boost-range
+        - **default**: 10
+        - **description**: Distance (in blocks) a player must be within to receive the regen buff when the campfire is in smoke signal mode
+
+    * boost-amplifier
+        - **default**: 1
+        - **description**: The amplifier on the regen buff when the campfire is in smoke signal mode
