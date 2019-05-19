@@ -17,4 +17,5 @@ changes to suit our server that are deemed too wild to be included directly upst
     :titlesonly:
 
     configuration
+    permissions
     contact
