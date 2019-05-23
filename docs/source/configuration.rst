@@ -33,14 +33,16 @@ verbose
 * **default**: false
 * **description**: Sets whether the server should dump all configuration values to the server log on startup.
 
-* enable-tick-overload
-    - **default**: false
-    - **description**: Enable/disable the vanilla tick overload detection ("Can't keep up! Is the server overloaded?")
+enable-tick-overload
+~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: Enable/disable the vanilla tick overload detection ("Can't keep up! Is the server overloaded?")
 
-* enable-tps-catchup
-    - **default**: false
-    - **description**: Enable/disable Spigot's TPS catchup (makes everything tick faster than 20 tps after
-     lag spikes, which can cause more lag - also skews /tps reports by ruining the average with above 20 tps entries)
+enable-tps-catchup
+~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: Enable/disable Spigot's TPS catchup (makes everything tick faster than 20 tps after
+    lag spikes, which can cause more lag - also skews /tps reports by ruining the average with above 20 tps entries)
 
 logger
 ~~~~~~
@@ -81,6 +83,11 @@ World Settings
 ==============
 
 World settings are on a per-world basis. The child-node `default` is used for all worlds that do not have their own specific settings.
+
+campfire-obeys-gravity
+~~~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: When true, campfires will fall to the ground (like anvils do) instead of floating in the air
 
 campfire-regen
 ~~~~~~~~~~~~~~
