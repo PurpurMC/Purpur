@@ -43,6 +43,11 @@ enable-tps-catchup
 * **default**: false
 * **description**: Enable/disable Spigot's TPS catchup (makes everything tick faster than 20 tps after lag spikes, which can cause more lag - also skews /tps reports by ruining the average with above 20 tps entries)
 
+packed-barrels
+~~~~~~~~~~~~~~
+* **default**: true
+* **description:** Use large size barrels (6 rows, aka 54 slots)
+
 logger
 ~~~~~~
 * show-duplicate-entity-uuid-errors
