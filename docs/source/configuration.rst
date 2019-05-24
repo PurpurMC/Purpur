@@ -88,8 +88,13 @@ World Settings
 
 World settings are on a per-world basis. The child-node `default` is used for all worlds that do not have their own specific settings.
 
+editable-signs
+~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Ability to edit signs by right clicking them with another sign in hand
+
 campfire-obeys-gravity
-~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
 * **default**: true
 * **description**: When true, campfires will fall to the ground (like anvils do) instead of floating in the air
 
