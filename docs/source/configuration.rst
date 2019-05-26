@@ -116,6 +116,10 @@ campfire-regen
     - **default**: 0
     - **description**: The amplifier on the regen buff. `0` for level 1, `1` for level 2
 
+* require-line-of-sight
+    - **default**: true
+    - **description**: Only players within line of sight of the campfire will receive the regen buff
+
 * boost-duration
     - **default**: 80
     - **description**: How long (in ticks) the regen buff lasts when the campfire is in smoke signal mode
@@ -127,3 +131,7 @@ campfire-regen
 * boost-amplifier
     - **default**: 1
     - **description**: The amplifier on the regen buff when the campfire is in smoke signal mode
+
+* boost-require-line-of-sight
+    - **default**: false
+    - **description**: Only players within line of sight of the campfire will receive the regen buff when the campfire is in smoke signal mode
