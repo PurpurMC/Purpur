@@ -88,6 +88,12 @@ mobs
         - **default**: true
         - **description**: Control if pumpkins can be placed back onto snowmen
 
+ridable
+~~~~~~~
+* <mob string id here>
+    - **default**: true
+    - **description**: When true this mob is ridable by right clicking it while holding shift
+
 World Settings
 ==============
 
