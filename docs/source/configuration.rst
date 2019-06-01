@@ -48,6 +48,11 @@ packed-barrels
 * **default**: true
 * **description:** Use large size barrels (6 rows, aka 54 slots)
 
+ender-dragon-death-always-places-egg-block
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description:** When true all valid ender dragon deaths will place an ender egg block on top of the portal
+
 logger
 ~~~~~~
 * show-duplicate-entity-uuid-errors
