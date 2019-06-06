@@ -146,3 +146,8 @@ campfire-regen
 * boost-require-line-of-sight
     - **default**: false
     - **description**: Only players within line of sight of the campfire will receive the regen buff when the campfire is in smoke signal mode
+
+allow-sign-colors
+~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Allow players to use color codes on signs
