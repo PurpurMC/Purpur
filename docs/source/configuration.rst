@@ -147,7 +147,17 @@ campfire-regen
     - **default**: false
     - **description**: Only players within line of sight of the campfire will receive the regen buff when the campfire is in smoke signal mode
 
+campfires-go-out-in-rain
+~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Campfires burn out in the rain
+
 allow-sign-colors
 ~~~~~~~~~~~~~~~~~
 * **default**: true
 * **description**: Allow players to use color codes on signs
+
+items-can-break-turtle-eggs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: Allow dropped items to damage/break turtle eggs
