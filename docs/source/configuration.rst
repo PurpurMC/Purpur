@@ -161,3 +161,13 @@ items-can-break-turtle-eggs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: false
 * **description**: Allow dropped items to damage/break turtle eggs
+
+block-tick-events
+~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Fire plugin events when blocks tick
+
+fluid-tick-events
+~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Fire plugin events when fluids tick
