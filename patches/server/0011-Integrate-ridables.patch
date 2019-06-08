@@ -1,11 +1,11 @@
-From 245036aa7d09e688b1724035e820b2c9ec8a2779 Mon Sep 17 00:00:00 2001
+From cdf6e6aabed0afe8377cbb11e4dc1998d8cf2163 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
 
 ---
  .../server/ControllerLookDolphin.java         |   4 +-
- .../java/net/minecraft/server/Entity.java     |  10 +-
+ .../java/net/minecraft/server/Entity.java     |  25 +++-
  .../net/minecraft/server/EntityAgeable.java   |   2 +-
  .../java/net/minecraft/server/EntityBat.java  |   2 +
  .../net/minecraft/server/EntityBlaze.java     |   3 +-
@@ -22,7 +22,7 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityEndermite.java |   3 +-
  .../net/minecraft/server/EntityEvoker.java    |   3 +-
  .../java/net/minecraft/server/EntityFish.java |  20 +--
- .../java/net/minecraft/server/EntityFox.java  |   1 +
+ .../java/net/minecraft/server/EntityFox.java  |  57 ++++++--
  .../net/minecraft/server/EntityGhast.java     |   1 +
  .../minecraft/server/EntityGiantZombie.java   |   2 +
  .../net/minecraft/server/EntityGuardian.java  |  27 +++-
@@ -36,9 +36,9 @@ Subject: [PATCH] Integrate ridables
  .../minecraft/server/EntityHorseZombie.java   |   7 +-
  .../net/minecraft/server/EntityHuman.java     |  14 +-
  .../server/EntityIllagerIllusioner.java       |   1 +
- .../minecraft/server/EntityInsentient.java    |  59 +++++++-
+ .../minecraft/server/EntityInsentient.java    |  51 ++++++-
  .../net/minecraft/server/EntityIronGolem.java |   1 +
- .../net/minecraft/server/EntityLiving.java    |  24 +++-
+ .../net/minecraft/server/EntityLiving.java    |  25 +++-
  .../net/minecraft/server/EntityLlama.java     |  37 ++++-
  .../minecraft/server/EntityLlamaTrader.java   |   1 +
  .../net/minecraft/server/EntityMagmaCube.java |   3 +-
@@ -64,7 +64,7 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntitySlime.java     |   3 +-
  .../net/minecraft/server/EntitySnowman.java   |   2 +
  .../net/minecraft/server/EntitySpider.java    |   1 +
- .../net/minecraft/server/EntitySquid.java     |  47 +++++++
+ .../net/minecraft/server/EntitySquid.java     |  47 ++++++
  .../server/EntityTameableAnimal.java          |   6 +
  .../minecraft/server/EntityTropicalFish.java  |   1 +
  .../net/minecraft/server/EntityTurtle.java    |   1 +
@@ -79,14 +79,14 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityZombie.java    |   1 +
  .../minecraft/server/EntityZombieHusk.java    |   1 +
  .../server/EntityZombieVillager.java          |   1 +
- .../java/net/pl3x/purpur/PurpurConfig.java    | 131 ++++++++++++++++++
+ .../java/net/pl3x/purpur/PurpurConfig.java    | 136 ++++++++++++++++++
  .../purpur/controller/ControllerLookWASD.java |  74 ++++++++++
  .../purpur/controller/ControllerMoveWASD.java |  77 ++++++++++
  .../controller/ControllerMoveWASDFlying.java  |  58 ++++++++
  .../controller/ControllerMoveWASDWater.java   |  42 ++++++
  .../craftbukkit/entity/CraftLivingEntity.java |  10 ++
  .../bukkit/craftbukkit/entity/CraftMob.java   |  12 ++
- 82 files changed, 780 insertions(+), 81 deletions(-)
+ 82 files changed, 838 insertions(+), 92 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
@@ -114,7 +114,7 @@ index 454627f65..df3d6cf28 100644
              this.d = false;
              this.a.aM = this.a(this.a.aM, this.h() + 20.0F, this.b);
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index a7db5163e..d0a13d14d 100644
+index ba8a8782d..59ac50e2f 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -78,6 +78,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -142,26 +142,46 @@ index a7db5163e..d0a13d14d 100644
      public boolean noclip;
      public float M;
      protected final Random random;
-@@ -2072,6 +2074,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2072,6 +2074,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              // Spigot end
              if (!this.world.isClientSide && entity instanceof EntityHuman && !(this.getRidingPassenger() instanceof EntityHuman)) {
                  this.passengers.add(0, entity);
 +                this.rider = (EntityHuman) entity; // Purpur
++                onMount(rider);
              } else {
                  this.passengers.add(entity);
              }
-@@ -2110,6 +2113,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2110,6 +2114,12 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
                  return false;
              }
              // Spigot end
 +            // Purpur start
 +            if (passengers.get(0) == rider) {
++                onDismount(rider);
 +                rider = null;
 +            }
 +            // Purpur end
              this.passengers.remove(entity);
              entity.j = 60;
          }
+@@ -3221,4 +3231,17 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     public void setMot(double d0, double d1, double d2) {
+         this.setMot(new Vec3D(d0, d1, d2));
+     }
++
++    // Purpur start
++    public void onMount(EntityHuman entityhuman) {
++        entityhuman.setJumping(false); // fixes jump on mount
++    }
++
++    public void onDismount(EntityHuman entityhuman) {
++    }
++
++    public boolean onSpacebar() {
++        return false;
++    }
++    // Purpur end
+ }
 diff --git a/src/main/java/net/minecraft/server/EntityAgeable.java b/src/main/java/net/minecraft/server/EntityAgeable.java
 index e87754ef3..553245ebe 100644
 --- a/src/main/java/net/minecraft/server/EntityAgeable.java
@@ -509,7 +529,7 @@ index a28fbdf1e..36229a2c4 100644
                  this.i.setMot(this.i.getMot().add(0.0D, 0.005D, 0.0D));
              }
 diff --git a/src/main/java/net/minecraft/server/EntityFox.java b/src/main/java/net/minecraft/server/EntityFox.java
-index 14046c98d..a8597f593 100644
+index 14046c98d..ce852cba3 100644
 --- a/src/main/java/net/minecraft/server/EntityFox.java
 +++ b/src/main/java/net/minecraft/server/EntityFox.java
 @@ -48,6 +48,7 @@ public class EntityFox extends EntityAnimal {
@@ -520,6 +540,165 @@ index 14046c98d..a8597f593 100644
          this.lookController = new EntityFox.k();
          this.moveController = new EntityFox.m();
          this.a(PathType.DANGER_OTHER, 0.0F);
+@@ -155,7 +156,7 @@ public class EntityFox extends EntityAnimal {
+     }
+ 
+     private boolean j(ItemStack itemstack) {
+-        return itemstack.getItem().isFood() && this.getGoalTarget() == null && this.onGround && !this.isSleeping();
++        return getRider() == null && itemstack.getItem().isFood() && this.getGoalTarget() == null && this.onGround && !this.isSleeping(); // Purpur
+     }
+ 
+     @Override
+@@ -367,6 +368,7 @@ public class EntityFox extends EntityAnimal {
+ 
+     @Override
+     public boolean e(ItemStack itemstack) {
++        if (getRider() != null) return false; // Purpur - do not pickup items when being ridden
+         EnumItemSlot enumitemslot = EntityInsentient.h(itemstack);
+ 
+         return !this.getEquipment(enumitemslot).isEmpty() ? false : enumitemslot == EnumItemSlot.MAINHAND && super.e(itemstack);
+@@ -374,12 +376,14 @@ public class EntityFox extends EntityAnimal {
+ 
+     @Override
+     protected boolean g(ItemStack itemstack) {
++        if (getRider() != null) return false; // Purpur - do not pickup items when being ridden
+         Item item = itemstack.getItem();
+         ItemStack itemstack1 = this.getEquipment(EnumItemSlot.MAINHAND);
+ 
+         return itemstack1.isEmpty() || this.bP > 0 && item.isFood() && !itemstack1.getItem().isFood();
+     }
+ 
++    public void spit(ItemStack itemstack) { k(itemstack); } // Purpur - OBFHELPER
+     private void k(ItemStack itemstack) {
+         if (!itemstack.isEmpty() && !this.world.isClientSide) {
+             EntityItem entityitem = new EntityItem(this.world, this.locX + this.getLookDirection().x, this.locY + 1.0D, this.locZ + this.getLookDirection().z, itemstack);
+@@ -473,6 +477,7 @@ public class EntityFox extends EntityAnimal {
+         return this.r(16);
+     }
+ 
++    public void setChasing(boolean flag) { s(flag); } // Purpur - OBFHELPER
+     public void s(boolean flag) {
+         this.d(16, flag);
+     }
+@@ -537,6 +542,7 @@ public class EntityFox extends EntityAnimal {
+         this.setSleeping(false);
+     }
+ 
++    public void stopActions() { en(); } // Purpur - OBFHELPER
+     private void en() {
+         this.u(false);
+         this.setCrouching(false);
+@@ -547,7 +553,7 @@ public class EntityFox extends EntityAnimal {
+     }
+ 
+     private boolean eo() {
+-        return !this.isSleeping() && !this.isSitting() && !this.dX();
++        return getRider() == null && !this.isSleeping() && !this.isSitting() && !this.dX(); // Purpur
+     }
+ 
+     @Override
+@@ -618,7 +624,30 @@ public class EntityFox extends EntityAnimal {
+         return deathEvent; // Paper
+     }
+ 
++    // Purpur start
++    @Override
++    public float cW() {
++        return getRider() == null ? super.cW() : 0.5F;
++    }
++
++    @Override
++    public void onMount(EntityHuman entityhuman) {
++        setCanPickupLoot(false);
++        stopActions();
++        setGoalTarget(null);
++        setChasing(false);
++        spit(getEquipment(EnumItemSlot.MAINHAND));
++
++    }
++
++    @Override
++    public void onDismount(EntityHuman entityhuman) {
++        setCanPickupLoot(true);
++    }
++    // Purpur end
++
+     public static boolean a(EntityFox entityfox, EntityLiving entityliving) {
++        if (entityfox.getRider() != null) return false; // Purpur - cannot jump chase while being ridden
+         double d0 = entityliving.locZ - entityfox.locZ;
+         double d1 = entityliving.locX - entityfox.locX;
+         double d2 = d0 / d1;
+@@ -681,16 +710,16 @@ public class EntityFox extends EntityAnimal {
+         }
+     }
+ 
+-    public class k extends ControllerLook {
++    public class k extends net.pl3x.purpur.controller.ControllerLookWASD { // Purpur
+ 
+         public k() {
+             super(EntityFox.this);
+         }
+ 
+         @Override
+-        public void a() {
++        public void tick() { // Purpur
+             if (!EntityFox.this.isSleeping()) {
+-                super.a();
++                super.tick(); // Purpur
+             }
+ 
+         }
+@@ -1004,12 +1033,12 @@ public class EntityFox extends EntityAnimal {
+ 
+         @Override
+         public boolean a() {
+-            return EntityFox.this.getLastDamager() == null && EntityFox.this.getRandom().nextFloat() < 0.02F && !EntityFox.this.isSleeping() && EntityFox.this.getGoalTarget() == null && EntityFox.this.getNavigation().n() && !this.h() && !EntityFox.this.dY() && !EntityFox.this.isCrouching();
++            return getRider() == null && EntityFox.this.getLastDamager() == null && EntityFox.this.getRandom().nextFloat() < 0.02F && !EntityFox.this.isSleeping() && EntityFox.this.getGoalTarget() == null && EntityFox.this.getNavigation().n() && !this.h() && !EntityFox.this.dY() && !EntityFox.this.isCrouching(); // Purpur
+         }
+ 
+         @Override
+         public boolean b() {
+-            return this.f > 0;
++            return getRider() == null && this.f > 0; // Purpur
+         }
+ 
+         @Override
+@@ -1290,8 +1319,14 @@ public class EntityFox extends EntityAnimal {
+ 
+         @Override
+         public boolean a() {
+-            return !EntityFox.this.isSitting() && !EntityFox.this.isSleeping() && !EntityFox.this.isCrouching() && !EntityFox.this.dX() && super.a();
++            return getRider() == null && !EntityFox.this.isSitting() && !EntityFox.this.isSleeping() && !EntityFox.this.isCrouching() && !EntityFox.this.dX() && super.a(); // Purpur
++        }
++
++        // Purpur start
++        public boolean b() {
++            return getRider() == null && super.b();
+         }
++        // Purpur end
+     }
+ 
+     class u extends PathfinderGoal {
+@@ -1349,16 +1384,16 @@ public class EntityFox extends EntityAnimal {
+         }
+     }
+ 
+-    class m extends ControllerMove {
++    class m extends net.pl3x.purpur.controller.ControllerMoveWASD { // Purpur
+ 
+         public m() {
+             super(EntityFox.this);
+         }
+ 
+         @Override
+-        public void a() {
++        public void tick() { // Purpur
+             if (EntityFox.this.eo()) {
+-                super.a();
++                super.tick(); // Purpur
+             }
+ 
+         }
 diff --git a/src/main/java/net/minecraft/server/EntityGhast.java b/src/main/java/net/minecraft/server/EntityGhast.java
 index 55b96c4d2..a05c3916f 100644
 --- a/src/main/java/net/minecraft/server/EntityGhast.java
@@ -830,7 +1009,7 @@ index 76641682b..bab9431b3 100644
          this.bA = new Vec3D[2][4];
  
 diff --git a/src/main/java/net/minecraft/server/EntityInsentient.java b/src/main/java/net/minecraft/server/EntityInsentient.java
-index 48ce15484..93dafd038 100644
+index 48ce15484..e1560c535 100644
 --- a/src/main/java/net/minecraft/server/EntityInsentient.java
 +++ b/src/main/java/net/minecraft/server/EntityInsentient.java
 @@ -9,6 +9,7 @@ import java.util.UUID;
@@ -880,7 +1059,7 @@ index 48ce15484..93dafd038 100644
      }
  
      public boolean dH() {
-@@ -1355,4 +1361,51 @@ public abstract class EntityInsentient extends EntityLiving {
+@@ -1355,4 +1361,43 @@ public abstract class EntityInsentient extends EntityLiving {
      public boolean a(Item item) {
          return this.getItemInMainHand().getItem() == item || this.getItemInOffHand().getItem() == item;
      }
@@ -897,7 +1076,7 @@ index 48ce15484..93dafd038 100644
 +        if (enumhand != EnumHand.MAIN_HAND) {
 +            return false;
 +        }
-+        if (!entityhuman.isSneaking()) {
++        if (PurpurConfig.requireShiftToMount && !entityhuman.isSneaking()) {
 +            return false;
 +        }
 +        if (!passengers.isEmpty() || entityhuman.isPassenger()) {
@@ -920,15 +1099,7 @@ index 48ce15484..93dafd038 100644
 +        entityhuman.mounting = true;
 +        entityhuman.yaw = this.yaw;
 +        entityhuman.pitch = this.pitch;
-+        if (entityhuman.startRiding(this)) {
-+            entityhuman.setJumping(false); // fixes jump on mount
-+            return true;
-+        }
-+        return entityhuman.mounting = false;
-+    }
-+
-+    public boolean onSpacebar() {
-+        return false;
++        return entityhuman.startRiding(this) || (entityhuman.mounting = false);
 +    }
 +    // Purpur end
  }
@@ -945,7 +1116,7 @@ index bb06d12f6..41ad48c96 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
-index 9ba7a1610..d27728171 100644
+index 9ba7a1610..38a0e4978 100644
 --- a/src/main/java/net/minecraft/server/EntityLiving.java
 +++ b/src/main/java/net/minecraft/server/EntityLiving.java
 @@ -87,10 +87,10 @@ public abstract class EntityLiving extends Entity {
@@ -992,7 +1163,15 @@ index 9ba7a1610..d27728171 100644
          float f;
  
          if (this.hasEffect(MobEffects.JUMP)) {
-@@ -2262,10 +2271,12 @@ public abstract class EntityLiving extends Entity {
+@@ -2044,6 +2053,7 @@ public abstract class EntityLiving extends Entity {
+ 
+         Vec3D vec3d = this.getMot();
+ 
++        if (getRider() != null) setMot(vec3d.x * 2D, (double) f, vec3d.z * 2D); else // Purpur - add small boost to velocity when jumping while being ridden
+         this.setMot(vec3d.x, (double) f, vec3d.z);
+         if (this.isSprinting()) {
+             float f1 = this.yaw * 0.017453292F;
+@@ -2262,10 +2272,12 @@ public abstract class EntityLiving extends Entity {
          return this.onGround ? this.da() * (0.21600002F / (f * f * f)) : this.aO;
      }
  
@@ -1005,7 +1184,7 @@ index 9ba7a1610..d27728171 100644
      public void o(float f) {
          this.bD = f;
      }
-@@ -2741,6 +2752,7 @@ public abstract class EntityLiving extends Entity {
+@@ -2741,6 +2753,7 @@ public abstract class EntityLiving extends Entity {
          this.aM = f;
      }
  
@@ -1796,10 +1975,22 @@ index 5cfda3160..ac460de59 100644
      }
  
 diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
-index 8f3367ae1..04f398965 100644
+index 8f3367ae1..1f8e83110 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
-@@ -114,4 +114,135 @@ public class PurpurConfig {
+@@ -103,6 +103,11 @@ public class PurpurConfig {
+         return config.getString(path, config.getString(path));
+     }
+ 
++    public static boolean requireShiftToMount = true;
++    private static void requireShiftToMount() {
++        requireShiftToMount = getBoolean("settings.mobs.require-shift-to-mount", requireShiftToMount);
++    }
++
+     public static int feedMushroomsToCows = 5;
+     private static void cowsSettings() {
+         feedMushroomsToCows = getInt("settings.mobs.cow.feed-mushrooms-for-mooshroom", feedMushroomsToCows);
+@@ -114,4 +119,135 @@ public class PurpurConfig {
          snowmanDropsPumpkin = getBoolean("settings.mobs.snow_golem.drops-pumpkin-when-sheared", snowmanDropsPumpkin);
          snowmanPumpkinPutBack = getBoolean("settings.mobs.snow_golem.pumpkin-can-be-added-back", snowmanPumpkinPutBack);
      }

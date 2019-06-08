@@ -48,11 +48,6 @@ packed-barrels
 * **default**: true
 * **description:** Use large size barrels (6 rows, aka 54 slots)
 
-ender-dragon-death-always-places-egg-block
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* **default**: true
-* **description:** When true all valid ender dragon deaths will place an ender egg block on top of the portal
-
 logger
 ~~~~~~
 * show-duplicate-entity-uuid-errors
@@ -65,10 +60,19 @@ logger
 
 mobs
 ~~~~
+* require-shift-to-mount
+    - **default**: true
+    - **description**: Require shift click to mount otherwise non-ridable mobs
+
 * cow
     * feed-mushrooms-for-mooshroom
         - **default**: 5
         - **description**: Number of mushrooms to feed a cow to make it transform into a mooshroom. Set to 0 to disable.
+
+* ender-dragon
+    * death-always-places-egg-block
+        - **default**: true
+        - **description:** When true all valid ender dragon deaths will place an ender egg block on top of the portal
 
 * giant
     * naturally-spawn
