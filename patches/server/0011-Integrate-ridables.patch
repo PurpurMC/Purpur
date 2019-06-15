@@ -1,4 +1,4 @@
-From 02c37cb0f3e33c7235007d6d06b84eb08a51d758 Mon Sep 17 00:00:00 2001
+From 03b6d400c54c19ffdd06a4fcebedbaa9ebcd53be Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
@@ -9,7 +9,7 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityAgeable.java   |   2 +-
  .../java/net/minecraft/server/EntityBat.java  |  25 ++++
  .../net/minecraft/server/EntityBlaze.java     |   3 +-
- .../java/net/minecraft/server/EntityCat.java  |   3 +-
+ .../java/net/minecraft/server/EntityCat.java  |  32 +++--
  .../minecraft/server/EntityCaveSpider.java    |   1 +
  .../net/minecraft/server/EntityChicken.java   |   3 +-
  .../java/net/minecraft/server/EntityCod.java  |   1 +
@@ -87,7 +87,7 @@ Subject: [PATCH] Integrate ridables
  .../controller/ControllerMoveWASDWater.java   |  42 ++++++
  .../craftbukkit/entity/CraftLivingEntity.java |  10 ++
  .../bukkit/craftbukkit/entity/CraftMob.java   |  12 ++
- 83 files changed, 958 insertions(+), 92 deletions(-)
+ 83 files changed, 980 insertions(+), 99 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
@@ -274,7 +274,7 @@ index 15db67de0..2e418ee14 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityCat.java b/src/main/java/net/minecraft/server/EntityCat.java
-index 719983077..dde268386 100644
+index 719983077..84d01f6f9 100644
 --- a/src/main/java/net/minecraft/server/EntityCat.java
 +++ b/src/main/java/net/minecraft/server/EntityCat.java
 @@ -16,7 +16,7 @@ public class EntityCat extends EntityTameableAnimal {
@@ -294,6 +294,96 @@ index 719983077..dde268386 100644
      }
  
      public MinecraftKey ee() {
+@@ -196,7 +197,7 @@ public class EntityCat extends EntityTameableAnimal {
+ 
+     @Override
+     public boolean C(Entity entity) {
+-        return entity.damageEntity(DamageSource.mobAttack(this), 3.0F);
++        return getRider() == null && entity.damageEntity(DamageSource.mobAttack(this), 3.0F); // Purpur
+     }
+ 
+     @Override
+@@ -268,7 +269,7 @@ public class EntityCat extends EntityTameableAnimal {
+ 
+     @Override
+     public boolean mate(EntityAnimal entityanimal) {
+-        if (!this.isTamed()) {
++        if (getRider() != null || !this.isTamed()) { // Purpur
+             return false;
+         } else if (!(entityanimal instanceof EntityCat)) {
+             return false;
+@@ -299,6 +300,7 @@ public class EntityCat extends EntityTameableAnimal {
+ 
+     @Override
+     public boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++        if (getRider() != null) return false; // Purpur
+         ItemStack itemstack = entityhuman.b(enumhand);
+         Item item = itemstack.getItem();
+ 
+@@ -347,6 +349,13 @@ public class EntityCat extends EntityTameableAnimal {
+         boolean flag = super.a(entityhuman, enumhand);
+ 
+         if (flag) {
++            // Purpur start
++            if (getRider() != null) {
++                setSitting(false);
++                u(false); // setSleepingWithOwner
++                v(false); // setHeadDown
++            }
++            // Purpur end
+             this.setPersistent();
+         }
+ 
+@@ -394,7 +403,7 @@ public class EntityCat extends EntityTameableAnimal {
+ 
+         @Override
+         public boolean a() {
+-            if (!this.a.isTamed()) {
++            if (this.a.getRider() != null || !this.a.isTamed()) { // Purpur
+                 return false;
+             } else if (this.a.isSitting()) {
+                 return false;
+@@ -447,7 +456,7 @@ public class EntityCat extends EntityTameableAnimal {
+ 
+         @Override
+         public boolean b() {
+-            return this.a.isTamed() && !this.a.isSitting() && this.b != null && this.b.isSleeping() && this.c != null && !this.g();
++            return this.a.getRider() == null && this.a.isTamed() && !this.a.isSitting() && this.b != null && this.b.isSleeping() && this.c != null && !this.g(); // Purpur
+         }
+ 
+         @Override
+@@ -544,8 +553,15 @@ public class EntityCat extends EntityTameableAnimal {
+ 
+         @Override
+         public boolean a() {
+-            return super.a() && !this.d.isTamed();
++            return this.d.getRider() == null && super.a() && !this.d.isTamed(); // Purpur
++        }
++
++        // Purpur start
++        @Override
++        public boolean b() {
++            return this.d.getRider() == null && super.b();
+         }
++        // Purpur end
+     }
+ 
+     static class a<T extends EntityLiving> extends PathfinderGoalAvoidTarget<T> {
+@@ -561,12 +577,12 @@ public class EntityCat extends EntityTameableAnimal {
+ 
+         @Override
+         public boolean a() {
+-            return !this.i.isTamed() && super.a();
++            return this.i.getRider() == null && !this.i.isTamed() && super.a(); // Purpur
+         }
+ 
+         @Override
+         public boolean b() {
+-            return !this.i.isTamed() && super.b();
++            return this.i.getRider() == null && !this.i.isTamed() && super.b(); // Purpur
+         }
+     }
+ }
 diff --git a/src/main/java/net/minecraft/server/EntityCaveSpider.java b/src/main/java/net/minecraft/server/EntityCaveSpider.java
 index 89c9306df..e9ec28362 100644
 --- a/src/main/java/net/minecraft/server/EntityCaveSpider.java
@@ -1937,7 +2027,7 @@ index e4eecf568..80bd32b79 100644
          this.bC = Blocks.SAND;
          this.K = 1.0F;
 diff --git a/src/main/java/net/minecraft/server/EntityTypes.java b/src/main/java/net/minecraft/server/EntityTypes.java
-index fb0c6bce0..4979f77b7 100644
+index 759e8b443..3fd1f8f49 100644
 --- a/src/main/java/net/minecraft/server/EntityTypes.java
 +++ b/src/main/java/net/minecraft/server/EntityTypes.java
 @@ -262,6 +262,10 @@ public class EntityTypes<T extends Entity> {
