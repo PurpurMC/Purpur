@@ -83,6 +83,11 @@ mobs
         - **default**: true
         - **description**: Control if giant zombies have AI instead of just standing there
 
+* iron_golem
+    * swims
+        - **default**: true
+        - **description**: Set whether iron golem can swim or not
+
 * snow_golem
     * drops-pumpkin-when-sheared
         - **default**: true
