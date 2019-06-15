@@ -1,20 +1,20 @@
-From 6f07fe3a5416402a1f559f3f70328ac6dceed30c Mon Sep 17 00:00:00 2001
+From 97c7a12cb8b363b0d51dc2d80c9528718eb29e49 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
 
 ---
  .../server/ControllerLookDolphin.java         |   4 +-
- .../java/net/minecraft/server/Entity.java     |  25 +++-
+ .../java/net/minecraft/server/Entity.java     |  28 +++-
  .../net/minecraft/server/EntityAgeable.java   |   2 +-
- .../java/net/minecraft/server/EntityBat.java  |  25 ++++
+ .../java/net/minecraft/server/EntityBat.java  |  22 +++
  .../net/minecraft/server/EntityBlaze.java     |  15 +-
- .../java/net/minecraft/server/EntityCat.java  |  34 +++--
+ .../java/net/minecraft/server/EntityCat.java  |  36 +++--
  .../minecraft/server/EntityCaveSpider.java    |   1 +
  .../net/minecraft/server/EntityChicken.java   |   3 +-
  .../java/net/minecraft/server/EntityCod.java  |   1 +
  .../java/net/minecraft/server/EntityCow.java  |   1 +
- .../net/minecraft/server/EntityCreeper.java   |  50 +++++++
+ .../net/minecraft/server/EntityCreeper.java   |  56 ++++++++
  .../net/minecraft/server/EntityDolphin.java   |  18 ++-
  .../net/minecraft/server/EntityDrowned.java   |   7 +-
  .../minecraft/server/EntityEnderDragon.java   |   1 +
@@ -142,7 +142,7 @@ Subject: [PATCH] Integrate ridables
  .../controller/ControllerMoveWASDWater.java   |  42 ++++++
  .../craftbukkit/entity/CraftLivingEntity.java |  10 ++
  .../bukkit/craftbukkit/entity/CraftMob.java   |  12 ++
- 138 files changed, 1137 insertions(+), 107 deletions(-)
+ 138 files changed, 1145 insertions(+), 107 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
@@ -171,7 +171,7 @@ index 454627f65..df3d6cf28 100644
              this.d = false;
              this.a.aM = this.a(this.a.aM, this.h() + 20.0F, this.b);
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 352b6dfb3..0a34957d8 100644
+index 352b6dfb3..a0e66b7d0 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -78,6 +78,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -221,13 +221,16 @@ index 352b6dfb3..0a34957d8 100644
              this.passengers.remove(entity);
              entity.j = 60;
          }
-@@ -3221,4 +3231,17 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3221,4 +3231,20 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      public void setMot(double d0, double d1, double d2) {
          this.setMot(new Vec3D(d0, d1, d2));
      }
 +
 +    // Purpur start
 +    public void onMount(EntityHuman entityhuman) {
++        if (this instanceof EntityInsentient) {
++            ((EntityInsentient) this).setGoalTarget(null);
++        }
 +        entityhuman.setJumping(false); // fixes jump on mount
 +    }
 +
@@ -253,7 +256,7 @@ index e87754ef3..553245ebe 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityBat.java b/src/main/java/net/minecraft/server/EntityBat.java
-index 4c283c33b..5344a6cf2 100644
+index 4c283c33b..3175f6062 100644
 --- a/src/main/java/net/minecraft/server/EntityBat.java
 +++ b/src/main/java/net/minecraft/server/EntityBat.java
 @@ -3,6 +3,7 @@ package net.minecraft.server;
@@ -289,21 +292,18 @@ index 4c283c33b..5344a6cf2 100644
          super.mobTick();
          BlockPosition blockposition = new BlockPosition(this);
          BlockPosition blockposition1 = blockposition.up();
-@@ -229,4 +241,17 @@ public class EntityBat extends EntityAmbient {
+@@ -229,4 +241,14 @@ public class EntityBat extends EntityAmbient {
      protected float b(EntityPose entitypose, EntitySize entitysize) {
          return entitysize.height / 2.0F;
      }
 +
 +    // Purpur start
 +    @Override
-+    protected boolean a(EntityHuman entityhuman, EnumHand enumhand) {
++    public void onMount(EntityHuman entityhuman) {
 +        if (isAsleep()) {
-+            if (CraftEventFactory.handleBatToggleSleepEvent(this, true)) {
-+                setAsleep(false);
-+                world.a(null, 1025, new BlockPosition(this).up(), 0);
-+            }
++            setAsleep(false);
++            world.a(null, 1025, new BlockPosition(this).up(), 0);
 +        }
-+        return !isAsleep() && super.a(entityhuman, enumhand);
 +    }
 +    // Purpur end
  }
@@ -355,7 +355,7 @@ index 15db67de0..325c642f1 100644
  
              return entityliving != null && entityliving.isAlive();
 diff --git a/src/main/java/net/minecraft/server/EntityCat.java b/src/main/java/net/minecraft/server/EntityCat.java
-index 719983077..4fa638b05 100644
+index 719983077..ed18dedd6 100644
 --- a/src/main/java/net/minecraft/server/EntityCat.java
 +++ b/src/main/java/net/minecraft/server/EntityCat.java
 @@ -16,7 +16,7 @@ public class EntityCat extends EntityTameableAnimal {
@@ -410,21 +410,23 @@ index 719983077..4fa638b05 100644
                      this.goalSit.setSitting(!this.isSitting());
                  }
              }
-@@ -347,6 +349,13 @@ public class EntityCat extends EntityTameableAnimal {
-         boolean flag = super.a(entityhuman, enumhand);
+@@ -381,6 +383,15 @@ public class EntityCat extends EntityTameableAnimal {
  
-         if (flag) {
-+            // Purpur start
-+            if (getRider() != null) {
-+                setSitting(false);
-+                u(false); // setSleepingWithOwner
-+                v(false); // setHeadDown
-+            }
-+            // Purpur end
-             this.setPersistent();
-         }
+     }
  
-@@ -394,7 +403,7 @@ public class EntityCat extends EntityTameableAnimal {
++    // Purpur start
++    public void onMount(EntityHuman entityhuman) {
++        setSitting(false);
++        u(false); // setSleepingWithOwner
++        v(false); // setHeadDown
++        super.onMount(entityhuman);
++    }
++    // Purpur end
++
+     static class b extends PathfinderGoal {
+ 
+         private final EntityCat a;
+@@ -394,7 +405,7 @@ public class EntityCat extends EntityTameableAnimal {
  
          @Override
          public boolean a() {
@@ -433,7 +435,7 @@ index 719983077..4fa638b05 100644
                  return false;
              } else if (this.a.isSitting()) {
                  return false;
-@@ -447,7 +456,7 @@ public class EntityCat extends EntityTameableAnimal {
+@@ -447,7 +458,7 @@ public class EntityCat extends EntityTameableAnimal {
  
          @Override
          public boolean b() {
@@ -442,7 +444,7 @@ index 719983077..4fa638b05 100644
          }
  
          @Override
-@@ -544,8 +553,15 @@ public class EntityCat extends EntityTameableAnimal {
+@@ -544,8 +555,15 @@ public class EntityCat extends EntityTameableAnimal {
  
          @Override
          public boolean a() {
@@ -459,7 +461,7 @@ index 719983077..4fa638b05 100644
      }
  
      static class a<T extends EntityLiving> extends PathfinderGoalAvoidTarget<T> {
-@@ -561,12 +577,12 @@ public class EntityCat extends EntityTameableAnimal {
+@@ -561,12 +579,12 @@ public class EntityCat extends EntityTameableAnimal {
  
          @Override
          public boolean a() {
@@ -532,7 +534,7 @@ index f053ff0e5..16a35418f 100644
  
      @Override
 diff --git a/src/main/java/net/minecraft/server/EntityCreeper.java b/src/main/java/net/minecraft/server/EntityCreeper.java
-index 0c2c3c730..f4b6f6846 100644
+index 0c2c3c730..c66aed65e 100644
 --- a/src/main/java/net/minecraft/server/EntityCreeper.java
 +++ b/src/main/java/net/minecraft/server/EntityCreeper.java
 @@ -20,6 +20,7 @@ public class EntityCreeper extends EntityMonster {
@@ -543,7 +545,7 @@ index 0c2c3c730..f4b6f6846 100644
      }
  
      @Override
-@@ -275,4 +276,53 @@ public class EntityCreeper extends EntityMonster {
+@@ -275,4 +276,59 @@ public class EntityCreeper extends EntityMonster {
      public void setCausedHeadDrop() {
          ++this.bD;
      }
@@ -565,6 +567,12 @@ index 0c2c3c730..f4b6f6846 100644
 +            prevSpacebarCharge = spacebarCharge;
 +        }
 +        super.mobTick();
++    }
++
++    @Override
++    public void onMount(EntityHuman entityhuman) {
++        setIgnited(false);
++        super.onMount(entityhuman);
 +    }
 +
 +    private int spacebarCharge = 0;
@@ -800,7 +808,7 @@ index a28fbdf1e..36229a2c4 100644
                  this.i.setMot(this.i.getMot().add(0.0D, 0.005D, 0.0D));
              }
 diff --git a/src/main/java/net/minecraft/server/EntityFox.java b/src/main/java/net/minecraft/server/EntityFox.java
-index b363e9ce9..b9f0d1edb 100644
+index b363e9ce9..b44e71402 100644
 --- a/src/main/java/net/minecraft/server/EntityFox.java
 +++ b/src/main/java/net/minecraft/server/EntityFox.java
 @@ -48,6 +48,7 @@ public class EntityFox extends EntityAnimal {
@@ -882,15 +890,15 @@ index b363e9ce9..b9f0d1edb 100644
 +    public void onMount(EntityHuman entityhuman) {
 +        setCanPickupLoot(false);
 +        stopActions();
-+        setGoalTarget(null);
 +        setChasing(false);
 +        spit(getEquipment(EnumItemSlot.MAINHAND));
-+
++        super.onMount(entityhuman);
 +    }
 +
 +    @Override
 +    public void onDismount(EntityHuman entityhuman) {
 +        setCanPickupLoot(true);
++        super.onDismount(entityhuman);
 +    }
 +    // Purpur end
 +
