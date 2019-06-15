@@ -1,4 +1,4 @@
-From 03b6d400c54c19ffdd06a4fcebedbaa9ebcd53be Mon Sep 17 00:00:00 2001
+From 3d00bada2fc60e58a12a65c4bf1295555e45d050 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
@@ -9,12 +9,12 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityAgeable.java   |   2 +-
  .../java/net/minecraft/server/EntityBat.java  |  25 ++++
  .../net/minecraft/server/EntityBlaze.java     |   3 +-
- .../java/net/minecraft/server/EntityCat.java  |  32 +++--
+ .../java/net/minecraft/server/EntityCat.java  |  34 +++--
  .../minecraft/server/EntityCaveSpider.java    |   1 +
  .../net/minecraft/server/EntityChicken.java   |   3 +-
  .../java/net/minecraft/server/EntityCod.java  |   1 +
  .../java/net/minecraft/server/EntityCow.java  |   1 +
- .../net/minecraft/server/EntityCreeper.java   |   1 +
+ .../net/minecraft/server/EntityCreeper.java   |  50 +++++++
  .../net/minecraft/server/EntityDolphin.java   |  18 ++-
  .../net/minecraft/server/EntityDrowned.java   |   7 +-
  .../minecraft/server/EntityEnderDragon.java   |   1 +
@@ -79,6 +79,23 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityZombie.java    |   1 +
  .../minecraft/server/EntityZombieHusk.java    |   1 +
  .../server/EntityZombieVillager.java          |   1 +
+ .../server/PathfinderGoalAvoidTarget.java     |   9 +-
+ .../minecraft/server/PathfinderGoalBreed.java |   4 +-
+ .../server/PathfinderGoalCatSitOnBed.java     |   1 +
+ .../server/PathfinderGoalFollowOwner.java     |   2 +
+ .../server/PathfinderGoalGotoTarget.java      |   2 +
+ .../server/PathfinderGoalHurtByTarget.java    |   1 +
+ .../server/PathfinderGoalJumpOnBlock.java     |   1 +
+ .../server/PathfinderGoalLeapAtTarget.java    |   2 +
+ .../server/PathfinderGoalLookAtPlayer.java    |   2 +
+ .../server/PathfinderGoalMeleeAttack.java     |   2 +
+ ...PathfinderGoalNearestAttackableTarget.java |   1 +
+ .../server/PathfinderGoalOcelotAttack.java    |   2 +
+ .../PathfinderGoalRandomLookaround.java       |   2 +
+ .../server/PathfinderGoalRandomStroll.java    |   2 +
+ .../PathfinderGoalRandomTargetNonTamed.java   |   2 +
+ .../minecraft/server/PathfinderGoalSit.java   |   2 +
+ .../server/PathfinderGoalTarget.java          |   1 +
  .../java/net/pl3x/purpur/PurpurConfig.java    | 136 ++++++++++++++++++
  .../purpur/controller/ControllerLookWASD.java |  74 ++++++++++
  .../purpur/controller/ControllerMoveWASD.java |  77 ++++++++++
@@ -87,7 +104,7 @@ Subject: [PATCH] Integrate ridables
  .../controller/ControllerMoveWASDWater.java   |  42 ++++++
  .../craftbukkit/entity/CraftLivingEntity.java |  10 ++
  .../bukkit/craftbukkit/entity/CraftMob.java   |  12 ++
- 83 files changed, 980 insertions(+), 99 deletions(-)
+ 100 files changed, 1061 insertions(+), 107 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
@@ -274,7 +291,7 @@ index 15db67de0..2e418ee14 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityCat.java b/src/main/java/net/minecraft/server/EntityCat.java
-index 719983077..84d01f6f9 100644
+index 719983077..4fa638b05 100644
 --- a/src/main/java/net/minecraft/server/EntityCat.java
 +++ b/src/main/java/net/minecraft/server/EntityCat.java
 @@ -16,7 +16,7 @@ public class EntityCat extends EntityTameableAnimal {
@@ -320,6 +337,15 @@ index 719983077..84d01f6f9 100644
          ItemStack itemstack = entityhuman.b(enumhand);
          Item item = itemstack.getItem();
  
+@@ -322,7 +324,7 @@ public class EntityCat extends EntityTameableAnimal {
+                         this.heal((float) item.getFoodInfo().getNutrition());
+                         return true;
+                     }
+-                } else if (!this.world.isClientSide) {
++                } else if (!entityhuman.isSneaking()) { // Purpur
+                     this.goalSit.setSitting(!this.isSitting());
+                 }
+             }
 @@ -347,6 +349,13 @@ public class EntityCat extends EntityTameableAnimal {
          boolean flag = super.a(entityhuman, enumhand);
  
@@ -442,7 +468,7 @@ index f053ff0e5..16a35418f 100644
  
      @Override
 diff --git a/src/main/java/net/minecraft/server/EntityCreeper.java b/src/main/java/net/minecraft/server/EntityCreeper.java
-index 0c2c3c730..2f4033b2c 100644
+index 0c2c3c730..f4b6f6846 100644
 --- a/src/main/java/net/minecraft/server/EntityCreeper.java
 +++ b/src/main/java/net/minecraft/server/EntityCreeper.java
 @@ -20,6 +20,7 @@ public class EntityCreeper extends EntityMonster {
@@ -453,6 +479,60 @@ index 0c2c3c730..2f4033b2c 100644
      }
  
      @Override
+@@ -275,4 +276,53 @@ public class EntityCreeper extends EntityMonster {
+     public void setCausedHeadDrop() {
+         ++this.bD;
+     }
++
++    // Purpur start
++    @Override
++    protected void mobTick() {
++        if (powerToggleDelay > 0) {
++            powerToggleDelay--;
++        }
++        if (getRider() != null) {
++            if (getRider().getForward() != 0 || getRider().getStrafe() != 0) {
++                spacebarCharge = 0;
++                setIgnited(false);
++            }
++            if (spacebarCharge == prevSpacebarCharge) {
++                spacebarCharge = 0;
++            }
++            prevSpacebarCharge = spacebarCharge;
++        }
++        super.mobTick();
++    }
++
++    private int spacebarCharge = 0;
++    private int prevSpacebarCharge = 0;
++    private int powerToggleDelay = 0;
++
++    @Override
++    public boolean onSpacebar() {
++        if (powerToggleDelay > 0) {
++            return true; // just toggled power, do not jump
++        }
++        spacebarCharge++;
++        if (spacebarCharge > maxFuseTicks - 2) {
++            spacebarCharge = 0;
++            if (getRider().getBukkitEntity().hasPermission("allow.powered.creeper")) {
++                powerToggleDelay = 20;
++                setPowered(!isPowered());
++                setIgnited(false);
++                return true;
++            }
++        }
++        if (!isIgnited()) {
++            if (getRider() != null && getRider().getForward() == 0 && getRider().getStrafe() == 0 &&
++                    getRider().getBukkitEntity().hasPermission("allow.special.creeper")) {
++                setIgnited(true);
++                return true;
++            }
++        }
++        return getForward() == 0 && getStrafe() == 0; // do not jump if standing still
++    }
++    // Purpur end
+ }
 diff --git a/src/main/java/net/minecraft/server/EntityDolphin.java b/src/main/java/net/minecraft/server/EntityDolphin.java
 index 04060bb3e..d13d3309c 100644
 --- a/src/main/java/net/minecraft/server/EntityDolphin.java
@@ -2161,6 +2241,318 @@ index 5cfda3160..ac460de59 100644
          this.setVillagerData(this.getVillagerData().withProfession((VillagerProfession) IRegistry.VILLAGER_PROFESSION.a(this.random)));
      }
  
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalAvoidTarget.java b/src/main/java/net/minecraft/server/PathfinderGoalAvoidTarget.java
+index 6e299144c..3571db9aa 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalAvoidTarget.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalAvoidTarget.java
+@@ -18,12 +18,7 @@ public class PathfinderGoalAvoidTarget<T extends EntityLiving> extends Pathfinde
+     private final PathfinderTargetCondition k;
+ 
+     public PathfinderGoalAvoidTarget(EntityCreature entitycreature, Class<T> oclass, float f, double d0, double d1) {
+-        Predicate predicate = (entityliving) -> {
+-            return true;
+-        };
+-        Predicate predicate1 = IEntitySelector.e;
+-
+-        this(entitycreature, oclass, predicate, f, d0, d1, predicate1::test);
++        this(entitycreature, oclass, (entityliving) -> true, f, d0, d1, IEntitySelector.e::test); // Purpur - fix decompile error
+     }
+ 
+     public PathfinderGoalAvoidTarget(EntityCreature entitycreature, Class<T> oclass, Predicate<EntityLiving> predicate, float f, double d0, double d1, Predicate<EntityLiving> predicate1) {
+@@ -47,6 +42,7 @@ public class PathfinderGoalAvoidTarget<T extends EntityLiving> extends Pathfinde
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         this.b = this.a.world.a(this.f, this.k, this.a, this.a.locX, this.a.locY, this.a.locZ, this.a.getBoundingBox().grow((double) this.c, 3.0D, (double) this.c));
+         if (this.b == null) {
+             return false;
+@@ -66,6 +62,7 @@ public class PathfinderGoalAvoidTarget<T extends EntityLiving> extends Pathfinde
+ 
+     @Override
+     public boolean b() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return !this.e.n();
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalBreed.java b/src/main/java/net/minecraft/server/PathfinderGoalBreed.java
+index 9d0b1ffef..88fcf4123 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalBreed.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalBreed.java
+@@ -29,16 +29,18 @@ public class PathfinderGoalBreed extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.animal.getRider() != null) return false; // Purpur
+         if (!this.animal.isInLove()) {
+             return false;
+         } else {
+             this.partner = this.h();
+-            return this.partner != null;
++            return this.partner != null && this.partner.getRider() == null; // Purpur
+         }
+     }
+ 
+     @Override
+     public boolean b() {
++        if (this.animal.getRider() != null || this.partner.getRider() != null) return false; // Purpur
+         return this.partner.isAlive() && this.partner.isInLove() && this.f < 60;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalCatSitOnBed.java b/src/main/java/net/minecraft/server/PathfinderGoalCatSitOnBed.java
+index 8a251cb00..d4754a8c0 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalCatSitOnBed.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalCatSitOnBed.java
+@@ -15,6 +15,7 @@ public class PathfinderGoalCatSitOnBed extends PathfinderGoalGotoTarget {
+ 
+     @Override
+     public boolean a() {
++        if (this.g.getRider() != null) return false; // Purpur
+         return this.g.isTamed() && !this.g.isSitting() && !this.g.eg() && super.a();
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalFollowOwner.java b/src/main/java/net/minecraft/server/PathfinderGoalFollowOwner.java
+index 896d2d56a..55318e137 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalFollowOwner.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalFollowOwner.java
+@@ -34,6 +34,7 @@ public class PathfinderGoalFollowOwner extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         EntityLiving entityliving = this.a.getOwner();
+ 
+         if (entityliving == null) {
+@@ -52,6 +53,7 @@ public class PathfinderGoalFollowOwner extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return !this.e.n() && this.a.h((Entity) this.c) > (double) (this.g * this.g) && !this.a.isSitting();
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalGotoTarget.java b/src/main/java/net/minecraft/server/PathfinderGoalGotoTarget.java
+index 5c2b7b0a5..6f2d0ce7b 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalGotoTarget.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalGotoTarget.java
+@@ -31,6 +31,7 @@ public abstract class PathfinderGoalGotoTarget extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         if (this.c > 0) {
+             --this.c;
+             return false;
+@@ -46,6 +47,7 @@ public abstract class PathfinderGoalGotoTarget extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return this.d >= -this.g && this.d <= 1200 && this.a(this.a.world, this.e);
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalHurtByTarget.java b/src/main/java/net/minecraft/server/PathfinderGoalHurtByTarget.java
+index dc9652a5e..3b5989ddb 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalHurtByTarget.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalHurtByTarget.java
+@@ -20,6 +20,7 @@ public class PathfinderGoalHurtByTarget extends PathfinderGoalTarget {
+ 
+     @Override
+     public boolean a() {
++        if (this.e.getRider() != null) return false; // Purpur
+         int i = this.e.cs();
+         EntityLiving entityliving = this.e.getLastDamager();
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalJumpOnBlock.java b/src/main/java/net/minecraft/server/PathfinderGoalJumpOnBlock.java
+index 84d2cf8df..856a79653 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalJumpOnBlock.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalJumpOnBlock.java
+@@ -11,6 +11,7 @@ public class PathfinderGoalJumpOnBlock extends PathfinderGoalGotoTarget {
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return this.g.isTamed() && !this.g.isSitting() && super.a();
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalLeapAtTarget.java b/src/main/java/net/minecraft/server/PathfinderGoalLeapAtTarget.java
+index b89d16136..08767e28b 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalLeapAtTarget.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalLeapAtTarget.java
+@@ -16,6 +16,7 @@ public class PathfinderGoalLeapAtTarget extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         if (this.a.isVehicle()) {
+             return false;
+         } else {
+@@ -32,6 +33,7 @@ public class PathfinderGoalLeapAtTarget extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return !this.a.onGround;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalLookAtPlayer.java b/src/main/java/net/minecraft/server/PathfinderGoalLookAtPlayer.java
+index 614a8471d..a57752bd2 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalLookAtPlayer.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalLookAtPlayer.java
+@@ -34,6 +34,7 @@ public class PathfinderGoalLookAtPlayer extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         if (this.a.getRandom().nextFloat() >= this.g) {
+             return false;
+         } else {
+@@ -53,6 +54,7 @@ public class PathfinderGoalLookAtPlayer extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return !this.b.isAlive() ? false : (this.a.h(this.b) > (double) (this.c * this.c) ? false : this.f > 0);
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalMeleeAttack.java b/src/main/java/net/minecraft/server/PathfinderGoalMeleeAttack.java
+index 702a75087..6d49d8437 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalMeleeAttack.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalMeleeAttack.java
+@@ -25,6 +25,7 @@ public class PathfinderGoalMeleeAttack extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         long i = this.a.world.getTime();
+ 
+         if (i - this.k < 20L) {
+@@ -46,6 +47,7 @@ public class PathfinderGoalMeleeAttack extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.a.getRider() != null) return false; // Purpur
+         EntityLiving entityliving = this.a.getGoalTarget();
+ 
+         return entityliving == null ? false : (!entityliving.isAlive() ? false : (!this.e ? !this.a.getNavigation().n() : (!this.a.a(new BlockPosition(entityliving)) ? false : !(entityliving instanceof EntityHuman) || !entityliving.isSpectator() && !((EntityHuman) entityliving).isCreative())));
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalNearestAttackableTarget.java b/src/main/java/net/minecraft/server/PathfinderGoalNearestAttackableTarget.java
+index 53399e311..d03130fcf 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalNearestAttackableTarget.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalNearestAttackableTarget.java
+@@ -29,6 +29,7 @@ public class PathfinderGoalNearestAttackableTarget<T extends EntityLiving> exten
+ 
+     @Override
+     public boolean a() {
++        if (this.e.getRider() != null) return false; // Purpur
+         if (this.b > 0 && this.e.getRandom().nextInt(this.b) != 0) {
+             return false;
+         } else {
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalOcelotAttack.java b/src/main/java/net/minecraft/server/PathfinderGoalOcelotAttack.java
+index bf52ecc40..2bb7e0c1e 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalOcelotAttack.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalOcelotAttack.java
+@@ -17,6 +17,7 @@ public class PathfinderGoalOcelotAttack extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.b.getRider() != null) return false; // Purpur
+         EntityLiving entityliving = this.b.getGoalTarget();
+ 
+         if (entityliving == null) {
+@@ -29,6 +30,7 @@ public class PathfinderGoalOcelotAttack extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.b.getRider() != null) return false; // Purpur
+         return !this.c.isAlive() ? false : (this.b.h((Entity) this.c) > 225.0D ? false : !this.b.getNavigation().n() || this.a());
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalRandomLookaround.java b/src/main/java/net/minecraft/server/PathfinderGoalRandomLookaround.java
+index 316205ebf..8cc9f4fe1 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalRandomLookaround.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalRandomLookaround.java
+@@ -16,11 +16,13 @@ public class PathfinderGoalRandomLookaround extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return this.a.getRandom().nextFloat() < 0.02F;
+     }
+ 
+     @Override
+     public boolean b() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return this.d >= 0;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalRandomStroll.java b/src/main/java/net/minecraft/server/PathfinderGoalRandomStroll.java
+index e92eb3019..4b7c33af5 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalRandomStroll.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalRandomStroll.java
+@@ -26,6 +26,7 @@ public class PathfinderGoalRandomStroll extends PathfinderGoal {
+ 
+     @Override
+     public boolean a() {
++        if (this.a.getRider() != null) return false; // Purpur
+         if (this.a.isVehicle()) {
+             return false;
+         } else {
+@@ -60,6 +61,7 @@ public class PathfinderGoalRandomStroll extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.a.getRider() != null) return false; // Purpur
+         return !this.a.getNavigation().n();
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalRandomTargetNonTamed.java b/src/main/java/net/minecraft/server/PathfinderGoalRandomTargetNonTamed.java
+index f572f3367..218c35bf7 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalRandomTargetNonTamed.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalRandomTargetNonTamed.java
+@@ -14,11 +14,13 @@ public class PathfinderGoalRandomTargetNonTamed<T extends EntityLiving> extends
+ 
+     @Override
+     public boolean a() {
++        if (this.i.getRider() != null) return false; // Purpur
+         return !this.i.isTamed() && super.a();
+     }
+ 
+     @Override
+     public boolean b() {
++        if (this.i.getRider() != null) return false; // Purpur
+         return this.d != null ? this.d.a(this.e, this.c) : super.b();
+     }
+ }
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalSit.java b/src/main/java/net/minecraft/server/PathfinderGoalSit.java
+index 211602083..cdb1393bf 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalSit.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalSit.java
+@@ -14,11 +14,13 @@ public class PathfinderGoalSit extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.entity.getRider() != null) return false; // Purpur
+         return this.willSit;
+     }
+ 
+     @Override
+     public boolean a() {
++        if (this.entity.getRider() != null) return false; // Purpur
+         if (!this.entity.isTamed()) {
+             return this.willSit && this.entity.getGoalTarget() == null; // CraftBukkit - Allow sitting for wild animals
+         } else if (this.entity.au()) {
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalTarget.java b/src/main/java/net/minecraft/server/PathfinderGoalTarget.java
+index 95afc8eee..59a50e549 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalTarget.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalTarget.java
+@@ -27,6 +27,7 @@ public abstract class PathfinderGoalTarget extends PathfinderGoal {
+ 
+     @Override
+     public boolean b() {
++        if (this.e.getRider() != null) return false; // Purpur
+         EntityLiving entityliving = this.e.getGoalTarget();
+ 
+         if (entityliving == null) {
 diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
 index 8f3367ae1..1f8e83110 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
