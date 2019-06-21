@@ -166,6 +166,11 @@ campfires-go-out-in-rain
 * **default**: true
 * **description**: Campfires burn out in the rain
 
+allow-moist-soil-from-water-below
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Allow soil to moisten from water directly below it
+
 allow-sign-colors
 ~~~~~~~~~~~~~~~~~
 * **default**: true
