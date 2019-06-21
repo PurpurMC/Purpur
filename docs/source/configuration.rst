@@ -88,6 +88,11 @@ mobs
         - **default**: true
         - **description**: Set whether iron golem can swim or not
 
+* phantom
+    * spawn-in-the-end
+        - **default**: true
+        - **description**: Set whether phantoms spawn naturally in the end
+
 * snow_golem
     * drops-pumpkin-when-sheared
         - **default**: true
