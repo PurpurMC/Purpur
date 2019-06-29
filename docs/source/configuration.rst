@@ -131,9 +131,10 @@ controllable-minecarts
 
 .. note::
     Example of block-speed overrides:
-      minecraft:sand: 0.1 |br|
-      minecraft:stone: 0.6 |br|
-      minecraft:black_concrete: 1.0
+      * block-speed:
+         - minecraft:sand: 0.1
+         - minecraft:stone: 0.6
+         - minecraft:black_concrete: 1.0
 
 World Settings
 ==============
