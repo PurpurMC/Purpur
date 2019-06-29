@@ -4,6 +4,8 @@ Configuration
 
 This page details the various configuration settings exposed by Purpur in the purpur.yml file.
 
+.. |br| raw:: html
+
 .. contents::
    :depth: 1
    :local:
@@ -129,8 +131,8 @@ controllable-minecarts
 
 .. note::
     Example of block-speed overrides:
-      minecraft:sand: 0.1\n
-      minecraft:stone: 0.6\n
+      minecraft:sand: 0.1|br|
+      minecraft:stone: 0.6|br|
       minecraft:black_concrete: 1.0
 
 World Settings
