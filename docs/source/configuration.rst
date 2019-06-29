@@ -113,6 +113,25 @@ ridable
     - **default**: true
     - **description**: When true this mob is ridable by right clicking it while holding shift
 
+controllable-minecarts
+~~~~~~~~~~~~~~~~~~~~~~
+* enabled
+    - **default**: true
+    - **description**: Whether minecarts can be controlled with WASD when not on rails
+
+* base-speed
+    - **default**: 0.2
+    - **description**: Base speed of minecart when controlled with WASD
+
+* block-speed
+    - **default**: {}
+    - **description**: List of speed overrides per block type
+
+    .. example::
+        minecraft:sand: 0.1
+        minecraft:stone: 0.6
+        minecraft:black_concrete: 1.0
+
 World Settings
 ==============
 

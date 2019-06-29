@@ -1,40 +1,138 @@
-From c77c0887764d4c7cba2c3190e402a7dfeb06e232 Mon Sep 17 00:00:00 2001
+From 9da2048d2a3c85e768563be742404530ab681d5a Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Sat, 29 Jun 2019 02:32:40 -0500
 Subject: [PATCH] Controllable Minecarts
 
 ---
- .../server/EntityMinecartAbstract.java          | 17 +++++++++++++++++
- 1 file changed, 17 insertions(+)
+ .../java/net/minecraft/server/Entity.java     |  1 +
+ .../server/EntityMinecartAbstract.java        | 35 +++++++++++++++++++
+ .../java/net/pl3x/purpur/PurpurConfig.java    | 28 +++++++++++++++
+ 3 files changed, 64 insertions(+)
 
+diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
+index ca429be7db..ee099b6728 100644
+--- a/src/main/java/net/minecraft/server/Entity.java
++++ b/src/main/java/net/minecraft/server/Entity.java
+@@ -1294,6 +1294,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+         this.inLava = true;
+     }
+ 
++    public boolean isInLava() { return aD(); } // Purpur - OBFHELPER
+     public boolean aD() {
+         return this.inLava;
+     }
 diff --git a/src/main/java/net/minecraft/server/EntityMinecartAbstract.java b/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
-index 6df2930e2d..c8c8fcca1b 100644
+index 6df2930e2d..d300c05333 100644
 --- a/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
 +++ b/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
-@@ -336,6 +336,23 @@ public abstract class EntityMinecartAbstract extends Entity {
+@@ -4,6 +4,7 @@ import java.util.Iterator;
+ import java.util.List;
+ import javax.annotation.Nullable;
+ 
++import net.pl3x.purpur.PurpurConfig; // Purpur
+ // CraftBukkit start
+ import org.bukkit.Location;
+ import org.bukkit.entity.Vehicle;
+@@ -330,12 +331,46 @@ public abstract class EntityMinecartAbstract extends Entity {
+ 
+     public void a(int i, int j, int k, boolean flag) {}
+ 
++    // Purpur start
++    public double getControllableSpeed() {
++        BlockPosition position = new BlockPosition(this);
++        Block block = world.getType(position).getBlock();
++        if (!block.material.isSolid()) {
++            block = world.getType(position.shift(EnumDirection.DOWN)).getBlock();
++        }
++        Double speed = PurpurConfig.controllableMinecartsBlockSpeeds.get(block);
++        if (speed == null) {
++            speed = PurpurConfig.controllableMinecartsBaseSpeed;
++        }
++        return speed;
++    }
++    // Purpur end
++
+     protected void i() {
+         double d0 = this.getMaxSpeed();
+         Vec3D vec3d = this.getMot();
  
          this.setMot(MathHelper.a(vec3d.x, -d0, d0), vec3d.y, MathHelper.a(vec3d.z, -d0, d0));
          if (this.onGround) {
 +            // Purpur start
-+            Entity passenger = isVehicle() ? passengers.get(0) : null;
-+            if (passenger instanceof EntityHuman) {
-+                EntityHuman entityhuman = (EntityHuman) passenger;
-+                if (entityhuman.getForward() != 0.0F) {
-+                    org.bukkit.util.Vector dir = entityhuman.getBukkitEntity().getEyeLocation().getDirection().normalize();
-+                    if (entityhuman.getForward() < 0.0) {
-+                        dir.multiply(-0.25);
++            if (PurpurConfig.controllableMinecarts && !isInWater() && !isInLava() && !passengers.isEmpty()) {
++                Entity passenger = passengers.get(0);
++                if (passenger instanceof EntityHuman) {
++                    EntityHuman entityhuman = (EntityHuman) passenger;
++                    if (entityhuman.getForward() != 0.0F) {
++                        Vector dir = entityhuman.getBukkitEntity().getEyeLocation().getDirection().normalize().multiply(getControllableSpeed());
++                        if (entityhuman.getForward() < 0.0) {
++                            dir.multiply(-0.5);
++                        }
++                        setMot(new Vec3D(dir.getX(), getMot().y, dir.getZ()));
++                        setStepHeight(1.0F);
++                    } else {
++                        setStepHeight(0.0F);
 +                    }
-+                    setMot(new Vec3D(dir.getX(), getMot().y, dir.getZ()));
-+                    setStepHeight(1.0F);
-+                } else {
-+                    setStepHeight(0.0F);
++                    this.yaw = passenger.yaw - 90;
 +                }
-+                this.yaw = passenger.yaw - 90;
 +            }
 +            // Purpur end
              // CraftBukkit start - replace magic numbers with our variables
              this.setMot(new Vec3D(this.getMot().x * this.derailedX, this.getMot().y * this.derailedY, this.getMot().z * this.derailedZ));
              // CraftBukkit end
+diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+index 9c7b8f3827..c734ecaafe 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+@@ -1,7 +1,12 @@
+ package net.pl3x.purpur;
+ 
+ import com.google.common.base.Throwables;
++import net.minecraft.server.Block;
++import net.minecraft.server.Blocks;
++import net.minecraft.server.IRegistry;
++import net.minecraft.server.MinecraftKey;
+ import org.bukkit.Bukkit;
++import org.bukkit.configuration.ConfigurationSection;
+ import org.bukkit.configuration.InvalidConfigurationException;
+ import org.bukkit.configuration.file.YamlConfiguration;
+ 
+@@ -10,7 +15,9 @@ import java.io.IOException;
+ import java.lang.reflect.InvocationTargetException;
+ import java.lang.reflect.Method;
+ import java.lang.reflect.Modifier;
++import java.util.HashMap;
+ import java.util.List;
++import java.util.Map;
+ import java.util.logging.Level;
+ 
+ public class PurpurConfig {
+@@ -279,4 +286,25 @@ public class PurpurConfig {
+         ridableZombiePigman = getBoolean("settings.ridable.zombie_pigman", ridableZombiePigman);
+         ridableZombieVillager = getBoolean("settings.ridable.zombie_villager", ridableZombieVillager);
+     }
++
++    public static boolean controllableMinecarts = true;
++    public static double controllableMinecartsBaseSpeed = 0.1F;
++    public static Map<Block, Double> controllableMinecartsBlockSpeeds = new HashMap<>();
++    private static void controllableMinecarts() {
++        controllableMinecarts = getBoolean("settings.controllable-minecarts.enabled", controllableMinecarts);
++        controllableMinecartsBaseSpeed = getDouble("settings.controllable-minecarts.base-speed", controllableMinecartsBaseSpeed);
++        if (!config.contains("settings.controllable-minecarts.block-speed")) {
++            config.createSection("settings.controllable-minecarts.block-speed");
++        }
++        if (controllableMinecarts) {
++            ConfigurationSection section = config.getConfigurationSection("settings.controllable-minecarts.block-speed");
++            for (String key : section.getKeys(false)) {
++                Block block = IRegistry.BLOCK.get(new MinecraftKey(key));
++                if (block != null) {
++                    controllableMinecartsBlockSpeeds.put(block, section.getDouble(key, controllableMinecartsBaseSpeed));
++                    System.out.println(block + " === " +controllableMinecartsBlockSpeeds.get(block));
++                }
++            }
++        }
++    }
+ }
 -- 
 2.20.1
 
