@@ -1,24 +1,26 @@
-From a7a2dcc5ee627a8bc612f05449f5fc4f2ea36e1a Mon Sep 17 00:00:00 2001
+From 31d2f745b9a6252ba2da812d09aaea1391785bb2 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Thu, 9 May 2019 18:09:43 -0500
 Subject: [PATCH] Purpur config files
 
 ---
- .../net/minecraft/server/DedicatedServer.java |   8 ++
+ .../net/minecraft/server/DedicatedServer.java |   9 ++
  src/main/java/net/minecraft/server/World.java |   3 +
- .../java/net/pl3x/purpur/PurpurConfig.java    | 113 ++++++++++++++++++
- .../net/pl3x/purpur/PurpurWorldConfig.java    |  63 ++++++++++
+ .../java/net/pl3x/purpur/PurpurCommand.java   |  59 ++++++++
+ .../java/net/pl3x/purpur/PurpurConfig.java    | 127 ++++++++++++++++++
+ .../net/pl3x/purpur/PurpurWorldConfig.java    |  63 +++++++++
  .../org/bukkit/craftbukkit/CraftServer.java   |   2 +
  .../java/org/bukkit/craftbukkit/Main.java     |   8 ++
- 6 files changed, 197 insertions(+)
+ 7 files changed, 271 insertions(+)
+ create mode 100644 src/main/java/net/pl3x/purpur/PurpurCommand.java
  create mode 100644 src/main/java/net/pl3x/purpur/PurpurConfig.java
  create mode 100644 src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 
 diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
-index c1473330fa..3e32c211c7 100644
+index c1473330fa..f438323be1 100644
 --- a/src/main/java/net/minecraft/server/DedicatedServer.java
 +++ b/src/main/java/net/minecraft/server/DedicatedServer.java
-@@ -174,6 +174,14 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+@@ -174,6 +174,15 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
              return false;
          }
          com.destroystokyo.paper.PaperConfig.registerCommands();
@@ -29,6 +31,7 @@ index c1473330fa..3e32c211c7 100644
 +            DedicatedServer.LOGGER.error("Unable to load server configuration", e);
 +            return false;
 +        }
++        net.pl3x.purpur.PurpurConfig.registerCommands();
 +        // Purpur end
          com.destroystokyo.paper.VersionHistoryManager.INSTANCE.getClass(); // load version history now
          // Paper end
@@ -54,16 +57,83 @@ index a7a35d6a6f..c8f198fdf0 100644
          this.generator = gen;
          this.world = new CraftWorld((WorldServer) this, gen, env);
          this.ticksPerAnimalSpawns = this.getServer().getTicksPerAnimalSpawns(); // CraftBukkit
+diff --git a/src/main/java/net/pl3x/purpur/PurpurCommand.java b/src/main/java/net/pl3x/purpur/PurpurCommand.java
+new file mode 100644
+index 0000000000..293ed7da5f
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/PurpurCommand.java
+@@ -0,0 +1,59 @@
++package net.pl3x.purpur;
++
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.WorldServer;
++import org.bukkit.ChatColor;
++import org.bukkit.Location;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++
++import java.io.File;
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.List;
++import java.util.stream.Collectors;
++
++public class PurpurCommand extends Command {
++    public PurpurCommand(String name) {
++        super(name);
++        this.description = "Purpur related commands";
++        this.usageMessage = "/purpur [reload | version]";
++        this.setPermission("bukkit.command.purpur");
++    }
++
++    @Override
++    public List<String> tabComplete(CommandSender sender, String alias, String[] args, Location location) throws IllegalArgumentException {
++        if (args.length == 1) {
++            return Arrays.asList("reload", "version").stream()
++                    .filter(arg -> arg.startsWith(args[0].toLowerCase()))
++                    .collect(Collectors.toList());
++        }
++        return Collections.emptyList();
++    }
++
++    @Override
++    public boolean execute(CommandSender sender, String commandLabel, String[] args) {
++        if (!testPermission(sender)) return true;
++
++        if (args.length != 1) {
++            sender.sendMessage(ChatColor.RED + "Usage: " + usageMessage);
++            return false;
++        }
++
++        if (args[0].equals("reload")) {
++            Command.broadcastCommandMessage(sender, ChatColor.RED + "Please note that this command is not supported and may cause issues.");
++            Command.broadcastCommandMessage(sender, ChatColor.RED + "If you encounter any issues please use the /stop command to restart your server.");
++
++            MinecraftServer console = MinecraftServer.getServer();
++            net.pl3x.purpur.PurpurConfig.init((File) console.options.valueOf("purpur-settings"));
++            for (WorldServer world : console.getWorlds()) {
++                world.purpurConfig.init();
++            }
++            console.server.reloadCount++;
++
++            Command.broadcastCommandMessage(sender, ChatColor.GREEN + "Purpur config reload complete.");
++        }
++
++        return true;
++    }
++}
 diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
 new file mode 100644
-index 0000000000..108450adcb
+index 0000000000..2f87a929c1
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,127 @@
 +package net.pl3x.purpur;
 +
 +import com.google.common.base.Throwables;
++import net.minecraft.server.MinecraftServer;
 +import org.bukkit.Bukkit;
++import org.bukkit.command.Command;
 +import org.bukkit.configuration.InvalidConfigurationException;
 +import org.bukkit.configuration.file.YamlConfiguration;
 +
@@ -72,7 +142,9 @@ index 0000000000..108450adcb
 +import java.lang.reflect.InvocationTargetException;
 +import java.lang.reflect.Method;
 +import java.lang.reflect.Modifier;
++import java.util.HashMap;
 +import java.util.List;
++import java.util.Map;
 +import java.util.logging.Level;
 +
 +public class PurpurConfig {
@@ -88,6 +160,7 @@ index 0000000000..108450adcb
 +            + "Docs: https://purpur.readthedocs.org/ \n";
 +    private static File CONFIG_FILE;
 +    static YamlConfiguration config;
++    static Map<String, Command> commands;
 +    private static int version;
 +    private static boolean verbose;
 +
@@ -96,7 +169,7 @@ index 0000000000..108450adcb
 +        config = new YamlConfiguration();
 +        try {
 +            config.load(CONFIG_FILE);
-+        } catch (IOException ex) {
++        } catch (IOException ignore) {
 +        } catch (InvalidConfigurationException ex) {
 +            Bukkit.getLogger().log(Level.SEVERE, "Could not load purpur.yml, please correct your syntax errors", ex);
 +            throw Throwables.propagate(ex);
@@ -104,6 +177,9 @@ index 0000000000..108450adcb
 +        config.options().header(HEADER);
 +        config.options().copyDefaults(true);
 +        verbose = getBoolean("verbose", false);
++
++        commands = new HashMap<>();
++        commands.put("purpur", new PurpurCommand("purpur"));
 +
 +        version = getInt("config-version", CONFIG_VERSION);
 +        set("config-version", version);
@@ -118,6 +194,12 @@ index 0000000000..108450adcb
 +    protected static void log(Level level, String s) {
 +        if (verbose) {
 +            Bukkit.getLogger().log(level, s);
++        }
++    }
++
++    public static void registerCommands() {
++        for (Map.Entry<String, Command> entry : commands.entrySet()) {
++            MinecraftServer.getServer().server.getCommandMap().register(entry.getKey(), "Purpur", entry.getValue());
 +        }
 +    }
 +
