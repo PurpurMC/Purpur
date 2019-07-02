@@ -1,33 +1,31 @@
-From 9723b774d584480d457b3777d8c8334572d9fbd8 Mon Sep 17 00:00:00 2001
+From aded92344a7a557a303f95c9141040897596c767 Mon Sep 17 00:00:00 2001
 From: stonar96 <minecraft.stonar96@gmail.com>
 Date: Mon, 20 Aug 2018 03:03:58 +0200
 Subject: [PATCH] Anti-Xray
 
 ---
- .../destroystokyo/paper/PaperWorldConfig.java |  34 +
- .../antixray/ChunkPacketBlockController.java  |  45 ++
- .../ChunkPacketBlockControllerAntiXray.java   | 689 ++++++++++++++++++
+ .../com/destroystokyo/paper/PaperConfig.java  |   4 +-
+ .../destroystokyo/paper/PaperWorldConfig.java |  43 +
+ .../antixray/ChunkPacketBlockController.java  |  46 ++
+ .../ChunkPacketBlockControllerAntiXray.java   | 777 ++++++++++++++++++
  .../paper/antixray/ChunkPacketInfo.java       |  81 ++
- .../antixray/ChunkPacketInfoAntiXray.java     |  29 +
+ .../antixray/ChunkPacketInfoAntiXray.java     |  31 +
  .../paper/antixray/DataBitsReader.java        |  56 ++
- .../paper/antixray/DataBitsWriter.java        |  84 +++
+ .../paper/antixray/DataBitsWriter.java        |  84 ++
  src/main/java/net/minecraft/server/Chunk.java |   2 +-
- .../minecraft/server/ChunkMapDistance.java    |   2 +
- .../minecraft/server/ChunkProviderServer.java |  10 +
  .../minecraft/server/ChunkRegionLoader.java   |   4 +-
- .../net/minecraft/server/ChunkSection.java    |  17 +-
- .../minecraft/server/DataPaletteBlock.java    |  69 +-
- .../java/net/minecraft/server/MCUtil.java     |  35 +
+ .../net/minecraft/server/ChunkSection.java    |  16 +-
+ .../minecraft/server/DataPaletteBlock.java    |  62 +-
  .../net/minecraft/server/NetworkManager.java  |  33 +-
- .../server/PacketPlayOutMapChunk.java         |  32 +-
- .../net/minecraft/server/PlayerChunk.java     |   3 +
+ .../server/PacketPlayOutMapChunk.java         |  37 +-
+ .../net/minecraft/server/PlayerChunk.java     |   7 +-
  .../net/minecraft/server/PlayerChunkMap.java  |   4 +-
  .../server/PlayerInteractManager.java         |   2 +
  .../java/net/minecraft/server/ProtoChunk.java |  16 +-
  .../java/net/minecraft/server/TicketType.java |   1 +
  src/main/java/net/minecraft/server/World.java |   5 +
  .../craftbukkit/generator/CraftChunkData.java |   4 +-
- 23 files changed, 1231 insertions(+), 26 deletions(-)
+ 21 files changed, 1286 insertions(+), 29 deletions(-)
  create mode 100644 src/main/java/com/destroystokyo/paper/antixray/ChunkPacketBlockController.java
  create mode 100644 src/main/java/com/destroystokyo/paper/antixray/ChunkPacketBlockControllerAntiXray.java
  create mode 100644 src/main/java/com/destroystokyo/paper/antixray/ChunkPacketInfo.java
@@ -35,8 +33,23 @@ Subject: [PATCH] Anti-Xray
  create mode 100644 src/main/java/com/destroystokyo/paper/antixray/DataBitsReader.java
  create mode 100644 src/main/java/com/destroystokyo/paper/antixray/DataBitsWriter.java
 
+diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+index 81987e4ad..5942c3438 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
+@@ -71,8 +71,8 @@ public class PaperConfig {
+         commands = new HashMap<String, Command>();
+         commands.put("paper", new PaperCommand("paper"));
+ 
+-        version = getInt("config-version", 18);
+-        set("config-version", 18);
++        version = getInt("config-version", 19);
++        set("config-version", 19);
+         readConfig(PaperConfig.class, null);
+     }
+ 
 diff --git a/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java b/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
-index 58109e1308..edb1c13d8b 100644
+index 58109e130..b03d3ee84 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
 @@ -1,7 +1,11 @@
@@ -51,7 +64,7 @@ index 58109e1308..edb1c13d8b 100644
  import org.bukkit.Bukkit;
  import org.bukkit.configuration.file.YamlConfiguration;
  import org.spigotmc.SpigotWorldConfig;
-@@ -509,4 +513,34 @@ public class PaperWorldConfig {
+@@ -509,4 +513,43 @@ public class PaperWorldConfig {
      private void maxAutoSaveChunksPerTick() {
          maxAutoSaveChunksPerTick = getInt("max-auto-save-chunks-per-tick", 24);
      }
@@ -81,17 +94,26 @@ index 58109e1308..edb1c13d8b 100644
 +        maxChunkSectionIndex = getInt("anti-xray.max-chunk-section-index", 3);
 +        maxChunkSectionIndex = maxChunkSectionIndex > 15 ? 15 : maxChunkSectionIndex;
 +        updateRadius = getInt("anti-xray.update-radius", 2);
-+        hiddenBlocks = getList("anti-xray.hidden-blocks", Arrays.asList("gold_ore", "iron_ore", "coal_ore", "lapis_ore", "mossy_cobblestone", "obsidian", "chest", "diamond_ore", "redstone_ore", "lit_redstone_ore", "clay", "emerald_ore", "ender_chest"));
-+        replacementBlocks = getList("anti-xray.replacement-blocks", Arrays.asList("stone", "planks"));
++        hiddenBlocks = getList("anti-xray.hidden-blocks", Arrays.asList("gold_ore", "iron_ore", "coal_ore", "lapis_ore", "mossy_cobblestone", "obsidian", "chest", "diamond_ore", "redstone_ore", "clay", "emerald_ore", "ender_chest"));
++        replacementBlocks = getList("anti-xray.replacement-blocks", Arrays.asList("stone", "oak_planks"));
++        if (PaperConfig.version < 19) {
++            hiddenBlocks.remove("lit_redstone_ore");
++            int index = replacementBlocks.indexOf("planks");
++            if (index != -1) {
++                replacementBlocks.set(index, "oak_planks");
++            }
++            set("anti-xray.hidden-blocks", hiddenBlocks);
++            set("anti-xray.replacement-blocks", replacementBlocks);
++        }
 +        log("Anti-Xray: " + (antiXray ? "enabled" : "disabled") + " / Engine Mode: " + engineMode.getDescription() + " / Chunk Edge Mode: " + chunkEdgeMode.getDescription() + " / Up to " + ((maxChunkSectionIndex + 1) * 16) + " blocks / Update Radius: " + updateRadius);
 +    }
  }
 diff --git a/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketBlockController.java b/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketBlockController.java
 new file mode 100644
-index 0000000000..dc534d239e
+index 000000000..f7e376ce6
 --- /dev/null
 +++ b/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketBlockController.java
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,46 @@
 +package com.destroystokyo.paper.antixray;
 +
 +import net.minecraft.server.BlockPosition;
@@ -121,11 +143,12 @@ index 0000000000..dc534d239e
 +        return true;
 +    }
 +
-+    public ChunkPacketInfo<IBlockData> getChunkPacketInfo(PacketPlayOutMapChunk packetPlayOutMapChunk, Chunk chunk, int chunkSectionSelector) {
++    public ChunkPacketInfo<IBlockData> getChunkPacketInfo(PacketPlayOutMapChunk packetPlayOutMapChunk, Chunk chunk,
++                                                          int chunkSectionSelector, boolean forceLoad) {
 +        return null;
 +    }
 +
-+    public void modifyBlocks(PacketPlayOutMapChunk packetPlayOutMapChunk, ChunkPacketInfo<IBlockData> chunkPacketInfo) {
++    public void modifyBlocks(PacketPlayOutMapChunk packetPlayOutMapChunk, ChunkPacketInfo<IBlockData> chunkPacketInfo, boolean loadChunks, Integer ticketHold) {
 +        packetPlayOutMapChunk.setReady(true);
 +    }
 +
@@ -139,10 +162,10 @@ index 0000000000..dc534d239e
 +}
 diff --git a/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketBlockControllerAntiXray.java b/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketBlockControllerAntiXray.java
 new file mode 100644
-index 0000000000..d98013d275
+index 000000000..9d8bee5ca
 --- /dev/null
 +++ b/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketBlockControllerAntiXray.java
-@@ -0,0 +1,689 @@
+@@ -0,0 +1,777 @@
 +package com.destroystokyo.paper.antixray;
 +
 +import java.util.ArrayList;
@@ -151,8 +174,11 @@ index 0000000000..d98013d275
 +import java.util.Set;
 +import java.util.concurrent.ExecutorService;
 +import java.util.concurrent.Executors;
++import java.util.concurrent.atomic.AtomicInteger;
++import java.util.function.Supplier;
 +
 +import net.minecraft.server.*;
++import org.bukkit.Bukkit;
 +import org.bukkit.World.Environment;
 +
 +import com.destroystokyo.paper.PaperWorldConfig;
@@ -240,11 +266,16 @@ index 0000000000..d98013d275
 +            }
 +        }
 +
++        ChunkEmpty emptyChunk = new ChunkEmpty(null, new ChunkCoordIntPair(0, 0));
++        BlockPosition zeroPos = new BlockPosition(0, 0, 0);
++
 +        for (int i = 0; i < solidGlobal.length; i++) {
 +            IBlockData blockData = ChunkSection.GLOBAL_PALETTE.getObject(i);
 +
 +            if (blockData != null) {
-+                solidGlobal[i] = blockData.getBlock().isOccluding(blockData, new ChunkEmpty(null, new ChunkCoordIntPair(0, 0)), new BlockPosition(0, 0, 0)) && blockData.getBlock() != Blocks.SPAWNER && blockData.getBlock() != Blocks.BARRIER;
++                solidGlobal[i] = blockData.getBlock().isOccluding(blockData, emptyChunk, zeroPos)
++                    && blockData.getBlock() != Blocks.SPAWNER && blockData.getBlock() != Blocks.BARRIER && blockData.getBlock() != Blocks.SHULKER_BOX;
++                // shulker box checks TE.
 +            }
 +        }
 +
@@ -285,6 +316,39 @@ index 0000000000..d98013d275
 +        return null;
 +    }
 +
++    private final AtomicInteger xrayRequests = new AtomicInteger();
++
++    private Integer addXrayTickets(final int x, final int z, final ChunkProviderServer chunkProvider) {
++        final Integer hold = Integer.valueOf(this.xrayRequests.getAndIncrement());
++
++        // Add at ticket level 33, which is just enough to keep chunks loaded
++        chunkProvider.addTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x, z), 0, hold);
++        chunkProvider.addTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x - 1, z), 0, hold);
++        chunkProvider.addTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x + 1, z), 0, hold);
++        chunkProvider.addTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x, z - 1), 0, hold);
++        chunkProvider.addTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x, z + 1), 0, hold);
++
++        return hold;
++    }
++
++    private void removeXrayTickets(final int x, final int z, final ChunkProviderServer chunkProvider, final Integer hold) {
++        // Remove at ticket level 33 (same one we added as), which is just enough to keep chunks loaded
++        chunkProvider.removeTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x, z), 0, hold);
++        chunkProvider.removeTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x - 1, z), 0, hold);
++        chunkProvider.removeTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x + 1, z), 0, hold);
++        chunkProvider.removeTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x, z - 1), 0, hold);
++        chunkProvider.removeTicket(TicketType.ANTIXRAY, new ChunkCoordIntPair(x, z + 1), 0, hold);
++    }
++
++    private void loadNeighbours(Chunk chunk) {
++        int locX = chunk.getPos().x;
++        int locZ = chunk.getPos().z;
++        chunk.world.getChunkAt(locX - 1, locZ);
++        chunk.world.getChunkAt(locX + 1, locZ);
++        chunk.world.getChunkAt(locX, locZ - 1);
++        chunk.world.getChunkAt(locX, locZ + 1);
++    }
++
 +    @Override
 +    public boolean onChunkPacketCreate(Chunk chunk, int chunkSectionSelector, boolean force) {
 +        int locX = chunk.getPos().x;
@@ -292,22 +356,19 @@ index 0000000000..d98013d275
 +        WorldServer world = (WorldServer)chunk.world;
 +        ChunkProviderServer chunkProvider = world.getChunkProvider();
 +
-+        // TODO do these need to exist > 1 tick?
 +        //Load nearby chunks if necessary
 +        if (force || chunkEdgeMode == ChunkEdgeMode.LOAD) { // TODO temporary
 +            // if forced, load NOW;
-+            MCUtil.addNeighbourTickets(world, locX, locZ, TicketType.ANTIXRAY, MCUtil.BORDER_TICKET_LEVEL, Unit.INSTANCE);
-+            chunk.world.getChunkAt(locX - 1, locZ);
-+            chunk.world.getChunkAt(locX + 1, locZ);
-+            chunk.world.getChunkAt(locX, locZ - 1);
-+            chunk.world.getChunkAt(locX, locZ + 1);
++            this.loadNeighbours(chunk);
 +        } else if (chunkEdgeMode == ChunkEdgeMode.WAIT) {
-+            if (chunkProvider.getChunkAtIfCachedImmediately(locX - 1, locZ) == null || chunkProvider.getChunkAtIfCachedImmediately(locX + 1, locZ) == null || chunkProvider.getChunkAtIfCachedImmediately(locX, locZ - 1) == null || chunkProvider.getChunkAtIfCachedImmediately(locX, locZ + 1) == null) {
++            if (chunkProvider.getChunkAtIfCachedImmediately(locX - 1, locZ) == null ||
++                chunkProvider.getChunkAtIfCachedImmediately(locX + 1, locZ) == null ||
++                chunkProvider.getChunkAtIfCachedImmediately(locX, locZ - 1) == null ||
++                chunkProvider.getChunkAtIfCachedImmediately(locX, locZ + 1) == null) {
 +                //Don't create the chunk packet now, wait until nearby chunks are loaded and create it later
 +                return false;
 +            }
-+            MCUtil.addNeighbourTickets((WorldServer)chunk.world, locX, locZ, TicketType.ANTIXRAY, MCUtil.BORDER_TICKET_LEVEL, Unit.INSTANCE);
-+        } else if (chunkEdgeMode == ChunkEdgeMode.LOAD) {
++        } else if (false && chunkEdgeMode == ChunkEdgeMode.LOAD) {
 +            // TODO Note: These should be asynchronous loads; however we have no such thing in 1.14.
 +            boolean missingChunk = false;
 +            //noinspection ConstantConditions
@@ -327,20 +388,57 @@ index 0000000000..d98013d275
 +    }
 +
 +    @Override
-+    public ChunkPacketInfoAntiXray getChunkPacketInfo(PacketPlayOutMapChunk packetPlayOutMapChunk, Chunk chunk, int chunkSectionSelector) {
-+        //Return a new instance to collect data and objects in the right state while creating the chunk packet for thread safe access later
-+        int locX = chunk.getPos().x;
-+        int locZ = chunk.getPos().z;
++    public ChunkPacketInfoAntiXray getChunkPacketInfo(PacketPlayOutMapChunk packetPlayOutMapChunk, Chunk chunk,
++                                                      int chunkSectionSelector, boolean forceLoad) {
++        // Return a new instance to collect data and objects in the right state while creating the chunk packet for thread safe access later
++        // Note: As of 1.14 this has to be moved later due to the chunk system.
++
 +        ChunkPacketInfoAntiXray chunkPacketInfoAntiXray = new ChunkPacketInfoAntiXray(packetPlayOutMapChunk, chunk, chunkSectionSelector, this);
-+        chunkPacketInfoAntiXray.setNearbyChunks((Chunk)chunk.world.getChunkIfLoadedImmediately(locX - 1, locZ),
-+                                                (Chunk)chunk.world.getChunkIfLoadedImmediately(locX + 1, locZ),
-+                                                (Chunk)chunk.world.getChunkIfLoadedImmediately(locX, locZ - 1),
-+                                                (Chunk)chunk.world.getChunkIfLoadedImmediately(locX, locZ + 1));
 +        return chunkPacketInfoAntiXray;
 +    }
 +
 +    @Override
-+    public void modifyBlocks(PacketPlayOutMapChunk packetPlayOutMapChunk, ChunkPacketInfo<IBlockData> chunkPacketInfo) {
++    public void modifyBlocks(PacketPlayOutMapChunk packetPlayOutMapChunk, ChunkPacketInfo<IBlockData> chunkPacketInfo, boolean loadChunks, Integer hold) {
++        if (!Bukkit.isPrimaryThread()) {
++            // plugins?
++            final Integer finalHold = hold;
++            MinecraftServer.getServer().scheduleOnMain(() -> {
++                this.modifyBlocks(packetPlayOutMapChunk, chunkPacketInfo, loadChunks, finalHold);
++            });
++            return;
++        }
++        Chunk chunk = chunkPacketInfo.getChunk();
++        int locX = chunk.getPos().x;
++        int locZ = chunk.getPos().z;
++        WorldServer world = (WorldServer)chunk.world;
++
++        Chunk[] chunks = new Chunk[] {
++            (Chunk)world.getChunkIfLoadedImmediately(locX - 1, locZ),
++            (Chunk)world.getChunkIfLoadedImmediately(locX + 1, locZ),
++            (Chunk)world.getChunkIfLoadedImmediately(locX, locZ - 1),
++            (Chunk)world.getChunkIfLoadedImmediately(locX, locZ + 1)
++        };
++
++        if (loadChunks) {
++            // Note: This ugly hack is to get us out of the general chunk load/unload queue to prevent deadlock
++
++            if (chunks[0] == null || chunks[1] == null || chunks[2] == null || chunks[3] == null) {
++                // we need to load
++                MinecraftServer.getServer().scheduleOnMain(() -> {
++                    Integer ticketHold = this.addXrayTickets(locX, locZ, world.getChunkProvider());
++                    this.loadNeighbours(chunk);
++                    this.modifyBlocks(packetPlayOutMapChunk, chunkPacketInfo, false, ticketHold);
++                });
++                return;
++            }
++
++            hold = this.addXrayTickets(locX, locZ, world.getChunkProvider());
++            // fall through to normal behavior, our chunks are now loaded & have a ticket
++        }
++
++        ((ChunkPacketInfoAntiXray)chunkPacketInfo).setNearbyChunks(chunks);
++        ((ChunkPacketInfoAntiXray)chunkPacketInfo).ticketHold = hold;
++
 +        if (asynchronous) {
 +            executorService.submit((ChunkPacketInfoAntiXray) chunkPacketInfo);
 +        } else {
@@ -361,108 +459,121 @@ index 0000000000..d98013d275
 +    private final ChunkSection[] nearbyChunkSections = new ChunkSection[4];
 +
 +    public void obfuscate(ChunkPacketInfoAntiXray chunkPacketInfoAntiXray) {
-+        boolean[] solidTemp = null;
-+        boolean[] obfuscateTemp = null;
-+        dataBitsReader.setDataBits(chunkPacketInfoAntiXray.getData());
-+        dataBitsWriter.setDataBits(chunkPacketInfoAntiXray.getData());
-+        int counter = 0;
++        try {
++            boolean[] solidTemp = null;
++            boolean[] obfuscateTemp = null;
++            dataBitsReader.setDataBits(chunkPacketInfoAntiXray.getData());
++            dataBitsWriter.setDataBits(chunkPacketInfoAntiXray.getData());
++            int counter = 0;
 +
-+        for (int chunkSectionIndex = 0; chunkSectionIndex <= maxChunkSectionIndex; chunkSectionIndex++) {
-+            if (chunkPacketInfoAntiXray.isWritten(chunkSectionIndex) && chunkPacketInfoAntiXray.getPredefinedObjects(chunkSectionIndex) != null) {
-+                int[] predefinedBlockDataBitsTemp;
++            for (int chunkSectionIndex = 0; chunkSectionIndex <= maxChunkSectionIndex; chunkSectionIndex++) {
++                if (chunkPacketInfoAntiXray.isWritten(chunkSectionIndex) && chunkPacketInfoAntiXray.getPredefinedObjects(chunkSectionIndex) != null) {
++                    int[] predefinedBlockDataBitsTemp;
 +
-+                if (chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex) == ChunkSection.GLOBAL_PALETTE) {
-+                    predefinedBlockDataBitsTemp = engineMode == EngineMode.HIDE ? chunkPacketInfoAntiXray.getChunk().world.getWorld().getEnvironment() == Environment.NETHER ? predefinedBlockDataBitsNetherrackGlobal : chunkPacketInfoAntiXray.getChunk().world.getWorld().getEnvironment() == Environment.THE_END ? predefinedBlockDataBitsEndStoneGlobal : predefinedBlockDataBitsStoneGlobal : predefinedBlockDataBitsGlobal;
-+                } else {
-+                    predefinedBlockDataBitsTemp = predefinedBlockDataBits == null ? predefinedBlockDataBits = engineMode == EngineMode.HIDE ? new int[1] : new int[predefinedBlockData.length] : predefinedBlockDataBits;
++                    if (chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex) == ChunkSection.GLOBAL_PALETTE) {
++                        predefinedBlockDataBitsTemp = engineMode == EngineMode.HIDE ? chunkPacketInfoAntiXray.getChunk().world.getWorld().getEnvironment() == Environment.NETHER ? predefinedBlockDataBitsNetherrackGlobal : chunkPacketInfoAntiXray.getChunk().world.getWorld().getEnvironment() == Environment.THE_END ? predefinedBlockDataBitsEndStoneGlobal : predefinedBlockDataBitsStoneGlobal : predefinedBlockDataBitsGlobal;
++                    } else {
++                        predefinedBlockDataBitsTemp = predefinedBlockDataBits == null ? predefinedBlockDataBits = engineMode == EngineMode.HIDE ? new int[1] : new int[predefinedBlockData.length] : predefinedBlockDataBits;
 +
-+                    for (int i = 0; i < predefinedBlockDataBitsTemp.length; i++) {
-+                        predefinedBlockDataBitsTemp[i] = chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex).getOrCreateIdFor(chunkPacketInfoAntiXray.getPredefinedObjects(chunkSectionIndex)[i]);
-+                    }
-+                }
-+
-+                dataBitsWriter.setIndex(chunkPacketInfoAntiXray.getOrCreateIdForIndex(chunkSectionIndex));
-+
-+                //Check if the chunk section below was not obfuscated
-+                if (chunkSectionIndex == 0 || !chunkPacketInfoAntiXray.isWritten(chunkSectionIndex - 1) || chunkPacketInfoAntiXray.getPredefinedObjects(chunkSectionIndex - 1) == null) {
-+                    //If so, initialize some stuff
-+                    dataBitsReader.setBitsPerObject(chunkPacketInfoAntiXray.getBitsPerObject(chunkSectionIndex));
-+                    dataBitsReader.setIndex(chunkPacketInfoAntiXray.getOrCreateIdForIndex(chunkSectionIndex));
-+                    solidTemp = readDataPalette(chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex), solid, solidGlobal);
-+                    obfuscateTemp = readDataPalette(chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex), obfuscate, obfuscateGlobal);
-+                    //Read the blocks of the upper layer of the chunk section below if it exists
-+                    ChunkSection belowChunkSection = null;
-+                    boolean skipFirstLayer = chunkSectionIndex == 0 || (belowChunkSection = chunkPacketInfoAntiXray.getChunk().getSections()[chunkSectionIndex - 1]) == Chunk.EMPTY_CHUNK_SECTION;
-+
-+                    for (int z = 0; z < 16; z++) {
-+                        for (int x = 0; x < 16; x++) {
-+                            current[z][x] = true;
-+                            next[z][x] = skipFirstLayer || !solidGlobal[ChunkSection.GLOBAL_PALETTE.getOrCreateIdFor(belowChunkSection.getType(x, 15, z))];
++                        for (int i = 0; i < predefinedBlockDataBitsTemp.length; i++) {
++                            predefinedBlockDataBitsTemp[i] = chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex).getOrCreateIdFor(chunkPacketInfoAntiXray.getPredefinedObjects(chunkSectionIndex)[i]);
 +                        }
 +                    }
 +
-+                    //Abuse the obfuscateLayer method to read the blocks of the first layer of the current chunk section
-+                    dataBitsWriter.setBitsPerObject(0);
-+                    obfuscateLayer(-1, dataBitsReader, dataBitsWriter, solidTemp, obfuscateTemp, predefinedBlockDataBitsTemp, current, next, nextNext, emptyNearbyChunkSections, counter);
-+                }
++                    dataBitsWriter.setIndex(chunkPacketInfoAntiXray.getOrCreateIdForIndex(chunkSectionIndex));
 +
-+                dataBitsWriter.setBitsPerObject(chunkPacketInfoAntiXray.getBitsPerObject(chunkSectionIndex));
-+                nearbyChunkSections[0] = chunkPacketInfoAntiXray.getNearbyChunks()[0] == null ? Chunk.EMPTY_CHUNK_SECTION : chunkPacketInfoAntiXray.getNearbyChunks()[0].getSections()[chunkSectionIndex];
-+                nearbyChunkSections[1] = chunkPacketInfoAntiXray.getNearbyChunks()[1] == null ? Chunk.EMPTY_CHUNK_SECTION : chunkPacketInfoAntiXray.getNearbyChunks()[1].getSections()[chunkSectionIndex];
-+                nearbyChunkSections[2] = chunkPacketInfoAntiXray.getNearbyChunks()[2] == null ? Chunk.EMPTY_CHUNK_SECTION : chunkPacketInfoAntiXray.getNearbyChunks()[2].getSections()[chunkSectionIndex];
-+                nearbyChunkSections[3] = chunkPacketInfoAntiXray.getNearbyChunks()[3] == null ? Chunk.EMPTY_CHUNK_SECTION : chunkPacketInfoAntiXray.getNearbyChunks()[3].getSections()[chunkSectionIndex];
++                    //Check if the chunk section below was not obfuscated
++                    if (chunkSectionIndex == 0 || !chunkPacketInfoAntiXray.isWritten(chunkSectionIndex - 1) || chunkPacketInfoAntiXray.getPredefinedObjects(chunkSectionIndex - 1) == null) {
++                        //If so, initialize some stuff
++                        dataBitsReader.setBitsPerObject(chunkPacketInfoAntiXray.getBitsPerObject(chunkSectionIndex));
++                        dataBitsReader.setIndex(chunkPacketInfoAntiXray.getOrCreateIdForIndex(chunkSectionIndex));
++                        solidTemp = readDataPalette(chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex), solid, solidGlobal);
++                        obfuscateTemp = readDataPalette(chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex), obfuscate, obfuscateGlobal);
++                        //Read the blocks of the upper layer of the chunk section below if it exists
++                        ChunkSection belowChunkSection = null;
++                        boolean skipFirstLayer = chunkSectionIndex == 0 || (belowChunkSection = chunkPacketInfoAntiXray.getChunk().getSections()[chunkSectionIndex - 1]) == Chunk.EMPTY_CHUNK_SECTION;
 +
-+                //Obfuscate all layers of the current chunk section except the upper one
-+                for (int y = 0; y < 15; y++) {
-+                    boolean[][] temp = current;
-+                    current = next;
-+                    next = nextNext;
-+                    nextNext = temp;
-+                    counter = obfuscateLayer(y, dataBitsReader, dataBitsWriter, solidTemp, obfuscateTemp, predefinedBlockDataBitsTemp, current, next, nextNext, nearbyChunkSections, counter);
-+                }
++                        for (int z = 0; z < 16; z++) {
++                            for (int x = 0; x < 16; x++) {
++                                current[z][x] = true;
++                                next[z][x] = skipFirstLayer || !solidGlobal[ChunkSection.GLOBAL_PALETTE.getOrCreateIdFor(belowChunkSection.getType(x, 15, z))];
++                            }
++                        }
 +
-+                //Check if the chunk section above doesn't need obfuscation
-+                if (chunkSectionIndex == maxChunkSectionIndex || !chunkPacketInfoAntiXray.isWritten(chunkSectionIndex + 1) || chunkPacketInfoAntiXray.getPredefinedObjects(chunkSectionIndex + 1) == null) {
-+                    //If so, obfuscate the upper layer of the current chunk section by reading blocks of the first layer from the chunk section above if it exists
-+                    ChunkSection aboveChunkSection;
++                        //Abuse the obfuscateLayer method to read the blocks of the first layer of the current chunk section
++                        dataBitsWriter.setBitsPerObject(0);
++                        obfuscateLayer(-1, dataBitsReader, dataBitsWriter, solidTemp, obfuscateTemp, predefinedBlockDataBitsTemp, current, next, nextNext, emptyNearbyChunkSections, counter);
++                    }
 +
-+                    if (chunkSectionIndex != 15 && (aboveChunkSection = chunkPacketInfoAntiXray.getChunk().getSections()[chunkSectionIndex + 1]) != Chunk.EMPTY_CHUNK_SECTION) {
++                    dataBitsWriter.setBitsPerObject(chunkPacketInfoAntiXray.getBitsPerObject(chunkSectionIndex));
++                    nearbyChunkSections[0] = chunkPacketInfoAntiXray.getNearbyChunks()[0] == null ? Chunk.EMPTY_CHUNK_SECTION : chunkPacketInfoAntiXray.getNearbyChunks()[0].getSections()[chunkSectionIndex];
++                    nearbyChunkSections[1] = chunkPacketInfoAntiXray.getNearbyChunks()[1] == null ? Chunk.EMPTY_CHUNK_SECTION : chunkPacketInfoAntiXray.getNearbyChunks()[1].getSections()[chunkSectionIndex];
++                    nearbyChunkSections[2] = chunkPacketInfoAntiXray.getNearbyChunks()[2] == null ? Chunk.EMPTY_CHUNK_SECTION : chunkPacketInfoAntiXray.getNearbyChunks()[2].getSections()[chunkSectionIndex];
++                    nearbyChunkSections[3] = chunkPacketInfoAntiXray.getNearbyChunks()[3] == null ? Chunk.EMPTY_CHUNK_SECTION : chunkPacketInfoAntiXray.getNearbyChunks()[3].getSections()[chunkSectionIndex];
++
++                    //Obfuscate all layers of the current chunk section except the upper one
++                    for (int y = 0; y < 15; y++) {
 +                        boolean[][] temp = current;
 +                        current = next;
 +                        next = nextNext;
 +                        nextNext = temp;
++                        counter = obfuscateLayer(y, dataBitsReader, dataBitsWriter, solidTemp, obfuscateTemp, predefinedBlockDataBitsTemp, current, next, nextNext, nearbyChunkSections, counter);
++                    }
 +
-+                        for (int z = 0; z < 16; z++) {
-+                            for (int x = 0; x < 16; x++) {
-+                                if (!solidGlobal[ChunkSection.GLOBAL_PALETTE.getOrCreateIdFor(aboveChunkSection.getType(x, 0, z))]) {
-+                                    current[z][x] = true;
++                    //Check if the chunk section above doesn't need obfuscation
++                    if (chunkSectionIndex == maxChunkSectionIndex || !chunkPacketInfoAntiXray.isWritten(chunkSectionIndex + 1) || chunkPacketInfoAntiXray.getPredefinedObjects(chunkSectionIndex + 1) == null) {
++                        //If so, obfuscate the upper layer of the current chunk section by reading blocks of the first layer from the chunk section above if it exists
++                        ChunkSection aboveChunkSection;
++
++                        if (chunkSectionIndex != 15 && (aboveChunkSection = chunkPacketInfoAntiXray.getChunk().getSections()[chunkSectionIndex + 1]) != Chunk.EMPTY_CHUNK_SECTION) {
++                            boolean[][] temp = current;
++                            current = next;
++                            next = nextNext;
++                            nextNext = temp;
++
++                            for (int z = 0; z < 16; z++) {
++                                for (int x = 0; x < 16; x++) {
++                                    if (!solidGlobal[ChunkSection.GLOBAL_PALETTE.getOrCreateIdFor(aboveChunkSection.getType(x, 0, z))]) {
++                                        current[z][x] = true;
++                                    }
 +                                }
 +                            }
++
++                            //There is nothing to read anymore
++                            dataBitsReader.setBitsPerObject(0);
++                            solid[0] = true;
++                            counter = obfuscateLayer(15, dataBitsReader, dataBitsWriter, solid, obfuscateTemp, predefinedBlockDataBitsTemp, current, next, nextNext, nearbyChunkSections, counter);
 +                        }
-+
-+                        //There is nothing to read anymore
-+                        dataBitsReader.setBitsPerObject(0);
-+                        solid[0] = true;
-+                        counter = obfuscateLayer(15, dataBitsReader, dataBitsWriter, solid, obfuscateTemp, predefinedBlockDataBitsTemp, current, next, nextNext, nearbyChunkSections, counter);
++                    } else {
++                        //If not, initialize the reader and other stuff for the chunk section above to obfuscate the upper layer of the current chunk section
++                        dataBitsReader.setBitsPerObject(chunkPacketInfoAntiXray.getBitsPerObject(chunkSectionIndex + 1));
++                        dataBitsReader.setIndex(chunkPacketInfoAntiXray.getOrCreateIdForIndex(chunkSectionIndex + 1));
++                        solidTemp = readDataPalette(chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex + 1), solid, solidGlobal);
++                        obfuscateTemp = readDataPalette(chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex + 1), obfuscate, obfuscateGlobal);
++                        boolean[][] temp = current;
++                        current = next;
++                        next = nextNext;
++                        nextNext = temp;
++                        counter = obfuscateLayer(15, dataBitsReader, dataBitsWriter, solidTemp, obfuscateTemp, predefinedBlockDataBitsTemp, current, next, nextNext, nearbyChunkSections, counter);
 +                    }
-+                } else {
-+                    //If not, initialize the reader and other stuff for the chunk section above to obfuscate the upper layer of the current chunk section
-+                    dataBitsReader.setBitsPerObject(chunkPacketInfoAntiXray.getBitsPerObject(chunkSectionIndex + 1));
-+                    dataBitsReader.setIndex(chunkPacketInfoAntiXray.getOrCreateIdForIndex(chunkSectionIndex + 1));
-+                    solidTemp = readDataPalette(chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex + 1), solid, solidGlobal);
-+                    obfuscateTemp = readDataPalette(chunkPacketInfoAntiXray.getDataPalette(chunkSectionIndex + 1), obfuscate, obfuscateGlobal);
-+                    boolean[][] temp = current;
-+                    current = next;
-+                    next = nextNext;
-+                    nextNext = temp;
-+                    counter = obfuscateLayer(15, dataBitsReader, dataBitsWriter, solidTemp, obfuscateTemp, predefinedBlockDataBitsTemp, current, next, nextNext, nearbyChunkSections, counter);
-+                }
 +
-+                dataBitsWriter.finish();
++                    dataBitsWriter.finish();
++                }
++            }
++
++            chunkPacketInfoAntiXray.getPacketPlayOutMapChunk().setReady(true);
++
++        } finally {
++            if (chunkPacketInfoAntiXray.ticketHold != null) {
++                MCUtil.ensureMain(null, (Runnable) () -> {
++                    Chunk chunk = chunkPacketInfoAntiXray.getChunk();
++                    ChunkCoordIntPair chunkPos = chunk.getPos();
++
++                    ChunkPacketBlockControllerAntiXray.this.removeXrayTickets(chunkPos.x, chunkPos.z, (ChunkProviderServer) chunk.world.getChunkProvider(),
++                        chunkPacketInfoAntiXray.ticketHold);
++                });
 +            }
 +        }
-+
-+        chunkPacketInfoAntiXray.getPacketPlayOutMapChunk().setReady(true);
 +    }
 +
 +    private int obfuscateLayer(int y, DataBitsReader dataBitsReader, DataBitsWriter dataBitsWriter, boolean[] solid, boolean[] obfuscate, int[] predefinedBlockDataBits, boolean[][] current, boolean[][] next, boolean[][] nextNext, ChunkSection[] nearbyChunkSections, int counter) {
@@ -763,7 +874,7 @@ index 0000000000..d98013d275
 +
 +        if (blockData != null && obfuscateGlobal[ChunkSection.GLOBAL_PALETTE.getOrCreateIdFor(blockData)]) {
 +            //world.notify(blockPosition, blockData, blockData, 3);
-+            ((WorldServer)world).getChunkProvider().flagDirty(blockPosition);
++            ((WorldServer)world).getChunkProvider().flagDirty(blockPosition); // We only need to re-send to client
 +        }
 +    }
 +
@@ -834,7 +945,7 @@ index 0000000000..d98013d275
 +}
 diff --git a/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketInfo.java b/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketInfo.java
 new file mode 100644
-index 0000000000..a68bace353
+index 000000000..a68bace35
 --- /dev/null
 +++ b/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketInfo.java
 @@ -0,0 +1,81 @@
@@ -921,10 +1032,10 @@ index 0000000000..a68bace353
 +}
 diff --git a/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketInfoAntiXray.java b/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketInfoAntiXray.java
 new file mode 100644
-index 0000000000..e255a45fa3
+index 000000000..067dfb2f1
 --- /dev/null
 +++ b/src/main/java/com/destroystokyo/paper/antixray/ChunkPacketInfoAntiXray.java
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,31 @@
 +package com.destroystokyo.paper.antixray;
 +
 +import net.minecraft.server.Chunk;
@@ -935,8 +1046,10 @@ index 0000000000..e255a45fa3
 +
 +    private Chunk[] nearbyChunks;
 +    private final ChunkPacketBlockControllerAntiXray chunkPacketBlockControllerAntiXray;
++    public Integer ticketHold;
 +
-+    public ChunkPacketInfoAntiXray(PacketPlayOutMapChunk packetPlayOutMapChunk, Chunk chunk, int chunkSectionSelector, ChunkPacketBlockControllerAntiXray chunkPacketBlockControllerAntiXray) {
++    public ChunkPacketInfoAntiXray(PacketPlayOutMapChunk packetPlayOutMapChunk, Chunk chunk, int chunkSectionSelector,
++                                   ChunkPacketBlockControllerAntiXray chunkPacketBlockControllerAntiXray) {
 +        super(packetPlayOutMapChunk, chunk, chunkSectionSelector);
 +        this.chunkPacketBlockControllerAntiXray = chunkPacketBlockControllerAntiXray;
 +    }
@@ -956,7 +1069,7 @@ index 0000000000..e255a45fa3
 +}
 diff --git a/src/main/java/com/destroystokyo/paper/antixray/DataBitsReader.java b/src/main/java/com/destroystokyo/paper/antixray/DataBitsReader.java
 new file mode 100644
-index 0000000000..cc586827aa
+index 000000000..cc586827a
 --- /dev/null
 +++ b/src/main/java/com/destroystokyo/paper/antixray/DataBitsReader.java
 @@ -0,0 +1,56 @@
@@ -1018,7 +1131,7 @@ index 0000000000..cc586827aa
 +}
 diff --git a/src/main/java/com/destroystokyo/paper/antixray/DataBitsWriter.java b/src/main/java/com/destroystokyo/paper/antixray/DataBitsWriter.java
 new file mode 100644
-index 0000000000..37093419cf
+index 000000000..37093419c
 --- /dev/null
 +++ b/src/main/java/com/destroystokyo/paper/antixray/DataBitsWriter.java
 @@ -0,0 +1,84 @@
@@ -1107,7 +1220,7 @@ index 0000000000..37093419cf
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index e2a48695df..d19412f186 100644
+index e2a48695d..d19412f18 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
 @@ -315,7 +315,7 @@ public class Chunk implements IChunkAccess {
@@ -1119,46 +1232,8 @@ index e2a48695df..d19412f186 100644
              this.sections[j >> 4] = chunksection;
          }
  
-diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 7a76db08fc..5c646c646b 100644
---- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
-+++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-@@ -177,10 +177,12 @@ public abstract class ChunkMapDistance {
-         this.e.b(i, this.a(objectsortedset), false);
-     }
- 
-+    public <T> void addTicketLevel(TicketType<T> type, ChunkCoordIntPair chunkPos, int level, T reason) { this.a(type, chunkPos, level, reason); } // Paper - OBFHELPER
-     public <T> void a(TicketType<T> tickettype, ChunkCoordIntPair chunkcoordintpair, int i, T t0) {
-         this.a(chunkcoordintpair.pair(), new Ticket<>(tickettype, i, t0, this.currentTick));
-     }
- 
-+    public <T> void removeTicketLevel(TicketType<T> type, ChunkCoordIntPair chunkPos, int level, T reason) { this.b(type, chunkPos, level, reason); } // Paper - OBFHELPER
-     public <T> void b(TicketType<T> tickettype, ChunkCoordIntPair chunkcoordintpair, int i, T t0) {
-         Ticket<T> ticket = new Ticket<>(tickettype, i, t0, this.currentTick);
- 
-diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 42b97ba86b..88cd325313 100644
---- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
-+++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-@@ -511,6 +511,16 @@ public class ChunkProviderServer extends IChunkProvider {
-         });
-     }
- 
-+    // Paper start -
-+    public <T> void addTicketLevel(TicketType<T> type, ChunkCoordIntPair chunkPos, int level, T reason) {
-+        this.chunkMapDistance.addTicketLevel(type, chunkPos, level, reason);
-+    }
-+
-+    public <T> void removeTicketLevel(TicketType<T> type, ChunkCoordIntPair chunkPos, int level, T reason) {
-+        this.chunkMapDistance.removeTicketLevel(type, chunkPos, level, reason);
-+    }
-+    // Paper end
-+
-     public <T> void addTicket(TicketType<T> tickettype, ChunkCoordIntPair chunkcoordintpair, int i, T t0) {
-         this.chunkMapDistance.addTicket(tickettype, chunkcoordintpair, i, t0);
-     }
 diff --git a/src/main/java/net/minecraft/server/ChunkRegionLoader.java b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
-index 287f113581..f88e3d957f 100644
+index 287f11358..f88e3d957 100644
 --- a/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 +++ b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 @@ -74,7 +74,7 @@ public class ChunkRegionLoader {
@@ -1180,15 +1255,15 @@ index 287f113581..f88e3d957f 100644
              object = protochunk;
              protochunk.a(abiomebase);
 diff --git a/src/main/java/net/minecraft/server/ChunkSection.java b/src/main/java/net/minecraft/server/ChunkSection.java
-index c4c181c1d5..609ec29d6b 100644
+index c4c181c1d..d6b327eff 100644
 --- a/src/main/java/net/minecraft/server/ChunkSection.java
 +++ b/src/main/java/net/minecraft/server/ChunkSection.java
-@@ -6,21 +6,32 @@ public class ChunkSection {
+@@ -6,21 +6,31 @@ public class ChunkSection {
  
      public static final DataPalette<IBlockData> GLOBAL_PALETTE = new DataPaletteGlobal<>(Block.REGISTRY_ID, Blocks.AIR.getBlockData());
      private final int yPos;
 -    private short nonEmptyBlockCount;
-+    public short nonEmptyBlockCount;
++    short nonEmptyBlockCount; // Paper - private -> package-private
      private short tickingBlockCount;
      private short e;
      final DataPaletteBlock<IBlockData> blockIds; // Paper - package
@@ -1197,12 +1272,11 @@ index c4c181c1d5..609ec29d6b 100644
 -        this(i, (short) 0, (short) 0, (short) 0);
 +        // Paper start - add parameters
 +        this(i, (IChunkAccess)null, (IWorldReader)null, true);
-     }
++    }
 +    public ChunkSection(int i, IChunkAccess chunk, IWorldReader world, boolean initializeBlocks) {
 +        this(i, (short) 0, (short) 0, (short) 0, chunk, world, initializeBlocks);
 +        // Paper end
-+    }
-+
+     }
  
      public ChunkSection(int i, short short0, short short1, short short2) {
 +        // Paper start - add parameters
@@ -1220,7 +1294,7 @@ index c4c181c1d5..609ec29d6b 100644
  
      public IBlockData getType(int i, int j, int k) {
 diff --git a/src/main/java/net/minecraft/server/DataPaletteBlock.java b/src/main/java/net/minecraft/server/DataPaletteBlock.java
-index e05b9d606a..49743fce7b 100644
+index e05b9d606..cbc9dc902 100644
 --- a/src/main/java/net/minecraft/server/DataPaletteBlock.java
 +++ b/src/main/java/net/minecraft/server/DataPaletteBlock.java
 @@ -1,5 +1,6 @@
@@ -1238,7 +1312,7 @@ index e05b9d606a..49743fce7b 100644
      protected DataBits a; protected DataBits getDataBits() { return this.a; } // Paper - OBFHELPER
      private DataPalette<T> h; private DataPalette<T> getDataPalette() { return this.h; } // Paper - OBFHELPER
      private int i; private int getBitsPerObject() { return this.i; } // Paper - OBFHELPER
-@@ -44,13 +46,55 @@ public class DataPaletteBlock<T> implements DataPaletteExpandable<T> {
+@@ -44,14 +46,50 @@ public class DataPaletteBlock<T> implements DataPaletteExpandable<T> {
      }
  
      public DataPaletteBlock(DataPalette<T> datapalette, RegistryBlockID<T> registryblockid, Function<NBTTagCompound, T> function, Function<T, NBTTagCompound> function1, T t0) {
@@ -1262,18 +1336,12 @@ index e05b9d606a..49743fce7b 100644
 +                // Default
 +                this.initialize(4);
 +            } else {
-+                // MathHelper.d() is trailingBits(roundCeilPow2(n)), alternatively; (int)ceil(log2(n))
++                // MathHelper.d() is trailingBits(roundCeilPow2(n)), alternatively; (int)ceil(log2(n)); however it's trash, use numberOfLeadingZeros instead
 +                // Count the bits of the maximum array index to initialize a data palette with enough space from the beginning
 +                // The length of the array is used because air is also added to the data palette from the beginning
 +                // Start with at least 4
-+                int maxIndex = predefinedObjects.length >> 4; // TODO
-+                int bitCount = Math.max(4, (32 - Integer.numberOfLeadingZeros(maxIndex - 1)));
-+
-+                /*
-+                while (maxIndex != 0) {
-+                    maxIndex >>= 1;
-+                    bitCount++;
-+                }*/
++                int maxIndex = predefinedObjects.length >> 4;
++                int bitCount = (32 - Integer.numberOfLeadingZeros(Math.max(16, maxIndex) - 1));
 +
 +                // Initialize with at least 15 free indixes
 +                this.initialize((1 << bitCount) - predefinedObjects.length < 16 ? bitCount + 1 : bitCount);
@@ -1281,8 +1349,8 @@ index e05b9d606a..49743fce7b 100644
 +            }
 +        }
 +        // Paper end
-+    }
-+
+     }
+ 
 +    // Paper start - Anti-Xray - Add predefined objects
 +    private void addPredefinedObjects() {
 +        if (this.predefinedObjects != null && this.getDataPalette() != this.getDataPaletteGlobal()) {
@@ -1290,20 +1358,13 @@ index e05b9d606a..49743fce7b 100644
 +                this.getDataPalette().getOrCreateIdFor(this.predefinedObjects[i]);
 +            }
 +        }
-     }
++    }
 +    // Paper end
- 
++
      private static int b(int i, int j, int k) {
          return j << 8 | k << 4 | i;
-@@ -74,7 +118,6 @@ public class DataPaletteBlock<T> implements DataPaletteExpandable<T> {
-             this.a = new DataBits(this.i, 4096);
-         }
      }
--
-     @Override
-     public int onResize(int i, T t0) {
-         this.a();
-@@ -85,6 +128,7 @@ public class DataPaletteBlock<T> implements DataPaletteExpandable<T> {
+@@ -85,6 +123,7 @@ public class DataPaletteBlock<T> implements DataPaletteExpandable<T> {
  
          int j;
  
@@ -1311,7 +1372,7 @@ index e05b9d606a..49743fce7b 100644
          for (j = 0; j < databits.b(); ++j) {
              T t1 = datapalette.a(databits.a(j));
  
-@@ -136,22 +180,39 @@ public class DataPaletteBlock<T> implements DataPaletteExpandable<T> {
+@@ -136,22 +175,39 @@ public class DataPaletteBlock<T> implements DataPaletteExpandable<T> {
  
      public void writeDataPaletteBlock(PacketDataSerializer packetDataSerializer) { this.b(packetDataSerializer); } // Paper - OBFHELPER
      public void b(PacketDataSerializer packetdataserializer) {
@@ -1353,52 +1414,8 @@ index e05b9d606a..49743fce7b 100644
          int j = along.length * 64 / 4096;
  
          if (this.h == this.b) {
-diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
-index 23d1935dd5..1b1ed4d47b 100644
---- a/src/main/java/net/minecraft/server/MCUtil.java
-+++ b/src/main/java/net/minecraft/server/MCUtil.java
-@@ -530,4 +530,39 @@ public final class MCUtil {
-             out.print(fileData);
-         }
-     }
-+
-+    // note: check these on update!
-+    /**
-+     * Chunks may not tick, and their entities may not tick. Appear loaded to plugins & nms getChunkIfLoaded calls.
-+     */
-+    public static final int BORDER_TICKET_LEVEL      = 33;
-+
-+    /**
-+     * Chunks may tick, but not their entities. Appear loaded to plugins & nms getChunkIfLoaded calls.
-+     */
-+    public static final int CHUNK_TICK_TICKET_LEVEL  = 32;
-+
-+    /**
-+     * Chunks may tick including their entities. Appear loaded to plugins & nms getChunkIfLoaded calls.
-+     */
-+    public static final int ENTITY_TICK_TICKET_LEVEL = 31;
-+
-+    public static <T> void addTickets(WorldServer world, int x, int z, TicketType<T> ticketType, int radius, int ticketLevel, T reason) {
-+        ChunkProviderServer chunkprovider = world.getChunkProvider();
-+        for (int dx = -radius; dx <= radius; ++dx) {
-+            for (int dz = -radius; dz <= radius; ++dz) {
-+               chunkprovider.addTicketLevel(ticketType, new ChunkCoordIntPair(x + dx, z + dz), ticketLevel, reason);
-+            }
-+        }
-+    }
-+
-+    public static <T> void addNeighbourTickets(WorldServer world, int x, int z, TicketType<T> ticketType, int ticketLevel, T reason) {
-+        ChunkProviderServer chunkprovider = world.getChunkProvider();
-+
-+        chunkprovider.addTicketLevel(ticketType, new ChunkCoordIntPair(x - 1, z), ticketLevel, reason);
-+        chunkprovider.addTicketLevel(ticketType, new ChunkCoordIntPair(x, z), ticketLevel, reason);
-+        chunkprovider.addTicketLevel(ticketType, new ChunkCoordIntPair(x + 1, z), ticketLevel, reason);
-+        chunkprovider.addTicketLevel(ticketType, new ChunkCoordIntPair(x, z - 1), ticketLevel, reason);
-+        chunkprovider.addTicketLevel(ticketType, new ChunkCoordIntPair(x, z + 1), ticketLevel, reason);
-+    }
- }
 diff --git a/src/main/java/net/minecraft/server/NetworkManager.java b/src/main/java/net/minecraft/server/NetworkManager.java
-index ba23d28335..8dcaaf8676 100644
+index ba23d2833..8dcaaf867 100644
 --- a/src/main/java/net/minecraft/server/NetworkManager.java
 +++ b/src/main/java/net/minecraft/server/NetworkManager.java
 @@ -166,8 +166,8 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
@@ -1459,7 +1476,7 @@ index ba23d28335..8dcaaf8676 100644
      public void a() {
          this.o();
 diff --git a/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java b/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
-index ef71a1feb3..c46a08a520 100644
+index ef71a1feb..483317608 100644
 --- a/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
 +++ b/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
 @@ -1,5 +1,6 @@
@@ -1482,15 +1499,20 @@ index ef71a1feb3..c46a08a520 100644
  
      // Paper start
      private final java.util.List<Packet> extraPackets = new java.util.ArrayList<>();
-@@ -30,6 +34,7 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
+@@ -30,6 +34,12 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
      }
      // Paper end
      public PacketPlayOutMapChunk(Chunk chunk, int i) {
-+        ChunkPacketInfo<IBlockData> chunkPacketInfo = chunk.world.chunkPacketBlockController.getChunkPacketInfo(this, chunk, i); // Paper - Anti-Xray - Add chunk packet info
++        // Paper start - add forceLoad param
++        this(chunk, i, false);
++    }
++    public PacketPlayOutMapChunk(Chunk chunk, int i, boolean forceLoad) {
++        // Paper end
++        ChunkPacketInfo<IBlockData> chunkPacketInfo = chunk.world.chunkPacketBlockController.getChunkPacketInfo(this, chunk, i, forceLoad); // Paper - Anti-Xray - Add chunk packet info
          ChunkCoordIntPair chunkcoordintpair = chunk.getPos();
  
          this.a = chunkcoordintpair.x;
-@@ -48,7 +53,12 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
+@@ -48,7 +58,12 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
          }
  
          this.e = new byte[this.a(chunk, i)];
@@ -1504,11 +1526,11 @@ index ef71a1feb3..c46a08a520 100644
          this.f = Lists.newArrayList();
          iterator = chunk.getTileEntities().entrySet().iterator();
          int totalSigns = 0; // Paper
-@@ -74,9 +84,19 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
+@@ -74,9 +89,19 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
                  this.f.add(nbttagcompound);
              }
          }
-+        chunk.world.chunkPacketBlockController.modifyBlocks(this, chunkPacketInfo); // Paper - Anti-Xray - Modify blocks
++        chunk.world.chunkPacketBlockController.modifyBlocks(this, chunkPacketInfo, forceLoad, null); // Paper - Anti-Xray - Modify blocks
 +    }
  
 +    // Paper start - Async-Anti-Xray - Getter and Setter for the ready flag
@@ -1524,7 +1546,7 @@ index ef71a1feb3..c46a08a520 100644
      @Override
      public void a(PacketDataSerializer packetdataserializer) throws IOException {
          this.a = packetdataserializer.readInt();
-@@ -135,6 +155,11 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
+@@ -135,6 +160,11 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
  
      public int writeChunk(PacketDataSerializer packetDataSerializer, Chunk chunk, int chunkSectionSelector) { return this.a(packetDataSerializer, chunk, chunkSectionSelector); } // Paper - OBFHELPER
      public int a(PacketDataSerializer packetdataserializer, Chunk chunk, int i) {
@@ -1536,32 +1558,43 @@ index ef71a1feb3..c46a08a520 100644
          int j = 0;
          ChunkSection[] achunksection = chunk.getSections();
          int k = 0;
-@@ -146,7 +171,8 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
+@@ -146,7 +176,8 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
  
              if (chunksection != Chunk.a && (!this.f() || !chunksection.c()) && (i & 1 << k) != 0) {
                  j |= 1 << k;
 -                chunksection.b(packetdataserializer);
-+                packetdataserializer.writeShort(chunksection.nonEmptyBlockCount);
++                packetdataserializer.writeShort(chunksection.nonEmptyBlockCount); // Paper - Anti-Xray - Add chunk packet info
 +                chunksection.getBlocks().writeDataPaletteBlock(packetdataserializer, chunkPacketInfo, k); // Paper - Anti-Xray - Add chunk packet info
              }
          }
  
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 761cd1355b..cb3363a01e 100644
+index 761cd1355..956a47132 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
-@@ -150,6 +150,9 @@ public class PlayerChunk {
-     }
- 
-     public void a(Chunk chunk) {
-+        if (!chunk.world.chunkPacketBlockController.onChunkPacketCreate(chunk, '\uffff', false)) { // Paper - Anti-Xray - Load nearby chunks if necessary
-+            return;
-+        }
-         if (this.dirtyCount != 0 || this.u != 0 || this.t != 0) {
+@@ -154,6 +154,11 @@ public class PlayerChunk {
              World world = chunk.getWorld();
  
+             if (this.dirtyCount == 64) {
++                // Paper start - Anti-Xray - Load nearby chunks if necessary
++                if (!chunk.world.chunkPacketBlockController.onChunkPacketCreate(chunk, '\uffff', false)) {
++                    return;
++                }
++                // Paper end
+                 this.s = -1;
+             }
+ 
+@@ -186,7 +191,7 @@ public class PlayerChunk {
+                     this.a(world, blockposition);
+                 }
+             } else if (this.dirtyCount == 64) {
+-                this.a(new PacketPlayOutMapChunk(chunk, this.r), false);
++                this.a(new PacketPlayOutMapChunk(chunk, this.r, true), false); // Paper - Anti-Xray
+             } else if (this.dirtyCount != 0) {
+                 this.a(new PacketPlayOutMultiBlockChange(this.dirtyCount, this.dirtyBlocks, chunk), false);
+ 
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 8e16d6ac87..210a7e8206 100644
+index 8e16d6ac8..f48633111 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -491,7 +491,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -1573,17 +1606,17 @@ index 8e16d6ac87..210a7e8206 100644
          }, this.executor);
      }
  
-@@ -1111,6 +1111,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1111,7 +1111,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      private void a(EntityPlayer entityplayer, Packet<?>[] apacket, Chunk chunk) {
          if (apacket[0] == null) {
-+            // Note that this is ALWAYS the case as of 1.14. re-check on update
-+            chunk.world.chunkPacketBlockController.onChunkPacketCreate(chunk, '\uffff', true); // Paper - Anti-Xray - Load nearby chunks if necessary
-             apacket[0] = new PacketPlayOutMapChunk(chunk, 65535);
+-            apacket[0] = new PacketPlayOutMapChunk(chunk, 65535);
++            apacket[0] = new PacketPlayOutMapChunk(chunk, 65535, true); // Paper - Anti-Xray
              apacket[1] = new PacketPlayOutLightUpdate(chunk.getPos(), this.lightEngine);
          }
+ 
 diff --git a/src/main/java/net/minecraft/server/PlayerInteractManager.java b/src/main/java/net/minecraft/server/PlayerInteractManager.java
-index 83b36b3e7f..8fef6008d1 100644
+index 83b36b3e7..8fef6008d 100644
 --- a/src/main/java/net/minecraft/server/PlayerInteractManager.java
 +++ b/src/main/java/net/minecraft/server/PlayerInteractManager.java
 @@ -207,6 +207,8 @@ public class PlayerInteractManager {
@@ -1596,7 +1629,7 @@ index 83b36b3e7f..8fef6008d1 100644
  
      public void a(BlockPosition blockposition) {
 diff --git a/src/main/java/net/minecraft/server/ProtoChunk.java b/src/main/java/net/minecraft/server/ProtoChunk.java
-index 6bdd7dda04..7bad12eb00 100644
+index 6bdd7dda0..7bad12eb0 100644
 --- a/src/main/java/net/minecraft/server/ProtoChunk.java
 +++ b/src/main/java/net/minecraft/server/ProtoChunk.java
 @@ -44,16 +44,28 @@ public class ProtoChunk implements IChunkAccess {
@@ -1639,19 +1672,19 @@ index 6bdd7dda04..7bad12eb00 100644
  
          return this.j[i];
 diff --git a/src/main/java/net/minecraft/server/TicketType.java b/src/main/java/net/minecraft/server/TicketType.java
-index d2bf158a91..cac427fda7 100644
+index d2bf158a9..2eeae60d5 100644
 --- a/src/main/java/net/minecraft/server/TicketType.java
 +++ b/src/main/java/net/minecraft/server/TicketType.java
 @@ -20,6 +20,7 @@ public class TicketType<T> {
      public static final TicketType<Integer> POST_TELEPORT = a("post_teleport", Integer::compareTo, 5);
      public static final TicketType<ChunkCoordIntPair> UNKNOWN = a("unknown", Comparator.comparingLong(ChunkCoordIntPair::pair), 1);
      public static final TicketType<Unit> PLUGIN = a("plugin", (a, b) -> 0); // CraftBukkit
-+    public static final TicketType<Unit> ANTIXRAY = a("antixray", (a, b) -> 0, 20); // TODO how long
++    public static final TicketType<Integer> ANTIXRAY = a("antixray", Integer::compareTo); // Paper - Anti-Xray
  
      public static <T> TicketType<T> a(String s, Comparator<T> comparator) {
          return new TicketType<>(s, comparator, 0L);
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index c8f198fdf0..c30d77be58 100644
+index bd8c0b33e..2ff482d91 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
 @@ -2,6 +2,8 @@ package net.minecraft.server;
@@ -1688,7 +1721,7 @@ index c8f198fdf0..c30d77be58 100644
              if (iblockdata1 == null) {
                  // CraftBukkit start - remove blockstate if failed
 diff --git a/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java b/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
-index 7772d59005..4570ed9991 100644
+index 7772d5900..4570ed999 100644
 --- a/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
 +++ b/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
 @@ -21,9 +21,11 @@ public final class CraftChunkData implements ChunkGenerator.ChunkData {
