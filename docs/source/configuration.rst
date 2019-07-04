@@ -45,6 +45,11 @@ enable-tps-catchup
 * **default**: false
 * **description**: Enable/disable Spigot's TPS catchup (makes everything tick faster than 20 tps after lag spikes, which can cause more lag - also skews /tps reports by ruining the average with above 20 tps entries)
 
+disable-drops-on-cramming-death
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Stops entities from dropping loot on death, if killed by cramming gamerule
+
 large-ender-chests
 ~~~~~~~~~~~~~~
 * **default**: true
