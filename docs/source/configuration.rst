@@ -95,6 +95,11 @@ mobs
         - **default**: true
         - **description**: Control if giant zombies have AI instead of just standing there
 
+* illusioner
+    * naturally-spawn
+        - **default**: true
+        - **description**: Control if illusioners naturally spawn in the game
+
 * iron_golem
     * swims
         - **default**: true
