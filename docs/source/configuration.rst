@@ -58,6 +58,14 @@ dont-send-useless-entity-packets
 .. warning::
     The `dont-send-useless-entity-packets` option is highly experimental! Only enable this if you are feeling brave.
 
+fix-item-position-desync
+~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: Update item positions according to the rounding the client does
+
+.. warning::
+    The `fix-item-position-desync` option is highly experimental! Only enable this if you are feeling brave.
+
 large-ender-chests
 ~~~~~~~~~~~~~~
 * **default**: true
