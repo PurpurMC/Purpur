@@ -50,6 +50,14 @@ disable-drops-on-cramming-death
 * **default**: true
 * **description**: Stops entities from dropping loot on death, if killed by cramming gamerule
 
+dont-send-useless-entity-packets
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: Skips sending relative move packets for entities that didn't really move
+
+.. warning::
+    The `dont-send-useless-entity-packets` option is highly experimental! Only enable this if you are feeling brave.
+
 large-ender-chests
 ~~~~~~~~~~~~~~
 * **default**: true
