@@ -240,6 +240,11 @@ items-can-break-turtle-eggs
 * **default**: false
 * **description**: Allow dropped items to damage/break turtle eggs
 
+milk-cures-bad-omen
+~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: Allow players to drink milk to cure bad omen status effect
+
 block-tick-events
 ~~~~~~~~~~~~~~~~~
 * **default**: true
