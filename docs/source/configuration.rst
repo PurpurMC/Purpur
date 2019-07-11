@@ -230,6 +230,11 @@ allow-sign-colors
 * **default**: true
 * **description**: Allow players to use color codes on signs
 
+allow-leashing-villagers
+~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Allow players to use leads on villagers (trader not included)
+
 items-can-break-turtle-eggs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: false
