@@ -1,4 +1,4 @@
-From c2a26437cd05c2c5023a3e609ccd6dfd25757f69 Mon Sep 17 00:00:00 2001
+From 6a1a8b6aafe4641484ae13615a21920c863586ae Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Tue, 9 Jul 2019 03:38:23 -0700
 Subject: [PATCH] Asynchronous chunk IO
@@ -11,12 +11,12 @@ Subject: [PATCH] Asynchronous chunk IO
  .../minecraft/server/ChunkProviderServer.java |   5 +
  .../net/minecraft/server/MinecraftServer.java |   1 +
  .../net/minecraft/server/PlayerChunkMap.java  | 152 +++-
- .../java/net/minecraft/server/RegionFile.java |  17 +-
+ .../java/net/minecraft/server/RegionFile.java |   6 +-
  .../net/minecraft/server/RegionFileCache.java |   6 +-
  .../minecraft/server/RegionFileSection.java   |  57 +-
  .../net/minecraft/server/VillagePlace.java    |  64 +-
  .../net/minecraft/server/WorldServer.java     |  72 ++
- 12 files changed, 1498 insertions(+), 52 deletions(-)
+ 12 files changed, 1501 insertions(+), 38 deletions(-)
  create mode 100644 src/main/java/com/destroystokyo/paper/io/ConcreteFileIOThread.java
  create mode 100644 src/main/java/com/destroystokyo/paper/io/IOUtil.java
  create mode 100644 src/main/java/com/destroystokyo/paper/io/PrioritizedTaskQueue.java
@@ -1261,7 +1261,7 @@ index 0324a90ca5..430cd70cf5 100644
  
      public String getServerIp() {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index f5b35b95b2..ae18431c38 100644
+index a439277813..6ca98b7ad5 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -57,7 +57,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -1414,7 +1414,7 @@ index f5b35b95b2..ae18431c38 100644
  
                  if (chunkstatus.getType() != ChunkStatus.Type.LEVELCHUNK) {
                      // Paper start - Optimize save by using status cache
--                    ChunkStatus statusOnDisk = this.getRegionFile(ichunkaccess.getPos(), false).getStatus(ichunkaccess.getPos().x, ichunkaccess.getPos().z, this);
+-                    ChunkStatus statusOnDisk = this.getChunkStatusOnDisk(chunkcoordintpair);
 +                    ChunkStatus statusOnDisk = this.getChunkStatus(chunkcoordintpair, true); // Paper - Async chunk io
                      if (statusOnDisk != null && statusOnDisk.getType() == ChunkStatus.Type.LEVELCHUNK) {
                          // Paper end
@@ -1503,14 +1503,14 @@ index f5b35b95b2..ae18431c38 100644
              return null;
          }
  
--        this.getRegionFile(chunkcoordintpair, false).setStatus(chunkcoordintpair.x, chunkcoordintpair.z, ChunkRegionLoader.getStatus(nbttagcompound));
+-        this.updateChunkStatusOnDisk(chunkcoordintpair, nbttagcompound);
 +        synchronized (this) { // Async chunk io - Synchronize so we do not potentially get and use a closed region file
 +            this.getRegionFile(chunkcoordintpair, false).setStatus(chunkcoordintpair.x, chunkcoordintpair.z, ChunkRegionLoader.getStatus(nbttagcompound));
 +        }
  
          return nbttagcompound;
          // Paper end
-@@ -1165,6 +1274,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1197,6 +1306,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      }
  
@@ -1519,32 +1519,21 @@ index f5b35b95b2..ae18431c38 100644
          return this.n;
      }
 diff --git a/src/main/java/net/minecraft/server/RegionFile.java b/src/main/java/net/minecraft/server/RegionFile.java
-index 18f218e971..2f10152404 100644
+index 3e80f6c53e..2f10152404 100644
 --- a/src/main/java/net/minecraft/server/RegionFile.java
 +++ b/src/main/java/net/minecraft/server/RegionFile.java
-@@ -55,20 +55,7 @@ public class RegionFile implements AutoCloseable {
+@@ -53,6 +53,10 @@ public class RegionFile implements AutoCloseable {
+         final int location = this.getChunkLocation(new ChunkCoordIntPair(x, z));
+         return this.statuses[location];
      }
- 
-     public ChunkStatus getStatus(int x, int z, PlayerChunkMap playerChunkMap) throws IOException {
--        if (this.closed) {
--            // We've used an invalid region file.
--            throw new java.io.EOFException("RegionFile is closed");
--        }
--        ChunkCoordIntPair chunkPos = new ChunkCoordIntPair(x, z);
--        int location = this.getChunkLocation(chunkPos);
--        ChunkStatus cached = this.statuses[location];
--        if (cached != null) {
--            return cached;
--        }
--
--        playerChunkMap.readChunkData(chunkPos); // This will set our status (yes it's disgusting)
--
--        return this.statuses[location];
++
++    public ChunkStatus getStatus(int x, int z, PlayerChunkMap playerChunkMap) throws IOException {
 +        return playerChunkMap.getChunkStatus(new ChunkCoordIntPair(x, z), true);
-     }
++    }
      // Paper end
  
-@@ -354,7 +341,7 @@ public class RegionFile implements AutoCloseable {
+     public RegionFile(File file) throws IOException {
+@@ -337,7 +341,7 @@ public class RegionFile implements AutoCloseable {
          this.writeInt(i); // Paper - Avoid 3 io write calls
      }
  
@@ -1812,7 +1801,7 @@ index 7bc473e1ef..9f4b1b4c49 100644
          }
  
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index b5c902e1de..7f7b2a539a 100644
+index 47005dcfdc..f0380c5df4 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -75,6 +75,78 @@ public class WorldServer extends World {
