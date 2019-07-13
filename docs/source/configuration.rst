@@ -102,6 +102,11 @@ mobs
         - **default**: true
         - **description:** When true all valid ender dragon deaths will place an ender egg block on top of the portal
 
+* fox
+    * tulips-change-type
+        - **default**: true
+        - **description**: Feeding a white/orange tulip changes type snow/regular.
+
 * giant
     * naturally-spawn
         - **default**: true
