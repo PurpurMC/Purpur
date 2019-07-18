@@ -76,6 +76,11 @@ packed-barrels
 * **default**: true
 * **description:** Use large size barrels (6 rows, aka 54 slots)
 
+use-better-mending
+~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description:** Set to true for mending enchantment to always repair the most damaged equipment first
+
 logger
 ~~~~~~
 * show-duplicate-entity-uuid-errors
