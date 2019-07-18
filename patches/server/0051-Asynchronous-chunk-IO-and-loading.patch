@@ -1,4 +1,4 @@
-From da939406c7900f95e4c1888e8672968e38afe69a Mon Sep 17 00:00:00 2001
+From c4a6f06f03a00f7c612b574ea996db5218711cd3 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Sat, 13 Jul 2019 09:23:10 -0700
 Subject: [PATCH] Asynchronous chunk IO and loading
@@ -1593,7 +1593,7 @@ index 0000000000..8dbaaba3cd
 +
 +}
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index db9113994e..4f7c442264 100644
+index d76860daf8..32a469025e 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -147,11 +147,143 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -1971,7 +1971,7 @@ index 0324a90ca5..430cd70cf5 100644
  
      public String getServerIp() {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index a439277813..f25ca782b9 100644
+index 89b72da828..089a20c835 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -57,7 +57,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -1992,7 +1992,7 @@ index a439277813..f25ca782b9 100644
      private final File x;
      private final PlayerMap playerMap;
      public final Int2ObjectMap<PlayerChunkMap.EntityTracker> trackedEntities;
-@@ -101,7 +101,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -126,7 +126,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          this.lightEngine = new LightEngineThreaded(ilightaccess, this, this.world.getWorldProvider().g(), threadedmailbox2, this.q.a(threadedmailbox2, false));
          this.u = new PlayerChunkMap.a(executor, iasynctaskhandler);
          this.m = supplier;
@@ -2001,7 +2001,7 @@ index a439277813..f25ca782b9 100644
          this.setViewDistance(i);
      }
  
-@@ -261,6 +261,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -286,6 +286,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      @Override
      public void close() throws IOException {
          this.q.close();
@@ -2009,7 +2009,7 @@ index a439277813..f25ca782b9 100644
          this.n.close();
          super.close();
      }
-@@ -308,7 +309,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -333,7 +334,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                          shouldSave = ((Chunk) ichunkaccess).lastSaved + world.paperConfig.autoSavePeriod <= world.getTime();
                      }
  
@@ -2018,7 +2018,7 @@ index a439277813..f25ca782b9 100644
                          ++savedThisTick;
                      playerchunk.m();
                  }
-@@ -328,11 +329,15 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -353,11 +354,15 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      protected void unloadChunks(BooleanSupplier booleansupplier) {
          GameProfilerFiller gameprofilerfiller = this.world.getMethodProfiler();
  
@@ -2034,7 +2034,7 @@ index a439277813..f25ca782b9 100644
          }
  
          gameprofilerfiller.exit();
-@@ -386,7 +391,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -411,7 +416,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                          ((Chunk) ichunkaccess).setLoaded(false);
                      }
  
@@ -2043,7 +2043,7 @@ index a439277813..f25ca782b9 100644
                      if (this.loadedChunks.remove(i) && ichunkaccess instanceof Chunk) {
                          Chunk chunk = (Chunk) ichunkaccess;
  
-@@ -462,26 +467,30 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -487,26 +492,30 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          }
      }
  
@@ -2089,7 +2089,7 @@ index a439277813..f25ca782b9 100644
              } catch (ReportedException reportedexception) {
                  Throwable throwable = reportedexception.getCause();
  
-@@ -495,7 +504,17 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -520,7 +529,17 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
              }
  
              return Either.left(new ProtoChunk(chunkcoordintpair, ChunkConverter.a, this.world)); // Paper - Anti-Xray
@@ -2108,7 +2108,7 @@ index a439277813..f25ca782b9 100644
      }
  
      private CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> b(PlayerChunk playerchunk, ChunkStatus chunkstatus) {
-@@ -701,18 +720,42 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -726,18 +745,42 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          return this.v.get();
      }
  
@@ -2159,7 +2159,7 @@ index a439277813..f25ca782b9 100644
  
              ichunkaccess.setLastSaved(this.world.getTime());
              ichunkaccess.setNeedsSaving(false);
-@@ -723,27 +766,33 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -748,27 +791,33 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                  NBTTagCompound nbttagcompound;
  
                  if (chunkstatus.getType() != ChunkStatus.Type.LEVELCHUNK) {
@@ -2196,7 +2196,7 @@ index a439277813..f25ca782b9 100644
      }
  
      protected void setViewDistance(int i) {
-@@ -808,6 +857,42 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -833,6 +882,42 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          return Iterables.unmodifiableIterable(this.visibleChunks.values());
      }
  
@@ -2239,7 +2239,7 @@ index a439277813..f25ca782b9 100644
      @Nullable
      public NBTTagCompound readChunkData(ChunkCoordIntPair chunkcoordintpair) throws IOException { // Paper - private -> public
          NBTTagCompound nbttagcompound = this.read(chunkcoordintpair);
-@@ -830,12 +915,30 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -855,12 +940,30 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      // Paper start - chunk status cache "api"
      public ChunkStatus getChunkStatusOnDiskIfCached(ChunkCoordIntPair chunkPos) {
@@ -2270,7 +2270,7 @@ index a439277813..f25ca782b9 100644
          RegionFile regionFile = this.getRegionFile(chunkPos, false);
  
          if (!regionFile.chunkExists(chunkPos)) {
-@@ -847,17 +950,49 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -872,17 +975,49 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          if (status != null) {
              return status;
          }
@@ -2322,7 +2322,7 @@ index a439277813..f25ca782b9 100644
      // Paper end
  
      // Spigot Start
-@@ -1197,6 +1332,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1222,6 +1357,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      }
  
