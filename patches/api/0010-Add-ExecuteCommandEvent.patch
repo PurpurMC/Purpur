@@ -1,20 +1,20 @@
-From 0daba673f890f25f7e57e46700e3c03dcbb613e4 Mon Sep 17 00:00:00 2001
+From 43add2c57d404f64bf9f1e0185ef8c3886785aa6 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Fri, 31 May 2019 00:08:28 -0500
 Subject: [PATCH] Add ExecuteCommandEvent
 
 ---
- .../purpur/event/ExecuteCommandEvent.java     | 87 +++++++++++++++++++
- .../org/bukkit/command/SimpleCommandMap.java  |  9 ++
- 2 files changed, 96 insertions(+)
+ .../purpur/event/ExecuteCommandEvent.java     | 130 ++++++++++++++++++
+ .../org/bukkit/command/SimpleCommandMap.java  |  15 +-
+ 2 files changed, 144 insertions(+), 1 deletion(-)
  create mode 100644 src/main/java/net/pl3x/purpur/event/ExecuteCommandEvent.java
 
 diff --git a/src/main/java/net/pl3x/purpur/event/ExecuteCommandEvent.java b/src/main/java/net/pl3x/purpur/event/ExecuteCommandEvent.java
 new file mode 100644
-index 00000000..013a8712
+index 000000000..3250bd4dc
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/event/ExecuteCommandEvent.java
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,130 @@
 +package net.pl3x.purpur.event;
 +
 +import org.apache.commons.lang.Validate;
@@ -24,6 +24,7 @@ index 00000000..013a8712
 +import org.bukkit.event.Event;
 +import org.bukkit.event.HandlerList;
 +import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
 +
 +/**
 + * This event is called whenever someone runs a command
@@ -33,10 +34,14 @@ index 00000000..013a8712
 +    private boolean cancel = false;
 +    private CommandSender sender;
 +    private Command command;
++    private String label;
++    private String[] args;
 +
-+    public ExecuteCommandEvent(@NotNull CommandSender sender, @NotNull Command command) {
++    public ExecuteCommandEvent(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @Nullable String[] args) {
 +        this.sender = sender;
 +        this.command = command;
++        this.label = label;
++        this.args = args;
 +    }
 +
 +    /**
@@ -81,6 +86,44 @@ index 00000000..013a8712
 +        this.sender = sender;
 +    }
 +
++    /**
++     * Get the label used to execute this command
++     *
++     * @return Label used to execute this command
++     */
++    @NotNull
++    public String getLabel() {
++        return label;
++    }
++
++    /**
++     * Set the label used to execute this command
++     *
++     * @param label Label used
++     */
++    public void setLabel(@NotNull String label) {
++        this.label = label;
++    }
++
++    /**
++     * Get the args passed to the command
++     *
++     * @return Args passed to the command
++     */
++    @NotNull
++    public String[] getArgs() {
++        return args;
++    }
++
++    /**
++     * Set the args passed to the command
++     *
++     * @param args Args passed to the command
++     */
++    public void setArgs(@NotNull String[] args) {
++        this.args = args;
++    }
++
 +    @Override
 +    public boolean isCancelled() {
 +        return cancel;
@@ -103,25 +146,38 @@ index 00000000..013a8712
 +    }
 +}
 diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-index 460fda05..b87c30a3 100644
+index 460fda05a..1e0eb0999 100644
 --- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
 +++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
-@@ -147,6 +147,15 @@ public class SimpleCommandMap implements CommandMap {
+@@ -147,6 +147,19 @@ public class SimpleCommandMap implements CommandMap {
              return false;
          }
  
 +        // Purpur start
-+        net.pl3x.purpur.event.ExecuteCommandEvent event = new net.pl3x.purpur.event.ExecuteCommandEvent(sender, target);
++        String[] parsedArgs = Arrays.copyOfRange(args, 1, args.length);
++        net.pl3x.purpur.event.ExecuteCommandEvent event = new net.pl3x.purpur.event.ExecuteCommandEvent(sender, target, sentCommandLabel, parsedArgs);
 +        if (!event.callEvent()) {
 +            return true; // cancelled
 +        }
++
 +        sender = event.getSender();
 +        target = event.getCommand();
++        sentCommandLabel = event.getLabel();
++        parsedArgs = event.getArgs();
 +        // Purpur end
 +
          // Paper start - Plugins do weird things to workaround normal registration
          if (target.timings == null) {
              target.timings = co.aikar.timings.TimingsManager.getCommandTiming(null, target);
+@@ -156,7 +169,7 @@ public class SimpleCommandMap implements CommandMap {
+         try {
+             try (co.aikar.timings.Timing ignored = target.timings.startTiming()) { // Paper - use try with resources
+             // Note: we don't return the result of target.execute as thats success / failure, we return handled (true) or not handled (false)
+-            target.execute(sender, sentCommandLabel, Arrays.copyOfRange(args, 1, args.length));
++            target.execute(sender, sentCommandLabel, parsedArgs); // Purpur
+             } // target.timings.stopTiming(); // Spigot // Paper
+         } catch (CommandException ex) {
+             server.getPluginManager().callEvent(new ServerExceptionEvent(new ServerCommandException(ex, target, sender, args))); // Paper
 -- 
 2.20.1
 
