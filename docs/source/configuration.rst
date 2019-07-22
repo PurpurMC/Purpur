@@ -264,3 +264,13 @@ fluid-tick-events
 ~~~~~~~~~~~~~~~~~
 * **default**: true
 * **description**: Fire plugin events when fluids tick
+
+limit-pillager-outpost-spawns
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: 10
+* **description**: Limit the number of pillagers allowed to spawn at an outpost at any given time
+
+radius-villager-iron-golem-spawns
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: 10
+* **description**: Radius villagers search for existing iron golems before spawning more
