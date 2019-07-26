@@ -274,3 +274,26 @@ radius-villager-iron-golem-spawns
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: 10
 * **description**: Radius villagers search for existing iron golems before spawning more
+
+elytra
+~~~~~~
+* damage-per-second
+    - **default**: 1
+    - **description**: How much damage an elytra takes during flight each second
+
+* damage-multiplied-by-speed
+    - **default**: 0
+    - **description**: Damage is multiplied by speed if flight is faster than set speed. Value of 0 disables this multiplier.
+
+* ignore-unbreaking
+    - **default**: false
+    - **description**: Should elytras ignore the unbreaking enchantment
+
+* damage-per-boost
+    * firework
+        - **default**: 0
+        - **description**: How much damage to deal to the elytra when firework boost activates
+
+    * trident
+        - **default**: 0
+        - **description**: How much damage to deal to the elytra when trident riptide boost activates
