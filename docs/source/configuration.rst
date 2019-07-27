@@ -145,6 +145,11 @@ mobs
         - **default**: true
         - **description**: Control if pumpkins can be placed back onto snowmen
 
+* zombie_horse
+    * spawn-chance
+        - **default**: 0
+        - **description**: Percent chance a zombie horse will spawn instead of a skeleton horse (natural spawns during thunderstorms)
+
 ridable
 ~~~~~~~
 * <mob string id here>
