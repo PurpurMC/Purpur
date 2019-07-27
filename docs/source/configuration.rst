@@ -45,6 +45,10 @@ enable-tps-catchup
 * **default**: false
 * **description**: Enable/disable Spigot's TPS catchup (makes everything tick faster than 20 tps after lag spikes, which can cause more lag - also skews /tps reports by ruining the average with above 20 tps entries)
 
+lagging-threshold:
+* **default**: 19.0
+* **description**: Purpur keeps track of when it is lagging in order to have the ability to change behaviors accordingly. This value is that threshold when you want to consider the server to be lagging. Right now this is only used for mob.villager.brain-ticks setting.
+
 disable-drops-on-cramming-death
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: true
@@ -144,6 +148,14 @@ mobs
     * pumpkin-can-be-added-back
         - **default**: true
         - **description**: Control if pumpkins can be placed back onto snowmen
+
+* villager
+    * use-brain-ticks-only-when-lagging
+        - **default**: true
+        - **description**: Only use the brain ticks setting when the server is lagging (see lagging-threshold above). If set to false, the brain ticks setting is always used.
+    * brain-ticks
+        - **default**: 2
+        - **description**: How often (in ticks) should villager's tick their brain logic. Vanilla value is to tick every tick (1). Higher amounts makes them tick less often to reduce lag, but setting it too high could result is unresponsive villagers.
 
 * zombie_horse
     * spawn-chance
