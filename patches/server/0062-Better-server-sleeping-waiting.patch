@@ -1,0 +1,90 @@
+From 24153d1feb47ab075ec741ecd5934016c7cd9e9b Mon Sep 17 00:00:00 2001
+From: Spottedleaf <Spottedleaf@users.noreply.github.com>
+Date: Sat, 20 Jul 2019 15:20:04 -0700
+Subject: [PATCH] Better server sleeping/waiting
+
+---
+ .../minecraft/server/IAsyncTaskHandler.java   | 47 +++++++++++++++++++
+ .../net/minecraft/server/MinecraftServer.java |  8 ++--
+ 2 files changed, 52 insertions(+), 3 deletions(-)
+
+diff --git a/src/main/java/net/minecraft/server/IAsyncTaskHandler.java b/src/main/java/net/minecraft/server/IAsyncTaskHandler.java
+index 84024e6ba4..78ea0a251e 100644
+--- a/src/main/java/net/minecraft/server/IAsyncTaskHandler.java
++++ b/src/main/java/net/minecraft/server/IAsyncTaskHandler.java
+@@ -91,6 +91,53 @@ public abstract class IAsyncTaskHandler<R extends Runnable> implements Mailbox<R
+ 
+     }
+ 
++    // Paper start - better waiting (MC-149018)
++    public void waitFor(final long time) { // time in ns
++        final long start = System.nanoTime();
++
++        ++this.e;
++
++        try {
++            while ((System.nanoTime() - start) < time) {
++                if (this.executeNext()) {
++                    // re-check condition
++                    continue;
++                }
++
++                // no tasks to execute
++                final long timeUsed = System.nanoTime() - start;
++                final long budget = time - timeUsed;
++
++                if (budget <= 50_000L) { // 50us, this can be tuned, even to 0
++                    // this is a presumption that park does not have the precision to sleep
++                    // for under 50us and we would oversleep, although this branch is not very
++                    // neccessary for this to work
++                    break;
++                }
++
++                // In order to avoid thread scheduling potentially waking up us
++                // late we aim to wake up a millisecond early
++                final long budgetWithPreempt = budget - (int)(1.0e6);
++
++                if (budgetWithPreempt <= 0) {
++                    // we don't have a millisecond to spare
++                    LockSupport.parkNanos("short park for timed wait", 50_000L);
++                    continue;
++                }
++
++                // Optionally before entering the long park we could spinwait a bit here,
++                // alternatively, we could spinwait for longer periods instead of one park
++
++
++                LockSupport.parkNanos("long park for timed wait", budgetWithPreempt);
++                // additions to the queue will unpark us
++            }
++        } finally {
++            --this.e;
++        }
++    }
++    // Paper end
++
+     public void executeAll() { // Paper - protected -> public
+         while (this.executeNext()) {
+             ;
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index a8703a42e5..375bc274a7 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1000,9 +1000,11 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+ 
+     protected void sleepForTick() {
+         //this.executeAll(); // Paper - move this into the tick method for timings
+-        this.awaitTasks(() -> {
+-            return !this.canSleepForTick();
+-        });
++        // Paper start - improve wait (MC-149018)
++        // ac will be false here given that flag is set depending on the last value of executeNext, which will be false
++        // after executing all tasks
++        this.waitFor((this.nextTick * 1000 * 1000) - System.nanoTime());
++        // Paper end
+     }
+ 
+     @Override
+-- 
+2.20.1
+
