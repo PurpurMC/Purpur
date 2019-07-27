@@ -140,6 +140,11 @@ mobs
         - **default**: true
         - **description**: Set whether phantoms spawn naturally in the end
 
+* pillager
+    * disable-patrols
+        - **default**: false
+        - **description**: Disables random pillager patrols (does not effect pillager outposts)
+
 * snow_golem
     * drops-pumpkin-when-sheared
         - **default**: true
