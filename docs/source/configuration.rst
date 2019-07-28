@@ -103,8 +103,8 @@ mobs
 
 * cow
     * feed-mushrooms-for-mooshroom
-        - **default**: 5
-        - **description**: Number of mushrooms to feed a cow to make it transform into a mooshroom. Set to 0 to disable.
+        - **default**: 0
+        - **description**: Number of mushrooms to feed a cow to make it transform into a mooshroom. Value of 0 disables feature.
 
 * ender-dragon
     * death-always-places-egg-block
@@ -136,8 +136,17 @@ mobs
         - **description**: Set whether iron golem can swim or not
 
 * phantom
+    * crystals-attack-range
+        - **default**: 0.0
+        - **description**: Radius crystals scan for phantoms to attack. Value of 0 disables feature
+    * crystals-attack-damage
+        - **default**: 1.0F
+        - **description**: Amount of damage per second crystals deal to phantoms. Value of 1.0 is half a heart
+    * orbit-crystal-radius
+        - **default**: 0.0
+                - **description**: Radius which phantoms scan for crystals to orbit. Value of 0 disables feature
     * spawn-in-the-end
-        - **default**: true
+        - **default**: false
         - **description**: Set whether phantoms spawn naturally in the end
 
 * pillager
@@ -147,11 +156,11 @@ mobs
 
 * snow_golem
     * drops-pumpkin-when-sheared
-        - **default**: true
+        - **default**: false
         - **description**: Control if shearing a snowman makes the pumpkin drop to the ground
 
     * pumpkin-can-be-added-back
-        - **default**: true
+        - **default**: false
         - **description**: Control if pumpkins can be placed back onto snowmen
 
 * villager
@@ -294,8 +303,13 @@ limit-pillager-outpost-spawns
 
 radius-villager-iron-golem-spawns
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* **default**: 10
-* **description**: Radius villagers search for existing iron golems before spawning more
+* **default**: 0
+* **description**: Radius villagers search for existing iron golems before spawning more. Value of 0 disables features
+
+limit-villager-iron-golem-spawns
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: 5
+* **description**: Maximum amount of iron golems villagers can spawn in configured radius
 
 elytra
 ~~~~~~
