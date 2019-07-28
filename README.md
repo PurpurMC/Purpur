@@ -6,7 +6,7 @@ Purpur is a fork of Paper used by the Pl3xCraft server.
 It contains many gameplay changes to suit our server that are deemed too wild to be included directly upstream into Paper.
 
 ## Contact
-[Discord](https://discord.gg/zAs8W5u)
+[Discord](https://pl3x.net/discord)
 
 ## License
 Everything is licensed under the MIT license, and is free to be used in your own fork.
