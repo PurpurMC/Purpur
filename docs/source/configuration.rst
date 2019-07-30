@@ -139,6 +139,11 @@ mobs
         - **default**: false
         - **description**: Set whether phantoms spawn naturally in the end
 
+* pigmen
+    * dont-target-unless-hit
+        - **default**: false
+        - **description**: Prevent pigmen from targetting players unless they are hit. (fixes MC-56653)
+
 * pillager
     * disable-patrols
         - **default**: false
