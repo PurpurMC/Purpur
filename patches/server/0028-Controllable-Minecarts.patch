@@ -1,0 +1,164 @@
+From 352fae6cf150c9a56028d01077eb87a78d61b85a Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sat, 29 Jun 2019 02:32:40 -0500
+Subject: [PATCH] Controllable Minecarts
+
+---
+ .../java/net/minecraft/server/Entity.java     |  1 +
+ .../server/EntityMinecartAbstract.java        | 39 +++++++++++++++++++
+ .../net/minecraft/server/ItemMinecart.java    |  8 ++--
+ .../java/net/pl3x/purpur/PurpurConfig.java    | 30 ++++++++++++++
+ 4 files changed, 75 insertions(+), 3 deletions(-)
+
+diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
+index fe7aa9d81..26a30e1c0 100644
+--- a/src/main/java/net/minecraft/server/Entity.java
++++ b/src/main/java/net/minecraft/server/Entity.java
+@@ -1295,6 +1295,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+         this.inLava = true;
+     }
+ 
++    public boolean isInLava() { return aD(); } // Purpur - OBFHELPER
+     public boolean aD() {
+         return this.inLava;
+     }
+diff --git a/src/main/java/net/minecraft/server/EntityMinecartAbstract.java b/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
+index 6df2930e2..c5b4057c3 100644
+--- a/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
++++ b/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
+@@ -4,6 +4,7 @@ import java.util.Iterator;
+ import java.util.List;
+ import javax.annotation.Nullable;
+ 
++import net.pl3x.purpur.PurpurConfig; // Purpur
+ // CraftBukkit start
+ import org.bukkit.Location;
+ import org.bukkit.entity.Vehicle;
+@@ -330,12 +331,50 @@ public abstract class EntityMinecartAbstract extends Entity {
+ 
+     public void a(int i, int j, int k, boolean flag) {}
+ 
++    // Purpur start
++    public double getControllableSpeed() {
++        BlockPosition position = new BlockPosition(this);
++        Block block = world.getType(position).getBlock();
++        if (!block.material.isSolid()) {
++            block = world.getType(position.shift(EnumDirection.DOWN)).getBlock();
++        }
++        Double speed = PurpurConfig.controllableMinecartsBlockSpeeds.get(block);
++        if (speed == null) {
++            speed = PurpurConfig.controllableMinecartsBaseSpeed;
++        }
++        return speed;
++    }
++    // Purpur end
++
+     protected void i() {
+         double d0 = this.getMaxSpeed();
+         Vec3D vec3d = this.getMot();
+ 
+         this.setMot(MathHelper.a(vec3d.x, -d0, d0), vec3d.y, MathHelper.a(vec3d.z, -d0, d0));
+         if (this.onGround) {
++            // Purpur start
++            if (PurpurConfig.controllableMinecarts && !isInWater() && !isInLava() && !passengers.isEmpty()) {
++                Entity passenger = passengers.get(0);
++                if (passenger instanceof EntityHuman) {
++                    EntityHuman entityhuman = (EntityHuman) passenger;
++                    if (entityhuman.isJumping()) {
++                        Vec3D mot = getMot();
++                        setMot(mot.x, PurpurConfig.controllableMinecartsHopBoost, mot.z);
++                    }
++                    if (entityhuman.getForward() != 0.0F) {
++                        Vector dir = entityhuman.getBukkitEntity().getEyeLocation().getDirection().normalize().multiply(getControllableSpeed());
++                        if (entityhuman.getForward() < 0.0) {
++                            dir.multiply(-0.5);
++                        }
++                        setMot(new Vec3D(dir.getX(), getMot().y, dir.getZ()));
++                        setStepHeight(PurpurConfig.controllableMinecartsStepHeight);
++                    } else {
++                        setStepHeight(0.0F);
++                    }
++                    this.yaw = passenger.yaw - 90;
++                }
++            }
++            // Purpur end
+             // CraftBukkit start - replace magic numbers with our variables
+             this.setMot(new Vec3D(this.getMot().x * this.derailedX, this.getMot().y * this.derailedY, this.getMot().z * this.derailedZ));
+             // CraftBukkit end
+diff --git a/src/main/java/net/minecraft/server/ItemMinecart.java b/src/main/java/net/minecraft/server/ItemMinecart.java
+index ec96fa0a4..9ad3cc298 100644
+--- a/src/main/java/net/minecraft/server/ItemMinecart.java
++++ b/src/main/java/net/minecraft/server/ItemMinecart.java
+@@ -103,8 +103,10 @@ public class ItemMinecart extends Item {
+         IBlockData iblockdata = world.getType(blockposition);
+ 
+         if (!iblockdata.a(TagsBlock.RAILS)) {
+-            return EnumInteractionResult.FAIL;
+-        } else {
++            // Purpur start - place minecarts anywhere
++            if (!net.pl3x.purpur.PurpurConfig.controllableMinecartsPlaceAnywhere) return EnumInteractionResult.FAIL;
++            if (iblockdata.getMaterial().isSolid()) blockposition = blockposition.shift(itemactioncontext.getClickedFace());
++        } //else { // Purpur end - place minecarts anywhere
+             ItemStack itemstack = itemactioncontext.getItemStack();
+ 
+             if (!world.isClientSide) {
+@@ -131,6 +133,6 @@ public class ItemMinecart extends Item {
+ 
+             itemstack.subtract(1);
+             return EnumInteractionResult.SUCCESS;
+-        }
++        //} // Purpur - place minecarts anywhere
+     }
+ }
+diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+index ddeb15b5d..40b28ebe5 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+@@ -1,9 +1,13 @@
+ package net.pl3x.purpur;
+ 
+ import com.google.common.base.Throwables;
++import net.minecraft.server.Block;
++import net.minecraft.server.IRegistry;
++import net.minecraft.server.MinecraftKey;
+ import net.minecraft.server.MinecraftServer;
+ import org.bukkit.Bukkit;
+ import org.bukkit.command.Command;
++import org.bukkit.configuration.ConfigurationSection;
+ import org.bukkit.configuration.InvalidConfigurationException;
+ import org.bukkit.configuration.file.YamlConfiguration;
+ import org.bukkit.event.inventory.InventoryType;
+@@ -303,4 +307,30 @@ public class PurpurConfig {
+         ridableZombiePigman = getBoolean("settings.ridable.zombie_pigman", ridableZombiePigman);
+         ridableZombieVillager = getBoolean("settings.ridable.zombie_villager", ridableZombieVillager);
+     }
++
++    public static boolean controllableMinecarts = true;
++    public static boolean controllableMinecartsPlaceAnywhere = true;
++    public static float controllableMinecartsStepHeight = 1.0F;
++    public static double controllableMinecartsHopBoost = 0.5D;
++    public static double controllableMinecartsBaseSpeed = 0.1D;
++    public static Map<Block, Double> controllableMinecartsBlockSpeeds = new HashMap<>();
++    private static void controllableMinecarts() {
++        controllableMinecarts = getBoolean("settings.controllable-minecarts.enabled", controllableMinecarts);
++        controllableMinecartsPlaceAnywhere = getBoolean("settings.controllable-minecarts.place-anywhere", controllableMinecartsPlaceAnywhere);
++        controllableMinecartsStepHeight = (float) getDouble("settings.controllable-minecarts.step-height", controllableMinecartsStepHeight);
++        controllableMinecartsHopBoost = getDouble("settings.controllable-minecarts.hop-boost", controllableMinecartsHopBoost);
++        controllableMinecartsBaseSpeed = getDouble("settings.controllable-minecarts.base-speed", controllableMinecartsBaseSpeed);
++        if (!config.contains("settings.controllable-minecarts.block-speed")) {
++            config.createSection("settings.controllable-minecarts.block-speed");
++        }
++        if (controllableMinecarts) {
++            ConfigurationSection section = config.getConfigurationSection("settings.controllable-minecarts.block-speed");
++            for (String key : section.getKeys(false)) {
++                Block block = IRegistry.BLOCK.get(new MinecraftKey(key));
++                if (block != null) {
++                    controllableMinecartsBlockSpeeds.put(block, section.getDouble(key, controllableMinecartsBaseSpeed));
++                }
++            }
++        }
++    }
+ }
+-- 
+2.20.1
+
