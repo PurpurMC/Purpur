@@ -75,6 +75,11 @@ use-better-mending
 * **default**: true
 * **description:** Set to true for mending enchantment to always repair the most damaged equipment first
 
+update-perms-on-world-change
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description:** When a player changes worlds the server recalculates their permissions and resends their available commands. This can be laggy, so the option is disabled by default
+
 logger
 ~~~~~~
 * show-duplicate-entity-uuid-errors
