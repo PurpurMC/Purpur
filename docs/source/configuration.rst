@@ -80,6 +80,27 @@ update-perms-on-world-change
 * **default**: false
 * **description:** When a player changes worlds the server recalculates their permissions and resends their available commands. This can be laggy, so the option is disabled by default
 
+grindstone
+~~~~~~~~~~~~~~~~~~~~~~
+* disallow-placement
+    - **default**: true
+    - **description**: Disallow placing blacklisted items into the grindstone UI slots
+
+* returns-zero-exp
+    - **default**: true
+    - **description**: Return 0 exp for blacklisted items in the grindstone
+
+* blacklisted-items
+    - **default**: {}
+    - **description**: List of blacklisted items for grindstone
+
+.. note::
+    Example of blacklisted-items:
+      * blacklisted-items:
+         - minecraft:tripwire_hook
+         - minecraft:stone
+         - minecraft:grass_block
+
 logger
 ~~~~~~
 * show-duplicate-entity-uuid-errors
