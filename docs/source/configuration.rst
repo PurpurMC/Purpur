@@ -332,6 +332,24 @@ limit-villager-iron-golem-spawns
 * **default**: 5
 * **description**: Maximum amount of iron golems villagers can spawn in configured radius
 
+idle-timeout
+~~~~~~~~~~~~
+* kick-if-idle
+    - **default**: true
+    - **description**: Kick players if they become idle (see server.properties for player-idle-timeout time)
+
+* tick-nearby-entities
+    - **default**: false
+    - **description**: Should entities tick normally when nearby players are afk. False will require at least 1 non-afk player in order to tick.
+
+* broadcast
+    * away
+        - **default**: "&e&o{player} is now AFK"
+        - **description**: The message to broadcast server-wide when a player goes afk. Set to empty string ("") to disable
+    * back
+        - **default**: "&e&o{player} is no longer AFK"
+        - **description**: The message to broadcast server-wide when a player comes back from being afk. Set to empty string ("") to disable
+
 elytra
 ~~~~~~
 * damage-per-second
