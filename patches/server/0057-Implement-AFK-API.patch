@@ -1,18 +1,19 @@
-From cd72403d3729650fddebbb1d9065c0eeb9ba2e1f Mon Sep 17 00:00:00 2001
+From 886c0f755d9420d7005f59640391e1799f94a68b Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Thu, 8 Aug 2019 15:29:15 -0500
-Subject: [PATCH] Implement AFK options
+Subject: [PATCH] Implement AFK API
 
 ---
  .../java/net/minecraft/server/Entity.java     |  1 +
- .../net/minecraft/server/EntityHuman.java     | 24 +++++++++++++
- .../net/minecraft/server/EntityPlayer.java    |  1 +
- .../net/minecraft/server/IEntityAccess.java   | 34 +++++++------------
- .../net/minecraft/server/IEntitySelector.java |  2 ++
- .../minecraft/server/PlayerConnection.java    | 10 ++++++
- .../net/pl3x/purpur/PurpurWorldConfig.java    | 12 +++++++
+ .../net/minecraft/server/EntityHuman.java     |  9 +++++
+ .../net/minecraft/server/EntityPlayer.java    | 37 +++++++++++++++++++
+ .../net/minecraft/server/IEntityAccess.java   | 34 ++++++-----------
+ .../net/minecraft/server/IEntitySelector.java |  2 +
+ .../minecraft/server/PlayerConnection.java    | 10 +++++
+ .../net/pl3x/purpur/PurpurWorldConfig.java    | 12 ++++++
+ .../craftbukkit/entity/CraftPlayer.java       | 17 +++++++++
  .../java/org/spigotmc/ActivationRange.java    |  1 +
- 8 files changed, 63 insertions(+), 22 deletions(-)
+ 9 files changed, 101 insertions(+), 22 deletions(-)
 
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
 index 770d21468..2ff5a12d8 100644
@@ -27,52 +28,75 @@ index 770d21468..2ff5a12d8 100644
          double d3 = this.locX - d0;
          double d4 = this.locY - d1;
 diff --git a/src/main/java/net/minecraft/server/EntityHuman.java b/src/main/java/net/minecraft/server/EntityHuman.java
-index 2a943f316..c396bf2e2 100644
+index 2a943f316..8ee2e6c7f 100644
 --- a/src/main/java/net/minecraft/server/EntityHuman.java
 +++ b/src/main/java/net/minecraft/server/EntityHuman.java
-@@ -75,6 +75,30 @@ public abstract class EntityHuman extends EntityLiving {
-     public boolean affectsSpawning = true;
-     // Paper end
+@@ -86,6 +86,15 @@ public abstract class EntityHuman extends EntityLiving {
+     }
+     // CraftBukkit end
  
 +    // Purpur start
-+    private boolean isAfk = false;
-+
-+    public void setAfk(boolean isAfk) {
-+        if (!world.purpurConfig.idleTimeoutKick) { // do not broadcast if going to kick
-+            if (!world.purpurConfig.idleTimeoutBroadcastAway.isEmpty() && !this.isAfk && isAfk) {
-+                getMinecraftServer().server.broadcastMessage(world.purpurConfig.idleTimeoutBroadcastAway.replace("{player}", getName()));
-+            } else if (!world.purpurConfig.idleTimeoutBroadcastBack.isEmpty() && this.isAfk && !isAfk) {
-+                getMinecraftServer().server.broadcastMessage(world.purpurConfig.idleTimeoutBroadcastBack.replace("{player}", getName()));
-+            }
-+        }
-+        this.isAfk = isAfk;
++    public void setAfk(boolean setAfk){
 +    }
 +
 +    public boolean isAfk() {
-+        return isAfk;
-+    }
-+
-+    @Override
-+    public boolean isCollidable(boolean ignoreClimbing) {
-+        return !isAfk && super.isCollidable(ignoreClimbing);
++        return false;
 +    }
 +    // Purpur end
 +
-     // CraftBukkit start
-     public boolean fauxSleeping;
-     public String spawnWorld = "";
+     public EntityHuman(World world, GameProfile gameprofile) {
+         super(EntityTypes.PLAYER, world);
+         this.bY = ItemStack.a;
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index 622899d8f..f7694545e 100644
+index 622899d8f..1ca5da443 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/EntityPlayer.java
-@@ -1593,6 +1593,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -1593,8 +1593,45 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
  
      public void resetIdleTimer() {
          this.cm = SystemUtils.getMonotonicMillis();
 +        setAfk(false); // Purpur
      }
  
++    // Purpur start
++    private boolean isAfk = false;
++
++    @Override
++    public void setAfk(boolean setAfk) {
++        if (this.isAfk == setAfk) {
++            return;
++        }
++
++        net.pl3x.purpur.event.PlayerAFKEvent event = new net.pl3x.purpur.event.PlayerAFKEvent(getBukkitEntity(), false, world.purpurConfig.idleTimeoutKick, setAfk ? world.purpurConfig.idleTimeoutBroadcastAway : world.purpurConfig.idleTimeoutBroadcastBack);
++        if (!event.callEvent() || event.shouldKick()) {
++            return;
++        }
++
++        this.isAfk = setAfk;
++
++        if (!setAfk) {
++            resetIdleTimer();
++        }
++
++        if (event.getBroadcastMsg() != null && !event.getBroadcastMsg().isEmpty()) {
++            ((WorldServer) world).getMinecraftServer().server.broadcastMessage(event.getBroadcastMsg().replace("{player}", getName()));
++        }
++    }
++
++    @Override
++    public boolean isAfk() {
++        return isAfk;
++    }
++
++    @Override
++    public boolean isCollidable(boolean ignoreClimbing) {
++        return !isAfk() && super.isCollidable(ignoreClimbing);
++    }
++    // Purpur end
++
      public ServerStatisticManager getStatisticManager() {
+         return this.serverStatisticManager;
+     }
 diff --git a/src/main/java/net/minecraft/server/IEntityAccess.java b/src/main/java/net/minecraft/server/IEntityAccess.java
 index 9aaa75e95..70fe85279 100644
 --- a/src/main/java/net/minecraft/server/IEntityAccess.java
@@ -203,6 +227,32 @@ index b1dcb5f8d..69fac757d 100644
      public int elytraDamagePerSecond = 1;
      public double elytraDamageMultiplyBySpeed = 0;
      public boolean elytraIgnoreUnbreaking = false;
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index e920545df..c098de315 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -2088,4 +2088,21 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+         return spigot;
+     }
+     // Spigot end
++
++    // Purpur start
++    @Override
++    public boolean isAfk() {
++        return getHandle().isAfk();
++    }
++
++    @Override
++    public void setAfk(boolean setAfk) {
++        getHandle().setAfk(setAfk);
++    }
++
++    @Override
++    public void resetIdleTimer() {
++        getHandle().resetIdleTimer();
++    }
++    // Purpur end
+ }
 diff --git a/src/main/java/org/spigotmc/ActivationRange.java b/src/main/java/org/spigotmc/ActivationRange.java
 index 92601c581..185717c80 100644
 --- a/src/main/java/org/spigotmc/ActivationRange.java
