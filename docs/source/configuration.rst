@@ -341,6 +341,9 @@ idle-timeout
 * tick-nearby-entities
     - **default**: false
     - **description**: Should entities tick normally when nearby players are afk. False will require at least 1 non-afk player in order to tick.
+* count-as-sleeping
+    - **default**: false
+    - **description**: Should AFK players count as sleeping? (allows active players to skip night by sleeping, even if AFK players are not in bed)
 
 * broadcast
     * away

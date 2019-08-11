@@ -1,4 +1,4 @@
-From 886c0f755d9420d7005f59640391e1799f94a68b Mon Sep 17 00:00:00 2001
+From ee58a30e490ea342f7ae1c7fa4b81ac972608fce Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Thu, 8 Aug 2019 15:29:15 -0500
 Subject: [PATCH] Implement AFK API
@@ -6,14 +6,15 @@ Subject: [PATCH] Implement AFK API
 ---
  .../java/net/minecraft/server/Entity.java     |  1 +
  .../net/minecraft/server/EntityHuman.java     |  9 +++++
- .../net/minecraft/server/EntityPlayer.java    | 37 +++++++++++++++++++
- .../net/minecraft/server/IEntityAccess.java   | 34 ++++++-----------
+ .../net/minecraft/server/EntityPlayer.java    | 39 +++++++++++++++++++
+ .../net/minecraft/server/IEntityAccess.java   | 34 ++++++----------
  .../net/minecraft/server/IEntitySelector.java |  2 +
  .../minecraft/server/PlayerConnection.java    | 10 +++++
- .../net/pl3x/purpur/PurpurWorldConfig.java    | 12 ++++++
- .../craftbukkit/entity/CraftPlayer.java       | 17 +++++++++
+ .../net/minecraft/server/WorldServer.java     |  4 +-
+ .../net/pl3x/purpur/PurpurWorldConfig.java    | 14 +++++++
+ .../craftbukkit/entity/CraftPlayer.java       | 17 ++++++++
  .../java/org/spigotmc/ActivationRange.java    |  1 +
- 9 files changed, 101 insertions(+), 22 deletions(-)
+ 10 files changed, 107 insertions(+), 24 deletions(-)
 
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
 index 770d21468..2ff5a12d8 100644
@@ -48,10 +49,10 @@ index 2a943f316..8ee2e6c7f 100644
          super(EntityTypes.PLAYER, world);
          this.bY = ItemStack.a;
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index 622899d8f..1ca5da443 100644
+index 622899d8f..64c274470 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/EntityPlayer.java
-@@ -1593,8 +1593,45 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -1593,8 +1593,47 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
  
      public void resetIdleTimer() {
          this.cm = SystemUtils.getMonotonicMillis();
@@ -81,6 +82,8 @@ index 622899d8f..1ca5da443 100644
 +        if (event.getBroadcastMsg() != null && !event.getBroadcastMsg().isEmpty()) {
 +            ((WorldServer) world).getMinecraftServer().server.broadcastMessage(event.getBroadcastMsg().replace("{player}", getName()));
 +        }
++
++        ((WorldServer) world).everyoneSleeping();
 +    }
 +
 +    @Override
@@ -197,8 +200,30 @@ index 8aa8a672d..7d4369887 100644
                                  // Skip the first time we do this
                                  if (from.getX() != Double.MAX_VALUE) {
                                      Location oldTo = to.clone();
+diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
+index 50fcab233..30b2bb0e2 100644
+--- a/src/main/java/net/minecraft/server/WorldServer.java
++++ b/src/main/java/net/minecraft/server/WorldServer.java
+@@ -319,7 +319,7 @@ public class WorldServer extends World {
+         }
+ 
+         if (this.C && this.players.stream().noneMatch((entityplayer) -> {
+-            return !entityplayer.isSpectator() && !entityplayer.isDeeplySleeping() && !entityplayer.fauxSleeping; // CraftBukkit
++            return !entityplayer.isSpectator() && !entityplayer.isDeeplySleeping() && !entityplayer.fauxSleeping && !(purpurConfig.idleTimeoutCountAsSleeping && entityplayer.isAfk()); // CraftBukkit // Purpur
+         })) {
+             this.C = false;
+             if (this.getGameRules().getBoolean(GameRules.DO_DAYLIGHT_CYCLE)) {
+@@ -586,7 +586,7 @@ public class WorldServer extends World {
+             while (iterator.hasNext()) {
+                 EntityPlayer entityplayer = (EntityPlayer) iterator.next();
+ 
+-                if (entityplayer.isSpectator() || (entityplayer.fauxSleeping && !entityplayer.isSleeping())) { // CraftBukkit
++                if (entityplayer.isSpectator() || (entityplayer.fauxSleeping && !entityplayer.isSleeping()) || (purpurConfig.idleTimeoutCountAsSleeping && entityplayer.isAfk())) { // CraftBukkit // Purpur
+                     ++i;
+                 } else if (entityplayer.isSleeping()) {
+                     ++j;
 diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-index b1dcb5f8d..69fac757d 100644
+index b1dcb5f8d..d3f4b7f01 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 @@ -1,6 +1,7 @@
@@ -209,17 +234,19 @@ index b1dcb5f8d..69fac757d 100644
  import org.bukkit.configuration.file.YamlConfiguration;
  import org.spigotmc.SpigotWorldConfig;
  
-@@ -131,6 +132,17 @@ public class PurpurWorldConfig {
+@@ -131,6 +132,19 @@ public class PurpurWorldConfig {
          limitVillagerIronGolemSpawns = getInt("limit-villager-iron-golem-spawns", limitVillagerIronGolemSpawns);
      }
  
 +    public boolean idleTimeoutKick = true;
 +    public boolean idleTimeoutTickNearbyEntities = false;
++    public boolean idleTimeoutCountAsSleeping = false;
 +    public String idleTimeoutBroadcastAway = "&e&o{player} is now AFK";
 +    public String idleTimeoutBroadcastBack = "&e&o{player} is no longer AFK";
 +    private void playerIdleTimeoutSettings() {
 +        idleTimeoutKick = getBoolean("idle-timeout.kick-if-idle", idleTimeoutKick);
 +        idleTimeoutTickNearbyEntities = getBoolean("idle-timeout.tick-nearby-entities", idleTimeoutTickNearbyEntities);
++        idleTimeoutCountAsSleeping = getBoolean("idle-timeout.count-as-sleeping", idleTimeoutCountAsSleeping);
 +        idleTimeoutBroadcastAway = ChatColor.translateAlternateColorCodes('&', getString("idle-timeout.broadcast.away", idleTimeoutBroadcastAway));
 +        idleTimeoutBroadcastBack = ChatColor.translateAlternateColorCodes('&', getString("idle-timeout.broadcast.back", idleTimeoutBroadcastBack));
 +    }
