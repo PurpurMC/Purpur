@@ -192,6 +192,11 @@ mobs
         - **default**: 2
         - **description**: How often (in ticks) should villager's tick their brain logic. Vanilla value is to tick every tick (1). Higher amounts makes them tick less often to reduce lag, but setting it too high could result is unresponsive villagers.
 
+* zombie
+    * target-turtle-eggs
+        - **default**: true
+        - **description**: Should zombies target/stomp turtle eggs
+
 * zombie_horse
     * spawn-chance
         - **default**: 0
