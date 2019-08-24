@@ -80,6 +80,11 @@ update-perms-on-world-change
 * **default**: false
 * **description:** When a player changes worlds the server recalculates their permissions and resends their available commands. This can be laggy, so the option is disabled by default
 
+slimes-not-pushable
+~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description:** Prevent slimes from being pushable by pistons
+
 grindstone
 ~~~~~~~~~~~~~~~~~~~~~~
 * disallow-placement
