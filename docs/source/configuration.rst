@@ -128,9 +128,12 @@ mobs
         - **description**: Number of mushrooms to feed a cow to make it transform into a mooshroom. Value of 0 disables feature.
 
 * ender-dragon
-    * death-always-places-egg-block
-        - **default**: true
+    * always-drop-egg-block
+        - **default**: false
         - **description:** When true all valid ender dragon deaths will place an ender egg block on top of the portal
+    * always-drop-full-exp
+        - **default**: false
+        - **description:** When true all valid ender dragon deaths will drop the full amount of experience orbs as if it were the first dragon death
 
 * fox
     * tulips-change-type
