@@ -239,6 +239,16 @@ editable-signs
 * **default**: true
 * **description**: Ability to edit signs by right clicking them with another sign in hand
 
+bamboo
+~~~~~~
+* max-height:
+    - **default**: 16
+    - **description**: Maximum height bamboo may grow to
+
+* small-height:
+    - **default**: 10
+    - **description**: Maximum height bamboo may be small thickness
+
 campfire-obeys-gravity
 ~~~~~~~~~~~~~~~~~~~~~~
 * **default**: true
