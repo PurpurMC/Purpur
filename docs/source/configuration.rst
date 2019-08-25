@@ -305,6 +305,11 @@ campfires-go-out-in-rain
 * **default**: true
 * **description**: Campfires burn out in the rain
 
+dispenser-apply-cursed-armor-slots
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Should dispensers apply armor to armor slots if enchanted with curse of binding
+
 allow-moist-soil-from-water-below
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: true
