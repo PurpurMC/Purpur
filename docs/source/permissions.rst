@@ -45,3 +45,12 @@ need to be granted the permissions you want them to have using a permissions plu
 * **purpur.sign.click.opens.editor**
     - **description**: Allows players to open the sign editor when right clicking a sign
     while holding a sign.
+
+* **purpur.sign.color**
+    - **description**: Allows players to use color codes on signs
+
+* **purpur.sign.style**
+    - **description**: Allows players to use style codes on signs (except the magic/obfuscated code)
+
+* **purpur.sign.magic**
+    - **description**: Allows players to use the magic/obfuscated style code on signs
