@@ -192,6 +192,9 @@ mobs
     * spawn-killer-rabbit-chance
         - **default**: 0.0
         - **description**: Percent chance (0.0-1.0) the killer rabbit naturally spawns
+    * spawn-toast-chance
+        - **default**: 0.0
+        - **description**: Percent chance (0.0-1.0) to naturally spawn a rabbit named Toast
 
 * snow_golem
     * drops-pumpkin-when-sheared
