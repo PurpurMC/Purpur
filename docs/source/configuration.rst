@@ -60,6 +60,11 @@ fix-item-position-desync
 .. warning::
     The `fix-item-position-desync` option is highly experimental! Only enable this if you are feeling brave.
 
+fix-zero-tick-farms
+~~~~~~~~~~~~~~~~~~~
+* **default**: true
+* **description**: Prevents crops from growing using the zero-tick trick (fixes MC-113809)
+
 large-ender-chests
 ~~~~~~~~~~~~~~
 * **default**: true
