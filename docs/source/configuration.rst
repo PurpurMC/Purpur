@@ -183,6 +183,11 @@ mobs
         - **default**: false
         - **description**: Disables random pillager patrols (does not effect pillager outposts)
 
+* rabbit
+    * spawn-killer-rabbit-chance
+        - **default**: 0.0
+        - **description**: Percent chance (0.0-1.0) the killer rabbit naturally spawns
+
 * snow_golem
     * drops-pumpkin-when-sheared
         - **default**: false
