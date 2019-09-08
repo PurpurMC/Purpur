@@ -270,6 +270,10 @@ bamboo
     - **default**: 10
     - **description**: Maximum height bamboo may be small thickness
 
+* boat-eject-players-on-land
+    - **default**: false
+    - **description**: Whether or not boats eject players when on land
+
 campfire-obeys-gravity
 ~~~~~~~~~~~~~~~~~~~~~~
 * **default**: true
