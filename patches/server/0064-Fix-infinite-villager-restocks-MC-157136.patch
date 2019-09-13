@@ -1,0 +1,107 @@
+From 9dfc4f3d34da8d170c3b41fa26c5b456b3fff561 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sat, 7 Sep 2019 16:08:46 -0500
+Subject: [PATCH] Fix infinite villager restocks MC-157136
+
+---
+ .../net/minecraft/server/EntityVillager.java  | 56 +++++++++----------
+ 1 file changed, 28 insertions(+), 28 deletions(-)
+
+diff --git a/src/main/java/net/minecraft/server/EntityVillager.java b/src/main/java/net/minecraft/server/EntityVillager.java
+index d1d62a900..6ef88559d 100644
+--- a/src/main/java/net/minecraft/server/EntityVillager.java
++++ b/src/main/java/net/minecraft/server/EntityVillager.java
+@@ -41,9 +41,9 @@ public class EntityVillager extends EntityVillagerAbstract implements Reputation
+     private long bK;
+     private long bL;
+     private int bM;
+-    private long bN;
+-    private int bO;
+-    private long bP;
++    private long bN; private long getLastRestockGameTime() { return bN; } private void setLastRestockGameTime(long value) { bN = value; } // Purpur - OBFHELPER
++    private int bO; private int getNumberOfRestocksToday() { return bO; } private void setNumberOfRestocksToday(int value) { bO = value; } // Purpur - OBFHELPER
++    private long bP; private long getLastRestockCheckDayTime() { return bP; } private void setLastRestockCheckDayTime(long value) { bP = value; } // Purpur - OBFHELPER
+     private static final ImmutableList<MemoryModuleType<?>> bQ = ImmutableList.of(MemoryModuleType.HOME, MemoryModuleType.JOB_SITE, MemoryModuleType.MEETING_POINT, MemoryModuleType.MOBS, MemoryModuleType.VISIBLE_MOBS, MemoryModuleType.VISIBLE_VILLAGER_BABIES, MemoryModuleType.NEAREST_PLAYERS, MemoryModuleType.NEAREST_VISIBLE_PLAYER, MemoryModuleType.WALK_TARGET, MemoryModuleType.LOOK_TARGET, MemoryModuleType.INTERACTION_TARGET, MemoryModuleType.BREED_TARGET, new MemoryModuleType[]{MemoryModuleType.PATH, MemoryModuleType.INTERACTABLE_DOORS, MemoryModuleType.OPENED_DOORS, MemoryModuleType.NEAREST_BED, MemoryModuleType.HURT_BY, MemoryModuleType.HURT_BY_ENTITY, MemoryModuleType.NEAREST_HOSTILE, MemoryModuleType.SECONDARY_JOB_SITE, MemoryModuleType.HIDING_PLACE, MemoryModuleType.HEARD_BELL_TIME, MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE, MemoryModuleType.LAST_SLEPT, MemoryModuleType.LAST_WORKED_AT_POI, MemoryModuleType.GOLEM_LAST_SEEN_TIME});
+     private static final ImmutableList<SensorType<? extends Sensor<? super EntityVillager>>> bR = ImmutableList.of(SensorType.b, SensorType.c, SensorType.d, SensorType.e, SensorType.f, SensorType.g, SensorType.h, SensorType.i, SensorType.j);
+     public static final Map<MemoryModuleType<GlobalPos>, BiPredicate<EntityVillager, VillagePlaceType>> bB = ImmutableMap.of(MemoryModuleType.HOME, (entityvillager, villageplacetype) -> {
+@@ -299,45 +299,44 @@ public class EntityVillager extends EntityVillagerAbstract implements Reputation
+         ++this.bO;
+     }
+ 
++    // Purpur start - fix MC-157136
++    private boolean needsToRestock() { return ev(); } // Purpur - OBFHELPER
+     private boolean ev() {
+-        Iterator iterator = this.getOffers().iterator();
+-
+-        MerchantRecipe merchantrecipe;
+-
+-        do {
+-            if (!iterator.hasNext()) {
+-                return false;
++        for(MerchantRecipe offer : getOffers()) {
++            if (offer.isFullyUsed()) {
++                return true;
+             }
+-
+-            merchantrecipe = (MerchantRecipe) iterator.next();
+-        } while (!merchantrecipe.isFullyUsed());
+-
+-        return true;
++        }
++        return false;
+     }
+ 
++    private boolean allowedToRestock() { return ew(); } // Purpur - OBFHELPER
+     private boolean ew() {
+-        return this.bO < 2 && this.world.getTime() > this.bN + 2400L;
++        return getNumberOfRestocksToday() == 0 || getNumberOfRestocksToday() < 2 && world.getTime() > getLastRestockGameTime() + 2400L;
+     }
+ 
++    public boolean shouldRestock() { return ek(); } // Purpur - OBFHELPER
+     public boolean ek() {
+-        long i = this.bN + 12000L;
+-        boolean flag = this.world.getTime() > i;
+-        long j = this.world.getDayTime();
++        long nextRestockTime = getLastRestockGameTime() + 12000L;
++        long worldTime = this.world.getTime();
++        boolean shouldRestock = worldTime > nextRestockTime;
++        long dayTime = this.world.getDayTime();
+ 
+-        if (this.bP > 0L) {
+-            long k = this.bP / 24000L;
+-            long l = j / 24000L;
+-
+-            flag |= l > k;
++        if (getLastRestockCheckDayTime() > 0L) {
++            long l = getLastRestockCheckDayTime() / 24000L;
++            long i1 = dayTime / 24000L;
++            shouldRestock |= i1 > l;
+         }
+ 
+-        this.bP = j;
+-        if (flag) {
+-            this.eH();
++        setLastRestockCheckDayTime(dayTime);
++        if (shouldRestock) {
++            setLastRestockGameTime(worldTime);
++            this.resetNumberOfRestocks();
+         }
+ 
+-        return this.ew() && this.ev();
++        return this.allowedToRestock() && this.needsToRestock();
+     }
++    // Purpur end
+ 
+     private void ex() {
+         int i = 2 - this.bO;
+@@ -958,6 +957,7 @@ public class EntityVillager extends EntityVillagerAbstract implements Reputation
+         this.bM = i;
+     }
+ 
++    private void resetNumberOfRestocks() { eh(); } // Purpur - OBFHELPER
+     private void eH() {
+         this.ex();
+         this.bO = 0;
+-- 
+2.23.0.rc1
+
