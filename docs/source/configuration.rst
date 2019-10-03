@@ -212,6 +212,9 @@ mobs
     * brain-ticks
         - **default**: 2
         - **description**: How often (in ticks) should villager's tick their brain logic. Vanilla value is to tick every tick (1). Higher amounts makes them tick less often to reduce lag, but setting it too high could result is unresponsive villagers.
+    * allow-leashing
+        - **default**: false
+        - **description**: Allow players to use leads on villagers (trader not included)
 
 * zombie
     * target-turtle-eggs
@@ -336,11 +339,6 @@ allow-sign-colors
 ~~~~~~~~~~~~~~~~~
 * **default**: true
 * **description**: Allow players to use color codes on signs
-
-allow-leashing-villagers
-~~~~~~~~~~~~~~~~~~~~~~~~
-* **default**: true
-* **description**: Allow players to use leads on villagers (trader not included)
 
 items-can-break-turtle-eggs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
