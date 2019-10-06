@@ -121,6 +121,12 @@ logger
     - **default**: true
     - **description**:: Controls if warnings about unknown attributes are shown in console/logs
 
+armorstand
+~~~~~~~~~~
+* step-height
+    - **default**: 0.0
+    - **description**:: Set the default step height of armorstands. Useful for plugins that utilize armorstands as vehicles to be able to drive over blocks without jumping, etc.
+
 mobs
 ~~~~
 * require-shift-to-mount
