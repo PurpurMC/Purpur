@@ -230,7 +230,7 @@ mobs
 * zombie_horse
     * spawn-chance
         - **default**: 0
-        - **description**: Percent chance a zombie horse will spawn instead of a skeleton horse (natural spawns during thunderstorms)
+        - **description**: Percent chance (0.0 - 1.0) a zombie horse will spawn instead of a skeleton horse (natural spawns during thunderstorms)
 
 ridable
 ~~~~~~~
