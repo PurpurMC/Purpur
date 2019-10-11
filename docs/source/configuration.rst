@@ -80,6 +80,11 @@ use-better-mending
 * **default**: true
 * **description:** Set to true for mending enchantment to always repair the most damaged equipment first
 
+use-alternate-keepalive
+~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description:** Uses a different approach to keepalive ping timeouts. Enabling this sends a keepalive packet once per second to a player, and only kicks for timeout if none of them were responded to in 30 seconds. Responding to any of them in any order will keep the player connected. AKA, it won't kick your players because 1 packet gets dropped somewhere along the lines.
+
 update-perms-on-world-change
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: false
