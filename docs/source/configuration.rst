@@ -75,6 +75,11 @@ packed-barrels
 * **default**: true
 * **description:** Use large size barrels (6 rows, aka 54 slots)
 
+suppress-unknown-attribute-warnings
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description:** Suppress warnings about unknown attributes in console and logs
+
 use-better-mending
 ~~~~~~~~~~~~~~~~~~
 * **default**: true
