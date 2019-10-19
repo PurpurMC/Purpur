@@ -288,6 +288,16 @@ bamboo
     - **default**: false
     - **description**: Whether or not boats eject players when on land
 
+block-tick-events
+~~~~~~~~~~~~~~~~~
+    - **default**: false
+    - **description**: Enable block tick events
+
+fluid-tick-events
+~~~~~~~~~~~~~~~~~
+    - **default**: false
+    - **description**: Enable fluid tick events
+
 campfire-obeys-gravity
 ~~~~~~~~~~~~~~~~~~~~~~
 * **default**: true
