@@ -295,13 +295,13 @@ bamboo
 
 block-tick-events
 ~~~~~~~~~~~~~~~~~
-    - **default**: false
-    - **description**: Enable block tick events
+* **default**: false
+* **description**: Enable block tick events
 
 fluid-tick-events
 ~~~~~~~~~~~~~~~~~
-    - **default**: false
-    - **description**: Enable fluid tick events
+* **default**: false
+* **description**: Enable fluid tick events
 
 campfire-obeys-gravity
 ~~~~~~~~~~~~~~~~~~~~~~
