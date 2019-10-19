@@ -178,7 +178,10 @@ mobs
 * iron_golem
     * swims
         - **default**: true
-        - **description**: Set whether iron golem can swim or not
+        - **description**: Set whether iron golems can swim or not
+    * can-spawn-in-air
+        - **default**: false
+        - **description**: Set whether iron golems can spawn in the air, like in 1.12 and below
 
 * phantom
     * crystals-attack-range
