@@ -207,11 +207,6 @@ mobs
         - **default**: false
         - **description**: Prevent pigmen from targetting players unless they are hit. (fixes MC-56653)
 
-* pillager
-    * disable-patrols
-        - **default**: false
-        - **description**: Disables random pillager patrols (does not effect pillager outposts)
-
 * rabbit
     * spawn-killer-rabbit-chance
         - **default**: 0.0
