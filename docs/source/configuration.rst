@@ -153,6 +153,11 @@ mobs
         - **default**: 0
         - **description**: Number of mushrooms to feed a cow to make it transform into a mooshroom. Value of 0 disables feature.
 
+* creeper
+    * naturally-charged-chance
+        - **default:** 0.0
+        - **description:** Chance creepers are charged (powered) when spawning
+
 * ender-dragon
     * always-drop-egg-block
         - **default**: false
