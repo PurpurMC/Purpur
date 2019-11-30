@@ -148,6 +148,11 @@ mobs
     - **default**: true
     - **description**: Require shift click to mount otherwise non-ridable mobs
 
+* chicken
+    * eggs-hatch-when-despawned
+        - **default:** false
+        - **description:** When chicken egg despawns a chicken is hatched in its place
+
 * cow
     * feed-mushrooms-for-mooshroom
         - **default**: 0
