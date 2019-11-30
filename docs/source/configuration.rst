@@ -237,6 +237,9 @@ mobs
     * allow-leashing
         - **default**: false
         - **description**: Allow players to use leads on villagers (trader not included)
+    * follow-emerald-blocks
+        - **default:** false
+        - **description:** Villagers will be tempted by emerald blocks and follow players holding them
 
 * zombie
     * target-turtle-eggs
