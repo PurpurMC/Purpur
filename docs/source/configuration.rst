@@ -427,18 +427,12 @@ limit-villager-iron-golem-spawns
 
 sleep
 ~~~~~
-* only-at-night
+* only-with-condition
     - **default:** false
-    - **description:** Make players only sleep at night. Night times specified below. Rest of the sleep options are ignored if this is false
-* night-start
-    - **default:** 12541
-    - **description:** The starting time of night (in ticks) when a player can first sleep
-* night-end
-    - **default:** 23458
-    - **description:** The ending time of night (in ticks) when a player cannot sleep
-* invert-condition
-    - **default:** false
-    - **description:** Invert the result of the time condition. Time condition is `!(time < start && time > end)`. Inverting it removes the `!`
+    - **description:** Make players only sleep when the following time condition is true
+* condition
+    - **default:** "time >= 12541 && time <= 23458"
+    - **description:** The time condition for player to be able to sleep
 
 idle-timeout
 ~~~~~~~~~~~~
