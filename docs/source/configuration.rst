@@ -201,6 +201,9 @@ mobs
     * spawn-in-the-end
         - **default**: false
         - **description**: Set whether phantoms spawn naturally in the end
+    * only-attack-insomniacs
+        - **default:** false
+        - **description:** Make phantoms only attack insomniac players. Players that have slept recently will be ignored.
 
 * pigmen
     * dont-target-unless-hit
