@@ -395,6 +395,11 @@ milk-cures-bad-omen
 * **default**: false
 * **description**: Allow players to drink milk to cure bad omen status effect
 
+hay-block-fall-damage
+~~~~~~~~~~~~~~~~~~~~~
+* **default:** true
+* **description:** Damage factor for when falling onto hay blocks. Set to true for no fall damage (Assassin's Creed style)
+
 block-tick-events
 ~~~~~~~~~~~~~~~~~
 * **default**: true
