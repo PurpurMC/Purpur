@@ -1,0 +1,95 @@
+From 91cca1e9d85a776b1aeff360f49c93eeae35371d Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Sat, 30 Nov 2019 03:30:17 -0600
+Subject: [PATCH] Add sleep options
+
+---
+ .../net/minecraft/server/EntityHuman.java     | 25 ++++++++++++++++---
+ .../net/pl3x/purpur/PurpurWorldConfig.java    |  7 ++++++
+ 2 files changed, 29 insertions(+), 3 deletions(-)
+
+diff --git a/src/main/java/net/minecraft/server/EntityHuman.java b/src/main/java/net/minecraft/server/EntityHuman.java
+index 2ec3e660b3..9d7122632b 100644
+--- a/src/main/java/net/minecraft/server/EntityHuman.java
++++ b/src/main/java/net/minecraft/server/EntityHuman.java
+@@ -14,6 +14,11 @@ import java.util.OptionalInt;
+ import java.util.UUID;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++// Purpur start
++import javax.script.ScriptEngine;
++import javax.script.ScriptEngineManager;
++import javax.script.ScriptException;
++// Purpur end
+ 
+ // CraftBukkit start
+ import org.bukkit.craftbukkit.entity.CraftHumanEntity;
+@@ -25,7 +30,6 @@ import org.bukkit.event.entity.EntityCombustByEntityEvent;
+ import org.bukkit.event.player.PlayerBedLeaveEvent;
+ import org.bukkit.event.player.PlayerDropItemEvent;
+ import org.bukkit.event.player.PlayerVelocityEvent;
+-import org.bukkit.util.Vector;
+ // CraftBukkit end
+ 
+ public abstract class EntityHuman extends EntityLiving {
+@@ -143,6 +147,21 @@ public abstract class EntityHuman extends EntityLiving {
+         this.datawatcher.register(EntityHuman.bt, new NBTTagCompound());
+     }
+ 
++    // Purpur start
++    private ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("JavaScript");
++
++    private boolean unableToSleepRightNow() {
++        if (world.purpurConfig.sleepOnlyWithCondition) {
++            try {
++                scriptEngine.eval("time = " + world.getDayTime());
++                return !(Boolean) scriptEngine.eval(world.purpurConfig.sleepCondition);
++            } catch (ScriptException ignore) {
++            }
++        }
++        return world.isDayTime();
++    }
++    // Purpur end
++
+     @Override
+     public void tick() {
+         this.noclip = this.isSpectator();
+@@ -160,7 +179,7 @@ public abstract class EntityHuman extends EntityLiving {
+                 this.sleepTicks = 100;
+             }
+ 
+-            if (!this.world.isClientSide && this.world.J()) {
++            if (!this.world.isClientSide && unableToSleepRightNow()) { // Purpur
+                 this.wakeup(false, true);
+             }
+         } else if (this.sleepTicks > 0) {
+@@ -1334,7 +1353,7 @@ public abstract class EntityHuman extends EntityLiving {
+                 return Either.left(EntityHuman.EnumBedResult.NOT_POSSIBLE_HERE);
+             }
+ 
+-            if (this.world.J()) {
++            if (unableToSleepRightNow()) { // Purpur
+                 this.setRespawnPosition(blockposition, false, true);
+                 return Either.left(EntityHuman.EnumBedResult.NOT_POSSIBLE_NOW);
+             }
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index a1237c5b9d..f61ed338ce 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -161,6 +161,13 @@ public class PurpurWorldConfig {
+         limitVillagerIronGolemSpawns = getInt("limit-villager-iron-golem-spawns", limitVillagerIronGolemSpawns);
+     }
+ 
++    public boolean sleepOnlyWithCondition = false;
++    public String sleepCondition = "time >= 12541 && time <= 23458";
++    private void sleepSettings() {
++        sleepOnlyWithCondition = getBoolean("sleep.only-with-condition", sleepOnlyWithCondition);
++        sleepCondition = getString("sleep.condition", sleepCondition);
++    }
++
+     public boolean idleTimeoutKick = true;
+     public boolean idleTimeoutTickNearbyEntities = false;
+     public boolean idleTimeoutCountAsSleeping = false;
+-- 
+2.24.0.rc1
+
