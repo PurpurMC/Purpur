@@ -487,3 +487,17 @@ elytra
     * trident
         - **default**: 0
         - **description**: How much damage to deal to the elytra when trident riptide boost activates
+
+mob
+~~~
+* zombie-villager
+    * transformation-chance
+        * easy
+            - **default:** 0.0
+            - **description:** Percent chance (0.0 - 1.0) for villagers to become zombie villagers when killed by a zombie in easy mode
+        * normal
+            - **default:** 0.5
+            - **description:** Percent chance (0.0 - 1.0) for villagers to become zombie villagers when killed by a zombie in normal mode
+        * hard
+            - **default:** 1.0
+            - **description:** Percent chance (0.0 - 1.0) for villagers to become zombie villagers when killed by a zombie in hard mode
