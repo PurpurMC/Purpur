@@ -425,6 +425,11 @@ limit-villager-iron-golem-spawns
 * **default**: 5
 * **description**: Maximum amount of iron golems villagers can spawn in configured radius
 
+entities-target-with-follow-range
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: When set to true, this fixes the vanilla bug MC-145656 by allowing entities to use their `generic.followRange` attribute as the range for the initial target search.
+
 sleep
 ~~~~~
 * only-with-condition
