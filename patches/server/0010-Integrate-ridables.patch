@@ -1,4 +1,4 @@
-From 3cc19c29cf49905010c819cf8e04b1bac193b7bd Mon Sep 17 00:00:00 2001
+From 84127fe99d1b2d97fbc22300ae017c72fdb0627f Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Tue, 30 Apr 2019 19:17:21 -0500
 Subject: [PATCH] Integrate ridables
@@ -7,7 +7,8 @@ Subject: [PATCH] Integrate ridables
  .../server/ControllerLookDolphin.java         |   4 +-
  .../java/net/minecraft/server/Entity.java     |  37 +++++-
  .../net/minecraft/server/EntityAgeable.java   |   2 +-
- .../java/net/minecraft/server/EntityBat.java  |  21 +++
+ .../java/net/minecraft/server/EntityBat.java  |  22 ++++
+ .../java/net/minecraft/server/EntityBee.java  |  89 ++++++++++++-
  .../net/minecraft/server/EntityBlaze.java     |  15 ++-
  .../java/net/minecraft/server/EntityCat.java  |  21 ++-
  .../minecraft/server/EntityCaveSpider.java    |   1 +
@@ -23,7 +24,7 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityEvoker.java    |   4 +-
  .../java/net/minecraft/server/EntityFish.java |  25 ++--
  .../java/net/minecraft/server/EntityFox.java  |  48 +++++--
- .../net/minecraft/server/EntityGhast.java     |   6 +-
+ .../net/minecraft/server/EntityGhast.java     |   7 +-
  .../minecraft/server/EntityGiantZombie.java   |   2 +
  .../net/minecraft/server/EntityGuardian.java  |  28 +++-
  .../minecraft/server/EntityGuardianElder.java |   1 +
@@ -32,7 +33,7 @@ Subject: [PATCH] Integrate ridables
  .../minecraft/server/EntityHorseZombie.java   |   6 +
  .../net/minecraft/server/EntityHuman.java     |  14 +-
  .../server/EntityIllagerIllusioner.java       |   2 +
- .../minecraft/server/EntityInsentient.java    |  51 +++++++-
+ .../minecraft/server/EntityInsentient.java    |  51 ++++++-
  .../net/minecraft/server/EntityIronGolem.java |   6 +-
  .../net/minecraft/server/EntityLiving.java    |  27 ++--
  .../net/minecraft/server/EntityLlama.java     |  42 +++++-
@@ -40,8 +41,8 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityMagmaCube.java |   3 +-
  .../minecraft/server/EntityMushroomCow.java   |   1 +
  .../net/minecraft/server/EntityOcelot.java    |   2 +
- .../net/minecraft/server/EntityPanda.java     |  29 ++++-
- .../net/minecraft/server/EntityParrot.java    |  45 ++++++-
+ .../net/minecraft/server/EntityPanda.java     |  29 +++-
+ .../net/minecraft/server/EntityParrot.java    |  46 ++++++-
  .../net/minecraft/server/EntityPhantom.java   |  40 ++++--
  .../java/net/minecraft/server/EntityPig.java  |  32 ++---
  .../net/minecraft/server/EntityPigZombie.java |   6 +
@@ -74,16 +75,17 @@ Subject: [PATCH] Integrate ridables
  .../net/minecraft/server/EntityZombie.java    |   2 +
  .../minecraft/server/EntityZombieHusk.java    |   1 +
  .../server/EntityZombieVillager.java          |   3 +-
- .../java/net/pl3x/purpur/PurpurConfig.java    | 122 ++++++++++++++++++
+ src/main/java/net/minecraft/server/Vec3D.java |   1 +
+ .../java/net/pl3x/purpur/PurpurConfig.java    | 124 ++++++++++++++++++
  .../purpur/controller/ControllerLookWASD.java |  74 +++++++++++
  .../purpur/controller/ControllerMoveWASD.java |  77 +++++++++++
  .../controller/ControllerMoveWASDFlying.java  |  62 +++++++++
- .../ControllerMoveWASDFlyingWithSpacebar.java |  65 ++++++++++
+ .../ControllerMoveWASDFlyingWithSpacebar.java |  65 +++++++++
  .../controller/ControllerMoveWASDWater.java   |  42 ++++++
  .../pathfinder/PathfinderGoalHasRider.java    |  20 +++
  .../craftbukkit/entity/CraftLivingEntity.java |  10 ++
  .../bukkit/craftbukkit/entity/CraftMob.java   |  12 ++
- 79 files changed, 1269 insertions(+), 120 deletions(-)
+ 81 files changed, 1360 insertions(+), 124 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
@@ -208,21 +210,22 @@ index 3d27f0964..822316a65 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityBat.java b/src/main/java/net/minecraft/server/EntityBat.java
-index 34239160b..f83e35f5b 100644
+index 34239160b..b19028fa8 100644
 --- a/src/main/java/net/minecraft/server/EntityBat.java
 +++ b/src/main/java/net/minecraft/server/EntityBat.java
-@@ -14,6 +14,10 @@ public class EntityBat extends EntityAmbient {
+@@ -14,6 +14,11 @@ public class EntityBat extends EntityAmbient {
  
      public EntityBat(EntityTypes<? extends EntityBat> entitytypes, World world) {
          super(entitytypes, world);
 +        // Purpur start
 +        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASDFlyingWithSpacebar(this, 0.075F);
 +        this.isRidable = net.pl3x.purpur.PurpurConfig.ridableBat;
++        this.canBeRiddenInWater = false;
 +        // Purpur end
          this.setAsleep(true);
      }
  
-@@ -95,6 +99,13 @@ public class EntityBat extends EntityAmbient {
+@@ -95,6 +100,13 @@ public class EntityBat extends EntityAmbient {
  
      @Override
      protected void mobTick() {
@@ -236,7 +239,7 @@ index 34239160b..f83e35f5b 100644
          super.mobTick();
          BlockPosition blockposition = new BlockPosition(this);
          BlockPosition blockposition1 = blockposition.up();
-@@ -229,4 +240,14 @@ public class EntityBat extends EntityAmbient {
+@@ -229,4 +241,14 @@ public class EntityBat extends EntityAmbient {
      protected float b(EntityPose entitypose, EntitySize entitysize) {
          return entitysize.height / 2.0F;
      }
@@ -247,6 +250,136 @@ index 34239160b..f83e35f5b 100644
 +        if (isAsleep()) {
 +            setAsleep(false);
 +            world.a(null, 1025, new BlockPosition(this).up(), 0);
++        }
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/server/EntityBee.java b/src/main/java/net/minecraft/server/EntityBee.java
+index fb1c0a965..50b353582 100644
+--- a/src/main/java/net/minecraft/server/EntityBee.java
++++ b/src/main/java/net/minecraft/server/EntityBee.java
+@@ -1,6 +1,7 @@
+ package net.minecraft.server;
+ 
+ import com.google.common.collect.Lists;
++
+ import java.util.Comparator;
+ import java.util.EnumSet;
+ import java.util.Iterator;
+@@ -36,8 +37,19 @@ public class EntityBee extends EntityAnimal implements EntityBird {
+ 
+     public EntityBee(EntityTypes<? extends EntityBee> entitytypes, World world) {
+         super(entitytypes, world);
+-        this.moveController = new ControllerMoveFlying(this, 20, true);
+-        this.lookController = new EntityBee.j(this);
++        // Purpur start
++        this.moveController = new ControllerMoveWASDBee(this, 256D);
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this) {
++            @Override
++            protected void tick() {
++                if (!((EntityBee) entity).isAngry()) {
++                    super.tick();
++                }
++            }
++        };
++        this.isRidable = net.pl3x.purpur.PurpurConfig.ridableBee;
++        this.canBeRiddenInWater = false;
++        // Purpur end
+         this.a(PathType.WATER, -1.0F);
+         this.a(PathType.COCOA, -1.0F);
+         this.a(PathType.FENCE, -1.0F);
+@@ -57,6 +69,7 @@ public class EntityBee extends EntityAnimal implements EntityBird {
+ 
+     @Override
+     protected void initPathfinder() {
++        this.goalSelector.a(0, new net.pl3x.purpur.pathfinder.PathfinderGoalHasRider(this)); // Purpur
+         this.goalSelector.a(0, new EntityBee.b(this, 1.399999976158142D, true));
+         this.goalSelector.a(1, new EntityBee.d());
+         this.goalSelector.a(2, new PathfinderGoalBreed(this, 1.0D));
+@@ -624,12 +637,12 @@ public class EntityBee extends EntityAnimal implements EntityBird {
+ 
+         @Override
+         public boolean a() {
+-            return super.a() && EntityBee.this.isAngry() && !EntityBee.this.hasStung();
++            return a.getRider() == null && super.a() && EntityBee.this.isAngry() && !EntityBee.this.hasStung();
+         }
+ 
+         @Override
+         public boolean b() {
+-            return super.b() && EntityBee.this.isAngry() && !EntityBee.this.hasStung();
++            return a.getRider() == null && super.b() && EntityBee.this.isAngry() && !EntityBee.this.hasStung();
+         }
+     }
+ 
+@@ -1219,4 +1232,72 @@ public class EntityBee extends EntityAnimal implements EntityBird {
+ 
+         }
+     }
++
++    // Purpur start
++    public static class ControllerMoveWASDBee extends ControllerMoveFlying {
++        protected final EntityBee entity;
++        protected final double maxY;
++        protected int tooHighCooldown = 0;
++
++        public ControllerMoveWASDBee(EntityBee entity, double maxY) {
++            super(entity, 20, true);
++            this.entity = entity;
++            this.maxY = maxY;
++        }
++
++        // isUpdating
++        @Override
++        public boolean b() {
++            return entity.getRider() != null || super.b();
++        }
++
++        // tick
++        @Override
++        public void a() {
++            if (entity.getRider() != null) {
++                tick(entity.getRider());
++            } else {
++                tick();
++            }
++        }
++
++        protected void tick() {
++            super.a(); // tick
++        }
++
++        protected void tick(EntityHuman rider) {
++            float forward = Math.max(0.0F, rider.getForward());
++            float vertical = forward == 0.0F ? 0.0F : -(rider.pitch / 90.0F);
++            float strafe = rider.getStrafe();
++
++            if (rider.isJumping()) {
++                entity.onSpacebar();
++            }
++
++            if (entity.locY() >= maxY || --tooHighCooldown > 0) {
++                tooHighCooldown = 60;
++                entity.setMot(entity.getMot().add(0.0D, -0.05D, 0.0D));
++                vertical = 0.0F;
++            }
++
++            float speed = (float) (e = entity.getAttributeInstance(GenericAttributes.MOVEMENT_SPEED).getValue());
++
++            if (entity.onGround) {
++                speed *= 0.25F;
++            }
++
++            entity.setSpeed(speed);
++            entity.setVertical(vertical);
++            entity.setStrafe(strafe);
++            entity.setForward(forward);
++
++            f = entity.getForward();
++            g = entity.getStrafe();
++
++            if (forward == 0 && strafe == 0) {
++                entity.setMot(entity.getMot().multiply(0.95, 0.9, 0.95));
++            }
 +        }
 +    }
 +    // Purpur end
@@ -914,16 +1047,17 @@ index 45b4db990..e34ca7170 100644
  
          }
 diff --git a/src/main/java/net/minecraft/server/EntityGhast.java b/src/main/java/net/minecraft/server/EntityGhast.java
-index e1c2540d1..ef794fbeb 100644
+index e1c2540d1..562dd6500 100644
 --- a/src/main/java/net/minecraft/server/EntityGhast.java
 +++ b/src/main/java/net/minecraft/server/EntityGhast.java
-@@ -10,12 +10,14 @@ public class EntityGhast extends EntityFlying implements IMonster {
+@@ -10,12 +10,15 @@ public class EntityGhast extends EntityFlying implements IMonster {
  
      public EntityGhast(EntityTypes<? extends EntityGhast> entitytypes, World world) {
          super(entitytypes, world);
 +        this.isRidable = net.pl3x.purpur.PurpurConfig.ridableGhast; // Purpur
          this.f = 5;
          this.moveController = new EntityGhast.ControllerGhast(this);
++        this.canBeRiddenInWater = false; // Purpur
      }
  
      @Override
@@ -932,7 +1066,7 @@ index e1c2540d1..ef794fbeb 100644
          this.goalSelector.a(5, new EntityGhast.PathfinderGoalGhastIdleMove(this));
          this.goalSelector.a(7, new EntityGhast.PathfinderGoalGhastMoveTowardsTarget(this));
          this.goalSelector.a(7, new EntityGhast.PathfinderGoalGhastAttackTarget(this));
-@@ -255,7 +257,7 @@ public class EntityGhast extends EntityFlying implements IMonster {
+@@ -255,7 +258,7 @@ public class EntityGhast extends EntityFlying implements IMonster {
          }
      }
  
@@ -941,7 +1075,7 @@ index e1c2540d1..ef794fbeb 100644
  
          private final EntityGhast i;
          private int j;
-@@ -266,7 +268,7 @@ public class EntityGhast extends EntityFlying implements IMonster {
+@@ -266,7 +269,7 @@ public class EntityGhast extends EntityFlying implements IMonster {
          }
  
          @Override
@@ -1603,7 +1737,7 @@ index cd41c80f1..c6afe108c 100644
          }
      }
 diff --git a/src/main/java/net/minecraft/server/EntityParrot.java b/src/main/java/net/minecraft/server/EntityParrot.java
-index 140208761..04f0ef54b 100644
+index 140208761..976b3c127 100644
 --- a/src/main/java/net/minecraft/server/EntityParrot.java
 +++ b/src/main/java/net/minecraft/server/EntityParrot.java
 @@ -21,7 +21,7 @@ public class EntityParrot extends EntityPerchable implements EntityBird {
@@ -1615,7 +1749,7 @@ index 140208761..04f0ef54b 100644
          hashmap.put(EntityTypes.BLAZE, SoundEffects.ENTITY_PARROT_IMITATE_BLAZE);
          hashmap.put(EntityTypes.CAVE_SPIDER, SoundEffects.ENTITY_PARROT_IMITATE_SPIDER);
          hashmap.put(EntityTypes.CREEPER, SoundEffects.ENTITY_PARROT_IMITATE_CREEPER);
-@@ -62,7 +62,45 @@ public class EntityParrot extends EntityPerchable implements EntityBird {
+@@ -62,7 +62,46 @@ public class EntityParrot extends EntityPerchable implements EntityBird {
  
      public EntityParrot(EntityTypes<? extends EntityParrot> entitytypes, World world) {
          super(entitytypes, world);
@@ -1658,11 +1792,12 @@ index 140208761..04f0ef54b 100644
 +            }
 +        };
 +        this.isRidable = net.pl3x.purpur.PurpurConfig.ridableParrot;
++        this.canBeRiddenInWater = false;
 +        // Purpur end
          this.a(PathType.DANGER_FIRE, -1.0F);
          this.a(PathType.DAMAGE_FIRE, -1.0F);
          this.a(PathType.COCOA, -1.0F);
-@@ -83,8 +121,9 @@ public class EntityParrot extends EntityPerchable implements EntityBird {
+@@ -83,8 +122,9 @@ public class EntityParrot extends EntityPerchable implements EntityBird {
      @Override
      protected void initPathfinder() {
          this.goalSit = new PathfinderGoalSit(this);
@@ -2708,8 +2843,20 @@ index 8082fa617..0c51c8dea 100644
          }
      }
  
+diff --git a/src/main/java/net/minecraft/server/Vec3D.java b/src/main/java/net/minecraft/server/Vec3D.java
+index 0c7f094e5..212af252b 100644
+--- a/src/main/java/net/minecraft/server/Vec3D.java
++++ b/src/main/java/net/minecraft/server/Vec3D.java
+@@ -89,6 +89,7 @@ public class Vec3D implements IPosition {
+         return this.d(vec3d.x, vec3d.y, vec3d.z);
+     }
+ 
++    public Vec3D multiply (double x, double y, double z) { return d(x, y, z); } // Purpur - OBFHELPER
+     public Vec3D d(double d0, double d1, double d2) {
+         return new Vec3D(this.x * d0, this.y * d1, this.z * d2);
+     }
 diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
-index 960361ff7..d3409155e 100644
+index 960361ff7..c4955fae6 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
 @@ -131,6 +131,11 @@ public class PurpurConfig {
@@ -2724,12 +2871,13 @@ index 960361ff7..d3409155e 100644
      public static int feedMushroomsToCows = 0;
      private static void cowsSettings() {
          feedMushroomsToCows = getInt("settings.mobs.cow.feed-mushrooms-for-mooshroom", feedMushroomsToCows);
-@@ -151,4 +156,121 @@ public class PurpurConfig {
+@@ -151,4 +156,123 @@ public class PurpurConfig {
          snowmanDropsPumpkin = getBoolean("settings.mobs.snow_golem.drops-pumpkin-when-sheared", snowmanDropsPumpkin);
          snowmanPumpkinPutBack = getBoolean("settings.mobs.snow_golem.pumpkin-can-be-added-back", snowmanPumpkinPutBack);
      }
 +
 +    public static boolean ridableBat = true;
++    public static boolean ridableBee = true;
 +    public static boolean ridableBlaze = true;
 +    public static boolean ridableCat = true;
 +    public static boolean ridableCaveSpider = true;
@@ -2788,6 +2936,7 @@ index 960361ff7..d3409155e 100644
 +    public static boolean ridableZombieVillager = true;
 +    private static void enableRidableMobs() {
 +        ridableBat = getBoolean("settings.ridable.bat", ridableBat);
++        ridableBee = getBoolean("settings.ridable.bee", ridableBee);
 +        ridableBlaze = getBoolean("settings.ridable.blaze", ridableBlaze);
 +        ridableCat = getBoolean("settings.ridable.cat", ridableCat);
 +        ridableCaveSpider = getBoolean("settings.ridable.cave_spider", ridableCaveSpider);
