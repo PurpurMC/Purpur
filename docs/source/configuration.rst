@@ -410,6 +410,15 @@ fluid-tick-events
 * **default**: true
 * **description**: Fire plugin events when fluids tick
 
+player
+* exp-dropped-on-death
+    * equation
+        - **default:** expLevel * 7
+        - **description:** How much exp to drop on death. Available NMS variables are `expLevel`, `expTotal`, and `exp`.
+    * maximum
+        - **default:** 100
+        - **description:** Maximum amount of exp value to drop on death
+
 cat-spawns
 ~~~~~~~~~~
 * delay
