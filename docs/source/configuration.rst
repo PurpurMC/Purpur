@@ -410,6 +410,26 @@ fluid-tick-events
 * **default**: true
 * **description**: Fire plugin events when fluids tick
 
+cat-spawns
+~~~~~~~~~~
+* delay
+    - **default:** 1200
+    - **description:** Number of ticks between attempting to naturally spawn a cat
+* swamp-hut
+    * disable
+        - **default:** false
+        - **description:** Control if cats can naturally spawn in witch swamp huts
+    * scan-range-for-other-cats
+        - **default:** 16
+        - **description:** Do not spawn a cat if another cat is found within this range
+* village
+    * disable
+        - **default:** false
+        - **description:** Control if cats can naturally spawn in villages/houses
+    * scan-range-for-other-cats
+        - **default:** 48
+        - **description:** Do not spawn a cat if another cat is found within this range
+
 limit-pillager-outpost-spawns
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: 10
