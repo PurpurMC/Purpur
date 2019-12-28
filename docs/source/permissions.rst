@@ -34,6 +34,10 @@ need to be granted the permissions you want them to have using a permissions plu
     Hold spacebar while not moving to charge the toggle. Instead of blowing up the powered
     state will toggle on or off.
 
+* **purpur.debug.f3n**
+    - **description**: Allows the use of the F3+N debug hotkey to swap gamemodes.
+    Player must have this perm _and_ the gamemode perm for it to work.
+
 * **purpur.drop.spawners**
     - **description**: Players with this permission can use a diamond pickaxe with silk
     touch enchantment to mine up any spawner cage instead of disappearing.
