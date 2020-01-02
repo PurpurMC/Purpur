@@ -100,11 +100,6 @@ slime-blocks-not-pushable
 * **default**: false
 * **description:** Prevent slime blocks from being pushable by pistons. Useful for preventing multiple types of duplication machines.
 
-infinite-lava
-~~~~~~~~~~~~~
-* **default:** false
-* **description:** Allow lava to take on infinite supply properties similar to water (two source blocks flowing together creates a new source block)
-
 grindstone
 ~~~~~~~~~~~~~~~~~~~~~~
 * disallow-placement
@@ -409,6 +404,12 @@ fluid-tick-events
 ~~~~~~~~~~~~~~~~~
 * **default**: true
 * **description**: Fire plugin events when fluids tick
+
+lava-flow
+~~~~~~~~~~~~~
+* infinite
+    * **default:** false
+    * **description:** Allow lava to take on infinite supply properties similar to water (two source blocks flowing together creates a new source block)
 
 player
 * exp-dropped-on-death
