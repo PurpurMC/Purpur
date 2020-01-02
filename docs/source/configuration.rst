@@ -410,6 +410,13 @@ lava-flow
 * infinite
     * **default:** false
     * **description:** Allow lava to take on infinite supply properties similar to water (two source blocks flowing together creates a new source block)
+* speed
+    * nether
+        * **default:** 10
+        * **description:** Delay in ticks between physics/flowing (lower is faster)
+    * not-nether
+        * **default:** 30
+        * **description:** Delay in ticks between physics/flowing (lower is faster)
 
 player
 * exp-dropped-on-death
