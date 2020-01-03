@@ -485,7 +485,7 @@ elytra
         - **default**: 0
         - **description**: How much damage to deal to the elytra when trident riptide boost activates
 
-mob
+mobs
 ~~~
 * cat
     * natural-spawns
