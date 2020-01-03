@@ -422,41 +422,6 @@ player
         - **default:** 100
         - **description:** Maximum amount of exp value to drop on death
 
-cat-spawns
-~~~~~~~~~~
-* delay
-    - **default:** 1200
-    - **description:** Number of ticks between attempting to naturally spawn a cat
-* swamp-hut
-    * disable
-        - **default:** false
-        - **description:** Control if cats can naturally spawn in witch swamp huts
-    * scan-range-for-other-cats
-        - **default:** 16
-        - **description:** Do not spawn a cat if another cat is found within this range
-* village
-    * disable
-        - **default:** false
-        - **description:** Control if cats can naturally spawn in villages/houses
-    * scan-range-for-other-cats
-        - **default:** 48
-        - **description:** Do not spawn a cat if another cat is found within this range
-
-limit-pillager-outpost-spawns
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* **default**: 10
-* **description**: Limit the number of pillagers allowed to spawn at an outpost at any given time
-
-radius-villager-iron-golem-spawns
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* **default**: 0
-* **description**: Radius villagers search for existing iron golems before spawning more. Value of 0 disables features
-
-limit-villager-iron-golem-spawns
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* **default**: 5
-* **description**: Maximum amount of iron golems villagers can spawn in configured radius
-
 entities-target-with-follow-range
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: false
@@ -522,6 +487,18 @@ elytra
 
 mob
 ~~~
+* cat
+    * natural-spawns
+        * delay
+            - **default:** 1200
+            - **description:** Number of ticks between attempting to naturally spawn a cat
+        * scan-range-for-other-cats
+            * swamp-hut
+                - **default:** 16
+                - **description:** Do not spawn a cat if another cat is found within this range. Set to 0 to disable
+            * village
+                - **default:** 48
+                - **description:** Do not spawn a cat if another cat is found within this range. Set to 0 to disable
 * chicken
     * eggs-hatch-when-despawned
         * max
@@ -530,6 +507,18 @@ mob
         * range
             - **default:** 10
             - **description:** The range in which to check for maximum number of allowed chickens.
+* pillager
+    * limit-outpost-spawns
+        * **default**: 10
+        * **description**: Limit the number of pillagers allowed to spawn at an outpost at any given time
+* villager
+    * iron-golem-spawn
+        * radius
+            * **default**: 0
+            * **description**: Radius villagers search for existing iron golems before spawning more. Value of 0 disables features
+        * limit
+            * **default**: 5
+            * **description**: Maximum amount of iron golems villagers can spawn in configured radius
 * zombie-villager
     * transformation-chance
         * easy
