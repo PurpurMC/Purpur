@@ -143,11 +143,6 @@ mobs
     - **default**: true
     - **description**: Require shift click to mount otherwise non-ridable mobs
 
-* chicken
-    * eggs-hatch-when-despawned
-        - **default:** false
-        - **description:** When chicken egg despawns a chicken is hatched in its place
-
 * cow
     * feed-mushrooms-for-mooshroom
         - **default**: 0
@@ -527,6 +522,14 @@ elytra
 
 mob
 ~~~
+* chicken
+    * eggs-hatch-when-despawned
+        * max
+            - **default:** 0
+            - **description:** Maximum number of chickens in an area allowed to spawn a chicken when an egg despawns. Set to 0 to disable feature.
+        * range
+            - **default:** 10
+            - **description:** The range in which to check for maximum number of allowed chickens.
 * zombie-villager
     * transformation-chance
         * easy
