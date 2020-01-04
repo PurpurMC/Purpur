@@ -385,6 +385,12 @@ milk-cures-bad-omen
 * **default**: false
 * **description**: Allow players to drink milk to cure bad omen status effect
 
+beehive
+~~~~~~~
+* can-generate-from-saplings
+    * **default:** false
+    * **description:** Trees grown from saplings have the same chance to have a beehive as if from chunk generation
+
 hay-block-fall-damage
 ~~~~~~~~~~~~~~~~~~~~~
 * **default:** true
