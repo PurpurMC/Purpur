@@ -1,11 +1,12 @@
-From 570979828b834ca760e09896fae86a227e643fe6 Mon Sep 17 00:00:00 2001
+From d9ba80236c9cb9d62dcb87a5c0b644cfa68cd9f0 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Sat, 4 Jan 2020 11:41:38 -0600
 Subject: [PATCH] Allow beehives to generate with saplings
 
 ---
  .../server/BiomeDecoratorGroups.java          | 260 +++++++++---------
- .../server/WorldGenFeatureTreeBeehive.java    |   2 +-
+ .../WorldGenFeatureStateProviderWeighted.java |  12 +-
+ .../server/WorldGenFeatureTreeBeehive.java    |   8 +-
  .../minecraft/server/WorldGenGroundBush.java  |  10 +-
  .../server/WorldGenTreeAbstract.java          |   6 +
  .../server/WorldGenTreeProvider.java          |  16 +-
@@ -13,7 +14,7 @@ Subject: [PATCH] Allow beehives to generate with saplings
  .../server/WorldGenTreeProviderOak.java       |  33 ++-
  .../net/minecraft/server/WorldGenerator.java  |   7 +-
  .../net/pl3x/purpur/PurpurWorldConfig.java    |   5 +
- 9 files changed, 206 insertions(+), 143 deletions(-)
+ 10 files changed, 221 insertions(+), 146 deletions(-)
 
 diff --git a/src/main/java/net/minecraft/server/BiomeDecoratorGroups.java b/src/main/java/net/minecraft/server/BiomeDecoratorGroups.java
 index 8aabc14a53..13246e6cd1 100644
@@ -496,16 +497,59 @@ index 8aabc14a53..13246e6cd1 100644
 +        biomebase.a(WorldGenStage.Decoration.SURFACE_STRUCTURES, WorldGenerator.END_CITY.b(WorldGenFeatureConfiguration.e).a(WorldGenDecorator.a.a(WorldGenFeatureDecoratorConfiguration.e))); // Purpur - decompile error
      }
  }
+diff --git a/src/main/java/net/minecraft/server/WorldGenFeatureStateProviderWeighted.java b/src/main/java/net/minecraft/server/WorldGenFeatureStateProviderWeighted.java
+index e2af6d43b2..c886a06a3d 100644
+--- a/src/main/java/net/minecraft/server/WorldGenFeatureStateProviderWeighted.java
++++ b/src/main/java/net/minecraft/server/WorldGenFeatureStateProviderWeighted.java
+@@ -37,9 +37,15 @@ public class WorldGenFeatureStateProviderWeighted extends WorldGenFeatureStatePr
+     public synchronized <T> T a(DynamicOps<T> dynamicops) { // Paper
+         Builder<T, T> builder = ImmutableMap.builder();
+ 
+-        builder.put(dynamicops.createString("type"), dynamicops.createString(IRegistry.t.getKey(this.a).toString())).put(dynamicops.createString("entries"), this.b.a(dynamicops, (iblockdata) -> {
+-            return IBlockData.a(dynamicops, iblockdata);
+-        }));
++        builder.put(
++                dynamicops.createString("type"),
++                dynamicops.createString(IRegistry.t.getKey(this.a).toString())
++        ).put(
++                dynamicops.createString("entries"),
++                this.b.a(dynamicops, (iblockdata) -> {
++                    return IBlockData.a(dynamicops, iblockdata);
++                })
++        );
+         return (new Dynamic<T>(dynamicops, dynamicops.createMap(builder.build()))).getValue(); // Paper - decompile fix
+     }
+ }
 diff --git a/src/main/java/net/minecraft/server/WorldGenFeatureTreeBeehive.java b/src/main/java/net/minecraft/server/WorldGenFeatureTreeBeehive.java
-index 4fbc53068f..60f0b0c05e 100644
+index 4fbc53068f..0faaec95fd 100644
 --- a/src/main/java/net/minecraft/server/WorldGenFeatureTreeBeehive.java
 +++ b/src/main/java/net/minecraft/server/WorldGenFeatureTreeBeehive.java
-@@ -55,6 +55,6 @@ public class WorldGenFeatureTreeBeehive extends WorldGenFeatureTree {
+@@ -36,6 +36,7 @@ public class WorldGenFeatureTreeBeehive extends WorldGenFeatureTree {
+                 IBlockData iblockdata = (IBlockData) Blocks.BEE_NEST.getBlockData().set(BlockBeehive.b, EnumDirection.SOUTH);
+ 
+                 this.a(generatoraccess, blockposition1, iblockdata, set, structureboundingbox);
++                MinecraftServer.getServer().scheduleOnMain(() -> { // Purpur
+                 TileEntity tileentity = generatoraccess.getTileEntity(blockposition1);
+ 
+                 if (tileentity instanceof TileEntityBeehive) {
+@@ -48,6 +49,7 @@ public class WorldGenFeatureTreeBeehive extends WorldGenFeatureTree {
+                         tileentitybeehive.a(entitybee, false, random.nextInt(599));
+                     }
+                 }
++                }); // Purpur
+ 
+             }
+         }
+@@ -55,6 +57,10 @@ public class WorldGenFeatureTreeBeehive extends WorldGenFeatureTree {
  
      @Override
      public <T> T a(DynamicOps<T> dynamicops) {
 -        return (new Dynamic(dynamicops, dynamicops.createMap(ImmutableMap.of(dynamicops.createString("type"), dynamicops.createString(IRegistry.w.getKey(this.a).toString()), dynamicops.createString("probability"), dynamicops.createFloat(this.b))))).getValue();
-+        return (new Dynamic<>(dynamicops, dynamicops.createMap(ImmutableMap.of(dynamicops.createString("type"), dynamicops.createString(IRegistry.w.getKey(this.a).toString()), dynamicops.createString("probability"), dynamicops.createFloat(this.b))))).getValue(); // Purpur - decompile error
++        // Purpur start - decompile error
++        ImmutableMap.Builder<T, T> builder = ImmutableMap.builder();
++        builder.put(dynamicops.createString("type"), dynamicops.createString(IRegistry.w.getKey(this.a).toString())).put(dynamicops.createString("probability"), dynamicops.createFloat(this.b));
++        return (new Dynamic<T>(dynamicops, dynamicops.createMap(builder.build()))).getValue();
++        // Purpur end
      }
  }
 diff --git a/src/main/java/net/minecraft/server/WorldGenGroundBush.java b/src/main/java/net/minecraft/server/WorldGenGroundBush.java
@@ -530,7 +574,7 @@ index bd756fd201..02b4e8a219 100644
 +    // Purpur end
  }
 diff --git a/src/main/java/net/minecraft/server/WorldGenTreeAbstract.java b/src/main/java/net/minecraft/server/WorldGenTreeAbstract.java
-index b7c1919ae4..fc5dc18575 100644
+index b7c1919ae4..92fe643058 100644
 --- a/src/main/java/net/minecraft/server/WorldGenTreeAbstract.java
 +++ b/src/main/java/net/minecraft/server/WorldGenTreeAbstract.java
 @@ -275,4 +275,10 @@ public abstract class WorldGenTreeAbstract<T extends WorldGenFeatureTreeConfigur
@@ -539,7 +583,7 @@ index b7c1919ae4..fc5dc18575 100644
      protected abstract boolean a(VirtualLevelWritable virtuallevelwritable, Random random, BlockPosition blockposition, Set<BlockPosition> set, Set<BlockPosition> set1, StructureBoundingBox structureboundingbox, T t0);
 +
 +    // Purpur start - decompile error
-+    public boolean generate(GeneratorAccess generatoraccess, ChunkGenerator<? extends GeneratorSettingsDefault> chunkgenerator, Random random, BlockPosition blockposition,T fc) {
++    public boolean generate(GeneratorAccess generatoraccess, ChunkGenerator<? extends GeneratorSettingsDefault> chunkgenerator, Random random, BlockPosition blockposition, T fc) {
 +        return a(generatoraccess, chunkgenerator, random, blockposition, fc);
 +    }
 +    // Purpur end
