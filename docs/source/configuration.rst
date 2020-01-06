@@ -390,6 +390,26 @@ beehive
 * can-generate-from-saplings
     * **default:** false
     * **description:** Trees grown from saplings have the same chance to have a beehive as if from chunk generation
+* generation-chance
+    * plains
+        * **default:** 0.05
+        * **description:** Chance a beehive generates on an oak tree in the plains biome
+    * sunflower-plains
+        * **default:** 0.05
+        * **description:** Chance a beehive generates on an oak tree in the sunflower plains biome
+    * flower-forest
+        * **default:** 0.01
+        * **description:** Chance a beehive generates on an oak or birch tree in the flower forest biome
+* sapling-chance
+    * plains
+        * **default:** 0.05
+        * **description:** Chance a beehive grows on an oak tree in the plains biome from a sapling
+    * sunflower-plains
+        * **default:** 0.05
+        * **description:** Chance a beehive grows on an oak tree in the sunflower plains biome from a sapling
+    * flower-forest
+        * **default:** 0.01
+        * **description:** Chance a beehive grows on an oak or birch tree in the flower forest biome from a sapling
 
 hay-block-fall-damage
 ~~~~~~~~~~~~~~~~~~~~~
