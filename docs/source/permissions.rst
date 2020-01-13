@@ -14,6 +14,9 @@ Purpur adds a few new permission nodes for some of it's added features.
 By default **all** of these permissions are for OP users only. Any other users will
 need to be granted the permissions you want them to have using a permissions plugin.
 
+* **bukkit.command.purpur**
+    - **description**: This permission gives the ability to use the /purpur command
+
 * **allow.ride.<mob_id>**
     - **description**: This permission gives the ability to ride a certain mob by shift
     right clicking it. Once mounted you can use WASD to move around, and spacebar to jump
