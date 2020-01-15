@@ -545,6 +545,10 @@ mobs
         * limit
             * **default**: 5
             * **description**: Maximum amount of iron golems villagers can spawn in configured radius
+* wither_skeleton
+    * takes-wither-damage
+        * **default**: false
+        * **description**: Allows wither skeletons to receive the wither effect (from wither roses, etc)
 * zombie-villager
     * transformation-chance
         * easy
