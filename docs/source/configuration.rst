@@ -35,6 +35,11 @@ verbose
 * **default**: false
 * **description**: Sets whether the server should dump all configuration values to the server log on startup.
 
+upnp-port-forwarding
+~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: Attempt to automatically port forward using UPnP
+
 lagging-threshold:
 * **default**: 19.0
 * **description**: Purpur keeps track of when it is lagging in order to have the ability to change behaviors accordingly. This value is that threshold when you want to consider the server to be lagging. Right now this is only used for mob.villager.brain-ticks setting.

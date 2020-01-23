@@ -1,0 +1,648 @@
+From 31e6c2d60a8fe1ea407efa510060c6923d5cbb89 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Wed, 22 Jan 2020 20:13:40 -0600
+Subject: [PATCH] UPnP Port Forwarding Service
+
+---
+ src/main/java/com/dosse/upnp/Gateway.java     | 204 ++++++++++++++++++
+ .../java/com/dosse/upnp/GatewayFinder.java    | 131 +++++++++++
+ src/main/java/com/dosse/upnp/UPnP.java        | 154 +++++++++++++
+ .../net/minecraft/server/DedicatedServer.java |  35 ++-
+ .../net/minecraft/server/MinecraftServer.java |  11 +
+ .../java/net/pl3x/purpur/PurpurConfig.java    |   5 +
+ 6 files changed, 530 insertions(+), 10 deletions(-)
+ create mode 100644 src/main/java/com/dosse/upnp/Gateway.java
+ create mode 100644 src/main/java/com/dosse/upnp/GatewayFinder.java
+ create mode 100644 src/main/java/com/dosse/upnp/UPnP.java
+
+diff --git a/src/main/java/com/dosse/upnp/Gateway.java b/src/main/java/com/dosse/upnp/Gateway.java
+new file mode 100644
+index 000000000..85c175655
+--- /dev/null
++++ b/src/main/java/com/dosse/upnp/Gateway.java
+@@ -0,0 +1,204 @@
++/*
++ * Copyright (C) 2015 Federico Dossena (adolfintel.com).
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
++ * MA 02110-1301  USA
++ */
++package com.dosse.upnp;
++
++import org.w3c.dom.Document;
++import org.w3c.dom.Node;
++import org.w3c.dom.NodeList;
++import org.w3c.dom.traversal.DocumentTraversal;
++import org.w3c.dom.traversal.NodeFilter;
++import org.w3c.dom.traversal.NodeIterator;
++
++import javax.xml.parsers.DocumentBuilderFactory;
++import java.net.HttpURLConnection;
++import java.net.Inet4Address;
++import java.net.URL;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.StringTokenizer;
++
++/**
++ * @author Federico
++ */
++class Gateway {
++
++    private Inet4Address iface;
++
++    private String serviceType = null, controlURL = null;
++
++    public Gateway(byte[] data, Inet4Address ip) throws Exception {
++        iface = ip;
++        String location = null;
++        StringTokenizer st = new StringTokenizer(new String(data), "\n");
++        while (st.hasMoreTokens()) {
++            String s = st.nextToken().trim();
++            if (s.isEmpty() || s.startsWith("HTTP/1.") || s.startsWith("NOTIFY *")) {
++                continue;
++            }
++            String name = s.substring(0, s.indexOf(':')), val = s.length() >= name.length() ? s.substring(name.length() + 1).trim() : null;
++            if (name.equalsIgnoreCase("location")) {
++                location = val;
++            }
++        }
++        if (location == null) {
++            throw new Exception("Unsupported Gateway");
++        }
++        Document d;
++        d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(location);
++        NodeList services = d.getElementsByTagName("service");
++        for (int i = 0; i < services.getLength(); i++) {
++            Node service = services.item(i);
++            NodeList n = service.getChildNodes();
++            String serviceType = null, controlURL = null;
++            for (int j = 0; j < n.getLength(); j++) {
++                Node x = n.item(j);
++                if (x.getNodeName().trim().equalsIgnoreCase("serviceType")) {
++                    serviceType = x.getFirstChild().getNodeValue();
++                } else if (x.getNodeName().trim().equalsIgnoreCase("controlURL")) {
++                    controlURL = x.getFirstChild().getNodeValue();
++                }
++            }
++            if (serviceType == null || controlURL == null) {
++                continue;
++            }
++            if (serviceType.trim().toLowerCase().contains(":wanipconnection:") || serviceType.trim().toLowerCase().contains(":wanpppconnection:")) {
++                this.serviceType = serviceType.trim();
++                this.controlURL = controlURL.trim();
++            }
++        }
++        if (controlURL == null) {
++            throw new Exception("Unsupported Gateway");
++        }
++        int slash = location.indexOf("/", 7); //finds first slash after http://
++        if (slash == -1) {
++            throw new Exception("Unsupported Gateway");
++        }
++        location = location.substring(0, slash);
++        if (!controlURL.startsWith("/")) {
++            controlURL = "/" + controlURL;
++        }
++        controlURL = location + controlURL;
++    }
++
++    private Map<String, String> command(String action, Map<String, String> params) throws Exception {
++        Map<String, String> ret = new HashMap<String, String>();
++        String soap = "<?xml version=\"1.0\"?>\r\n" + "<SOAP-ENV:Envelope xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\" SOAP-ENV:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">"
++                + "<SOAP-ENV:Body>"
++                + "<m:" + action + " xmlns:m=\"" + serviceType + "\">";
++        if (params != null) {
++            for (Map.Entry<String, String> entry : params.entrySet()) {
++                soap += "<" + entry.getKey() + ">" + entry.getValue() + "</" + entry.getKey() + ">";
++            }
++        }
++        soap += "</m:" + action + "></SOAP-ENV:Body></SOAP-ENV:Envelope>";
++        byte[] req = soap.getBytes();
++        HttpURLConnection conn = (HttpURLConnection) new URL(controlURL).openConnection();
++        conn.setRequestMethod("POST");
++        conn.setDoOutput(true);
++        conn.setRequestProperty("Content-Type", "text/xml");
++        conn.setRequestProperty("SOAPAction", "\"" + serviceType + "#" + action + "\"");
++        conn.setRequestProperty("Connection", "Close");
++        conn.setRequestProperty("Content-Length", "" + req.length);
++        conn.getOutputStream().write(req);
++        Document d = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(conn.getInputStream());
++        NodeIterator iter = ((DocumentTraversal) d).createNodeIterator(d.getDocumentElement(), NodeFilter.SHOW_ELEMENT, null, true);
++        Node n;
++        while ((n = iter.nextNode()) != null) {
++            try {
++                if (n.getFirstChild().getNodeType() == Node.TEXT_NODE) {
++                    ret.put(n.getNodeName(), n.getTextContent());
++                }
++            } catch (Throwable t) {
++            }
++        }
++        conn.disconnect();
++        return ret;
++    }
++
++    public String getLocalIP() {
++        return iface.getHostAddress();
++    }
++
++    public String getExternalIP() {
++        try {
++            Map<String, String> r = command("GetExternalIPAddress", null);
++            return r.get("NewExternalIPAddress");
++        } catch (Throwable t) {
++            return null;
++        }
++    }
++
++    public boolean openPort(int port, boolean udp) {
++        if (port < 0 || port > 65535) {
++            throw new IllegalArgumentException("Invalid port");
++        }
++        Map<String, String> params = new HashMap<String, String>();
++        params.put("NewRemoteHost", "");
++        params.put("NewProtocol", udp ? "UDP" : "TCP");
++        params.put("NewInternalClient", iface.getHostAddress());
++        params.put("NewExternalPort", "" + port);
++        params.put("NewInternalPort", "" + port);
++        params.put("NewEnabled", "1");
++        params.put("NewPortMappingDescription", "PurpurUPnP");  // Purpur
++        params.put("NewLeaseDuration", "0");
++        try {
++            Map<String, String> r = command("AddPortMapping", params);
++            return r.get("errorCode") == null;
++        } catch (Exception ex) {
++            return false;
++        }
++    }
++
++    public boolean closePort(int port, boolean udp) {
++        if (port < 0 || port > 65535) {
++            throw new IllegalArgumentException("Invalid port");
++        }
++        Map<String, String> params = new HashMap<String, String>();
++        params.put("NewRemoteHost", "");
++        params.put("NewProtocol", udp ? "UDP" : "TCP");
++        params.put("NewExternalPort", "" + port);
++        try {
++            command("DeletePortMapping", params);
++            return true;
++        } catch (Exception ex) {
++            return false;
++        }
++    }
++
++    public boolean isMapped(int port, boolean udp) {
++        if (port < 0 || port > 65535) {
++            throw new IllegalArgumentException("Invalid port");
++        }
++        Map<String, String> params = new HashMap<String, String>();
++        params.put("NewRemoteHost", "");
++        params.put("NewProtocol", udp ? "UDP" : "TCP");
++        params.put("NewExternalPort", "" + port);
++        try {
++            Map<String, String> r = command("GetSpecificPortMappingEntry", params);
++            if (r.get("errorCode") != null) {
++                throw new Exception();
++            }
++            return r.get("NewInternalPort") != null;
++        } catch (Exception ex) {
++            return false;
++        }
++
++    }
++
++}
+diff --git a/src/main/java/com/dosse/upnp/GatewayFinder.java b/src/main/java/com/dosse/upnp/GatewayFinder.java
+new file mode 100644
+index 000000000..dcb009eb0
+--- /dev/null
++++ b/src/main/java/com/dosse/upnp/GatewayFinder.java
+@@ -0,0 +1,131 @@
++/*
++ * Copyright (C) 2015 Federico Dossena (adolfintel.com).
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
++ * MA 02110-1301  USA
++ */
++package com.dosse.upnp;
++
++import java.net.DatagramPacket;
++import java.net.DatagramSocket;
++import java.net.Inet4Address;
++import java.net.InetAddress;
++import java.net.InetSocketAddress;
++import java.net.NetworkInterface;
++import java.net.SocketTimeoutException;
++import java.util.Enumeration;
++import java.util.LinkedList;
++
++/**
++ * @author Federico
++ */
++abstract class GatewayFinder {
++
++    private static final String[] SEARCH_MESSAGES;
++
++    static {
++        LinkedList<String> m = new LinkedList<String>();
++        for (String type : new String[]{"urn:schemas-upnp-org:device:InternetGatewayDevice:1", "urn:schemas-upnp-org:service:WANIPConnection:1", "urn:schemas-upnp-org:service:WANPPPConnection:1"}) {
++            m.add("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nST: " + type + "\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\n\r\n");
++        }
++        SEARCH_MESSAGES = m.toArray(new String[]{});
++    }
++
++    private class GatewayListener extends Thread {
++
++        private Inet4Address ip;
++        private String req;
++
++        public GatewayListener(Inet4Address ip, String req) {
++            setName("PurpurUPnP - Gateway Listener"); // Purpur
++            this.ip = ip;
++            this.req = req;
++        }
++
++        @Override
++        public void run() {
++            try {
++                byte[] req = this.req.getBytes();
++                DatagramSocket s = new DatagramSocket(new InetSocketAddress(ip, 0));
++                s.send(new DatagramPacket(req, req.length, new InetSocketAddress("239.255.255.250", 1900)));
++                s.setSoTimeout(3000);
++                for (; ; ) {
++                    try {
++                        DatagramPacket recv = new DatagramPacket(new byte[1536], 1536);
++                        s.receive(recv);
++                        Gateway gw = new Gateway(recv.getData(), ip);
++                        gatewayFound(gw);
++                    } catch (SocketTimeoutException t) {
++                        break;
++                    } catch (Throwable t) {
++                    }
++                }
++            } catch (Throwable t) {
++            }
++        }
++    }
++
++    private LinkedList<GatewayListener> listeners = new LinkedList<GatewayListener>();
++
++    public GatewayFinder() {
++        for (Inet4Address ip : getLocalIPs()) {
++            for (String req : SEARCH_MESSAGES) {
++                GatewayListener l = new GatewayListener(ip, req);
++                l.start();
++                listeners.add(l);
++            }
++        }
++    }
++
++    public boolean isSearching() {
++        for (GatewayListener l : listeners) {
++            if (l.isAlive()) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    public abstract void gatewayFound(Gateway g);
++
++    private static Inet4Address[] getLocalIPs() {
++        LinkedList<Inet4Address> ret = new LinkedList<Inet4Address>();
++        try {
++            Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
++            while (ifaces.hasMoreElements()) {
++                try {
++                    NetworkInterface iface = ifaces.nextElement();
++                    if (!iface.isUp() || iface.isLoopback() || iface.isVirtual() || iface.isPointToPoint()) {
++                        continue;
++                    }
++                    Enumeration<InetAddress> addrs = iface.getInetAddresses();
++                    if (addrs == null) {
++                        continue;
++                    }
++                    while (addrs.hasMoreElements()) {
++                        InetAddress addr = addrs.nextElement();
++                        if (addr instanceof Inet4Address) {
++                            ret.add((Inet4Address) addr);
++                        }
++                    }
++                } catch (Throwable t) {
++                }
++            }
++        } catch (Throwable t) {
++        }
++        return ret.toArray(new Inet4Address[]{});
++    }
++
++}
+diff --git a/src/main/java/com/dosse/upnp/UPnP.java b/src/main/java/com/dosse/upnp/UPnP.java
+new file mode 100644
+index 000000000..f61c949bf
+--- /dev/null
++++ b/src/main/java/com/dosse/upnp/UPnP.java
+@@ -0,0 +1,154 @@
++/*
++ * Copyright (C) 2015 Federico Dossena (adolfintel.com).
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
++ * MA 02110-1301  USA
++ */
++package com.dosse.upnp;
++
++/**
++ * This class contains static methods that allow quick access to UPnP Port Mapping.<br>
++ * Commands will be sent to the default gateway.
++ *
++ * @author Federico
++ */
++public class UPnP {
++
++    private static Gateway defaultGW = null;
++    private static final GatewayFinder finder = new GatewayFinder() {
++        @Override
++        public void gatewayFound(Gateway g) {
++            synchronized (finder) {
++                if (defaultGW == null) {
++                    defaultGW = g;
++                }
++            }
++        }
++    };
++
++    /**
++     * Waits for UPnP to be initialized (takes ~3 seconds).<br>
++     * It is not necessary to call this method manually before using UPnP functions
++     */
++    public static void waitInit() {
++        while (finder.isSearching()) {
++            try {
++                Thread.sleep(1);
++            } catch (InterruptedException ex) {
++            }
++        }
++    }
++
++    /**
++     * Is there an UPnP gateway?<br>
++     * This method is blocking if UPnP is still initializing<br>
++     * All UPnP commands will fail if UPnP is not available
++     *
++     * @return true if available, false if not
++     */
++    public static boolean isUPnPAvailable() {
++        waitInit();
++        return defaultGW != null;
++    }
++
++    /**
++     * Opens a TCP port on the gateway
++     *
++     * @param port TCP port (0-65535)
++     * @return true if the operation was successful, false otherwise
++     */
++    public static boolean openPortTCP(int port) {
++        if (!isUPnPAvailable()) return false;
++        return defaultGW.openPort(port, false);
++    }
++
++    /**
++     * Opens a UDP port on the gateway
++     *
++     * @param port UDP port (0-65535)
++     * @return true if the operation was successful, false otherwise
++     */
++    public static boolean openPortUDP(int port) {
++        if (!isUPnPAvailable()) return false;
++        return defaultGW.openPort(port, true);
++    }
++
++    /**
++     * Closes a TCP port on the gateway<br>
++     * Most gateways seem to refuse to do this
++     *
++     * @param port TCP port (0-65535)
++     * @return true if the operation was successful, false otherwise
++     */
++    public static boolean closePortTCP(int port) {
++        if (!isUPnPAvailable()) return false;
++        return defaultGW.closePort(port, false);
++    }
++
++    /**
++     * Closes a UDP port on the gateway<br>
++     * Most gateways seem to refuse to do this
++     *
++     * @param port UDP port (0-65535)
++     * @return true if the operation was successful, false otherwise
++     */
++    public static boolean closePortUDP(int port) {
++        if (!isUPnPAvailable()) return false;
++        return defaultGW.closePort(port, true);
++    }
++
++    /**
++     * Checks if a TCP port is mapped<br>
++     *
++     * @param port TCP port (0-65535)
++     * @return true if the port is mapped, false otherwise
++     */
++    public static boolean isMappedTCP(int port) {
++        if (!isUPnPAvailable()) return false;
++        return defaultGW.isMapped(port, false);
++    }
++
++    /**
++     * Checks if a UDP port is mapped<br>
++     *
++     * @param port UDP port (0-65535)
++     * @return true if the port is mapped, false otherwise
++     */
++    public static boolean isMappedUDP(int port) {
++        if (!isUPnPAvailable()) return false;
++        return defaultGW.isMapped(port, false);
++    }
++
++    /**
++     * Gets the external IP address of the default gateway
++     *
++     * @return external IP address as string, or null if not available
++     */
++    public static String getExternalIP() {
++        if (!isUPnPAvailable()) return null;
++        return defaultGW.getExternalIP();
++    }
++
++    /**
++     * Gets the internal IP address of this machine
++     *
++     * @return internal IP address as string, or null if not available
++     */
++    public static String getLocalIP() {
++        if (!isUPnPAvailable()) return null;
++        return defaultGW.getLocalIP();
++    }
++
++}
+diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
+index 8b5f4cab0..f5e0f87db 100644
+--- a/src/main/java/net/minecraft/server/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/DedicatedServer.java
+@@ -1,27 +1,20 @@
+ package net.minecraft.server;
+ 
+ import com.google.common.base.Strings;
+-import com.google.common.collect.Lists;
+ import com.google.gson.JsonObject;
+ import com.mojang.authlib.GameProfile;
+ import com.mojang.authlib.GameProfileRepository;
+ import com.mojang.authlib.minecraft.MinecraftSessionService;
+ import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
+ import com.mojang.datafixers.DataFixer;
+-import java.io.BufferedReader;
++
+ import java.io.File;
+ import java.io.IOException;
+-import java.io.InputStreamReader;
+ import java.net.InetAddress;
+ import java.net.Proxy;
+-import java.nio.charset.StandardCharsets;
+-import java.util.Collections;
+-import java.util.List;
+ import java.util.Locale;
+ import java.util.Optional;
+ import java.util.Random;
+-import java.util.concurrent.CompletableFuture;
+-import java.util.concurrent.ExecutionException;
+ import java.util.function.BooleanSupplier;
+ import java.util.regex.Pattern;
+ import javax.annotation.Nullable;
+@@ -29,11 +22,9 @@ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+ // CraftBukkit start
+-import java.io.PrintStream;
+ import org.apache.logging.log4j.Level;
+ 
+ import org.bukkit.command.CommandSender;
+-import org.bukkit.craftbukkit.LoggerOutputStream;
+ import co.aikar.timings.MinecraftTimings; // Paper
+ import org.bukkit.event.server.ServerCommandEvent;
+ import org.bukkit.craftbukkit.util.Waitable;
+@@ -231,6 +222,30 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+             return false;
+         }
+ 
++        // Purpur start
++        if (net.pl3x.purpur.PurpurConfig.useUPnP) {
++            LOGGER.info("[UPnP] Attempting to start UPnP port forwarding service...");
++            if (com.dosse.upnp.UPnP.isUPnPAvailable()) {
++                if (com.dosse.upnp.UPnP.isMappedTCP(getPort())) {
++                    upnp = false;
++                    LOGGER.info("[UPnP] Port " + getPort() + " is already open");
++                } else if (com.dosse.upnp.UPnP.openPortTCP(getPort())) {
++                    upnp = true;
++                    LOGGER.info("[UPnP] Successfully opened port " + getPort());
++                } else {
++                    upnp = false;
++                    LOGGER.info("[UPnP] Failed to open port " + getPort());
++                }
++                if (upnp) {
++                    LOGGER.info("[UPnP] " + com.dosse.upnp.UPnP.getExternalIP() + ":" + getPort());
++                }
++            } else {
++                upnp = false;
++                LOGGER.error("[UPnP] Service is unavailable");
++            }
++        }
++        // Purpur end
++
+         // CraftBukkit start
+         // this.a((PlayerList) (new DedicatedPlayerList(this))); // Spigot - moved up
+         server.loadPlugins();
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 9d5ef40a0..9470af092 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -181,6 +181,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+     public boolean lagging = false; // Purpur
+     public final SlackActivityAccountant slackActivityAccountant = new SlackActivityAccountant();
+     // Spigot end
++    protected boolean upnp = false;
+ 
+     public MinecraftServer(OptionSet options, Proxy proxy, DataFixer datafixer, CommandDispatcher commanddispatcher, YggdrasilAuthenticationService yggdrasilauthenticationservice, MinecraftSessionService minecraftsessionservice, GameProfileRepository gameprofilerepository, UserCache usercache, WorldLoadListenerFactory worldloadlistenerfactory, String s) {
+         super("Server");
+@@ -791,6 +792,16 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+         }
+         // Spigot end
+         com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.close(true, true); // Paper
++
++        // Purpur start
++        if (upnp) {
++            if (com.dosse.upnp.UPnP.closePortTCP(getPort())) {
++                LOGGER.info("UPnP port forwarding service disabled: port " + getPort() + " closed");
++            } else {
++                LOGGER.error("UPnP port forwarding service failed to close port " + getPort());
++            }
++        }
++        // Purpur end
+     }
+ 
+     public String getServerIp() {
+diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+index 544c68b0d..917f6503d 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+@@ -137,6 +137,11 @@ public class PurpurConfig {
+         return config.getString(path, config.getString(path));
+     }
+ 
++    public static boolean useUPnP = false;
++    private static void upnpSettings() {
++        useUPnP = getBoolean("settings.upnp-port-forwarding", useUPnP);
++    }
++
+     public static double laggingThreshold = 19.0D;
+     private static void tickLoopSettings() {
+         laggingThreshold = getDouble("settings.lagging-threshold", laggingThreshold);
+-- 
+2.24.0
+
