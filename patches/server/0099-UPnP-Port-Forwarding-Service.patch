@@ -1,14 +1,17 @@
-From 063bb512eb620d23fc41913e95e6405a43dbf699 Mon Sep 17 00:00:00 2001
+From f57586d123fab52e1a14494b485936afc38994c6 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Wed, 22 Jan 2020 20:13:40 -0600
 Subject: [PATCH] UPnP Port Forwarding Service
 
 ---
- pom.xml                                       | 10 ++++++++
- .../net/minecraft/server/DedicatedServer.java | 25 +++++++++++++++++++
- .../net/minecraft/server/MinecraftServer.java | 11 ++++++++
- .../java/net/pl3x/purpur/PurpurConfig.java    |  5 ++++
- 4 files changed, 51 insertions(+)
+ pom.xml                                       | 10 +++++
+ .../net/minecraft/server/DedicatedServer.java | 25 +++++++++++
+ .../net/minecraft/server/MinecraftServer.java | 11 +++++
+ .../java/net/pl3x/purpur/PurpurConfig.java    |  5 +++
+ .../pl3x/purpur/gui/info/ServerInfoPanel.java |  4 ++
+ .../pl3x/purpur/gui/info/UPnPComponent.java   | 45 +++++++++++++++++++
+ 6 files changed, 100 insertions(+)
+ create mode 100644 src/main/java/net/pl3x/purpur/gui/info/UPnPComponent.java
 
 diff --git a/pom.xml b/pom.xml
 index 37ff489db..c886104c5 100644
@@ -39,7 +42,7 @@ index 37ff489db..c886104c5 100644
  
      <pluginRepositories>
 diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
-index 8b5f4cab0..3e31b2bb3 100644
+index aec6040c8..c04940d0a 100644
 --- a/src/main/java/net/minecraft/server/DedicatedServer.java
 +++ b/src/main/java/net/minecraft/server/DedicatedServer.java
 @@ -231,6 +231,31 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
@@ -75,14 +78,14 @@ index 8b5f4cab0..3e31b2bb3 100644
          // this.a((PlayerList) (new DedicatedPlayerList(this))); // Spigot - moved up
          server.loadPlugins();
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 9d5ef40a0..01b5a6b3e 100644
+index 105ac8a04..d36bac5d7 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -181,6 +181,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
      public boolean lagging = false; // Purpur
      public final SlackActivityAccountant slackActivityAccountant = new SlackActivityAccountant();
      // Spigot end
-+    protected boolean upnp = false;
++    protected boolean upnp = false; public boolean isUPnPEnabled() { return upnp; }
  
      public MinecraftServer(OptionSet options, Proxy proxy, DataFixer datafixer, CommandDispatcher commanddispatcher, YggdrasilAuthenticationService yggdrasilauthenticationservice, MinecraftSessionService minecraftsessionservice, GameProfileRepository gameprofilerepository, UserCache usercache, WorldLoadListenerFactory worldloadlistenerfactory, String s) {
          super("Server");
@@ -119,6 +122,86 @@ index 544c68b0d..917f6503d 100644
      public static double laggingThreshold = 19.0D;
      private static void tickLoopSettings() {
          laggingThreshold = getDouble("settings.lagging-threshold", laggingThreshold);
+diff --git a/src/main/java/net/pl3x/purpur/gui/info/ServerInfoPanel.java b/src/main/java/net/pl3x/purpur/gui/info/ServerInfoPanel.java
+index c4519794c..2d9d1859d 100644
+--- a/src/main/java/net/pl3x/purpur/gui/info/ServerInfoPanel.java
++++ b/src/main/java/net/pl3x/purpur/gui/info/ServerInfoPanel.java
+@@ -11,6 +11,7 @@ public class ServerInfoPanel extends JPanel {
+     private final Timer timer;
+     private final RAMGraph ramGraph;
+     private final RAMDetails ramDetails;
++    private final UPnPComponent upnpComponent;
+ 
+     public ServerInfoPanel(MinecraftServer server) {
+         super(new BorderLayout());
+@@ -19,13 +20,16 @@ public class ServerInfoPanel extends JPanel {
+ 
+         ramGraph = new RAMGraph();
+         ramDetails = new RAMDetails(server);
++        upnpComponent = new UPnPComponent(server);
+ 
+         add(ramGraph, "North");
+         add(ramDetails, "Center");
++        add(upnpComponent, "South");
+ 
+         timer = new Timer(500, (event) -> {
+             ramGraph.update();
+             ramDetails.update(ramGraph);
++            upnpComponent.repaint();
+         });
+         timer.start();
+     }
+diff --git a/src/main/java/net/pl3x/purpur/gui/info/UPnPComponent.java b/src/main/java/net/pl3x/purpur/gui/info/UPnPComponent.java
+new file mode 100644
+index 000000000..af6a7e18f
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/gui/info/UPnPComponent.java
+@@ -0,0 +1,45 @@
++package net.pl3x.purpur.gui.info;
++
++import net.minecraft.server.MinecraftServer;
++import net.pl3x.purpur.PurpurConfig;
++
++import javax.swing.JTextPane;
++import javax.swing.border.EmptyBorder;
++import java.awt.Color;
++import java.awt.Dimension;
++import java.awt.Graphics;
++
++public class UPnPComponent extends JTextPane {
++    private final MinecraftServer server;
++
++    UPnPComponent(MinecraftServer server) {
++        this.server = server;
++        setBorder(new EmptyBorder(0, 30, 0, 10));
++        setText("UPnP Status");
++        setOpaque(false);
++    }
++
++    @Override
++    public Dimension getPreferredSize() {
++        return new Dimension(350, 20);
++    }
++
++    @Override
++    public void paint(Graphics graphics) {
++        super.paint(graphics);
++        graphics.setColor(server.isUPnPEnabled() ? Color.GREEN : Color.RED);
++        graphics.fillOval(10, 0, 15, 15);
++        setToolTipText(getTooltip());
++    }
++
++    private String getTooltip() {
++        if (!PurpurConfig.useUPnP) {
++            return "UPnP Disabled";
++        }
++        if (server.isUPnPEnabled()) {
++            return "UPnP Enabled";
++        } else {
++            return "UPnP Unavailable";
++        }
++    }
++}
 -- 
 2.24.0
 
