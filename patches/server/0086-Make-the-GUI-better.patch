@@ -1,4 +1,4 @@
-From 706430e6dde42ea1db8fe1ea7d66602fb31f8477 Mon Sep 17 00:00:00 2001
+From 1ef1f86e4ffacc1e104cb34f404d9caff58d51cd Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Thu, 16 Jan 2020 14:59:16 -0600
 Subject: [PATCH] Make the GUI better
@@ -6,22 +6,26 @@ Subject: [PATCH] Make the GUI better
 ---
  .../net/minecraft/server/DedicatedServer.java |   6 +-
  .../net/minecraft/server/MinecraftServer.java |   3 +-
- .../java/net/pl3x/purpur/gui/ColorPane.java   | 126 ++++++++++++
+ .../java/net/pl3x/purpur/gui/ColorPane.java   |  80 ++++++++
  .../net/pl3x/purpur/gui/ConsolePanel.java     | 128 +++++++++++++
+ .../java/net/pl3x/purpur/gui/GUIColor.java    |  58 ++++++
  .../pl3x/purpur/gui/PlayerListComponent.java  |  27 +++
  .../java/net/pl3x/purpur/gui/ServerGUI.java   | 121 ++++++++++++
  .../net/pl3x/purpur/gui/info/RAMDetails.java  |  52 +++++
  .../net/pl3x/purpur/gui/info/RAMGraph.java    | 179 ++++++++++++++++++
  .../pl3x/purpur/gui/info/ServerInfoPanel.java |  42 ++++
- src/main/resources/log4j2.xml                 |  11 +-
- 10 files changed, 690 insertions(+), 5 deletions(-)
+ .../purpur/util/HighlightErrorConverter.java  |  86 +++++++++
+ src/main/resources/log4j2.xml                 |  13 +-
+ 12 files changed, 789 insertions(+), 6 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/gui/ColorPane.java
  create mode 100644 src/main/java/net/pl3x/purpur/gui/ConsolePanel.java
+ create mode 100644 src/main/java/net/pl3x/purpur/gui/GUIColor.java
  create mode 100644 src/main/java/net/pl3x/purpur/gui/PlayerListComponent.java
  create mode 100644 src/main/java/net/pl3x/purpur/gui/ServerGUI.java
  create mode 100644 src/main/java/net/pl3x/purpur/gui/info/RAMDetails.java
  create mode 100644 src/main/java/net/pl3x/purpur/gui/info/RAMGraph.java
  create mode 100644 src/main/java/net/pl3x/purpur/gui/info/ServerInfoPanel.java
+ create mode 100644 src/main/java/net/pl3x/purpur/util/HighlightErrorConverter.java
 
 diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
 index d70c8cab2b..61ccb6079e 100644
@@ -77,139 +81,93 @@ index 9d5ef40a03..105ac8a040 100644
      }
 diff --git a/src/main/java/net/pl3x/purpur/gui/ColorPane.java b/src/main/java/net/pl3x/purpur/gui/ColorPane.java
 new file mode 100644
-index 0000000000..d5d5766e1d
+index 0000000000..e819ecc1b0
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/gui/ColorPane.java
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,80 @@
 +package net.pl3x.purpur.gui;
 +
++import net.md_5.bungee.api.ChatColor;
++import net.md_5.bungee.api.chat.BaseComponent;
++import net.md_5.bungee.api.chat.TextComponent;
++
 +import javax.swing.JTextPane;
++import javax.swing.Timer;
 +import javax.swing.text.AttributeSet;
 +import javax.swing.text.BadLocationException;
 +import javax.swing.text.SimpleAttributeSet;
 +import javax.swing.text.StyleConstants;
 +import javax.swing.text.StyleContext;
-+import java.awt.Color;
-+
-+/*
-+ * Class from: https://stackoverflow.com/a/6899478
-+ */
++import java.util.HashSet;
++import java.util.Set;
 +
 +public class ColorPane extends JTextPane {
-+    private static final Color BLACK = Color.BLACK;
-+    private static final Color RED = Color.RED;
-+    private static final Color BLUE = Color.BLUE;
-+    private static final Color MAGENTA = Color.MAGENTA;
-+    private static final Color GREEN = Color.GREEN;
-+    private static final Color YELLOW = Color.getHSBColor(0.15f, 1.0f, 1.0f);
-+    private static final Color CYAN = Color.CYAN;
-+    private static final Color WHITE = Color.LIGHT_GRAY;
++    private static final GUIColor DEFAULT_COLOR = GUIColor.BLACK;
 +
-+    private String remaining = "";
++    public void append(String str) {
++        BaseComponent[] components = TextComponent.fromLegacyText(DEFAULT_COLOR.getCode() + str, ChatColor.BLACK);
++        for (BaseComponent component : components) {
++            String text = component.toPlainText();
++            if (text == null || text.isEmpty()) {
++                continue;
++            }
 +
-+    public void append(Color c, String s) {
-+        StyleContext sc = StyleContext.getDefaultStyleContext();
-+        AttributeSet aset = sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, c);
-+        if (c != BLACK) {
-+            aset = sc.addAttribute(aset, StyleConstants.CharacterConstants.Bold, true);
-+        }
-+        int len = getDocument().getLength(); // same value as getText().length();
++            GUIColor guiColor = GUIColor.getColor(component.getColor());
 +
-+        //setCaretPosition(len);  // place caret at the end (with no selection)
-+        //setCharacterAttributes(aset, false);
-+        //replaceSelection(s); // there is no selection, so inserts at caret
++            StyleContext context = StyleContext.getDefaultStyleContext();
++            AttributeSet attr = context.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, guiColor.getColor());
++            attr = context.addAttribute(attr, StyleConstants.CharacterConstants.Bold, component.isBold() || guiColor != DEFAULT_COLOR);
++            attr = context.addAttribute(attr, StyleConstants.CharacterConstants.Italic, component.isItalic());
++            attr = context.addAttribute(attr, StyleConstants.CharacterConstants.Underline, component.isUnderlined());
++            attr = context.addAttribute(attr, StyleConstants.CharacterConstants.StrikeThrough, component.isStrikethrough());
++            //attr = context.addAttribute(attr, StyleConstants.CharacterConstants.Blink, component.isObfuscated()); // no such thing as Blink, sadly
 +
-+        try {
-+            getDocument().insertString(len, s, aset);
-+        } catch (BadLocationException e) {
-+            e.printStackTrace();
++            try {
++                int pos = getDocument().getLength();
++                getDocument().insertString(pos, text, attr);
++
++                if (component.isObfuscated()) {
++                    // dirty hack to blink some text
++                    Blink blink = new Blink(pos, text.length(), attr, context.addAttribute(attr, StyleConstants.Foreground, getBackground()));
++                    BLINKS.add(blink);
++                }
++            } catch (BadLocationException e) {
++                e.printStackTrace();
++            }
 +        }
 +    }
 +
-+    public void appendANSI(String s) { // convert ANSI color codes first
-+        int aPos = 0;   // current char position in addString
-+        int aIndex; // index of next Escape sequence
-+        int mIndex; // index of "m" terminating Escape sequence
-+        String tmpString;
-+        boolean stillSearching; // true until no more Escape sequences
-+        String addString = remaining + s;
-+        remaining = "";
-+        Color colorCurrent = BLACK; // reset the colors
++    private static final Set<Blink> BLINKS = new HashSet<>();
++    private static boolean SYNC_BLINK;
 +
-+        if (addString.length() > 0) {
-+            aIndex = addString.indexOf("\u001B"); // find first escape
-+            if (aIndex == -1) { // no escape/color change in this string, so just send it with current color
-+                append(colorCurrent, addString);
-+                return;
-+            }
-+            // otherwise There is an escape character in the string, so we must process it
-+
-+            if (aIndex > 0) { // Escape is not first char, so send text up to first escape
-+                tmpString = addString.substring(0, aIndex);
-+                append(colorCurrent, tmpString);
-+                aPos = aIndex;
-+            }
-+            // aPos is now at the beginning of the first escape sequence
-+
-+            stillSearching = true;
-+            while (stillSearching) {
-+                mIndex = addString.indexOf("m", aPos); // find the end of the escape sequence
-+                if (mIndex < 0) { // the buffer ends halfway through the ansi string!
-+                    remaining = addString.substring(aPos);
-+                    stillSearching = false;
-+                    continue;
-+                } else {
-+                    tmpString = addString.substring(aPos, mIndex + 1);
-+                    colorCurrent = getANSIColor(tmpString);
-+                }
-+                aPos = mIndex + 1;
-+                // now we have the color, send text that is in that color (up to next escape)
-+
-+                aIndex = addString.indexOf("\u001B", aPos);
-+
-+                if (aIndex == -1) { // if that was the last sequence of the input, send remaining text
-+                    tmpString = addString.substring(aPos);
-+                    append(colorCurrent, tmpString);
-+                    stillSearching = false;
-+                    continue; // jump out of loop early, as the whole string has been sent now
-+                }
-+
-+                // there is another escape sequence, so send part of the string and prepare for the next
-+                tmpString = addString.substring(aPos, aIndex);
-+                aPos = aIndex;
-+                append(colorCurrent, tmpString);
-+
-+            } // while there's text in the input buffer
-+        }
++    static {
++        Timer timer = new Timer(500, e -> {
++            SYNC_BLINK = !SYNC_BLINK;
++            BLINKS.forEach(Blink::blink);
++        });
++        timer.start();
 +    }
 +
-+    private Color getANSIColor(String ANSIColor) {
-+        if (ANSIColor.isEmpty()) {
-+            return BLACK;
-+        } else if (ANSIColor.contains("30")) {
-+            return BLACK;
-+        } else if (ANSIColor.contains("31")) {
-+            return RED;
-+        } else if (ANSIColor.contains("32")) {
-+            return GREEN;
-+        } else if (ANSIColor.contains("33")) {
-+            return YELLOW;
-+        } else if (ANSIColor.contains("34")) {
-+            return BLUE;
-+        } else if (ANSIColor.contains("35")) {
-+            return MAGENTA;
-+        } else if (ANSIColor.contains("36")) {
-+            return CYAN;
-+        } else if (ANSIColor.contains("37")) {
-+            return WHITE;
-+        } else {
-+            return BLACK;
++    private class Blink {
++        private final int start, length;
++        private final AttributeSet attr1;
++        private final AttributeSet attr2;
++
++        private Blink(int start, int length, AttributeSet attr1, AttributeSet attr2) {
++            this.start = start;
++            this.length = length;
++            this.attr1 = attr1;
++            this.attr2 = attr2;
++        }
++
++        private void blink() {
++            getStyledDocument().setCharacterAttributes(start, length, SYNC_BLINK ? attr1 : attr2, true);
 +        }
 +    }
 +}
 diff --git a/src/main/java/net/pl3x/purpur/gui/ConsolePanel.java b/src/main/java/net/pl3x/purpur/gui/ConsolePanel.java
 new file mode 100644
-index 0000000000..a728f46e6c
+index 0000000000..29d237d9e7
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/gui/ConsolePanel.java
 @@ -0,0 +1,128 @@
@@ -312,9 +270,9 @@ index 0000000000..a728f46e6c
 +        logAppenderThread.start();
 +    }
 +
-+    private void print(ColorPane console, JScrollPane jscrollpane, String s) {
++    private void print(ColorPane console, JScrollPane jscrollpane, String str) {
 +        if (!SwingUtilities.isEventDispatchThread()) {
-+            SwingUtilities.invokeLater(() -> print(console, jscrollpane, s));
++            SwingUtilities.invokeLater(() -> print(console, jscrollpane, str));
 +        } else {
 +            JScrollBar jscrollbar = jscrollpane.getVerticalScrollBar();
 +            boolean scrollToBottom = false;
@@ -323,7 +281,7 @@ index 0000000000..a728f46e6c
 +                scrollToBottom = (double) jscrollbar.getValue() + jscrollbar.getSize().getHeight() + (double) (MONOSPACED.getSize() * 4) > (double) jscrollbar.getMaximum();
 +            }
 +
-+            console.appendANSI(s);
++            console.append(str);
 +
 +            if (scrollToBottom) {
 +                jscrollbar.setValue(Integer.MAX_VALUE);
@@ -338,6 +296,70 @@ index 0000000000..a728f46e6c
 +                remove();
 +            }
 +            return super.offerFirst(command);
++        }
++    }
++}
+diff --git a/src/main/java/net/pl3x/purpur/gui/GUIColor.java b/src/main/java/net/pl3x/purpur/gui/GUIColor.java
+new file mode 100644
+index 0000000000..2a280ae48a
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/gui/GUIColor.java
+@@ -0,0 +1,58 @@
++package net.pl3x.purpur.gui;
++
++import net.md_5.bungee.api.ChatColor;
++
++import java.awt.Color;
++import java.util.HashMap;
++import java.util.Map;
++
++public enum GUIColor {
++    BLACK(ChatColor.BLACK, new Color(0x000000)),
++    DARK_BLUE(ChatColor.DARK_BLUE, new Color(0x0000AA)),
++    DARK_GREEN(ChatColor.DARK_GREEN, new Color(0x00AA00)),
++    DARK_AQUA(ChatColor.DARK_AQUA, new Color(0x009999)),
++    DARK_RED(ChatColor.DARK_RED, new Color(0xAA0000)),
++    DARK_PURPLE(ChatColor.DARK_PURPLE, new Color(0xAA00AA)),
++    GOLD(ChatColor.GOLD, new Color(0xBB8800)),
++    GRAY(ChatColor.GRAY, new Color(0x888888)),
++    DARK_GRAY(ChatColor.DARK_GRAY, new Color(0x444444)),
++    BLUE(ChatColor.BLUE, new Color(0x5555FF)),
++    GREEN(ChatColor.GREEN, new Color(0x55FF55)),
++    AQUA(ChatColor.AQUA, new Color(0x55DDDD)),
++    RED(ChatColor.RED, new Color(0xFF5555)),
++    LIGHT_PURPLE(ChatColor.LIGHT_PURPLE, new Color(0xFF55FF)),
++    YELLOW(ChatColor.YELLOW, new Color(0xFFBB00)),
++    WHITE(ChatColor.WHITE, new Color(0xBBBBBB));
++
++    private final ChatColor chat;
++    private final Color color;
++
++    private static final Map<ChatColor, GUIColor> BY_CHAT = new HashMap<>();
++
++    GUIColor(ChatColor chat, Color color) {
++        this.chat = chat;
++        this.color = color;
++    }
++
++    public Color getColor() {
++        return color;
++    }
++
++    public ChatColor getChatColor() {
++        return chat;
++    }
++
++    public String getCode() {
++        return chat.toString();
++    }
++
++    public static GUIColor getColor(ChatColor chat) {
++        return BY_CHAT.get(chat);
++    }
++
++    static {
++        for (GUIColor color : values()) {
++            BY_CHAT.put(color.chat, color);
 +        }
 +    }
 +}
@@ -792,22 +814,116 @@ index 0000000000..c4519794c9
 +        ramGraph.stop();
 +    }
 +}
+diff --git a/src/main/java/net/pl3x/purpur/util/HighlightErrorConverter.java b/src/main/java/net/pl3x/purpur/util/HighlightErrorConverter.java
+new file mode 100644
+index 0000000000..4b340b88a2
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/util/HighlightErrorConverter.java
+@@ -0,0 +1,86 @@
++package net.pl3x.purpur.util;
++
++import org.apache.logging.log4j.Level;
++import org.apache.logging.log4j.core.LogEvent;
++import org.apache.logging.log4j.core.config.Configuration;
++import org.apache.logging.log4j.core.config.plugins.Plugin;
++import org.apache.logging.log4j.core.layout.PatternLayout;
++import org.apache.logging.log4j.core.pattern.ConverterKeys;
++import org.apache.logging.log4j.core.pattern.LogEventPatternConverter;
++import org.apache.logging.log4j.core.pattern.PatternConverter;
++import org.apache.logging.log4j.core.pattern.PatternFormatter;
++import org.apache.logging.log4j.core.pattern.PatternParser;
++import org.apache.logging.log4j.util.PerformanceSensitive;
++
++import java.util.List;
++
++@Plugin(name = "highlightGUIError", category = PatternConverter.CATEGORY)
++@ConverterKeys({"highlightGUIError"})
++@PerformanceSensitive("allocation")
++public final class HighlightErrorConverter extends LogEventPatternConverter {
++
++    private static final String ERROR = "\u00A74\u00A7l"; // Bold Red
++    private static final String WARN = "\u00A7e\u00A7l"; // Bold Yellow
++
++    private final List<PatternFormatter> formatters;
++
++    protected HighlightErrorConverter(List<PatternFormatter> formatters) {
++        super("highlightGUIError", null);
++        this.formatters = formatters;
++    }
++
++    @Override
++    public void format(LogEvent event, StringBuilder toAppendTo) {
++        Level level = event.getLevel();
++        if (level.isMoreSpecificThan(Level.ERROR)) {
++            format(ERROR, event, toAppendTo);
++            return;
++        } else if (level.isMoreSpecificThan(Level.WARN)) {
++            format(WARN, event, toAppendTo);
++            return;
++        }
++        for (PatternFormatter formatter : formatters) {
++            formatter.format(event, toAppendTo);
++        }
++    }
++
++    private void format(String style, LogEvent event, StringBuilder toAppendTo) {
++        int start = toAppendTo.length();
++        toAppendTo.append(style);
++        int end = toAppendTo.length();
++
++        for (PatternFormatter formatter : formatters) {
++            formatter.format(event, toAppendTo);
++        }
++
++        if (toAppendTo.length() == end) {
++            toAppendTo.setLength(start);
++        }
++    }
++
++    @Override
++    public boolean handlesThrowable() {
++        for (final PatternFormatter formatter : formatters) {
++            if (formatter.handlesThrowable()) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    public static HighlightErrorConverter newInstance(Configuration config, String[] options) {
++        if (options.length != 1) {
++            LOGGER.error("Incorrect number of options on highlightGUIError. Expected 1 received " + options.length);
++            return null;
++        }
++        if (options[0] == null) {
++            LOGGER.error("No pattern supplied on highlightGUIError");
++            return null;
++        }
++
++        PatternParser parser = PatternLayout.createPatternParser(config);
++        List<PatternFormatter> formatters = parser.parse(options[0]);
++        return new HighlightErrorConverter(formatters);
++    }
++
++}
 diff --git a/src/main/resources/log4j2.xml b/src/main/resources/log4j2.xml
-index a9bb987652..707ade70a4 100644
+index a9bb987652..4be7613d0f 100644
 --- a/src/main/resources/log4j2.xml
 +++ b/src/main/resources/log4j2.xml
-@@ -2,7 +2,16 @@
- <Configuration status="WARN" packages="com.mojang.util">
+@@ -1,8 +1,17 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+-<Configuration status="WARN" packages="com.mojang.util">
++<Configuration status="WARN" packages="com.mojang.util,net.pl3x.purpur.util"><!-- Purpur -->
      <Appenders>
          <Queue name="ServerGuiConsole">
 -            <PatternLayout pattern="[%d{HH:mm:ss} %level]: %msg%n" />
 +            <!-- Purpur start -->
 +            <PatternLayout>
-+                <LoggerNamePatternSelector defaultPattern="%highlightError{[%d{HH:mm:ss} %level]: [%logger] %minecraftFormatting{%msg}%n%xEx}">
++                <LoggerNamePatternSelector defaultPattern="%highlightGUIError{[%d{HH:mm:ss} %level]: [%logger] %msg%n%xEx}">
 +                    <!-- Log root, Minecraft, Mojang and Bukkit loggers without prefix -->
 +                    <!-- Disable prefix for various plugins that bypass the plugin logger -->
 +                    <PatternMatch key=",net.minecraft.,Minecraft,com.mojang.,com.sk89q.,ru.tehkode.,Minecraft.AWE"
-+                                  pattern="%highlightError{[%d{HH:mm:ss} %level]: %minecraftFormatting{%msg}%n%xEx}" />
++                                  pattern="%highlightGUIError{[%d{HH:mm:ss} %level]: %msg%n%xEx}" />
 +                </LoggerNamePatternSelector>
 +            </PatternLayout>
 +            <!-- Purpur end -->
