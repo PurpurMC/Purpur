@@ -11,4 +11,4 @@ Discord
 
 Our main presence is on Discord. You can use the following link to join it
 
-* `<https://discord.gg/zAs8W5u>`_
+* `<https://discord.gg/JXra7N4>`_

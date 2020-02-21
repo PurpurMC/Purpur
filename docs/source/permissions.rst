@@ -49,7 +49,7 @@ need to be granted the permissions you want them to have using a permissions plu
     - **description**: Players with this permission can place down a spawner cage and
     have the mob type restored to what it was when it was mined using silk touch.
 
-* **purpur.sign.click.opens.editor**
+* **purpur.sign.edit**
     - **description**: Allows players to open the sign editor when right clicking a sign
     while holding a sign.
 
