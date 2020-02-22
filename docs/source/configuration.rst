@@ -141,6 +141,23 @@ blocks
         - **default**: 10
         - **description**: Maximum height bamboo may be small thickness
 
+* bed
+    * explode
+        - **default**: true
+        - **description**: Whether beds explode. Setting this to false just makes the bed blip out of existence
+
+    * explosion-power
+        - **default**: 5.0
+        - **description**: The blast radius of the explosion. (For comparison, TNT is 4.0 and charged creepers are 6.0)
+
+    * explosion-fire
+        - **default**: true
+        - **description**: Whether the explosion can cause fire or not
+
+    * explosion-effect
+        - **default**: DESTROY
+        - **description**: What to do with the blocks that are effected by the explosion. `DESTROY` will destroy the blocks (no item drops). `BREAK` will naturally break the blocks (items will drop). `NONE` will not break any blocks
+
 * campfire
     * burn-out-in-rain
         - **default**: false
