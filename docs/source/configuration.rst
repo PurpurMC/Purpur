@@ -344,6 +344,37 @@ gameplay-mechanics
          - minecraft:stone: 0.6
          - minecraft:black_concrete: 1.0
 
+* item
+    * float-in-lava
+        - **default**: false
+        - **description**: Can items float in lava
+
+    * immune
+        * explosions
+            - **default**: {}
+            - **description**: List of items that are immune to explosions
+
+        * fire
+            - **default**: {}
+            - **description**: List of items that are immune to fire
+
+        * lava
+            - **default**: {}
+            - **description**: List of items that are immune to lava
+
+.. note::
+    Example of item immune list:
+      * explosions:
+         - minecraft:diamond
+         - minecraft:diamond_block
+         - minecraft:diamond_sword
+
+.. warning::
+    These item immune lists can cause client desync issues, such as invisible items on the ground!
+    There is nothing I can do about that from the server side, but I have patched this in my
+    client mod, (PurpurClient) <https://ci.pl3x.net/job/PurpurClient/>, starting with build #12.
+
+
 * player
     * exp-dropped-on-death
         * equation
