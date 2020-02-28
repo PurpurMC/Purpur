@@ -1,4 +1,4 @@
-From 968974fd46af44aea280c9ae0a043c7d2c6d02b9 Mon Sep 17 00:00:00 2001
+From fab88622b6aa59230bfa0157678353f3f3bbf130 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Thu, 6 Feb 2020 19:53:59 -0600
 Subject: [PATCH] Ridables
@@ -77,7 +77,7 @@ Subject: [PATCH] Ridables
  .../server/EntityVillagerTrader.java          |  18 +
  .../minecraft/server/EntityVindicator.java    |  19 +
  .../net/minecraft/server/EntityWitch.java     |  21 +-
- .../net/minecraft/server/EntityWither.java    |  28 +-
+ .../net/minecraft/server/EntityWither.java    |  40 +-
  .../java/net/minecraft/server/EntityWolf.java | 121 ++--
  .../net/minecraft/server/EntityZombie.java    |  19 +
  .../minecraft/server/EntityZombieHusk.java    |  17 +
@@ -91,12 +91,12 @@ Subject: [PATCH] Ridables
  .../net/pl3x/purpur/PurpurWorldConfig.java    | 585 ++++++++++++++++++
  .../purpur/controller/ControllerLookWASD.java |  75 +++
  .../purpur/controller/ControllerMoveWASD.java |  86 +++
- .../controller/ControllerMoveWASDFlying.java  |  59 ++
- .../ControllerMoveWASDFlyingWithSpacebar.java |  65 ++
+ .../controller/ControllerMoveWASDFlying.java  |  53 ++
+ .../ControllerMoveWASDFlyingWithSpacebar.java |  61 ++
  .../controller/ControllerMoveWASDWater.java   |  43 ++
  .../pathfinder/PathfinderGoalHasRider.java    |  21 +
  .../craftbukkit/entity/CraftEntity.java       |  27 +
- 92 files changed, 3095 insertions(+), 196 deletions(-)
+ 92 files changed, 3095 insertions(+), 198 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
@@ -4317,11 +4317,14 @@ index 1432d3f6bf..447387bd78 100644
          this.targetSelector.a(2, this.bz);
          this.targetSelector.a(3, this.bA);
 diff --git a/src/main/java/net/minecraft/server/EntityWither.java b/src/main/java/net/minecraft/server/EntityWither.java
-index 8977c3516b..12f97910e3 100644
+index 8977c3516b..7b8b033d6a 100644
 --- a/src/main/java/net/minecraft/server/EntityWither.java
 +++ b/src/main/java/net/minecraft/server/EntityWither.java
-@@ -41,13 +41,37 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+@@ -39,15 +39,40 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+         this.setHealth(this.getMaxHealth());
+         this.getNavigation().d(true);
          this.f = 50;
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASDFlyingWithSpacebar(this, 0.1F);
      }
  
 +    // Purpur start
@@ -4359,7 +4362,35 @@ index 8977c3516b..12f97910e3 100644
          this.targetSelector.a(1, new PathfinderGoalHurtByTarget(this, new Class[0]));
          this.targetSelector.a(2, new PathfinderGoalNearestAttackableTarget<>(this, EntityInsentient.class, 0, false, false, EntityWither.bG));
      }
-@@ -541,7 +565,7 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+@@ -189,6 +214,13 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+ 
+     @Override
+     protected void mobTick() {
++        // Purpur start
++        if (hasRider()) {
++            Vec3D mot = getMot();
++            setMot(mot.x, mot.y + (getVertical() > 0 ? 0.07D : 0.0D), mot.z);
++        }
++        // Purpur end
++
+         int i;
+ 
+         if (this.eq() > 0) {
+@@ -523,11 +555,11 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+     }
+ 
+     public int getHeadTarget(int i) {
+-        return (Integer) this.datawatcher.get((DataWatcherObject) EntityWither.bw.get(i));
++        return hasRider() ? 0 : this.datawatcher.get(EntityWither.bw.get(i)); // Purpur
+     }
+ 
+     public void setHeadTarget(int i, int j) {
+-        this.datawatcher.set((DataWatcherObject) EntityWither.bw.get(i), j);
++        if (!hasRider()) this.datawatcher.set(EntityWither.bw.get(i), j); // Purpur
+     }
+ 
+     public boolean J_() {
+@@ -541,7 +573,7 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
  
      @Override
      protected boolean n(Entity entity) {
@@ -5488,10 +5519,10 @@ index 0000000000..0a5d6d46c2
 +}
 diff --git a/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java b/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
 new file mode 100644
-index 0000000000..3246a9f0a3
+index 0000000000..3491250704
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,53 @@
 +package net.pl3x.purpur.controller;
 +
 +import net.minecraft.server.EntityHuman;
@@ -5500,21 +5531,15 @@ index 0000000000..3246a9f0a3
 +
 +public class ControllerMoveWASDFlying extends ControllerMoveWASD {
 +    protected final float groundSpeedModifier;
-+    protected final double maxY;
 +    protected int tooHighCooldown = 0;
 +
 +    public ControllerMoveWASDFlying(EntityInsentient entity) {
-+        this(entity, 1.0F, 256D);
++        this(entity, 1.0F);
 +    }
 +
 +    public ControllerMoveWASDFlying(EntityInsentient entity, float groundSpeedModifier) {
-+        this(entity, groundSpeedModifier, 256D);
-+    }
-+
-+    public ControllerMoveWASDFlying(EntityInsentient entity, float groundSpeedModifier, double maxY) {
 +        super(entity);
 +        this.groundSpeedModifier = groundSpeedModifier;
-+        this.maxY = maxY;
 +    }
 +
 +    @Override
@@ -5553,10 +5578,10 @@ index 0000000000..3246a9f0a3
 +}
 diff --git a/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlyingWithSpacebar.java b/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlyingWithSpacebar.java
 new file mode 100644
-index 0000000000..5c66e5b23f
+index 0000000000..f753759361
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlyingWithSpacebar.java
-@@ -0,0 +1,65 @@
+@@ -0,0 +1,61 @@
 +package net.pl3x.purpur.controller;
 +
 +import net.minecraft.server.EntityHuman;
@@ -5571,10 +5596,6 @@ index 0000000000..5c66e5b23f
 +
 +    public ControllerMoveWASDFlyingWithSpacebar(EntityInsentient entity, float groundSpeedModifier) {
 +        super(entity, groundSpeedModifier);
-+    }
-+
-+    public ControllerMoveWASDFlyingWithSpacebar(EntityInsentient entity, float groundSpeedModifier, double maxY) {
-+        super(entity, groundSpeedModifier, maxY);
 +    }
 +
 +    @Override
