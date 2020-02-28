@@ -312,6 +312,10 @@ gameplay-mechanics
         - **default**: false
         - **description**: Boats should eject players when on land
 
+* void-damage-height
+    - **default**: -64.0
+    - **description**: Lower limit where void damage starts to happen
+
 * controllable-minecarts
     * enabled
         - **default**: true
