@@ -302,7 +302,7 @@ gameplay-mechanics
     - **default**: true
     - **description**: Save projectile entities to the world/chunk so they can be reloaded later
 
-* amorstand
+* armorstand
     * step-height
         - **default**: 0.0
         - **description**: Set the default step height of armorstands. Useful for plugins that utilize armorstands as vehicles to be able to drive over blocks without jumping, etc
