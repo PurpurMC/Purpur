@@ -1,4 +1,4 @@
-From 5ce3739636649d51eef6782aed1278e5e7f7ae07 Mon Sep 17 00:00:00 2001
+From 16367235204424d27caa39c93d855efe48a85462 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Thu, 27 Feb 2020 13:39:06 -0600
 Subject: [PATCH] Make natural spawns per biome configurable
@@ -6,7 +6,7 @@ Subject: [PATCH] Make natural spawns per biome configurable
 ---
  .../minecraft/server/BiomeBambooJungle.java   |   18 +-
  .../server/BiomeBambooJungleHills.java        |   18 +-
- .../java/net/minecraft/server/BiomeBase.java  |   35 +-
+ .../java/net/minecraft/server/BiomeBase.java  |   31 +-
  .../java/net/minecraft/server/BiomeBeach.java |   11 +-
  .../net/minecraft/server/BiomeBigHills.java   |   15 +-
  .../minecraft/server/BiomeBirchForest.java    |   14 +-
@@ -80,9 +80,9 @@ Subject: [PATCH] Make natural spawns per biome configurable
  .../java/net/minecraft/server/BiomeVoid.java  |    1 +
  .../minecraft/server/BiomeWarmDeepOcean.java  |   14 +-
  .../net/minecraft/server/BiomeWarmOcean.java  |   14 +-
- .../java/net/minecraft/server/Biomes.java     |   30 +
+ .../java/net/minecraft/server/Biomes.java     |   28 +
  src/main/resources/biomes.yml                 | 1042 +++++++++++++++++
- 78 files changed, 1180 insertions(+), 905 deletions(-)
+ 78 files changed, 1174 insertions(+), 905 deletions(-)
  create mode 100644 src/main/resources/biomes.yml
 
 diff --git a/src/main/java/net/minecraft/server/BiomeBambooJungle.java b/src/main/java/net/minecraft/server/BiomeBambooJungle.java
@@ -142,7 +142,7 @@ index 2a6dafccdd..501314da9a 100644
      }
  }
 diff --git a/src/main/java/net/minecraft/server/BiomeBase.java b/src/main/java/net/minecraft/server/BiomeBase.java
-index 0102a170dc..8df3cb738a 100644
+index 0102a170dc..6e0627fdca 100644
 --- a/src/main/java/net/minecraft/server/BiomeBase.java
 +++ b/src/main/java/net/minecraft/server/BiomeBase.java
 @@ -17,8 +17,25 @@ import org.apache.logging.log4j.Logger;
@@ -181,21 +181,17 @@ index 0102a170dc..8df3cb738a 100644
      private final ThreadLocal<Long2FloatLinkedOpenHashMap> w = ThreadLocal.withInitial(() -> {
          return (Long2FloatLinkedOpenHashMap) SystemUtils.a(() -> {
              Long2FloatLinkedOpenHashMap long2floatlinkedopenhashmap = new Long2FloatLinkedOpenHashMap(1024, 0.25F) {
-@@ -112,6 +129,20 @@ public abstract class BiomeBase {
+@@ -112,6 +129,16 @@ public abstract class BiomeBase {
          return MathHelper.f(0.62222224F - f * 0.05F, 0.5F + f * 0.1F, 1.0F);
      }
  
 +    // Purpur start
-+    protected void addMobSpawn(EntityTypes entitytype, int weight, int min_group, int max_group) {
-+        getSpawnData().get(entitytype.getEnumCreatureType()).add(new BiomeMeta(entitytype, weight, min_group, max_group));
++    protected void addMobSpawn(EntityTypes type, int weight, int min, int max) {
++        getSpawnData().get(type.getEnumCreatureType()).add(new BiomeMeta(type, weight, min, max));
 +    }
 +
 +    public String getName() {
-+        return getKey().getKey();
-+    }
-+
-+    public MinecraftKey getKey() {
-+        return IRegistry.BIOME.getKey(this);
++        return IRegistry.BIOME.getKey(this).getKey();
 +    }
 +    // Purpur end
 +
@@ -1880,45 +1876,44 @@ index e4dc7d198c..00f94b906b 100644
      }
  }
 diff --git a/src/main/java/net/minecraft/server/Biomes.java b/src/main/java/net/minecraft/server/Biomes.java
-index 12742870ca..ec652e9552 100644
+index 12742870ca..a448c77264 100644
 --- a/src/main/java/net/minecraft/server/Biomes.java
 +++ b/src/main/java/net/minecraft/server/Biomes.java
-@@ -92,5 +92,35 @@ public abstract class Biomes {
+@@ -87,6 +87,34 @@ public abstract class Biomes {
+             BiomeBase.c.a(biomebase, IRegistry.BIOME.a(IRegistry.BIOME.get(new MinecraftKey(biomebase.m))));
+         }
  
-     static {
-         Collections.addAll(BiomeBase.b, new BiomeBase[]{Biomes.OCEAN, Biomes.PLAINS, Biomes.DESERT, Biomes.MOUNTAINS, Biomes.FOREST, Biomes.TAIGA, Biomes.SWAMP, Biomes.RIVER, Biomes.FROZEN_RIVER, Biomes.SNOWY_TUNDRA, Biomes.SNOWY_MOUNTAINS, Biomes.MUSHROOM_FIELDS, Biomes.MUSHROOM_FIELD_SHORE, Biomes.BEACH, Biomes.DESERT_HILLS, Biomes.WOODED_HILLS, Biomes.TAIGA_HILLS, Biomes.JUNGLE, Biomes.JUNGLE_HILLS, Biomes.JUNGLE_EDGE, Biomes.DEEP_OCEAN, Biomes.STONE_SHORE, Biomes.SNOWY_BEACH, Biomes.BIRCH_FOREST, Biomes.BIRCH_FOREST_HILLS, Biomes.DARK_FOREST, Biomes.SNOWY_TAIGA, Biomes.SNOWY_TAIGA_HILLS, Biomes.GIANT_TREE_TAIGA, Biomes.GIANT_TREE_TAIGA_HILLS, Biomes.WOODED_MOUNTAINS, Biomes.SAVANNA, Biomes.SAVANNA_PLATEAU, Biomes.BADLANDS, Biomes.WOODED_BADLANDS_PLATEAU, Biomes.BADLANDS_PLATEAU});
-+
 +        // Purpur start
-+        BiomeBase.getBiomes().forEach(biome -> {
-+            org.bukkit.configuration.ConfigurationSection section = BiomeBase.biomeData.getConfigurationSection(biome.getName() + ".spawn-data");
-+            if (section != null) {
-+                for (String entity : section.getKeys(false)) {
-+                    EntityTypes entitytype = EntityTypes.getType(entity).orElse(null);
-+                    if (entitytype == null) {
-+                        MinecraftServer.LOGGER.error("Unknown entity type in biomes.yml for " + biome.getName() + "." + entity);
-+                        continue;
-+                    }
-+                    String raw = section.getString(entity);
-+                    if (raw == null || raw.isEmpty()) {
-+                        continue;
-+                    }
-+                    int weight, min, max;
-+                    try {
-+                        String[] split = raw.trim().replace(" ", "").split(",");
-+                        weight = Integer.parseInt(split[0]);
-+                        min = Integer.parseInt(split[1]);
-+                        max = Integer.parseInt(split[2]);
-+                    } catch (Exception e) {
-+                        MinecraftServer.LOGGER.error("Error parsing data in biomes.yml for " + biome.getName() + "." + entity, e);
-+                        continue;
-+                    }
-+                    biome.addMobSpawn(entitytype, weight, min, max);
++        org.bukkit.configuration.ConfigurationSection section = BiomeBase.biomeData.getConfigurationSection(biomebase.getName() + ".spawn-data");
++        if (section != null) {
++            for (String entity : section.getKeys(false)) {
++                EntityTypes type = EntityTypes.getType(entity).orElse(null);
++                if (type == null) {
++                    MinecraftServer.LOGGER.error("Unknown entity type in biomes.yml for " + biomebase.getName() + "." + entity);
++                    continue;
 +                }
++                String raw = section.getString(entity);
++                if (raw == null || raw.isEmpty()) {
++                    continue;
++                }
++                int weight, min, max;
++                try {
++                    String[] split = raw.trim().replace(" ", "").split(",");
++                    weight = Integer.parseInt(split[0]);
++                    min = Integer.parseInt(split[1]);
++                    max = Integer.parseInt(split[2]);
++                } catch (Exception e) {
++                    MinecraftServer.LOGGER.error("Error parsing data in biomes.yml for " + biomebase.getName() + "." + entity, e);
++                    continue;
++                }
++                biomebase.addMobSpawn(type, weight, min, max);
 +            }
-+        });
-+        // Purpur end
++        }
++        //Purpur end
++
+         return biomebase;
      }
- }
+ 
 diff --git a/src/main/resources/biomes.yml b/src/main/resources/biomes.yml
 new file mode 100644
 index 0000000000..f0ea65299f
