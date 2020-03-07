@@ -14,6 +14,11 @@ Everything is licensed under the MIT license, and is free to be used in your own
 See [starlis/empirecraft](https://github.com/starlis/empirecraft) and [electronicboy/byof](https://github.com/electronicboy/byof) 
 for the license of material used/modified by this project.
 
+## bStats
+
+[![bStats Graph Data](https://bstats.org/signatures/server-implementation/Purpur.svg)](https://bstats.org/plugin/server-implementation/Purpur)
+
+
 ## Server owners
 
 Downloads can be obtained from Pl3x's [Jenkins server](https://ci.pl3x.net/job/Purpur/).
