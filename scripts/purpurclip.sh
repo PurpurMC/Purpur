@@ -9,10 +9,10 @@ purpurjar="$basedir/Purpur-Server/target/purpur-$mcver.jar"
 vanillajar="$workdir/Minecraft/$mcver/$mcver.jar"
 
 (
-    cd "$workdir/Paperclip"
+    cd "$basedir/Paperclip"
     mvn clean package "-Dmcver=$mcver" "-Dpaperjar=$purpurjar" "-Dvanillajar=$vanillajar"
 )
-cp "$workdir/Paperclip/assembly/target/paperclip-${mcver}.jar" "$basedir/purpurclip.jar"
+cp "$basedir/Paperclip/assembly/target/paperclip-${mcver}.jar" "$basedir/purpurclip.jar"
 
 echo ""
 echo ""
