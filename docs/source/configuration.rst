@@ -314,6 +314,10 @@ gameplay-mechanics
         - **default**: false
         - **description**: Boats should eject players when on land
 
+* trident-loyalty-void-return-height
+    - **default**: 0.0
+    - **description**: The void height at which a trident with loyalty will return to it's thrower. A value of 0.0 or higher disables this feature.
+
 * void-damage-height
     - **default**: -64.0
     - **description**: Lower limit where void damage starts to happen
