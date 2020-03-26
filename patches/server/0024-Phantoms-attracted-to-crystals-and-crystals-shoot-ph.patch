@@ -1,0 +1,392 @@
+From 274dddbd8d5e6c0f4f89b267d26bdbc5167a01ec Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Thu, 9 May 2019 18:26:06 -0500
+Subject: [PATCH] Phantoms attracted to crystals and crystals shoot phantoms
+
+---
+ .../net/minecraft/server/DamageSource.java    |   1 +
+ .../java/net/minecraft/server/Entity.java     |   8 +-
+ .../minecraft/server/EntityEnderCrystal.java  |  49 +++++
+ .../net/minecraft/server/EntityPhantom.java   | 174 +++++++++++++++++-
+ .../net/minecraft/server/IEntityAccess.java   |   1 +
+ .../net/pl3x/purpur/PurpurWorldConfig.java    |   6 +
+ 6 files changed, 228 insertions(+), 11 deletions(-)
+
+diff --git a/src/main/java/net/minecraft/server/DamageSource.java b/src/main/java/net/minecraft/server/DamageSource.java
+index f7344d3aec..f6c0165f94 100644
+--- a/src/main/java/net/minecraft/server/DamageSource.java
++++ b/src/main/java/net/minecraft/server/DamageSource.java
+@@ -82,6 +82,7 @@ public class DamageSource {
+         return (new EntityDamageSourceIndirect("thrown", entity, entity1)).c();
+     }
+ 
++    public static DamageSource indirectMagic(Entity entity, @Nullable Entity owner) { return c(entity, owner); } // Purpur - OBFHELPER
+     public static DamageSource c(Entity entity, @Nullable Entity entity1) {
+         return (new EntityDamageSourceIndirect("indirectMagic", entity, entity1)).setIgnoreArmor().setMagic();
+     }
+diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
+index 2ebeb8a530..c7fa9bc0bc 100644
+--- a/src/main/java/net/minecraft/server/Entity.java
++++ b/src/main/java/net/minecraft/server/Entity.java
+@@ -1521,6 +1521,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+         return d3 * d3 + d4 * d4 + d5 * d5;
+     }
+ 
++    public double getDistanceSq(Entity entity) { return this.h(entity); } // Purpur - OBFHELPER
+     public double h(Entity entity) {
+         return this.c(entity.getPositionVector());
+     }
+@@ -2044,14 +2045,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+         return this.a(new ItemStack(imaterial), (float) i);
+     }
+ 
+-    @Nullable
+-    public EntityItem a(ItemStack itemstack) {
++    @Nullable public EntityItem dropItem(ItemStack itemstack) { return this.a(itemstack); } // Purpur - OBFHELPER
++    @Nullable public EntityItem a(ItemStack itemstack) {
+         return this.a(itemstack, 0.0F);
+     }
+ 
+     @Nullable public final EntityItem dropItem(ItemStack itemstack, float offset) { return this.a(itemstack, offset); } // Paper - OBFHELPER
+-    @Nullable
+-    public EntityItem a(ItemStack itemstack, float f) {
++    @Nullable public EntityItem a(ItemStack itemstack, float f) {
+         if (itemstack.isEmpty()) {
+             return null;
+         } else if (this.world.isClientSide) {
+diff --git a/src/main/java/net/minecraft/server/EntityEnderCrystal.java b/src/main/java/net/minecraft/server/EntityEnderCrystal.java
+index a57d0089d8..02952c3af8 100644
+--- a/src/main/java/net/minecraft/server/EntityEnderCrystal.java
++++ b/src/main/java/net/minecraft/server/EntityEnderCrystal.java
+@@ -13,6 +13,12 @@ public class EntityEnderCrystal extends Entity {
+     private static final DataWatcherObject<Optional<BlockPosition>> c = DataWatcher.a(EntityEnderCrystal.class, DataWatcherRegistry.m);
+     private static final DataWatcherObject<Boolean> d = DataWatcher.a(EntityEnderCrystal.class, DataWatcherRegistry.i);
+     public int b;
++    // Purpur start
++    private EntityPhantom targetPhantom;
++    private int phantomBeamTicks = 0;
++    private int phantomDamageCooldown = 0;
++    private int idleCooldown = 0;
++    // Purpur end
+ 
+     public EntityEnderCrystal(EntityTypes<? extends EntityEnderCrystal> entitytypes, World world) {
+         super(entitytypes, world);
+@@ -51,7 +57,50 @@ public class EntityEnderCrystal extends Entity {
+             }
+         }
+ 
++        // Purpur start
++        if (world.purpurConfig.phantomAttackedByCrystalRadius <= 0 || --idleCooldown > 0) {
++            return; // on cooldown
++        }
++
++        if (targetPhantom == null) {
++            for (EntityPhantom phantom : world.getEntitiesByClass(EntityPhantom.class, getBoundingBox().grow(world.purpurConfig.phantomAttackedByCrystalRadius))) {
++                if (phantom.hasLineOfSight(this)) {
++                    attackPhantom(phantom);
++                    break;
++                }
++            }
++        } else {
++            setBeamTarget(new BlockPosition(targetPhantom).add(0, -2, 0));
++            if (--phantomBeamTicks > 0 && targetPhantom.isAlive()) {
++                phantomDamageCooldown--;
++                if (targetPhantom.hasLineOfSight(this)) {
++                    if (phantomDamageCooldown <= 0) {
++                        phantomDamageCooldown = 20;
++                        targetPhantom.damageEntity(DamageSource.indirectMagic(this, this), world.purpurConfig.phantomAttackedByCrystalDamage);
++                    }
++                } else {
++                    forgetPhantom(); // no longer in sight
++                }
++            } else {
++                forgetPhantom(); // attacked long enough
++            }
++        }
++    }
++
++    private void attackPhantom(EntityPhantom phantom) {
++        phantomDamageCooldown = 0;
++        phantomBeamTicks = 60;
++        targetPhantom = phantom;
++    }
++
++    private void forgetPhantom() {
++        targetPhantom = null;
++        setBeamTarget(null);
++        phantomBeamTicks = 0;
++        phantomDamageCooldown = 0;
++        idleCooldown = 60;
+     }
++    // Purpur end
+ 
+     @Override
+     protected void b(NBTTagCompound nbttagcompound) {
+diff --git a/src/main/java/net/minecraft/server/EntityPhantom.java b/src/main/java/net/minecraft/server/EntityPhantom.java
+index 6d2984c8d5..3b9cd169bd 100644
+--- a/src/main/java/net/minecraft/server/EntityPhantom.java
++++ b/src/main/java/net/minecraft/server/EntityPhantom.java
+@@ -8,9 +8,10 @@ import javax.annotation.Nullable;
+ public class EntityPhantom extends EntityFlying implements IMonster {
+ 
+     private static final DataWatcherObject<Integer> b = DataWatcher.a(EntityPhantom.class, DataWatcherRegistry.b);
+-    private Vec3D c;
+-    private BlockPosition d;
+-    private EntityPhantom.AttackPhase bw;
++    private Vec3D c; public void setHomeOffset(Vec3D offset) { this.c = offset; } public Vec3D getHomeOffset() { return this.c; } // Purpur - OBFHELPER
++    private BlockPosition d; public void setHome(BlockPosition home) { this.d = home; } public BlockPosition getHome() { return this.d; } // Purpur - OBFHELPER
++    private EntityPhantom.AttackPhase bw; public AttackPhase getAttackPhase() { return this.bw; } // Purpur - OBFHELPER
++    private BlockPosition crystalPosition; // Purpur
+ 
+     public EntityPhantom(EntityTypes<? extends EntityPhantom> entitytypes, World world) {
+         super(entitytypes, world);
+@@ -63,12 +64,18 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+ 
+     @Override
+     protected void initPathfinder() {
++        // Purpur start
+         this.goalSelector.a(0, new net.pl3x.purpur.pathfinder.PathfinderGoalHasRider(this)); // Purpur
+-        this.goalSelector.a(1, new EntityPhantom.c());
+-        this.goalSelector.a(2, new EntityPhantom.i());
+-        this.goalSelector.a(3, new EntityPhantom.e());
++        if (world.purpurConfig.phantomOrbitCrystalRadius > 0) {
++            this.goalSelector.a(1, new FindCrystalGoal(this));
++            this.goalSelector.a(2, new OrbitCrystalGoal(this));
++        }
++        this.goalSelector.a(3, new EntityPhantom.c()); // PickAttackGoal
++        this.goalSelector.a(4, new EntityPhantom.i()); // SweepAttackGoal
++        this.goalSelector.a(5, new EntityPhantom.e()); // OrbitPointGoal
+         this.targetSelector.a(0, new net.pl3x.purpur.pathfinder.PathfinderGoalHasRider(this)); // Purpur
+-        this.targetSelector.a(1, new EntityPhantom.b());
++        this.targetSelector.a(1, new EntityPhantom.b()); // AttackPlayerGoal
++        // Purpur end
+     }
+ 
+     @Override
+@@ -154,6 +161,26 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+         super.mobTick();
+     }
+ 
++    // Purpur start
++    @Override
++    protected LootTableInfo.Builder a(boolean wasRecentlyHit, DamageSource damagesource) { // dropLoot
++        boolean dropped = false;
++        if (killer == null && damagesource.getEntity() instanceof EntityEnderCrystal) {
++            if (random.nextInt(5) < 1) { // 1 out of 5 chance (20%)
++                dropped = dropItem(new ItemStack(Items.PHANTOM_MEMBRANE)) != null;
++            }
++        }
++        if (!dropped) {
++            return super.a(wasRecentlyHit, damagesource); // dropLoot
++        }
++        return new LootTableInfo.Builder((WorldServer) world);
++    }
++
++    public boolean isCirclingCrystal() {
++        return crystalPosition != null;
++    }
++    // Purpur end
++
+     @Override
+     public GroupDataEntity prepare(GeneratorAccess generatoraccess, DifficultyDamageScaler difficultydamagescaler, EnumMobSpawn enummobspawn, @Nullable GroupDataEntity groupdataentity, @Nullable NBTTagCompound nbttagcompound) {
+         this.d = (new BlockPosition(this)).up(5);
+@@ -242,6 +269,136 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+     }
+     // Paper end
+ 
++    // Purpur start
++    class FindCrystalGoal extends PathfinderGoal {
++        private final EntityPhantom phantom;
++        private EntityEnderCrystal crystal;
++        private java.util.Comparator<EntityEnderCrystal> comparator;
++
++        FindCrystalGoal(EntityPhantom phantom) {
++            this.phantom = phantom;
++            comparator = java.util.Comparator.comparingDouble(phantom::h);
++            this.a(EnumSet.of(PathfinderGoal.Type.LOOK));
++        }
++
++        @Override
++        public boolean a() { // shouldExecute
++            double range = maxTargetRange();
++            List<EntityEnderCrystal> crystals = world.getEntitiesByClass(EntityEnderCrystal.class, phantom.getBoundingBox().grow(range));
++            if (crystals.isEmpty()) {
++                return false;
++            }
++            crystals.sort(comparator);
++            crystal = crystals.get(0);
++            if (phantom.getDistanceSq(crystal) > range * range) {
++                crystal = null;
++                return false;
++            }
++            return true;
++        }
++
++        @Override
++        public boolean b() { // shouldContinueExecuting
++            if (crystal == null || !crystal.isAlive()) {
++                return false;
++            }
++            double range = maxTargetRange();
++            return phantom.getDistanceSq(crystal) <= (range * range) * 2;
++        }
++
++        @Override
++        public void c() { // startExecuting
++            phantom.crystalPosition = new BlockPosition(crystal).add(0, phantom.getRandom().nextInt(10) + 10, 0);
++        }
++
++        @Override
++        public void d() { // resetTask
++            crystal = null;
++            phantom.crystalPosition = null;
++            super.d();
++        }
++
++        private double maxTargetRange() {
++            return phantom.world.purpurConfig.phantomOrbitCrystalRadius;
++        }
++
++        class DistanceComparator implements java.util.Comparator<Entity> {
++            private final Entity entity;
++
++            public DistanceComparator(Entity entity) {
++                this.entity = entity;
++            }
++
++            public int compare(Entity entity1, Entity entity2) {
++                return Double.compare(entity.getDistanceSq(entity1), entity.getDistanceSq(entity2));
++            }
++        }
++    }
++
++    class OrbitCrystalGoal extends PathfinderGoal {
++        private final EntityPhantom phantom;
++        private float offset;
++        private float radius;
++        private float verticalChange;
++        private float direction;
++
++        OrbitCrystalGoal(EntityPhantom phantom) {
++            this.phantom = phantom;
++            this.a(EnumSet.of(PathfinderGoal.Type.MOVE));
++        }
++
++        @Override
++        public boolean a() { // shouldExecute
++            return phantom.isCirclingCrystal();
++        }
++
++        @Override
++        public void c() { // startExecuting
++            this.radius = 5.0F + phantom.random.nextFloat() * 10.0F;
++            this.verticalChange = -4.0F + phantom.random.nextFloat() * 9.0F;
++            this.direction = phantom.random.nextBoolean() ? 1.0F : -1.0F;
++            updateOffset();
++        }
++
++        @Override
++        public void e() { // tick
++            if (phantom.random.nextInt(350) == 0) {
++                this.verticalChange = -4.0F + phantom.random.nextFloat() * 9.0F;
++            }
++            if (phantom.random.nextInt(250) == 0) {
++                ++this.radius;
++                if (this.radius > 15.0F) {
++                    this.radius = 5.0F;
++                    this.direction = -this.direction;
++                }
++            }
++            if (phantom.random.nextInt(450) == 0) {
++                this.offset = phantom.random.nextFloat() * 2.0F * 3.1415927F;
++                updateOffset();
++            }
++            if (phantom.getHomeOffset().c(phantom.locX(), phantom.locY(), phantom.locZ()) < 4.0D) {
++                updateOffset();
++            }
++            if (phantom.getHomeOffset().y < phantom.locY() && !phantom.world.isEmpty((new BlockPosition(phantom)).down(1))) {
++                this.verticalChange = Math.max(1.0F, this.verticalChange);
++                updateOffset();
++            }
++            if (phantom.getHomeOffset().y > phantom.locY() && !phantom.world.isEmpty((new BlockPosition(phantom)).up(1))) {
++                this.verticalChange = Math.min(-1.0F, this.verticalChange);
++                updateOffset();
++            }
++        }
++
++        private void updateOffset() {
++            this.offset += this.direction * 15.0F * 0.017453292F;
++            phantom.setHomeOffset(new Vec3D(phantom.crystalPosition).add(
++                    (double) (this.radius * MathHelper.cos(this.offset)),
++                    (double) (-4.0F + this.verticalChange),
++                    (double) (this.radius * MathHelper.sin(this.offset))));
++        }
++    }
++    // Purpur end
++
+     class b extends PathfinderGoal {
+ 
+         private final PathfinderTargetCondition b;
+@@ -255,6 +412,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+         @Override
+         public boolean a() {
+             if (getRider() != null) return false; // Purpur - pathfinder does not have a flag
++            if (isCirclingCrystal()) return false; // Purpur - pathfinder does not have a flag
+             if (this.c > 0) {
+                 --this.c;
+                 return false;
+@@ -286,6 +444,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+         @Override
+         public boolean b() {
+             if (getRider() != null) return false; // Purpur - pathfinder does not have a flag
++            if (isCirclingCrystal()) return false; // Purpur - pathfinder does not have a flag
+             EntityLiving entityliving = EntityPhantom.this.getGoalTarget();
+ 
+             return entityliving != null ? EntityPhantom.this.a(entityliving, PathfinderTargetCondition.a) : false;
+@@ -301,6 +460,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+         @Override
+         public boolean a() {
+             if (getRider() != null) return false; // Purpur - pathfinder does not have a flag
++            if (isCirclingCrystal()) return false; // Purpur - pathfinder does not have a flag
+             EntityLiving entityliving = EntityPhantom.this.getGoalTarget();
+ 
+             return entityliving != null ? EntityPhantom.this.a(EntityPhantom.this.getGoalTarget(), PathfinderTargetCondition.a) : false;
+diff --git a/src/main/java/net/minecraft/server/IEntityAccess.java b/src/main/java/net/minecraft/server/IEntityAccess.java
+index c522a7c2a7..9622615b50 100644
+--- a/src/main/java/net/minecraft/server/IEntityAccess.java
++++ b/src/main/java/net/minecraft/server/IEntityAccess.java
+@@ -34,6 +34,7 @@ public interface IEntityAccess {
+         });
+     }
+ 
++    default <T extends Entity> List<T> getEntitiesByClass(Class<? extends T> oclass, AxisAlignedBB axisalignedbb) { return a(oclass, axisalignedbb); } // Purpur - OBFHELPER
+     default <T extends Entity> List<T> a(Class<? extends T> oclass, AxisAlignedBB axisalignedbb) {
+         return this.a(oclass, axisalignedbb, IEntitySelector.f);
+     }
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 9ae372d7d0..9aafb4616d 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -398,6 +398,9 @@ public class PurpurWorldConfig {
+     public double phantomMaxY = 256D;
+     public boolean phantomIgnoreCreative = false;
+     public boolean phantomOnlyAttackInsomniacs = false;
++    public double phantomAttackedByCrystalRadius = 0.0D;
++    public float phantomAttackedByCrystalDamage = 1.0F;
++    public double phantomOrbitCrystalRadius = 0.0D;
+     private void phantomSettings() {
+         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
+         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
+@@ -405,6 +408,9 @@ public class PurpurWorldConfig {
+         phantomMaxY = getDouble("mobs.phantom.ridable-max-y", phantomMaxY);
+         phantomIgnoreCreative = getBoolean("mobs.phantom.do-not-spawn-on-creative-players", phantomIgnoreCreative);
+         phantomOnlyAttackInsomniacs = getBoolean("mobs.phantom.only-attack-insomniacs", phantomOnlyAttackInsomniacs);
++        phantomAttackedByCrystalRadius = getDouble("mobs.phantom.attacked-by-crystal-range", phantomAttackedByCrystalRadius);
++        phantomAttackedByCrystalDamage = (float) getDouble("mobs.phantom.attacked-by-crystal-damage", phantomAttackedByCrystalDamage);
++        phantomOrbitCrystalRadius = getDouble("mobs.phantom.orbit-crystal-radius", phantomOrbitCrystalRadius);
+     }
+ 
+     public boolean pigRidable = false;
+-- 
+2.24.0
+
