@@ -46,6 +46,14 @@ use-alternate-keepalive
 * **default**: false
 * **description**: Uses a different approach to keepalive ping timeouts. Enabling this sends a keepalive packet once per second to a player, and only kicks for timeout if none of them were responded to in 30 seconds. Responding to any of them in any order will keep the player connected. AKA, it won't kick your players because 1 packet gets dropped somewhere along the lines
 
+tps-catchup
+~~~~~~~~~~~
+* **default**: true
+* **description**: Control tps catch-up
+
+.. note::
+    TPS catchup makes your server tick faster than 20 TPS after any period of time that below 20. This is an attempt at keeping the average TPS as close to 20 as possible, but does come with its own set of side effects
+
 dont-send-useless-entity-packets
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * **default**: false
