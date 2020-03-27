@@ -965,6 +965,9 @@ mobs
     * require-shift-to-mount
         - **default**: true
         - **description**: Required to crouch (hold shift) and right click to mount
+    * breedable-item
+        - **default**: ""
+        - **description**: Item to tempt/feed polar bears and make them breed
 
 * pufferfish
     * ridable
