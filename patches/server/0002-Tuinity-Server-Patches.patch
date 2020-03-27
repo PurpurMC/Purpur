@@ -1,4 +1,4 @@
-From d0753522c812ed12669f90b13afa74d3a83f4f36 Mon Sep 17 00:00:00 2001
+From b81cf7e90910b86b40a28bfdf32632d3ce1633e9 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 14 Dec 2018 21:53:58 -0800
 Subject: [PATCH] Tuinity Server Patches
@@ -34,7 +34,7 @@ Subject: [PATCH] Tuinity Server Patches
  .../util/pool/PooledBlockPositions.java       |   40 +
  .../net/minecraft/server/ArraySetSorted.java  |   41 +-
  .../net/minecraft/server/AxisAlignedBB.java   |    2 +
- src/main/java/net/minecraft/server/Chunk.java |  135 +++
+ src/main/java/net/minecraft/server/Chunk.java |  188 ++-
  .../java/net/minecraft/server/ChunkMap.java   |   15 +-
  .../minecraft/server/ChunkMapDistance.java    |  401 ++++++-
  .../minecraft/server/ChunkProviderServer.java |  137 ++-
@@ -43,15 +43,16 @@ Subject: [PATCH] Tuinity Server Patches
  .../net/minecraft/server/DedicatedServer.java |    3 +-
  .../minecraft/server/DoubleListOffset.java    |    2 +-
  src/main/java/net/minecraft/server/EULA.java  |    2 +-
- .../java/net/minecraft/server/Entity.java     |  137 +++
- .../minecraft/server/EntityEnderDragon.java   |    4 +-
+ .../java/net/minecraft/server/Entity.java     |  181 ++-
+ .../minecraft/server/EntityEnderDragon.java   |    5 +-
  .../minecraft/server/EntityInsentient.java    |   19 +-
+ .../net/minecraft/server/EntityLiving.java    |    8 +-
  .../net/minecraft/server/EntityPlayer.java    |   43 +-
  .../minecraft/server/EntityTrackerEntry.java  |   24 +-
  .../net/minecraft/server/EntityWither.java    |    4 +-
  .../java/net/minecraft/server/HeightMap.java  |    5 +-
  .../minecraft/server/IAsyncTaskHandler.java   |    2 +-
- .../net/minecraft/server/IEntityAccess.java   |   33 +-
+ .../net/minecraft/server/IEntityAccess.java   |   46 +-
  .../minecraft/server/LightEngineBlock.java    |    2 +-
  .../minecraft/server/LightEngineLayer.java    |    2 +-
  .../net/minecraft/server/LightEngineSky.java  |    2 +-
@@ -73,6 +74,7 @@ Subject: [PATCH] Tuinity Server Patches
  .../server/PathfinderTargetCondition.java     |    1 +
  .../net/minecraft/server/PlayerChunk.java     |   94 +-
  .../net/minecraft/server/PlayerChunkMap.java  | 1043 +++++++++++++++--
+ .../server/PlayerConnectionUtils.java         |   20 +
  .../server/PlayerInteractManager.java         |   45 +-
  .../net/minecraft/server/PlayerInventory.java |    6 +-
  .../java/net/minecraft/server/PlayerList.java |    6 +-
@@ -88,8 +90,8 @@ Subject: [PATCH] Tuinity Server Patches
  .../minecraft/server/VoxelShapeCubePoint.java |    2 +-
  .../server/VoxelShapeMergerList.java          |    2 +-
  .../net/minecraft/server/VoxelShapes.java     |    2 +-
- src/main/java/net/minecraft/server/World.java |   23 +-
- .../net/minecraft/server/WorldServer.java     |  461 +++++++-
+ src/main/java/net/minecraft/server/World.java |   49 +-
+ .../net/minecraft/server/WorldServer.java     |  485 +++++++-
  .../net/minecraft/server/WorldUpgrader.java   |    2 +-
  .../org/bukkit/craftbukkit/CraftServer.java   |   15 +-
  .../org/bukkit/craftbukkit/CraftWorld.java    |   67 +-
@@ -99,7 +101,8 @@ Subject: [PATCH] Tuinity Server Patches
  .../java/org/spigotmc/ActivationRange.java    |   41 +-
  src/main/java/org/spigotmc/AsyncCatcher.java  |    2 +-
  src/main/java/org/spigotmc/TrackingRange.java |   40 +
- 95 files changed, 6360 insertions(+), 482 deletions(-)
+ .../java/org/spigotmc/WatchdogThread.java     |   58 +
+ 98 files changed, 6600 insertions(+), 489 deletions(-)
  create mode 100644 src/main/java/com/tuinity/tuinity/chunk/ChunkRegionManager.java
  create mode 100644 src/main/java/com/tuinity/tuinity/chunk/QueuedChangesMapLong2Int.java
  create mode 100644 src/main/java/com/tuinity/tuinity/chunk/QueuedChangesMapLong2Object.java
@@ -3509,10 +3512,66 @@ index c950139c0f..1a3234bb47 100644
          return d0 >= this.minX && d0 < this.maxX && d1 >= this.minY && d1 < this.maxY && d2 >= this.minZ && d2 < this.maxZ;
      }
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index 07073af991..8b8e1d900e 100644
+index 07073af991..00bc88b2bf 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
-@@ -162,6 +162,94 @@ public class Chunk implements IChunkAccess {
+@@ -92,6 +92,55 @@ public class Chunk implements IChunkAccess {
+     private final int[] inventoryEntityCounts = new int[16];
+     // Paper end
+ 
++    // Tuinity start - optimise hard collision handling
++    final com.tuinity.tuinity.util.EntityList[] hardCollidingEntities = new com.tuinity.tuinity.util.EntityList[16];
++
++    {
++        for (int i = 0, len = this.hardCollidingEntities.length; i < len; ++i) {
++            this.hardCollidingEntities[i] = new com.tuinity.tuinity.util.EntityList();
++        }
++    }
++
++    public final void getHardCollidingEntities(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> into) {
++        // copied from getEntities
++        com.tuinity.tuinity.util.TickThread.softEnsureTickThread("Async getEntities call"); // Tuinity
++        int min = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
++        int max = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
++
++        min = MathHelper.clamp(min, 0, this.hardCollidingEntities.length - 1);
++        max = MathHelper.clamp(max, 0, this.hardCollidingEntities.length - 1);
++
++        for (int k = min; k <= max; ++k) {
++            com.tuinity.tuinity.util.EntityList entityList = this.hardCollidingEntities[k];
++            Entity[] entities = entityList.getRawData();
++
++            for (int i = 0, len = entityList.size(); i < len; ++i) {
++                Entity entity1 = entities[i];
++                if (entity1.shouldBeRemoved) continue; // Paper
++
++                if (entity1 != entity && entity1.getBoundingBox().intersects(axisalignedbb)) {
++                    into.add(entity1);
++
++                    if (!(entity1 instanceof EntityEnderDragon)) {
++                        continue;
++                    }
++
++                    EntityComplexPart[] aentitycomplexpart = ((EntityEnderDragon) entity1).getComplexParts();
++                    int l = aentitycomplexpart.length;
++
++                    for (int i1 = 0; i1 < l; ++i1) {
++                        EntityComplexPart entitycomplexpart = aentitycomplexpart[i1];
++
++                        if (entitycomplexpart != entity && entitycomplexpart.getBoundingBox().intersects(axisalignedbb)) {
++                            into.add(entitycomplexpart);
++                        }
++                    }
++                }
++            }
++        }
++    }
++    // Tuinity end - optimise hard collision handling
++
+     public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage, ChunkConverter chunkconverter, TickList<Block> ticklist, TickList<FluidType> ticklist1, long i, @Nullable ChunkSection[] achunksection, @Nullable Consumer<Chunk> consumer) {
+         this.sections = new ChunkSection[16];
+         this.e = Maps.newHashMap();
+@@ -162,6 +211,94 @@ public class Chunk implements IChunkAccess {
      public PlayerChunk playerChunk;
      // Paper end
  
@@ -3607,7 +3666,7 @@ index 07073af991..8b8e1d900e 100644
      public Chunk(World world, ProtoChunk protochunk) {
          this(world, protochunk.getPos(), protochunk.getBiomeIndex(), protochunk.p(), protochunk.n(), protochunk.o(), protochunk.getInhabitedTime(), protochunk.getSections(), (Consumer) null);
          Iterator iterator = protochunk.y().iterator();
-@@ -411,6 +499,7 @@ public class Chunk implements IChunkAccess {
+@@ -411,6 +548,7 @@ public class Chunk implements IChunkAccess {
  
      @Override
      public void a(Entity entity) {
@@ -3615,7 +3674,16 @@ index 07073af991..8b8e1d900e 100644
          this.q = true;
          int i = MathHelper.floor(entity.locX() / 16.0D);
          int j = MathHelper.floor(entity.locZ() / 16.0D);
-@@ -480,6 +569,7 @@ public class Chunk implements IChunkAccess {
+@@ -457,7 +595,7 @@ public class Chunk implements IChunkAccess {
+         entity.chunkY = k;
+         entity.chunkZ = this.loc.z;
+         this.entities.add(entity); // Paper - per chunk entity list
+-        this.entitySlices[k].add(entity);
++        this.entitySlices[k].add(entity); if (entity.hardCollides()) this.hardCollidingEntities[k].add(entity); // Tuinity - optimise hard colliding entities
+         // Paper start
+         if (entity instanceof EntityItem) {
+             itemCounts[k]++;
+@@ -480,6 +618,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public void a(Entity entity, int i) {
@@ -3623,7 +3691,16 @@ index 07073af991..8b8e1d900e 100644
          if (i < 0) {
              i = 0;
          }
-@@ -512,6 +602,12 @@ public class Chunk implements IChunkAccess {
+@@ -493,7 +632,7 @@ public class Chunk implements IChunkAccess {
+         if (entitySlices[i] == entity.entitySlice) {
+             entity.entitySlice = null;
+         }
+-        if (!this.entitySlices[i].remove(entity)) {
++        if (entity.hardCollides()) this.hardCollidingEntities[i].remove(entity); if (!this.entitySlices[i].remove(entity)) { // Tuinity - optimise hard colliding entities
+             return;
+         }
+         if (entity instanceof EntityItem) {
+@@ -512,6 +651,12 @@ public class Chunk implements IChunkAccess {
          return ((HeightMap) this.heightMap.get(heightmap_type)).a(i & 15, j & 15) - 1;
      }
  
@@ -3636,7 +3713,7 @@ index 07073af991..8b8e1d900e 100644
      @Nullable
      private TileEntity j(BlockPosition blockposition) {
          IBlockData iblockdata = this.getType(blockposition);
-@@ -653,6 +749,25 @@ public class Chunk implements IChunkAccess {
+@@ -653,6 +798,25 @@ public class Chunk implements IChunkAccess {
  
      // CraftBukkit start
      public void loadCallback() {
@@ -3662,7 +3739,7 @@ index 07073af991..8b8e1d900e 100644
          org.bukkit.Server server = this.world.getServer();
          ((WorldServer)this.world).getChunkProvider().addLoadedChunk(this); // Paper
          if (server != null) {
-@@ -696,6 +811,23 @@ public class Chunk implements IChunkAccess {
+@@ -696,6 +860,23 @@ public class Chunk implements IChunkAccess {
          // note: saving can be prevented, but not forced if no saving is actually required
          this.mustNotSave = !unloadEvent.isSaveChunk();
          ((WorldServer)this.world).getChunkProvider().removeLoadedChunk(this); // Paper
@@ -3686,7 +3763,7 @@ index 07073af991..8b8e1d900e 100644
      }
      // CraftBukkit end
  
-@@ -704,6 +836,7 @@ public class Chunk implements IChunkAccess {
+@@ -704,6 +885,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public void a(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> list, @Nullable Predicate<? super Entity> predicate) {
@@ -3694,7 +3771,7 @@ index 07073af991..8b8e1d900e 100644
          int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
  
-@@ -743,6 +876,7 @@ public class Chunk implements IChunkAccess {
+@@ -743,6 +925,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public <T extends Entity> void a(@Nullable EntityTypes<?> entitytypes, AxisAlignedBB axisalignedbb, List<? super T> list, Predicate<? super T> predicate) {
@@ -3702,7 +3779,7 @@ index 07073af991..8b8e1d900e 100644
          int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
  
-@@ -765,6 +899,7 @@ public class Chunk implements IChunkAccess {
+@@ -765,6 +948,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public <T extends Entity> void a(Class<? extends T> oclass, AxisAlignedBB axisalignedbb, List<T> list, @Nullable Predicate<? super T> predicate) {
@@ -4617,10 +4694,10 @@ index cf00f35a5b..e54730f097 100644
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 8974c16bf9..223ad3965c 100644
+index 8974c16bf9..d3bcecb907 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
-@@ -208,6 +208,142 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -208,6 +208,176 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
      // CraftBukkit end
  
@@ -4760,10 +4837,53 @@ index 8974c16bf9..223ad3965c 100644
 +    }
 +    // Tuinity end
 +
++    // Tuinity start
++    /**
++     * Overriding this field will cause memory leaks.
++     */
++    private final boolean hardCollides;
++
++    private static final java.util.Map<Class<? extends Entity>, Boolean> cachedOverrides = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
++    {
++        Boolean hardCollides = cachedOverrides.get(this.getClass());
++        if (hardCollides == null) {
++            try {
++                Object getHardCollisionBoxMethod = Entity.class.getMethod("au");
++                Object getHardCollisionBoxEntityMethod = Entity.class.getMethod("j", Entity.class);
++                if (!this.getClass().getMethod("au").equals(getHardCollisionBoxMethod)) {
++                    hardCollides = Boolean.TRUE;
++                } else if (!this.getClass().getMethod("j", Entity.class).equals(getHardCollisionBoxEntityMethod)) {
++                    hardCollides = Boolean.TRUE;
++                } else {
++                    hardCollides = Boolean.FALSE;
++                }
++                cachedOverrides.put(this.getClass(), hardCollides);
++            } catch (Throwable thr) {
++                // shouldn't happen, just explode
++                throw new RuntimeException(thr);
++            }
++        }
++        this.hardCollides = hardCollides.booleanValue();
++    }
++
++    public final boolean hardCollides() {
++        return this.hardCollides;
++    }
++    // Tuinity end
++
      public Entity(EntityTypes<?> entitytypes, World world) {
          this.id = Entity.entityCount.incrementAndGet();
          this.passengers = Lists.newArrayList();
-@@ -1371,6 +1507,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1078,7 +1248,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     }
+ 
+     @Nullable
+-    public AxisAlignedBB au() {
++    public AxisAlignedBB au() { // Tuinity - diff on change, we expect this to be "getHardCollisionBox" (hard collision optimisation)
+         return null;
+     }
+ 
+@@ -1371,6 +1541,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return MathHelper.c(f * f + f1 * f1 + f2 * f2);
      }
  
@@ -4771,8 +4891,46 @@ index 8974c16bf9..223ad3965c 100644
      public double g(double d0, double d1, double d2) {
          double d3 = this.locX() - d0;
          double d4 = this.locY() - d1;
+@@ -1989,7 +2160,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     }
+ 
+     @Nullable
+-    public AxisAlignedBB j(Entity entity) {
++    public AxisAlignedBB j(Entity entity) { // Tuinity - diff on change, we expect this to be "getHardCollisionBox" (hard collision optimisation)
+         return null;
+     }
+ 
+@@ -3309,12 +3480,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+         return new Vec3D(this.locX, this.locY, this.locZ);
+     }
+ 
++    public final ca.spottedleaf.concurrentutil.lock.VolatileSeqLock posSeqLock = new ca.spottedleaf.concurrentutil.lock.VolatileSeqLock(); // Tuinity - log detailed entity tick information
++
+     public Vec3D getMot() {
+         return this.mot;
+     }
+ 
+     public void setMot(Vec3D vec3d) {
++        this.posSeqLock.acquireWrite(); // Tuinity
+         this.mot = vec3d;
++        this.posSeqLock.releaseWrite(); // Tuinity
+     }
+ 
+     public void setMot(double d0, double d1, double d2) {
+@@ -3362,9 +3537,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     }
+ 
+     public void setPositionRaw(double d0, double d1, double d2) {
++        this.posSeqLock.acquireWrite(); // Tuinity
+         this.locX = d0;
+         this.locY = d1;
+         this.locZ = d2;
++        this.posSeqLock.releaseWrite(); // Tuinity
+     }
+ 
+     public void checkDespawn() {}
 diff --git a/src/main/java/net/minecraft/server/EntityEnderDragon.java b/src/main/java/net/minecraft/server/EntityEnderDragon.java
-index af10fc36e0..bf14d33c0d 100644
+index af10fc36e0..206abf636a 100644
 --- a/src/main/java/net/minecraft/server/EntityEnderDragon.java
 +++ b/src/main/java/net/minecraft/server/EntityEnderDragon.java
 @@ -579,9 +579,9 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
@@ -4787,6 +4945,14 @@ index af10fc36e0..bf14d33c0d 100644
                      // Paper end
                      double deltaX = this.locX() - player.locX();
                      double deltaZ = this.locZ() - player.locZ();
+@@ -847,6 +847,7 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+     @Override
+     public void checkDespawn() {}
+ 
++    public final EntityComplexPart[] getComplexParts() { return this.eo(); } // Tuinity - OBFHELPER
+     public EntityComplexPart[] eo() {
+         return this.children;
+     }
 diff --git a/src/main/java/net/minecraft/server/EntityInsentient.java b/src/main/java/net/minecraft/server/EntityInsentient.java
 index 1991cee43d..27ef476001 100644
 --- a/src/main/java/net/minecraft/server/EntityInsentient.java
@@ -4825,6 +4991,28 @@ index 1991cee43d..27ef476001 100644
              }
  
          } else {
+diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
+index ad474500e2..53f04c582a 100644
+--- a/src/main/java/net/minecraft/server/EntityLiving.java
++++ b/src/main/java/net/minecraft/server/EntityLiving.java
+@@ -2663,10 +2663,16 @@ public abstract class EntityLiving extends Entity {
+     protected void doTick() {}
+ 
+     protected void collideNearby() {
++        // Tuinity - start don't run getEntities if we're not going to use its result
++        int i = this.world.getGameRules().getInt(GameRules.MAX_ENTITY_CRAMMING);
++        if (i <= 0 && world.paperConfig.maxCollisionsPerEntity <= 0) {
++            return;
++        }
++        // Tuinity - end don't run getEntities if we're not going to use its result
+         List<Entity> list = this.world.getEntities(this, this.getBoundingBox(), IEntitySelector.a(this));
+ 
+         if (!list.isEmpty()) {
+-            int i = this.world.getGameRules().getInt(GameRules.MAX_ENTITY_CRAMMING);
++            // Tuinity - move up
+             int j;
+ 
+             if (i > 0 && list.size() > i - 1 && this.random.nextInt(4) == 0) {
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
 index e7bfbc3307..d49c45ce7f 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
@@ -5030,10 +5218,38 @@ index cfe43e882e..e7a58989dd 100644
  
      protected IAsyncTaskHandler(String s) {
 diff --git a/src/main/java/net/minecraft/server/IEntityAccess.java b/src/main/java/net/minecraft/server/IEntityAccess.java
-index 4157e50e4d..c522a7c2a7 100644
+index 4157e50e4d..2108923f5f 100644
 --- a/src/main/java/net/minecraft/server/IEntityAccess.java
 +++ b/src/main/java/net/minecraft/server/IEntityAccess.java
-@@ -59,8 +59,8 @@ public interface IEntityAccess {
+@@ -42,25 +42,34 @@ public interface IEntityAccess {
+         return this.b(oclass, axisalignedbb, IEntitySelector.f);
+     }
+ 
++    // Tuinity start - optimise hard collision
++    /**
++     * Not guaranteed to only return hard colliding entites
++     */
++    default List<Entity> getHardCollidingEntities(@Nullable Entity entity, AxisAlignedBB axisalignedbb) {
++        return this.getEntities(entity, axisalignedbb);
++    }
++    // Tuinity end - optimise hard collision
++
+     default Stream<VoxelShape> b(@Nullable Entity entity, AxisAlignedBB axisalignedbb, Set<Entity> set) {
+         if (axisalignedbb.a() < 1.0E-7D) {
+             return Stream.empty();
+         } else {
+             AxisAlignedBB axisalignedbb1 = axisalignedbb.g(1.0E-7D);
+-            Stream<AxisAlignedBB> stream = this.getEntities(entity, axisalignedbb1).stream().filter((entity1) -> { // Paper - decompile fix
++            Stream<AxisAlignedBB> stream = this.getHardCollidingEntities(entity, axisalignedbb1).stream().filter((entity1) -> { // Paper - decompile fix // Tuinity - optimise hard collision
+                 return !set.contains(entity1);
+             }).filter((entity1) -> {
+                 return entity == null || !entity.isSameVehicle(entity1);
+             }).flatMap((entity1) -> {
+-                return Stream.of(entity1.au(), entity == null ? null : entity.j(entity1));
++                return Stream.of(entity1.au(), entity == null ? null : entity.j(entity1)); // Tuinity - optimise hard collision - diff on change, these are the methods that only hard colliding entities override
+             }).filter(Objects::nonNull);
+ 
+             return stream.filter(axisalignedbb1::c).map(VoxelShapes::a);
          }
      }
  
@@ -5044,7 +5260,7 @@ index 4157e50e4d..c522a7c2a7 100644
          double d4 = -1.0D;
          EntityHuman entityhuman = null;
          Iterator iterator = this.getPlayers().iterator();
-@@ -95,6 +95,11 @@ public interface IEntityAccess {
+@@ -95,6 +104,11 @@ public interface IEntityAccess {
  
      @Nullable
      default EntityHuman a(double d0, double d1, double d2) {
@@ -5056,7 +5272,7 @@ index 4157e50e4d..c522a7c2a7 100644
          double d3 = -1.0D;
          EntityHuman entityhuman = null;
          Iterator iterator = this.getPlayers().iterator();
-@@ -102,7 +107,7 @@ public interface IEntityAccess {
+@@ -102,7 +116,7 @@ public interface IEntityAccess {
          while (iterator.hasNext()) {
              EntityHuman entityhuman1 = (EntityHuman) iterator.next();
  
@@ -5065,7 +5281,7 @@ index 4157e50e4d..c522a7c2a7 100644
                  double d4 = entityhuman1.g(d0, entityhuman1.locY(), d1);
  
                  if ((d2 < 0.0D || d4 < d2 * d2) && (d3 == -1.0D || d4 < d3)) {
-@@ -141,19 +146,26 @@ public interface IEntityAccess {
+@@ -141,19 +155,26 @@ public interface IEntityAccess {
  
      @Nullable
      default EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving) {
@@ -5095,7 +5311,7 @@ index 4157e50e4d..c522a7c2a7 100644
      @Nullable
      default <T extends EntityLiving> T a(Class<? extends T> oclass, PathfinderTargetCondition pathfindertargetcondition, @Nullable EntityLiving entityliving, double d0, double d1, double d2, AxisAlignedBB axisalignedbb) {
          return this.a(this.a(oclass, axisalignedbb, null), pathfindertargetcondition, entityliving, d0, d1, d2); // Paper - decompile fix
-@@ -164,8 +176,8 @@ public interface IEntityAccess {
+@@ -164,8 +185,8 @@ public interface IEntityAccess {
          return this.a(this.b(oclass, axisalignedbb, null), pathfindertargetcondition, entityliving, d0, d1, d2); // Paper - decompile fix
      }
  
@@ -5106,7 +5322,7 @@ index 4157e50e4d..c522a7c2a7 100644
          double d3 = -1.0D;
          T t0 = null;
          Iterator<? extends T> iterator = list.iterator(); // Paper - decompile fix
-@@ -187,6 +199,11 @@ public interface IEntityAccess {
+@@ -187,6 +208,11 @@ public interface IEntityAccess {
      }
  
      default List<EntityHuman> a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving, AxisAlignedBB axisalignedbb) {
@@ -7536,6 +7752,48 @@ index 57bea926a6..9570747eab 100644
          public void track(List<EntityPlayer> list) {
              Iterator iterator = list.iterator();
  
+diff --git a/src/main/java/net/minecraft/server/PlayerConnectionUtils.java b/src/main/java/net/minecraft/server/PlayerConnectionUtils.java
+index eb3269e0ea..0f7bb50a96 100644
+--- a/src/main/java/net/minecraft/server/PlayerConnectionUtils.java
++++ b/src/main/java/net/minecraft/server/PlayerConnectionUtils.java
+@@ -13,10 +13,25 @@ public class PlayerConnectionUtils {
+         ensureMainThread(packet, t0, (IAsyncTaskHandler) worldserver.getMinecraftServer());
+     }
+ 
++    // Tuinity start - detailed watchdog information
++    private static final java.util.concurrent.ConcurrentLinkedDeque<PacketListener> packetProcessing = new java.util.concurrent.ConcurrentLinkedDeque<>();
++
++    public static java.util.List<PacketListener> getCurrentPacketProcessors() {
++        java.util.List<PacketListener> ret = new java.util.ArrayList<>(4);
++        for (PacketListener listener : packetProcessing) {
++            ret.add(listener);
++        }
++
++        return ret;
++    }
++    // Tuinity end - detailed watchdog information
++
+     public static <T extends PacketListener> void ensureMainThread(Packet<T> packet, T t0, IAsyncTaskHandler<?> iasynctaskhandler) throws CancelledPacketHandleException {
+         if (!iasynctaskhandler.isMainThread()) {
+             Timing timing = MinecraftTimings.getPacketTiming(packet); // Paper - timings
+             iasynctaskhandler.execute(() -> {
++                packetProcessing.push(t0); // Tuinity - detailed watchdog information
++                try { // Tuinity - detailed watchdog information
+                 if (MinecraftServer.getServer().hasStopped() || (t0 instanceof PlayerConnection && ((PlayerConnection) t0).processedDisconnect)) return; // CraftBukkit, MC-142590
+                 if (t0.a().isConnected()) {
+                     try (Timing ignored = timing.startTiming()) { // Paper - timings
+@@ -25,6 +40,11 @@ public class PlayerConnectionUtils {
+                 } else {
+                     PlayerConnectionUtils.LOGGER.debug("Ignoring packet due to disconnection: " + packet);
+                 }
++                // Tuinity start - detailed watchdog information
++                } finally {
++                    packetProcessing.pop();
++                }
++                // Tuinity end - detailed watchdog information
+ 
+             });
+             throw CancelledPacketHandleException.INSTANCE;
 diff --git a/src/main/java/net/minecraft/server/PlayerInteractManager.java b/src/main/java/net/minecraft/server/PlayerInteractManager.java
 index ce4340a476..1b60310bb0 100644
 --- a/src/main/java/net/minecraft/server/PlayerInteractManager.java
@@ -8569,7 +8827,7 @@ index 08c83c62df..d5da9f5825 100644
      public static VoxelShape a() {
          return VoxelShapes.c;
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index 5117dafbcf..2b5d0ecd0d 100644
+index 5117dafbcf..6d34f487ea 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
 @@ -82,6 +82,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
@@ -8620,7 +8878,40 @@ index 5117dafbcf..2b5d0ecd0d 100644
              }
  
              if (!this.isClientSide && (i & 1) != 0) {
-@@ -1179,9 +1189,11 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1170,6 +1180,32 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+         return this.getChunkAt(i, j, ChunkStatus.FULL, false);
+     }
+ 
++    // Tuinity start - optimise hard collision handling
++    @Override
++    public List<Entity> getHardCollidingEntities(@Nullable Entity entity, AxisAlignedBB axisalignedbb) {
++        // copied from below
++        List<Entity> list = Lists.newArrayList();
++        int i = MathHelper.floor((axisalignedbb.minX - 2.0D) / 16.0D);
++        int j = MathHelper.floor((axisalignedbb.maxX + 2.0D) / 16.0D);
++        int k = MathHelper.floor((axisalignedbb.minZ - 2.0D) / 16.0D);
++        int l = MathHelper.floor((axisalignedbb.maxZ + 2.0D) / 16.0D);
++
++        ChunkProviderServer chunkProvider = ((ChunkProviderServer)this.chunkProvider); // Tuinity - optimize for loaded chunks
++
++        for (int i1 = i; i1 <= j; ++i1) {
++            for (int j1 = k; j1 <= l; ++j1) {
++                Chunk chunk = chunkProvider.getChunkAtIfLoadedMainThread(i1, j1); // Paper // Tuinity - optimize for loaded chunks
++
++                if (chunk != null) {
++                    chunk.getHardCollidingEntities(entity, axisalignedbb, list);
++                }
++            }
++        }
++
++        return list;
++    }
++    // Tuinity end - optimise hard collision handling
++
+     @Override
+     public List<Entity> getEntities(@Nullable Entity entity, AxisAlignedBB axisalignedbb, @Nullable Predicate<? super Entity> predicate) {
+         this.getMethodProfiler().c("getEntities");
+@@ -1179,9 +1215,11 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          int k = MathHelper.floor((axisalignedbb.minZ - 2.0D) / 16.0D);
          int l = MathHelper.floor((axisalignedbb.maxZ + 2.0D) / 16.0D);
  
@@ -8633,7 +8924,7 @@ index 5117dafbcf..2b5d0ecd0d 100644
  
                  if (chunk != null) {
                      chunk.a(entity, axisalignedbb, list, predicate);
-@@ -1200,9 +1212,11 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1200,9 +1238,11 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          int l = MathHelper.f((axisalignedbb.maxZ + 2.0D) / 16.0D);
          List<T> list = Lists.newArrayList();
  
@@ -8646,7 +8937,7 @@ index 5117dafbcf..2b5d0ecd0d 100644
  
                  if (chunk != null) {
                      chunk.a(entitytypes, axisalignedbb, list, predicate);
-@@ -1222,10 +1236,11 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1222,10 +1262,11 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          int l = MathHelper.f((axisalignedbb.maxZ + 2.0D) / 16.0D);
          List<T> list = Lists.newArrayList();
          IChunkProvider ichunkprovider = this.getChunkProvider();
@@ -8660,7 +8951,7 @@ index 5117dafbcf..2b5d0ecd0d 100644
                  if (chunk != null) {
                      chunk.a(oclass, axisalignedbb, list, predicate);
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index 2de48e7537..92b79e3e71 100644
+index 2de48e7537..9fc38244aa 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -55,7 +55,7 @@ public class WorldServer extends World {
@@ -9075,7 +9366,46 @@ index 2de48e7537..92b79e3e71 100644
                      this.unregisterEntity(entity1);
                  }
  
-@@ -829,6 +1191,10 @@ public class WorldServer extends World {
+@@ -740,7 +1102,26 @@ public class WorldServer extends World {
+ 
+     }
+ 
++    // Tuinity start - log detailed entity tick information
++    static final java.util.concurrent.ConcurrentLinkedDeque<Entity> currentlyTickingEntities = new java.util.concurrent.ConcurrentLinkedDeque<>();
++
++    public static List<Entity> getCurrentlyTickingEntities() {
++        List<Entity> ret = Lists.newArrayListWithCapacity(4);
++
++        for (Entity entity : currentlyTickingEntities) {
++            ret.add(entity);
++        }
++
++        return ret;
++    }
++    // Tuinity end - log detailed entity tick information
++
+     public void entityJoinedWorld(Entity entity) {
++        // Tuinity start - log detailed entity tick information
++        com.tuinity.tuinity.util.TickThread.ensureTickThread("Cannot tick an entity off-main");
++        try {
++            currentlyTickingEntities.push(entity);
++        // Tuinity end - log detailed entity tick information
+         if (entity instanceof EntityHuman || this.getChunkProvider().a(entity)) {
+             ++TimingHistory.entityTicks; // Paper - timings
+             // Spigot start
+@@ -785,6 +1166,11 @@ public class WorldServer extends World {
+             } // Paper - timings
+ 
+         }
++        // Tuinity start - log detailed entity tick information
++        } finally {
++            currentlyTickingEntities.pop();
++        }
++        // Tuinity end - log detailed entity tick information
+     }
+ 
+     public void a(Entity entity, Entity entity1) {
+@@ -829,6 +1215,10 @@ public class WorldServer extends World {
          int k = MathHelper.floor(entity.locZ() / 16.0D);
  
          if (!entity.inChunk || entity.chunkX != i || entity.chunkY != j || entity.chunkZ != k) {
@@ -9086,7 +9416,7 @@ index 2de48e7537..92b79e3e71 100644
              if (entity.inChunk && this.isChunkLoaded(entity.chunkX, entity.chunkZ)) {
                  this.getChunkAt(entity.chunkX, entity.chunkZ).a(entity, entity.chunkY);
              }
-@@ -838,6 +1204,83 @@ public class WorldServer extends World {
+@@ -838,6 +1228,83 @@ public class WorldServer extends World {
              } else {
                  this.getChunkAt(i, k).a(entity);
              }
@@ -9170,7 +9500,7 @@ index 2de48e7537..92b79e3e71 100644
          }
  
          this.getMethodProfiler().exit();
-@@ -1189,6 +1632,7 @@ public class WorldServer extends World {
+@@ -1189,6 +1656,7 @@ public class WorldServer extends World {
  
          this.registerEntity(entityplayer);
          this.getChunkProvider().playerChunkMap.addPlayerToDistanceMaps(entityplayer); // Paper - distance maps
@@ -9178,7 +9508,7 @@ index 2de48e7537..92b79e3e71 100644
      }
  
      // CraftBukkit start
-@@ -1371,6 +1815,7 @@ public class WorldServer extends World {
+@@ -1371,6 +1839,7 @@ public class WorldServer extends World {
  
              this.players.remove(entityplayer);
              this.getChunkProvider().playerChunkMap.removePlayerFromDistanceMaps(entityplayer); // Paper - distance maps
@@ -9186,7 +9516,7 @@ index 2de48e7537..92b79e3e71 100644
          }
  
          this.getScoreboard().a(entity);
-@@ -1383,6 +1828,7 @@ public class WorldServer extends World {
+@@ -1383,6 +1852,7 @@ public class WorldServer extends World {
          if (entity instanceof EntityInsentient) {
              this.navigators.remove(((EntityInsentient) entity).getNavigation());
          }
@@ -9194,7 +9524,7 @@ index 2de48e7537..92b79e3e71 100644
          new com.destroystokyo.paper.event.entity.EntityRemoveFromWorldEvent(entity.getBukkitEntity()).callEvent(); // Paper - fire while valid
          entity.valid = false; // CraftBukkit
      }
-@@ -1439,6 +1885,11 @@ public class WorldServer extends World {
+@@ -1439,6 +1909,11 @@ public class WorldServer extends World {
              }
              // Paper end
              entity.shouldBeRemoved = false; // Paper - shouldn't be removed after being re-added
@@ -9696,6 +10026,82 @@ index 46c33e6917..76a4d43152 100644
 +    }
 +    // Tuinity end
  }
+diff --git a/src/main/java/org/spigotmc/WatchdogThread.java b/src/main/java/org/spigotmc/WatchdogThread.java
+index 5bdcdcf9e8..218f86fe4c 100644
+--- a/src/main/java/org/spigotmc/WatchdogThread.java
++++ b/src/main/java/org/spigotmc/WatchdogThread.java
+@@ -59,6 +59,63 @@ public class WatchdogThread extends Thread
+         }
+     }
+ 
++    // Tuinity start - log detailed tick information
++    private void dumpTickingInfo() {
++        Logger log = Bukkit.getServer().getLogger();
++
++        // ticking entities
++        for (net.minecraft.server.Entity entity : net.minecraft.server.WorldServer.getCurrentlyTickingEntities()) {
++            double posX, posY, posZ;
++            net.minecraft.server.Vec3D mot;
++            int lock;
++            do {
++                lock = entity.posSeqLock.acquireRead();
++                posX = entity.locX();
++                posY = entity.locY();
++                posZ = entity.locZ();
++                mot = entity.getMot();
++            } while (!entity.posSeqLock.tryReleaseRead(lock));
++
++            String entityType = entity.getMinecraftKey().toString();
++            java.util.UUID entityUUID = entity.getUniqueID();
++            net.minecraft.server.World world = entity.getWorld();
++
++            log.log(Level.SEVERE, "Ticking entity: " + entityType);
++            log.log(Level.SEVERE, "Position: world: '" + (world == null ? "unknown world?" : world.getWorldData().getName()) + "' at location (" + posX + ", " + posY + ", " + posZ + ")");
++            log.log(Level.SEVERE, "Velocity: " + (mot == null ? "unknown velocity" : mot.toString()) + " (in blocks per tick)");
++            log.log(Level.SEVERE, "UUID: " + entityUUID);
++        }
++
++        // packet processors
++        for (net.minecraft.server.PacketListener packetListener : net.minecraft.server.PlayerConnectionUtils.getCurrentPacketProcessors()) {
++            if (packetListener instanceof net.minecraft.server.PlayerConnection) {
++                net.minecraft.server.EntityPlayer player = ((net.minecraft.server.PlayerConnection)packetListener).player;
++                if (player == null) {
++                    log.log(Level.SEVERE, "Handling packet for player connection (null player): " + packetListener);
++                } else {
++                    // exclude velocity, this is set client side... Paper will also warn on high velocity set too
++                    double posX, posY, posZ;
++                    int lock;
++                    do {
++                        lock = player.posSeqLock.acquireRead();
++                        posX = player.locX();
++                        posY = player.locY();
++                        posZ = player.locZ();
++                    } while (!player.posSeqLock.tryReleaseRead(lock));
++
++                    java.util.UUID entityUUID = player.getUniqueID();
++                    net.minecraft.server.World world = player.getWorld();
++
++                    log.log(Level.SEVERE, "Handling packet for player '" + player.getName() + "', UUID: " + entityUUID);
++                    log.log(Level.SEVERE, "Position: world: '" + (world == null ? "unknown world?" : world.getWorldData().getName()) + "' at location (" + posX + ", " + posY + ", " + posZ + ")");
++                }
++            } else {
++                log.log(Level.SEVERE, "Handling packet for connection: " + packetListener);
++            }
++        }
++    }
++    // Tuinity end - log detailed tick information
++
+     @Override
+     public void run()
+     {
+@@ -114,6 +171,7 @@ public class WatchdogThread extends Thread
+                 log.log( Level.SEVERE, "------------------------------" );
+                 log.log( Level.SEVERE, "Server thread dump (Look for plugins here before reporting to Paper!):" ); // Paper
+                 ChunkTaskManager.dumpAllChunkLoadInfo(); // Paper
++                this.dumpTickingInfo(); // Tuinity - log detailed tick information
+                 dumpThread( ManagementFactory.getThreadMXBean().getThreadInfo( MinecraftServer.getServer().serverThread.getId(), Integer.MAX_VALUE ), log );
+                 log.log( Level.SEVERE, "------------------------------" );
+                 //
 -- 
 2.24.0
 
