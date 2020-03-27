@@ -613,6 +613,16 @@ mobs
     * require-shift-to-mount
         - **default**: true
         - **description**: Required to crouch (hold shift) and right click to mount
+    * jockey
+        * chance
+            - **default**: 0.05
+            - **description**: Chance of riding a chicken when spawned
+        * only-babies
+            - **default**: true
+            - **description**: Only babies can ride chickens
+        * try-existing-chickens
+            - **default**: true
+            - **description**: Scan for existing chickens to spawn on
 
 * elder_guardian
     * ridable
@@ -762,6 +772,16 @@ mobs
     * require-shift-to-mount
         - **default**: true
         - **description**: Required to crouch (hold shift) and right click to mount
+    * jockey
+        * chance
+            - **default**: 0.05
+            - **description**: Chance of riding a chicken when spawned
+        * only-babies
+            - **default**: true
+            - **description**: Only babies can ride chickens
+        * try-existing-chickens
+            - **default**: true
+            - **description**: Scan for existing chickens to spawn on
 
 * horse
     * ridable-in-water
@@ -1272,6 +1292,16 @@ mobs
     * transform-to-villager-chance
         - **default**: -0.1
         - **description**: Chance that a villager can turn into a zombie upon death. Overrides world difficulty. Set to a negative number to use vanilla's default behavior
+    * jockey
+        * chance
+            - **default**: 0.05
+            - **description**: Chance of riding a chicken when spawned
+        * only-babies
+            - **default**: true
+            - **description**: Only babies can ride chickens
+        * try-existing-chickens
+            - **default**: true
+            - **description**: Scan for existing chickens to spawn on
 
 * zombie_horse
     * ridable
@@ -1297,6 +1327,16 @@ mobs
     * dont-target-unless-hit
         - **default**: false
         - **description**: Prevent pigmen from targetting players unless they are hit. (fixes MC-56653)
+    * jockey
+        * chance
+            - **default**: 0.05
+            - **description**: Chance of riding a chicken when spawned
+        * only-babies
+            - **default**: true
+            - **description**: Only babies can ride chickens
+        * try-existing-chickens
+            - **default**: true
+            - **description**: Scan for existing chickens to spawn on
 
 * zombie-villager
     * ridable
@@ -1308,3 +1348,13 @@ mobs
     * require-shift-to-mount
         - **default**: true
         - **description**: Required to crouch (hold shift) and right click to mount
+    * jockey
+        * chance
+            - **default**: 0.05
+            - **description**: Chance of riding a chicken when spawned
+        * only-babies
+            - **default**: true
+            - **description**: Only babies can ride chickens
+        * try-existing-chickens
+            - **default**: true
+            - **description**: Scan for existing chickens to spawn on
