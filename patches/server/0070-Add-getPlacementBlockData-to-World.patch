@@ -1,0 +1,86 @@
+From 711cf195fd8e1ef488cf8e4532ba2e37f4bf9acf Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Sat, 8 Feb 2020 23:30:17 -0600
+Subject: [PATCH] Add getPlacementBlockData to World
+
+---
+ .../net/minecraft/server/BlockMobSpawner.java |  1 +
+ .../net/minecraft/server/ItemSpawner.java     | 23 +++++++++++++++++++
+ src/main/java/net/minecraft/server/Items.java |  2 +-
+ .../org/bukkit/craftbukkit/CraftWorld.java    |  5 ++++
+ 4 files changed, 30 insertions(+), 1 deletion(-)
+ create mode 100644 src/main/java/net/minecraft/server/ItemSpawner.java
+
+diff --git a/src/main/java/net/minecraft/server/BlockMobSpawner.java b/src/main/java/net/minecraft/server/BlockMobSpawner.java
+index 69d04f6cbf..901d45f284 100644
+--- a/src/main/java/net/minecraft/server/BlockMobSpawner.java
++++ b/src/main/java/net/minecraft/server/BlockMobSpawner.java
+@@ -57,6 +57,7 @@ public class BlockMobSpawner extends BlockTileEntity {
+ 
+     @Override
+     public int getExpDrop(IBlockData iblockdata, World world, BlockPosition blockposition, ItemStack itemstack) {
++        if (isSilkTouch(itemstack)) return 0; // Purpur
+         int i = 15 + world.random.nextInt(15) + world.random.nextInt(15);
+ 
+         return i;
+diff --git a/src/main/java/net/minecraft/server/ItemSpawner.java b/src/main/java/net/minecraft/server/ItemSpawner.java
+new file mode 100644
+index 0000000000..7dc68ffe92
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/ItemSpawner.java
+@@ -0,0 +1,23 @@
++package net.minecraft.server;
++
++public class ItemSpawner extends ItemBlock {
++    public ItemSpawner(Block block, Info info) {
++        super(block, info);
++    }
++
++    @Override
++    protected boolean a(BlockPosition blockposition, World world, EntityHuman entityhuman, ItemStack itemstack, IBlockData iblockdata) {
++        boolean handled = super.a(blockposition, world, entityhuman, itemstack, iblockdata);
++        if (entityhuman.getBukkitEntity().hasPermission("purpur.place.spawners")) {
++            TileEntity spawner = world.getTileEntity(blockposition);
++            if (spawner instanceof TileEntityMobSpawner && itemstack.hasTag()) {
++                NBTTagCompound tag = itemstack.getTag();
++                if (tag.hasKey("Purpur.mob_type")) {
++                    EntityTypes.getType(tag.getString("Purpur.mob_type")).ifPresent(type ->
++                            ((TileEntityMobSpawner) spawner).getSpawner().setMobName(type));
++                }
++            }
++        }
++        return handled;
++    }
++}
+diff --git a/src/main/java/net/minecraft/server/Items.java b/src/main/java/net/minecraft/server/Items.java
+index 9c9b93f280..74a722cce5 100644
+--- a/src/main/java/net/minecraft/server/Items.java
++++ b/src/main/java/net/minecraft/server/Items.java
+@@ -155,7 +155,7 @@ public class Items {
+     public static final Item bU = a(Blocks.PURPUR_BLOCK, CreativeModeTab.b);
+     public static final Item bV = a(Blocks.PURPUR_PILLAR, CreativeModeTab.b);
+     public static final Item bW = a(Blocks.PURPUR_STAIRS, CreativeModeTab.b);
+-    public static final Item bX = a(Blocks.SPAWNER);
++    public static final Item bX = a(Blocks.SPAWNER, new ItemSpawner(Blocks.SPAWNER, new Item.Info().a(EnumItemRarity.EPIC))); // Purpur
+     public static final Item bY = a(Blocks.OAK_STAIRS, CreativeModeTab.b);
+     public static final Item bZ = a(Blocks.CHEST, CreativeModeTab.c);
+     public static final Item ca = a(Blocks.DIAMOND_ORE, CreativeModeTab.b);
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+index 1e071c4f92..0cd9c98eb8 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
+@@ -2451,6 +2451,11 @@ public class CraftWorld implements World {
+     public net.pl3x.purpur.MoonPhase getMoonPhase() {
+         return net.pl3x.purpur.MoonPhase.getPhase(getFullTime() / 24000L);
+     }
++
++    public BlockData getPlacementBlockData(BlockData blockdata, Location location) {
++        IBlockData validData = net.minecraft.server.Block.getValidBlockForPosition(((CraftBlockData) blockdata).getState(), getHandle(), net.minecraft.server.MCUtil.toBlockPosition(location));
++        return CraftBlockData.fromData(validData == null ? Blocks.AIR.getBlockData() : validData);
++    }
+     // Purpur end
+ 
+     // Paper start
+-- 
+2.24.0
+
