@@ -1,4 +1,4 @@
-From b81cf7e90910b86b40a28bfdf32632d3ce1633e9 Mon Sep 17 00:00:00 2001
+From 609cec66f047fa2d8e936286d4d98396d7e90efd Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 14 Dec 2018 21:53:58 -0800
 Subject: [PATCH] Tuinity Server Patches
@@ -13,9 +13,9 @@ Subject: [PATCH] Tuinity Server Patches
  .../paper/server/ticklist/PaperTickList.java  |    8 +
  .../com/mojang/datafixers/util/Either.java    |    6 +-
  .../tuinity/chunk/ChunkRegionManager.java     |  165 +++
- .../chunk/QueuedChangesMapLong2Int.java       |  155 +++
+ .../chunk/QueuedChangesMapLong2Int.java       |  159 +++
  .../chunk/QueuedChangesMapLong2Object.java    |  170 +++
- .../tuinity/tuinity/config/TuinityConfig.java |  305 +++++
+ .../tuinity/tuinity/config/TuinityConfig.java |  318 +++++
  .../com/tuinity/tuinity/util/ChunkList.java   |  119 ++
  .../com/tuinity/tuinity/util/EntityList.java  |  124 ++
  .../tuinity/tuinity/util/IBlockDataList.java  |  123 ++
@@ -94,7 +94,7 @@ Subject: [PATCH] Tuinity Server Patches
  .../net/minecraft/server/WorldServer.java     |  485 +++++++-
  .../net/minecraft/server/WorldUpgrader.java   |    2 +-
  .../org/bukkit/craftbukkit/CraftServer.java   |   15 +-
- .../org/bukkit/craftbukkit/CraftWorld.java    |   67 +-
+ .../org/bukkit/craftbukkit/CraftWorld.java    |   74 +-
  .../java/org/bukkit/craftbukkit/Main.java     |    7 +
  .../craftbukkit/entity/CraftEntity.java       |   12 +
  .../craftbukkit/entity/CraftPlayer.java       |   37 +-
@@ -102,7 +102,7 @@ Subject: [PATCH] Tuinity Server Patches
  src/main/java/org/spigotmc/AsyncCatcher.java  |    2 +-
  src/main/java/org/spigotmc/TrackingRange.java |   40 +
  .../java/org/spigotmc/WatchdogThread.java     |   58 +
- 98 files changed, 6600 insertions(+), 489 deletions(-)
+ 98 files changed, 6624 insertions(+), 489 deletions(-)
  create mode 100644 src/main/java/com/tuinity/tuinity/chunk/ChunkRegionManager.java
  create mode 100644 src/main/java/com/tuinity/tuinity/chunk/QueuedChangesMapLong2Int.java
  create mode 100644 src/main/java/com/tuinity/tuinity/chunk/QueuedChangesMapLong2Object.java
@@ -604,10 +604,10 @@ index 0000000000..ff17a100ba
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/QueuedChangesMapLong2Int.java b/src/main/java/com/tuinity/tuinity/chunk/QueuedChangesMapLong2Int.java
 new file mode 100644
-index 0000000000..d528d08ea5
+index 0000000000..a5c38bc078
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/QueuedChangesMapLong2Int.java
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,159 @@
 +package com.tuinity.tuinity.chunk;
 +
 +import ca.spottedleaf.concurrentutil.lock.WeakSeqLock;
@@ -713,6 +713,8 @@ index 0000000000..d528d08ea5
 +            }
 +        }
 +
++        this.queuedPuts.clear();
++
 +        final LongIterator iterator1 = this.queuedRemove.iterator();
 +        while (iterator1.hasNext()) {
 +            final long key = iterator1.nextLong();
@@ -725,6 +727,7 @@ index 0000000000..d528d08ea5
 +            }
 +        }
 +
++        this.queuedRemove.clear();
 +
 +        return true;
 +    }
@@ -755,10 +758,11 @@ index 0000000000..d528d08ea5
 +                this.visibleMap.remove(key);
 +            }
 +
-+
 +            return true;
 +        } finally {
 +            this.updatingMapSeqLock.releaseWrite();
++            this.queuedRemove.clear();
++            this.queuedPuts.clear();
 +        }
 +    }
 +
@@ -942,10 +946,10 @@ index 0000000000..e5bb56cca9
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
 new file mode 100644
-index 0000000000..78c011309a
+index 0000000000..bcc5866aae
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
-@@ -0,0 +1,305 @@
+@@ -0,0 +1,318 @@
 +package com.tuinity.tuinity.config;
 +
 +import ca.spottedleaf.concurrentutil.util.Throw;
@@ -1248,8 +1252,21 @@ index 0000000000..78c011309a
 +            }
 +            this.useOptimizedTracker = this.getBoolean("optimized-tracker", true);
 +        }
-+    }
 +
++        public int spawnLimitMonsters;
++        public int spawnLimitAnimals;
++        public int spawnLimitWaterAnimals;
++        public int spawnLimitAmbient;
++
++        private void perWorldSpawnLimit() {
++            String path = "spawn-limits";
++
++            spawnLimitMonsters = getInt(path + ".monsters", -1);
++            spawnLimitAnimals = getInt(path + ".animals", -1);
++            spawnLimitWaterAnimals = getInt(path + ".water-animals", -1);
++            spawnLimitAmbient = getInt(path + ".ambient", -1);
++        }
++    }
 +}
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/util/ChunkList.java b/src/main/java/com/tuinity/tuinity/util/ChunkList.java
@@ -9597,7 +9614,7 @@ index f70468adab..2be7962bc5 100644
          public void restart() {
              org.spigotmc.RestartCommand.restart();
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 051506fce8..4db397d9f9 100644
+index 051506fce8..ae461b77b3 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 @@ -3,6 +3,7 @@ package org.bukkit.craftbukkit;
@@ -9629,7 +9646,21 @@ index 051506fce8..4db397d9f9 100644
              if (chunkHolder.getChunk() != null) {
                  ++ret;
              }
-@@ -432,8 +433,8 @@ public class CraftWorld implements World {
+@@ -328,6 +329,13 @@ public class CraftWorld implements World {
+         this.generator = gen;
+ 
+         environment = env;
++
++        //Tuinity start - per world spawn limits
++        monsterSpawn = world.tuinityConfig.spawnLimitMonsters;
++        animalSpawn = world.tuinityConfig.spawnLimitAnimals;
++        waterAnimalSpawn = world.tuinityConfig.spawnLimitWaterAnimals;
++        ambientSpawn = world.tuinityConfig.spawnLimitAmbient;
++        //Tuinity end
+     }
+ 
+     @Override
+@@ -432,8 +440,8 @@ public class CraftWorld implements World {
  
      @Override
      public Chunk[] getLoadedChunks() {
@@ -9640,7 +9671,7 @@ index 051506fce8..4db397d9f9 100644
      }
  
      @Override
-@@ -462,6 +463,7 @@ public class CraftWorld implements World {
+@@ -462,6 +470,7 @@ public class CraftWorld implements World {
          net.minecraft.server.IChunkAccess chunk = world.getChunkProvider().getChunkAt(x, z, ChunkStatus.FULL, false);
          if (chunk != null) {
              world.getChunkProvider().removeTicket(TicketType.PLUGIN, chunk.getPos(), 1, Unit.INSTANCE);
@@ -9648,7 +9679,7 @@ index 051506fce8..4db397d9f9 100644
          }
  
          return true;
-@@ -1094,16 +1096,16 @@ public class CraftWorld implements World {
+@@ -1094,16 +1103,16 @@ public class CraftWorld implements World {
  
      @Override
      public List<Entity> getEntities() {
@@ -9668,7 +9699,7 @@ index 051506fce8..4db397d9f9 100644
                      list.add(bukkitEntity);
                  }
              }
-@@ -1114,16 +1116,16 @@ public class CraftWorld implements World {
+@@ -1114,16 +1123,16 @@ public class CraftWorld implements World {
  
      @Override
      public List<LivingEntity> getLivingEntities() {
@@ -9688,7 +9719,7 @@ index 051506fce8..4db397d9f9 100644
                      list.add((LivingEntity) bukkitEntity);
                  }
              }
-@@ -1144,7 +1146,7 @@ public class CraftWorld implements World {
+@@ -1144,7 +1153,7 @@ public class CraftWorld implements World {
      public <T extends Entity> Collection<T> getEntitiesByClass(Class<T> clazz) {
          Collection<T> list = new ArrayList<T>();
  
@@ -9697,7 +9728,7 @@ index 051506fce8..4db397d9f9 100644
              if (entity instanceof net.minecraft.server.Entity) {
                  if (((net.minecraft.server.Entity) entity).shouldBeRemoved) continue; // Paper
                  Entity bukkitEntity = ((net.minecraft.server.Entity) entity).getBukkitEntity();
-@@ -1155,7 +1157,7 @@ public class CraftWorld implements World {
+@@ -1155,7 +1164,7 @@ public class CraftWorld implements World {
  
                  Class<?> bukkitClass = bukkitEntity.getClass();
  
@@ -9706,7 +9737,7 @@ index 051506fce8..4db397d9f9 100644
                      list.add((T) bukkitEntity);
                  }
              }
-@@ -1168,7 +1170,7 @@ public class CraftWorld implements World {
+@@ -1168,7 +1177,7 @@ public class CraftWorld implements World {
      public Collection<Entity> getEntitiesByClasses(Class<?>... classes) {
          Collection<Entity> list = new ArrayList<Entity>();
  
@@ -9715,7 +9746,7 @@ index 051506fce8..4db397d9f9 100644
              if (entity instanceof net.minecraft.server.Entity) {
                  if (((net.minecraft.server.Entity) entity).shouldBeRemoved) continue; // Paper
                  Entity bukkitEntity = ((net.minecraft.server.Entity) entity).getBukkitEntity();
-@@ -1181,7 +1183,7 @@ public class CraftWorld implements World {
+@@ -1181,7 +1190,7 @@ public class CraftWorld implements World {
  
                  for (Class<?> clazz : classes) {
                      if (clazz.isAssignableFrom(bukkitClass)) {
@@ -9724,7 +9755,7 @@ index 051506fce8..4db397d9f9 100644
                              list.add(bukkitEntity);
                          }
                          break;
-@@ -2467,10 +2469,43 @@ public class CraftWorld implements World {
+@@ -2467,10 +2476,43 @@ public class CraftWorld implements World {
      // Spigot start
      @Override
      public int getViewDistance() {
