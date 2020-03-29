@@ -8,10 +8,10 @@
     vanillajar="$workdir/Minecraft/$mcver/$mcver.jar"
 
     (
-        cd "$basedir/Paperclip"
+        cd "$workdir/Paperclip"
         mvn clean package "-Dmcver=$mcver" "-Dpaperjar=$purpurjar" "-Dvanillajar=$vanillajar"
     )
-    cp "$basedir/Paperclip/assembly/target/paperclip-${mcver}.jar" "$basedir/purpurclip.jar"
+    cp "$workdir/Paperclip/assembly/target/paperclip-${mcver}.jar" "$basedir/purpurclip.jar"
 
     echo ""
     echo ""
