@@ -61,3 +61,24 @@ need to be granted the permissions you want them to have using a permissions plu
 
 * **purpur.sign.magic**
     - **description**: Allows players to use the magic/obfuscated style code on signs
+
+* **purpur.enderchest.rows.six**
+    - **description**: Allows players to have 6 rows in their enderchest
+
+* **purpur.enderchest.rows.five**
+    - **description**: Allows players to have 5 rows in their enderchest
+
+* **purpur.enderchest.rows.four**
+    - **description**: Allows players to have 4 rows in their enderchest
+
+* **purpur.enderchest.rows.three**
+    - **description**: Allows players to have 3 rows in their enderchest
+
+* **purpur.enderchest.rows.two**
+    - **description**: Allows players to have 2 rows in their enderchest
+
+* **purpur.enderchest.rows.one**
+    - **description**: Allows players to have 1 row in their enderchest
+
+.. note::
+    Enderchest row permissions require `settings.blocks.ender_chest.six-rows` to be enabled!

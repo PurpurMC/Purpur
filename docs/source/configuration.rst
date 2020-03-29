@@ -123,6 +123,18 @@ blocks
     * six-rows
         - **default**: false
         - **description**: Ender chests should have 6 rows of inventory space
+    * use-permissions-for-rows
+        - **default**: false
+        - **description**: Use permission nodes to determine the number of rows. `six-rows` MUST be enabled for this to work.
+
+.. note::
+    Enderchest row permissions:
+        purpur.enderchest.rows.six
+        purpur.enderchest.rows.five
+        purpur.enderchest.rows.four
+        purpur.enderchest.rows.three
+        purpur.enderchest.rows.two
+        purpur.enderchest.rows.one
 
 * slime
     * not-movable-by-piston
