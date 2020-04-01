@@ -1,4 +1,4 @@
-From d7b3299a3aaf3ba71cbae864bab62d1edc2c450e Mon Sep 17 00:00:00 2001
+From a434d70db1a28df0eec9ca2b6694b38f440a341b Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Thu, 6 Feb 2020 19:53:59 -0600
 Subject: [PATCH] Ridables
@@ -43,8 +43,8 @@ Subject: [PATCH] Ridables
  .../minecraft/server/EntityInsentient.java    |  48 +-
  .../net/minecraft/server/EntityIronGolem.java |  23 +-
  .../net/minecraft/server/EntityLiving.java    |  21 +-
- .../net/minecraft/server/EntityLlama.java     |  54 +-
- .../minecraft/server/EntityLlamaTrader.java   |  13 +
+ .../net/minecraft/server/EntityLlama.java     |  64 +-
+ .../minecraft/server/EntityLlamaTrader.java   |  23 +
  .../net/minecraft/server/EntityMagmaCube.java |  17 +
  .../minecraft/server/EntityMushroomCow.java   |  17 +
  .../net/minecraft/server/EntityOcelot.java    |  19 +
@@ -93,7 +93,7 @@ Subject: [PATCH] Ridables
  .../minecraft/server/ProjectileHelper.java    |   1 +
  src/main/java/net/minecraft/server/Vec3D.java |   3 +
  src/main/java/net/minecraft/server/World.java |   7 +
- .../net/pl3x/purpur/PurpurWorldConfig.java    | 591 ++++++++++++++++++
+ .../net/pl3x/purpur/PurpurWorldConfig.java    | 595 ++++++++++++++++++
  .../purpur/controller/ControllerLookWASD.java |  75 +++
  .../purpur/controller/ControllerMoveWASD.java |  86 +++
  .../controller/ControllerMoveWASDFlying.java  |  53 ++
@@ -102,7 +102,7 @@ Subject: [PATCH] Ridables
  .../net/pl3x/purpur/entity/DolphinSpit.java   | 119 ++++
  .../pathfinder/PathfinderGoalHasRider.java    |  21 +
  .../craftbukkit/entity/CraftEntity.java       |  27 +
- 98 files changed, 3427 insertions(+), 204 deletions(-)
+ 98 files changed, 3451 insertions(+), 204 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
@@ -2567,10 +2567,10 @@ index 8efb646a0..77fe338a8 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityLlama.java b/src/main/java/net/minecraft/server/EntityLlama.java
-index 193dbfc5f..5b87b245f 100644
+index 193dbfc5f..7a4e64a3d 100644
 --- a/src/main/java/net/minecraft/server/EntityLlama.java
 +++ b/src/main/java/net/minecraft/server/EntityLlama.java
-@@ -16,7 +16,36 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+@@ -16,8 +16,47 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
  
      public EntityLlama(EntityTypes<? extends EntityLlama> entitytypes, World world) {
          super(entitytypes, world);
@@ -2600,14 +2600,25 @@ index 193dbfc5f..5b87b245f 100644
 +
 +    // Purpur start
 +    @Override
++    public boolean isRidable() {
++        return world.purpurConfig.llamaRidable;
++    }
++
++    @Override
 +    public boolean isRidableInWater() {
 +        return world.purpurConfig.llamaRidableInWater;
      }
-+    // Purpur end
  
++    @Override
++    public boolean requireShiftToMount() {
++        return false; // shift reserved for opening inventory
++    }
++    // Purpur end
++
      public void setStrength(int i) {
          this.datawatcher.set(EntityLlama.bF, Math.max(1, Math.min(5, i)));
-@@ -58,6 +87,14 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+     }
+@@ -58,6 +97,14 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
      @Override
      protected void initPathfinder() {
          this.goalSelector.a(0, new PathfinderGoalFloat(this));
@@ -2615,14 +2626,14 @@ index 193dbfc5f..5b87b245f 100644
 +        this.goalSelector.a(0, new net.pl3x.purpur.pathfinder.PathfinderGoalHasRider(this) {
 +            @Override
 +            public boolean a() {
-+                return entity.getRidingPassenger() instanceof EntityHuman && isSaddled();
++                return super.a() && isSaddled();
 +            }
 +        });
 +        // Purpur end
          this.goalSelector.a(1, new PathfinderGoalTame(this, 1.2D));
          this.goalSelector.a(2, new PathfinderGoalLlamaFollow(this, 2.0999999046325684D));
          this.goalSelector.a(3, new PathfinderGoalArrowAttack(this, 1.25D, 40, 20.0F));
-@@ -67,6 +104,14 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+@@ -67,6 +114,14 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
          this.goalSelector.a(6, new PathfinderGoalRandomStrollLand(this, 0.7D));
          this.goalSelector.a(7, new PathfinderGoalLookAtPlayer(this, EntityHuman.class, 6.0F));
          this.goalSelector.a(8, new PathfinderGoalRandomLookaround(this));
@@ -2637,7 +2648,7 @@ index 193dbfc5f..5b87b245f 100644
          this.targetSelector.a(1, new EntityLlama.c(this));
          this.targetSelector.a(2, new EntityLlama.a(this));
      }
-@@ -253,6 +298,13 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+@@ -253,6 +308,13 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
          return false;
      }
  
@@ -2651,7 +2662,7 @@ index 193dbfc5f..5b87b245f 100644
      @Override
      public void a(IInventory iinventory) {
          EnumColor enumcolor = this.eZ();
-@@ -286,7 +338,7 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
+@@ -286,7 +348,7 @@ public class EntityLlama extends EntityHorseChestedAbstract implements IRangedEn
      }
  
      @Nullable
@@ -2661,24 +2672,34 @@ index 193dbfc5f..5b87b245f 100644
  
          return i == -1 ? null : EnumColor.fromColorIndex(i);
 diff --git a/src/main/java/net/minecraft/server/EntityLlamaTrader.java b/src/main/java/net/minecraft/server/EntityLlamaTrader.java
-index 4cebd67e8..283c1ac94 100644
+index 4cebd67e8..08c4ca3f3 100644
 --- a/src/main/java/net/minecraft/server/EntityLlamaTrader.java
 +++ b/src/main/java/net/minecraft/server/EntityLlamaTrader.java
-@@ -11,6 +11,13 @@ public class EntityLlamaTrader extends EntityLlama {
+@@ -11,6 +11,23 @@ public class EntityLlamaTrader extends EntityLlama {
          super(entitytypes, world);
      }
  
 +    // Purpur start
 +    @Override
++    public boolean isRidable() {
++        return world.purpurConfig.llamaTraderRidable;
++    }
++
++    @Override
 +    public boolean isRidableInWater() {
 +        return world.purpurConfig.llamaTraderRidableInWater;
++    }
++
++    @Override
++    public boolean requireShiftToMount() {
++        return false; // shift reserved for opening inventory
 +    }
 +    // Purpur end
 +
      @Override
      protected EntityLlama fa() {
          return (EntityLlama) EntityTypes.TRADER_LLAMA.a(this.world);
-@@ -79,6 +86,12 @@ public class EntityLlamaTrader extends EntityLlama {
+@@ -79,6 +96,12 @@ public class EntityLlamaTrader extends EntityLlama {
          return this.isLeashed() && !this.fh();
      }
  
@@ -5191,10 +5212,10 @@ index 1131d4326..7451b7fc4 100644
 +    // Purpur end
  }
 diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-index eda37fa43..fafbea673 100644
+index eda37fa43..430e31a2a 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-@@ -64,4 +64,595 @@ public class PurpurWorldConfig {
+@@ -64,4 +64,599 @@ public class PurpurWorldConfig {
          PurpurConfig.config.addDefault("world-settings.default." + path, def);
          return PurpurConfig.config.getString("world-settings." + worldName + "." + path, PurpurConfig.config.getString("world-settings.default." + path));
      }
@@ -5438,13 +5459,17 @@ index eda37fa43..fafbea673 100644
 +        ironGolemRequireShiftToMount = getBoolean("mobs.iron_golem.require-shift-to-mount", ironGolemRequireShiftToMount);
 +    }
 +
++    public boolean llamaRidable = false;
 +    public boolean llamaRidableInWater = false;
 +    private void llamaSettings() {
++        llamaRidable = getBoolean("mobs.llama.ridable", llamaRidable);
 +        llamaRidableInWater = getBoolean("mobs.llama.ridable-in-water", llamaRidableInWater);
 +    }
 +
++    public boolean llamaTraderRidable = false;
 +    public boolean llamaTraderRidableInWater = false;
 +    private void llamaTraderSettings() {
++        llamaTraderRidable = getBoolean("mobs.trader_llama.ridable", llamaTraderRidable);
 +        llamaTraderRidableInWater = getBoolean("mobs.trader_llama.ridable-in-water", llamaTraderRidableInWater);
 +    }
 +
