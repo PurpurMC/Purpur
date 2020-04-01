@@ -849,11 +849,17 @@ mobs
         - **description**: Set whether iron golems can swim or not
 
 * llama
+    * ridable
+        - **default**: false
+        - **description**: Makes this mob WASD controllable. Llama's must be tamed and saddled (with carpet) to be WASD controllable.
     * ridable-in-water
         - **default**: false
         - **description**: Makes this mob ridable in water (it wont eject you)
 
 * trader_llama
+    * ridable
+        - **default**: false
+        - **description**: Makes this mob mountable and WASD controllable. Trader llama's must be tamed to be WASD controllable. Being saddled (carpet) is not a requirement since it technically always has a carpet.
     * ridable-in-water
         - **default**: false
         - **description**: Makes this mob ridable in water (it wont eject you)
