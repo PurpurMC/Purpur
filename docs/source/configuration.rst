@@ -188,6 +188,40 @@ blocks
         - **default**: DESTROY
         - **description**: What to do with the blocks that are effected by the explosion. `DESTROY` will destroy the blocks (no item drops). `BREAK` will naturally break the blocks (items will drop). `NONE` will not break any blocks
 
+* beehive
+    * generation-chance
+        * plains
+            - **default**: 0.05F;
+            - **description**: Chance for beehives to generate on trees in plains biome (0.0 - 1.0)
+        * sunflower-plains
+            - **default**: 0.05F;
+            - **description**: Chance for beehives to generate on trees in sunflower-plains biome (0.0 - 1.0)
+        * flower-forest
+            - **default**: 0.02F;
+            - **description**: Chance for beehives to generate on trees in flower-forest biome (0.0 - 1.0)
+        * forest
+            - **default**: 0.002F;
+            - **description**: Chance for beehives to generate on trees in forest biome (0.0 - 1.0)
+        * wooded-hills
+            - **default**: 0.002F;
+            - **description**: Chance for beehives to generate on trees in wooded-hills biome (0.0 - 1.0)
+        * birch-forest
+            - **default**: 0.002F;
+            - **description**: Chance for beehives to generate on trees in birch-forest biome (0.0 - 1.0)
+        * tall-birch-forest
+            - **default**: 0.002F;
+            - **description**: Chance for beehives to generate on trees in tall-birch-forest biome (0.0 - 1.0)
+        * birch-forest-hills
+            - **default**: 0.002F;
+            - **description**: Chance for beehives to generate on trees in birch-forest-hills biome (0.0 - 1.0)
+        * tall-birch-hills
+            - **default**: 0.002F;
+            - **description**: Chance for beehives to generate on trees in tall-birch-hills biome (0.0 - 1.0)
+    * grow-sapling-flower-check-radius
+        - **default**: 2
+        - **description**: Radius check for flowers when sapling grows to generate beehive
+
+
 * campfire
     * burn-out-in-rain
         - **default**: false
