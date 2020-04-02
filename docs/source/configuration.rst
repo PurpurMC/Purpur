@@ -112,6 +112,14 @@ packet-limiter
     - **default**: "Sent too many packets"
     - **description**: The message player sees when being kicked from packet limiter
 
+* enchantment
+    * <enchantment id>
+        * max-level
+            - **default**: 1 through 5
+            - **description**: Maximum level the enchantment can be
+.. note::
+    Enchantment level lore is rendered client side. Levels above 11 do not have a lang entry in the locale file. Use a resource pack to overcome this.
+
 blocks
 ~~~~~~
 * barrel
