@@ -1,0 +1,344 @@
+From ad3d52400086d46440569f70b21be061c7ef856c Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Fri, 6 Mar 2020 16:33:58 -0600
+Subject: [PATCH] Optimize entity pathfinder selector
+
+---
+ .../co/aikar/timings/MinecraftTimings.java    |   4 +
+ .../tuinity/util/OptimizedSmallEnumSet.java   |  65 +++++++++
+ .../net/minecraft/server/PathfinderGoal.java  |   6 +-
+ .../server/PathfinderGoalSelector.java        | 132 +++++++++++-------
+ .../server/PathfinderGoalWrapped.java         |   6 +-
+ 5 files changed, 159 insertions(+), 54 deletions(-)
+ create mode 100644 src/main/java/com/tuinity/tuinity/util/OptimizedSmallEnumSet.java
+
+diff --git a/src/main/java/co/aikar/timings/MinecraftTimings.java b/src/main/java/co/aikar/timings/MinecraftTimings.java
+index 69e26a8267..11b62a2e0d 100644
+--- a/src/main/java/co/aikar/timings/MinecraftTimings.java
++++ b/src/main/java/co/aikar/timings/MinecraftTimings.java
+@@ -42,6 +42,10 @@ public final class MinecraftTimings {
+     public static final Timing antiXrayUpdateTimer = Timings.ofSafe("anti-xray - update");
+     public static final Timing antiXrayObfuscateTimer = Timings.ofSafe("anti-xray - obfuscate");
+ 
++    public static final Timing goalCleanup = Timings.ofSafe("PathfinderGoal - Cleanup");
++    public static final Timing goalUpdate = Timings.ofSafe("PathfinderGoal - Update");
++    public static final Timing goalTick = Timings.ofSafe("PathfinderGoal - Tick");
++
+     private static final Map<Class<?>, String> taskNameCache = new MapMaker().weakKeys().makeMap();
+ 
+     private MinecraftTimings() {}
+diff --git a/src/main/java/com/tuinity/tuinity/util/OptimizedSmallEnumSet.java b/src/main/java/com/tuinity/tuinity/util/OptimizedSmallEnumSet.java
+new file mode 100644
+index 0000000000..68db858885
+--- /dev/null
++++ b/src/main/java/com/tuinity/tuinity/util/OptimizedSmallEnumSet.java
+@@ -0,0 +1,65 @@
++package com.tuinity.tuinity.util;
++
++import java.util.Collection;
++
++// containing utils to work on small numbers of enums
++public final class OptimizedSmallEnumSet<E extends Enum> {
++
++    private final Class<E> enumClass;
++    private long backingSet;
++
++    public OptimizedSmallEnumSet(final Class<E> clazz) {
++        if (clazz == null) {
++            throw new IllegalArgumentException("Null class");
++        }
++        if (!clazz.isEnum()) {
++            throw new IllegalArgumentException("Class must be enum, not " + clazz.getCanonicalName());
++        }
++        this.enumClass = clazz;
++    }
++
++    public boolean addUnchecked(final E element) {
++        final int ordinal = element.ordinal();
++        final long key = 1L << ordinal;
++
++        final long prev = this.backingSet;
++        this.backingSet = prev | key;
++
++        return (prev & key) == 0;
++    }
++
++    public boolean removeUnchecked(final E element) {
++        final int ordinal = element.ordinal();
++        final long key = 1L << ordinal;
++
++        final long prev = this.backingSet;
++        this.backingSet = prev & ~key;
++
++        return (prev & key) != 0;
++    }
++
++    public void clear() {
++        this.backingSet = 0L;
++    }
++
++    public int size() {
++        return Long.bitCount(this.backingSet);
++    }
++
++    public void addAllUnchecked(final Collection<E> enums) {
++        for (final E element : enums) {
++            if (element == null) {
++                throw new NullPointerException("Null element");
++            }
++            this.backingSet |= (1L << element.ordinal());
++        }
++    }
++
++    public long getBackingSet() {
++        return this.backingSet;
++    }
++
++    public boolean hasCommonElements(final OptimizedSmallEnumSet<E> other) {
++        return (other.backingSet & this.backingSet) != 0;
++    }
++}
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoal.java b/src/main/java/net/minecraft/server/PathfinderGoal.java
+index e059930ba7..6c307a9095 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoal.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoal.java
+@@ -4,7 +4,7 @@ import java.util.EnumSet;
+ 
+ public abstract class PathfinderGoal {
+ 
+-    private final EnumSet<PathfinderGoal.Type> a = EnumSet.noneOf(PathfinderGoal.Type.class);
++    private final com.tuinity.tuinity.util.OptimizedSmallEnumSet<Type> a = new com.tuinity.tuinity.util.OptimizedSmallEnumSet<>(PathfinderGoal.Type.class); // Purpur
+ 
+     public PathfinderGoal() {}
+ 
+@@ -30,14 +30,14 @@ public abstract class PathfinderGoal {
+     public void setTypes(EnumSet<PathfinderGoal.Type> types) { this.a(types); } // Purpur - OBFHELPER
+     public void a(EnumSet<PathfinderGoal.Type> enumset) {
+         this.a.clear();
+-        this.a.addAll(enumset);
++        this.a.addAllUnchecked(enumset); // Purpur
+     }
+ 
+     public String toString() {
+         return this.getClass().getSimpleName();
+     }
+ 
+-    public EnumSet<PathfinderGoal.Type> i() {
++    public com.tuinity.tuinity.util.OptimizedSmallEnumSet<PathfinderGoal.Type> i() { // Purpur
+         return this.a;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalSelector.java b/src/main/java/net/minecraft/server/PathfinderGoalSelector.java
+index 935136771e..b2bea3e241 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalSelector.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalSelector.java
+@@ -12,6 +12,7 @@ import org.apache.logging.log4j.Logger;
+ public class PathfinderGoalSelector {
+ 
+     private static final Logger LOGGER = LogManager.getLogger();
++    private static PathfinderGoalWrapped EMPTY_GOAL() { return b; }; // Purpur - OBFHELPER
+     private static final PathfinderGoalWrapped b = new PathfinderGoalWrapped(Integer.MAX_VALUE, new PathfinderGoal() {
+         @Override
+         public boolean a() {
+@@ -26,7 +27,7 @@ public class PathfinderGoalSelector {
+     private final Map<PathfinderGoal.Type, PathfinderGoalWrapped> c = new EnumMap(PathfinderGoal.Type.class);
+     private final Set<PathfinderGoalWrapped> d = Sets.newLinkedHashSet();private Set<PathfinderGoalWrapped> getTasks() { return d; }// Paper - OBFHELPER
+     private final GameProfilerFiller e;
+-    private final EnumSet<PathfinderGoal.Type> f = EnumSet.noneOf(PathfinderGoal.Type.class);
++    private final com.tuinity.tuinity.util.OptimizedSmallEnumSet<PathfinderGoal.Type> disabledTypes = new com.tuinity.tuinity.util.OptimizedSmallEnumSet<>(PathfinderGoal.Type.class); // Purpur
+     private int g = 3;private int getTickRate() { return g; } // Paper - OBFHELPER
+     private int curRate;private int getCurRate() { return curRate; } private void incRate() { this.curRate++; } // Paper TODO
+ 
+@@ -58,65 +59,98 @@ public class PathfinderGoalSelector {
+     // Paper end
+ 
+     public void a(PathfinderGoal pathfindergoal) {
+-        this.d.stream().filter((pathfindergoalwrapped) -> {
+-            return pathfindergoalwrapped.j() == pathfindergoal;
+-        }).filter(PathfinderGoalWrapped::g).forEach(PathfinderGoalWrapped::d);
+-        this.d.removeIf((pathfindergoalwrapped) -> {
+-            return pathfindergoalwrapped.j() == pathfindergoal;
+-        });
++        // Purpur start
++        for (java.util.Iterator<PathfinderGoalWrapped> iterator = getTasks().iterator(); iterator.hasNext();) {
++            PathfinderGoalWrapped wrappedGoal = iterator.next();
++            if (wrappedGoal.getGoal() != pathfindergoal) {
++                continue;
++            }
++            if (wrappedGoal.isRunning()) {
++                wrappedGoal.d(); // reset goal
++            }
++            iterator.remove();
++        }
++        // Purpur end
+     }
+ 
++    private static final PathfinderGoal.Type[] PATHFINDER_GOAL_TYPES = PathfinderGoal.Type.values(); // Purpur
++
+     public void doTick() {
+         this.e.enter("goalCleanup");
+-        this.c().filter((pathfindergoalwrapped) -> {
+-            boolean flag;
++        // Purpur start
++        co.aikar.timings.MinecraftTimings.goalCleanup.startTiming();
++        for (java.util.Iterator<PathfinderGoalWrapped> iter = getTasks().iterator(); iter.hasNext();) {
++            PathfinderGoalWrapped wrappedGoal = iter.next();
++            if (!wrappedGoal.isRunning()) {
++                continue; // goal is not running
++            }
++            if (!this.disabledTypes.hasCommonElements(wrappedGoal.getTypes()) && wrappedGoal.b()) {
++                continue; // goal type is not disabled and should continue running
++            }
++            wrappedGoal.d(); // reset goal
++        }
++        this.c.forEach((type, goal) -> {
++            if (!goal.isRunning()) {
++                this.c.remove(type); // remove locked goal types if goal no longer running
++            }
++        });
++        co.aikar.timings.MinecraftTimings.goalCleanup.stopTiming();
++        // Purpur end
++        this.e.exit();
++        this.e.enter("goalUpdate");
++        // Purpur start
++        co.aikar.timings.MinecraftTimings.goalUpdate.startTiming();
++        goal_update_loop:
++        for (java.util.Iterator<PathfinderGoalWrapped> iterator = getTasks().iterator(); iterator.hasNext();) {
++            PathfinderGoalWrapped wrappedGoal = iterator.next();
++            if (wrappedGoal.isRunning()) {
++                continue; // goal is already running
++            }
++
++            com.tuinity.tuinity.util.OptimizedSmallEnumSet<PathfinderGoal.Type> wrappedGoalSet = wrappedGoal.getTypes();
+ 
+-            if (pathfindergoalwrapped.g()) {
+-                Stream stream = pathfindergoalwrapped.i().stream();
+-                EnumSet enumset = this.f;
++            if (disabledTypes.hasCommonElements(wrappedGoalSet)) {
++                continue; // goal type is disabled
++            }
+ 
+-                this.f.getClass();
+-                if (!stream.anyMatch(enumset::contains) && pathfindergoalwrapped.b()) {
+-                    flag = false;
+-                    return flag;
++            long k = wrappedGoalSet.getBackingSet();
++            int wrappedGoalSize = wrappedGoalSet.size();
++            for (int i = 0; i < wrappedGoalSize; ++i) {
++                PathfinderGoal.Type type = PATHFINDER_GOAL_TYPES[Long.numberOfTrailingZeros(k)];
++                k ^= -k & k; // Tuinity's ca.spottedleaf.concurrentutil.util.IntegerUtil.getTrailingBit
++                if (!c.getOrDefault(type, EMPTY_GOAL()).canBeReplacedBy(wrappedGoal)) {
++                    continue goal_update_loop; // goal type(s) is locked by another running goal with same type(s)
+                 }
+             }
+ 
+-            flag = true;
+-            return flag;
+-        }).forEach(PathfinderGoal::d);
+-        this.c.forEach((pathfindergoal_type, pathfindergoalwrapped) -> {
+-            if (!pathfindergoalwrapped.g()) {
+-                this.c.remove(pathfindergoal_type);
++            if (!wrappedGoal.a()) {
++                continue; // goal failed to run
+             }
+ 
+-        });
+-        this.e.exit();
+-        this.e.enter("goalUpdate");
+-        this.d.stream().filter((pathfindergoalwrapped) -> {
+-            return !pathfindergoalwrapped.g();
+-        }).filter((pathfindergoalwrapped) -> {
+-            Stream stream = pathfindergoalwrapped.i().stream();
+-            EnumSet enumset = this.f;
+-
+-            this.f.getClass();
+-            return stream.noneMatch(enumset::contains);
+-        }).filter((pathfindergoalwrapped) -> {
+-            return pathfindergoalwrapped.i().stream().allMatch((pathfindergoal_type) -> {
+-                return ((PathfinderGoalWrapped) this.c.getOrDefault(pathfindergoal_type, PathfinderGoalSelector.b)).a(pathfindergoalwrapped);
+-            });
+-        }).filter(PathfinderGoalWrapped::a).forEach((pathfindergoalwrapped) -> {
+-            pathfindergoalwrapped.i().forEach((pathfindergoal_type) -> {
+-                PathfinderGoalWrapped pathfindergoalwrapped1 = (PathfinderGoalWrapped) this.c.getOrDefault(pathfindergoal_type, PathfinderGoalSelector.b);
+-
+-                pathfindergoalwrapped1.d();
+-                this.c.put(pathfindergoal_type, pathfindergoalwrapped);
+-            });
+-            pathfindergoalwrapped.c();
+-        });
++            k = wrappedGoalSet.getBackingSet();
++            wrappedGoalSize = wrappedGoalSet.size();
++            for (int i = 0; i < wrappedGoalSize; ++i) {
++                PathfinderGoal.Type type = PATHFINDER_GOAL_TYPES[Long.numberOfTrailingZeros(k)];
++                k ^= -k & k; // Tuinity's ca.spottedleaf.concurrentutil.util.IntegerUtil.getTrailingBit
++                c.getOrDefault(type, EMPTY_GOAL()).d(); // reset goal
++                c.put(type, wrappedGoal);
++            }
++
++            wrappedGoal.c(); // start goal
++        }
++        co.aikar.timings.MinecraftTimings.goalUpdate.stopTiming();
++        // Purpur end
+         this.e.exit();
+         this.e.enter("goalTick");
+-        this.c().forEach(PathfinderGoalWrapped::e);
++        // Purpur start
++        co.aikar.timings.MinecraftTimings.goalTick.startTiming();
++        for (PathfinderGoalWrapped wrappedGoal : getTasks()) {
++            if (wrappedGoal.isRunning()) {
++                wrappedGoal.e(); // goal tick
++            }
++        }
++        co.aikar.timings.MinecraftTimings.goalTick.stopTiming();
++        // Purpur end
+         this.e.exit();
+     }
+ 
+@@ -125,11 +159,11 @@ public class PathfinderGoalSelector {
+     }
+ 
+     public void a(PathfinderGoal.Type pathfindergoal_type) {
+-        this.f.add(pathfindergoal_type);
++        this.disabledTypes.addUnchecked(pathfindergoal_type); // Purpur
+     }
+ 
+     public void b(PathfinderGoal.Type pathfindergoal_type) {
+-        this.f.remove(pathfindergoal_type);
++        this.disabledTypes.removeUnchecked(pathfindergoal_type); // Purpur
+     }
+ 
+     public void a(PathfinderGoal.Type pathfindergoal_type, boolean flag) {
+diff --git a/src/main/java/net/minecraft/server/PathfinderGoalWrapped.java b/src/main/java/net/minecraft/server/PathfinderGoalWrapped.java
+index 29657fed75..172e74b965 100644
+--- a/src/main/java/net/minecraft/server/PathfinderGoalWrapped.java
++++ b/src/main/java/net/minecraft/server/PathfinderGoalWrapped.java
+@@ -14,6 +14,7 @@ public class PathfinderGoalWrapped extends PathfinderGoal {
+         this.a = pathfindergoal;
+     }
+ 
++    public boolean canBeReplacedBy(PathfinderGoalWrapped pathfindergoalwrapped) { return a(pathfindergoalwrapped); } // Purpur - OBFHELPER
+     public boolean a(PathfinderGoalWrapped pathfindergoalwrapped) {
+         return this.E_() && pathfindergoalwrapped.h() < this.h();
+     }
+@@ -59,8 +60,8 @@ public class PathfinderGoalWrapped extends PathfinderGoal {
+         this.a.a(enumset);
+     }
+ 
+-    @Override
+-    public EnumSet<PathfinderGoal.Type> i() {
++    public com.tuinity.tuinity.util.OptimizedSmallEnumSet<PathfinderGoal.Type> getTypes() { return i(); } // Purpur - OBFHELPER
++    @Override public com.tuinity.tuinity.util.OptimizedSmallEnumSet<PathfinderGoal.Type> i() { // Purpur
+         return this.a.i();
+     }
+ 
+@@ -73,6 +74,7 @@ public class PathfinderGoalWrapped extends PathfinderGoal {
+         return this.b;
+     }
+ 
++    public PathfinderGoal getGoal() { return j(); } // Purpur - OBFHELPER
+     public PathfinderGoal j() {
+         return this.a;
+     }
+-- 
+2.24.0
+
