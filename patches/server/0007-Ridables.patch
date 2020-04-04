@@ -1,4 +1,4 @@
-From 0ed72be7432541d6fbc0cae5de1e2877bf8db166 Mon Sep 17 00:00:00 2001
+From 392cd63c778db648271e8db15aac6b3d4e060bf9 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Thu, 6 Feb 2020 19:53:59 -0600
 Subject: [PATCH] Ridables
@@ -50,7 +50,7 @@ Subject: [PATCH] Ridables
  .../net/minecraft/server/EntityOcelot.java    |  19 +
  .../net/minecraft/server/EntityPanda.java     |  47 +-
  .../net/minecraft/server/EntityParrot.java    |  77 ++-
- .../net/minecraft/server/EntityPhantom.java   |  77 ++-
+ .../net/minecraft/server/EntityPhantom.java   |  97 ++-
  .../java/net/minecraft/server/EntityPig.java  |  48 +-
  .../net/minecraft/server/EntityPigZombie.java |  17 +
  .../net/minecraft/server/EntityPillager.java  |  19 +
@@ -93,22 +93,24 @@ Subject: [PATCH] Ridables
  .../minecraft/server/ProjectileHelper.java    |   1 +
  src/main/java/net/minecraft/server/Vec3D.java |   3 +
  src/main/java/net/minecraft/server/World.java |   7 +
- .../net/pl3x/purpur/PurpurWorldConfig.java    | 595 ++++++++++++++++++
+ .../net/pl3x/purpur/PurpurWorldConfig.java    | 599 ++++++++++++++++++
  .../purpur/controller/ControllerLookWASD.java |  75 +++
  .../purpur/controller/ControllerMoveWASD.java |  86 +++
  .../controller/ControllerMoveWASDFlying.java  |  53 ++
  .../ControllerMoveWASDFlyingWithSpacebar.java |  61 ++
  .../controller/ControllerMoveWASDWater.java   |  43 ++
  .../net/pl3x/purpur/entity/DolphinSpit.java   | 119 ++++
+ .../net/pl3x/purpur/entity/PhantomFlames.java | 126 ++++
  .../pathfinder/PathfinderGoalHasRider.java    |  21 +
  .../craftbukkit/entity/CraftEntity.java       |  27 +
- 98 files changed, 3451 insertions(+), 204 deletions(-)
+ 99 files changed, 3601 insertions(+), 204 deletions(-)
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerLookWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASD.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlying.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDFlyingWithSpacebar.java
  create mode 100644 src/main/java/net/pl3x/purpur/controller/ControllerMoveWASDWater.java
  create mode 100644 src/main/java/net/pl3x/purpur/entity/DolphinSpit.java
+ create mode 100644 src/main/java/net/pl3x/purpur/entity/PhantomFlames.java
  create mode 100644 src/main/java/net/pl3x/purpur/pathfinder/PathfinderGoalHasRider.java
 
 diff --git a/src/main/java/net/minecraft/server/AxisAlignedBB.java b/src/main/java/net/minecraft/server/AxisAlignedBB.java
@@ -195,7 +197,7 @@ index 816d301f1c..f7344d3aec 100644
          this.C = true;
          return this;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index d098b224fb..ffdad5f332 100644
+index 862a64b6fd..69ae184bc6 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -79,7 +79,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -2279,7 +2281,7 @@ index 5782a25ecd..c87fc523f1 100644
 +    protected void ez() { if (world.purpurConfig.zombieHorseCanSwim) goalSelector.a(0, new PathfinderGoalFloat(this)); } // Purpur
  }
 diff --git a/src/main/java/net/minecraft/server/EntityHuman.java b/src/main/java/net/minecraft/server/EntityHuman.java
-index 584166f225..de22cad764 100644
+index 7afcde608e..f372c13d8b 100644
 --- a/src/main/java/net/minecraft/server/EntityHuman.java
 +++ b/src/main/java/net/minecraft/server/EntityHuman.java
 @@ -374,9 +374,21 @@ public abstract class EntityHuman extends EntityLiving {
@@ -3059,7 +3061,7 @@ index 94e57a2d85..7ba2f3a351 100644
          this.goalSelector.a(2, this.goalSit);
          this.goalSelector.a(2, new PathfinderGoalFollowOwner(this, 1.0D, 5.0F, 1.0F, true));
 diff --git a/src/main/java/net/minecraft/server/EntityPhantom.java b/src/main/java/net/minecraft/server/EntityPhantom.java
-index 90eeddb1af..5ccbc341d2 100644
+index 90eeddb1af..c392085d0b 100644
 --- a/src/main/java/net/minecraft/server/EntityPhantom.java
 +++ b/src/main/java/net/minecraft/server/EntityPhantom.java
 @@ -22,6 +22,40 @@ public class EntityPhantom extends EntityFlying implements IMonster {
@@ -3115,21 +3117,20 @@ index 90eeddb1af..5ccbc341d2 100644
          this.targetSelector.a(1, new EntityPhantom.b());
      }
  
-@@ -39,6 +75,13 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+@@ -39,6 +75,12 @@ public class EntityPhantom extends EntityFlying implements IMonster {
      protected void initAttributes() {
          super.initAttributes();
          this.getAttributeMap().b(GenericAttributes.ATTACK_DAMAGE);
 +        // Purpur start
 +        if (world != null && world.purpurConfig.phantomRidable) {
-+            this.getAttributeInstance(GenericAttributes.MOVEMENT_SPEED).setValue(0.01D);
 +            this.getAttributeMap().b(GenericAttributes.FLYING_SPEED);
-+            this.getAttributeInstance(GenericAttributes.FLYING_SPEED).setValue(0.6000000238418579D);
++            this.getAttributeInstance(GenericAttributes.FLYING_SPEED).setValue(3.0D);
 +        }
 +        // Purpur end
      }
  
      @Override
-@@ -103,7 +146,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+@@ -103,7 +145,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
  
      @Override
      public void movementTick() {
@@ -3138,7 +3139,35 @@ index 90eeddb1af..5ccbc341d2 100644
              this.setOnFire(8);
          }
  
-@@ -215,6 +258,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+@@ -115,6 +157,27 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+         super.mobTick();
+     }
+ 
++    // Purpur start
++    @Override
++    public boolean onSpacebar() {
++        if (hasRider() && getRider().getBukkitEntity().hasPermission("allow.special.phantom")) {
++            shoot();
++        }
++        return false;
++    }
++
++    public boolean shoot() {
++        org.bukkit.Location loc = ((org.bukkit.entity.LivingEntity) getBukkitEntity()).getEyeLocation();
++        loc.setPitch(-loc.getPitch());
++        org.bukkit.util.Vector target = loc.getDirection().normalize().multiply(100).add(loc.toVector());
++
++        net.pl3x.purpur.entity.PhantomFlames flames = new net.pl3x.purpur.entity.PhantomFlames(world, this);
++        flames.shoot(target.getX() - locX(), target.getY() - locY(), target.getZ() - locZ(), 1.0F, 5.0F);
++        world.addEntity(flames);
++        return true;
++    }
++    // Purpur end
++
+     @Override
+     public GroupDataEntity prepare(GeneratorAccess generatoraccess, DifficultyDamageScaler difficultydamagescaler, EnumMobSpawn enummobspawn, @Nullable GroupDataEntity groupdataentity, @Nullable NBTTagCompound nbttagcompound) {
+         this.d = (new BlockPosition(this)).up(5);
+@@ -215,6 +278,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
  
          @Override
          public boolean a() {
@@ -3146,7 +3175,7 @@ index 90eeddb1af..5ccbc341d2 100644
              if (this.c > 0) {
                  --this.c;
                  return false;
-@@ -244,6 +288,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+@@ -244,6 +308,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
  
          @Override
          public boolean b() {
@@ -3154,7 +3183,7 @@ index 90eeddb1af..5ccbc341d2 100644
              EntityLiving entityliving = EntityPhantom.this.getGoalTarget();
  
              return entityliving != null ? EntityPhantom.this.a(entityliving, PathfinderTargetCondition.a) : false;
-@@ -258,6 +303,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+@@ -258,6 +323,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
  
          @Override
          public boolean a() {
@@ -3162,7 +3191,7 @@ index 90eeddb1af..5ccbc341d2 100644
              EntityLiving entityliving = EntityPhantom.this.getGoalTarget();
  
              return entityliving != null ? EntityPhantom.this.a(EntityPhantom.this.getGoalTarget(), PathfinderTargetCondition.a) : false;
-@@ -447,14 +493,23 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+@@ -447,14 +513,23 @@ public class EntityPhantom extends EntityFlying implements IMonster {
          }
      }
  
@@ -3188,7 +3217,7 @@ index 90eeddb1af..5ccbc341d2 100644
      }
  
      class d extends EntityAIBodyControl {
-@@ -470,7 +525,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+@@ -470,7 +545,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
          }
      }
  
@@ -3197,7 +3226,7 @@ index 90eeddb1af..5ccbc341d2 100644
  
          private float j = 0.1F;
  
-@@ -479,7 +534,19 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+@@ -479,7 +554,19 @@ public class EntityPhantom extends EntityFlying implements IMonster {
          }
  
          @Override
@@ -3357,7 +3386,7 @@ index 0357c9da93..98a657cece 100644
          this.targetSelector.a(2, new PathfinderGoalNearestAttackableTarget<>(this, EntityHuman.class, true));
          this.targetSelector.a(3, new PathfinderGoalNearestAttackableTarget<>(this, EntityVillagerAbstract.class, false));
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index e353d93365..f4fcefc68e 100644
+index f44825090f..c8e2b81a1f 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/EntityPlayer.java
 @@ -1291,6 +1291,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
@@ -5212,10 +5241,10 @@ index 1131d43269..7451b7fc4b 100644
 +    // Purpur end
  }
 diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-index eda37fa43f..430e31a2a3 100644
+index eda37fa43f..69f99a993d 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-@@ -64,4 +64,599 @@ public class PurpurWorldConfig {
+@@ -64,4 +64,603 @@ public class PurpurWorldConfig {
          PurpurConfig.config.addDefault("world-settings.default." + path, def);
          return PurpurConfig.config.getString("world-settings." + worldName + "." + path, PurpurConfig.config.getString("world-settings.default." + path));
      }
@@ -5529,11 +5558,15 @@ index eda37fa43f..430e31a2a3 100644
 +    public boolean phantomRidableInWater = false;
 +    public boolean phantomRequireShiftToMount = true;
 +    public double phantomMaxY = 256D;
++    public float phantomFlameDamage = 1.0F;
++    public int phantomFlameFireTime = 8;
 +    private void phantomSettings() {
 +        phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
 +        phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
 +        phantomRequireShiftToMount = getBoolean("mobs.phantom.require-shift-to-mount", phantomRequireShiftToMount);
 +        phantomMaxY = getDouble("mobs.phantom.ridable-max-y", phantomMaxY);
++        phantomFlameDamage = (float) getDouble("mobs.phantom.flames.damage", phantomFlameDamage);
++        phantomFlameFireTime = getInt("mobs.phantom.flames.fire-time", phantomFlameFireTime);
 +    }
 +
 +    public boolean pigRidable = false;
@@ -6262,6 +6295,138 @@ index 0000000000..7189cc569f
 +                if (dolphin != null) {
 +                    Entity entity = ((MovingObjectPositionEntity) rayTrace).getEntity();
 +                    entity.damageEntity(DamageSource.indirectMobAttack(this, dolphin).setProjectile(), world.purpurConfig.dolphinSpitDamage);
++                }
++                die();
++        }
++    }
++
++    @Override
++    public void a(MovingObjectPosition movingobjectposition) {
++    }
++
++    @Override
++    protected void initDatawatcher() {
++    }
++
++    @Override
++    protected void a(NBTTagCompound nbttagcompound) {
++    }
++
++    @Override
++    protected void b(NBTTagCompound nbttagcompound) {
++    }
++
++    @Override
++    public Packet<?> L() {
++        return new PacketPlayOutSpawnEntity(this);
++    }
++}
+diff --git a/src/main/java/net/pl3x/purpur/entity/PhantomFlames.java b/src/main/java/net/pl3x/purpur/entity/PhantomFlames.java
+new file mode 100644
+index 0000000000..f9e680efd2
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/entity/PhantomFlames.java
+@@ -0,0 +1,126 @@
++package net.pl3x.purpur.entity;
++
++import net.minecraft.server.DamageSource;
++import net.minecraft.server.Entity;
++import net.minecraft.server.EntityLiving;
++import net.minecraft.server.EntityLlamaSpit;
++import net.minecraft.server.EntityPhantom;
++import net.minecraft.server.EntityTypes;
++import net.minecraft.server.IProjectile;
++import net.minecraft.server.Material;
++import net.minecraft.server.MathHelper;
++import net.minecraft.server.MovingObjectPosition;
++import net.minecraft.server.MovingObjectPositionEntity;
++import net.minecraft.server.NBTTagCompound;
++import net.minecraft.server.Packet;
++import net.minecraft.server.PacketPlayOutSpawnEntity;
++import net.minecraft.server.Particles;
++import net.minecraft.server.ProjectileHelper;
++import net.minecraft.server.RayTrace;
++import net.minecraft.server.Vec3D;
++import net.minecraft.server.World;
++import net.minecraft.server.WorldServer;
++import org.bukkit.craftbukkit.event.CraftEventFactory;
++
++public class PhantomFlames extends EntityLlamaSpit implements IProjectile {
++    public EntityLiving phantom;
++    public int ticksLived;
++
++    public PhantomFlames(EntityTypes<? extends EntityLlamaSpit> entitytypes, World world) {
++        super(entitytypes, world);
++    }
++
++    public PhantomFlames(World world, EntityPhantom phantom) {
++        this(EntityTypes.LLAMA_SPIT, world);
++        this.phantom = phantom;
++
++        setPosition(phantom.locX() - (double) (phantom.getWidth() + 1.0F) * 0.5D * (double) MathHelper.sin(phantom.getBodyRotation() * ((float) Math.PI / 180F)), phantom.getHeadY() - (double) 0.1F, phantom.locZ() + (double) (phantom.getWidth() + 1.0F) * 0.5D * (double) MathHelper.cos(phantom.getBodyRotation() * ((float) Math.PI / 180F)));
++    }
++
++    @Override
++    public boolean canSaveToDisk() {
++        return false;
++    }
++
++    @Override
++    public void tick() {
++        setFlag(6, isGlowing());
++        entityBaseTick();
++
++        Vec3D mot = getMot();
++
++        MovingObjectPosition hitResult = ProjectileHelper.getHitResult(this, getBoundingBox().expandTowards(mot).expand(1.0D), (entity) -> !entity.isSpectator() && entity != phantom && entity != phantom.getRider(), RayTrace.BlockCollisionOption.OUTLINE, true);
++        if (hitResult != null) {
++            onHit(hitResult);
++        }
++
++        mot = mot.scale(0.99F);
++        setMot(mot);
++        setPosition(locX() + mot.x, locY() + mot.y, locZ() + mot.z);
++
++        Vec3D m = mot.scale(2.0);
++        for (int i = 0; i < 5; i++) {
++            ((WorldServer) world).sendParticles(null, Particles.FLAME,
++                    locX() + random.nextFloat() / 2 - 0.25F,
++                    locY() + random.nextFloat() / 2 - 0.25F,
++                    locZ() + random.nextFloat() / 2 - 0.25F,
++                    0, m.getX(), m.getY(), m.getZ(), 0.1, true);
++        }
++
++        if (!world.containsMaterial(getBoundingBox(), Material.AIR)) {
++            die();
++        }
++        if (++ticksLived > 20) {
++            die();
++        }
++    }
++
++    @Override
++    public void shoot(double x, double y, double z, float speed, float inaccuracy) {
++        setMot(new Vec3D(x, y, z).normalize().add(
++                random.nextGaussian() * (double) 0.0075F * (double) inaccuracy,
++                random.nextGaussian() * (double) 0.0075F * (double) inaccuracy,
++                random.nextGaussian() * (double) 0.0075F * (double) inaccuracy)
++                .scale(speed));
++    }
++
++    public void onHit(MovingObjectPosition rayTrace) {
++        CraftEventFactory.callProjectileHitEvent(this, rayTrace);
++
++        switch (rayTrace.getType()) {
++            case BLOCK:
++                die();
++                break;
++            case ENTITY:
++                if (phantom != null) {
++                    Entity entity = ((MovingObjectPositionEntity) rayTrace).getEntity();
++                    entity.damageEntity(DamageSource.indirectMobAttack(this, phantom).setProjectile(), world.purpurConfig.phantomFlameDamage);
++                    if (world.purpurConfig.phantomFlameFireTime > 0) {
++                        entity.setOnFire(world.purpurConfig.phantomFlameFireTime);
++                    }
 +                }
 +                die();
 +        }
