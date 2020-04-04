@@ -997,6 +997,13 @@ mobs
     * orbit-crystal-radius
         - **default**: 0.0
         - **description**: Radius which phantoms scan for crystals to orbit. Value of 0 disables feature
+    * flames
+        * damage
+            - **default**: 1.0
+            - **description**: The amount of direct damage from phantom flames
+        * fire-time
+            - **default**: 8
+            - **description**: Number of seconds an entity is set on fire when hit by flames
 
 * pig
     * ridable
