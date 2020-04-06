@@ -1029,6 +1029,13 @@ mobs
     * limit-outpost-spawns
         * **default**: 0
         * **description**: Limit the number of pillagers allowed to spawn at an outpost at any given time. 0 disables the limit
+    * leader
+        * chance
+            * **default**: 0.06
+            * **description**: Chance a pillager spawns as a leader at an outpost (0.0 - 1.0)
+        * range-check-for-other-leaders
+            * **default**: 0
+            * **description**: If there is another leader within this radius range, do not make new outpost spawn a leader. (0 disables feature)
 
 * polar_bear
     * ridable
