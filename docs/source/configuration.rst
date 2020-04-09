@@ -79,10 +79,10 @@ upnp-port-forwarding
 * **default**: false
 * **description**: Attempt to automatically port forward using UPnP
 
-recalculate-perms-on-world-change
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* **default**: true
-* **description**: When a player changes worlds the server recalculates their permissions and resends their available commands
+update-permissions-and-commands-async
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* **default**: false
+* **description**: Recalculate player permissions and command map asynchronously
 
 logger
 ~~~~~~
