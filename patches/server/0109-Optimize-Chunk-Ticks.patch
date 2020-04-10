@@ -1,19 +1,19 @@
-From a5ff94c33d6be044c252853121f6b3d491251720 Mon Sep 17 00:00:00 2001
+From c48af70fbccc813d46cc8cfa972bf2e4ad26ef5a Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Thu, 2 Apr 2020 00:28:06 -0500
 Subject: [PATCH] Optimize Chunk Ticks
 
 ---
- .../minecraft/server/ChunkProviderServer.java | 72 ++++++-------------
+ .../minecraft/server/ChunkProviderServer.java | 70 ++++++-------------
  .../minecraft/server/EnumCreatureType.java    | 14 ++++
  .../net/minecraft/server/PlayerChunkMap.java  | 30 ++++----
- 3 files changed, 52 insertions(+), 64 deletions(-)
+ 3 files changed, 51 insertions(+), 63 deletions(-)
 
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 59055cccc5..aad33cdc18 100644
+index 15450f36a4..276f1adcec 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-@@ -630,11 +630,12 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -632,11 +632,12 @@ public class ChunkProviderServer extends IChunkProvider {
              int k = this.world.getGameRules().getInt(GameRules.RANDOM_TICK_SPEED);
              BlockPosition blockposition = this.world.getSpawn();
              // CraftBukkit start - Other mob type spawn tick rate
@@ -31,7 +31,7 @@ index 59055cccc5..aad33cdc18 100644
              // CraftBukkit end
  
              this.world.getMethodProfiler().enter("naturalSpawnCount");
-@@ -660,16 +661,18 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -662,15 +663,17 @@ public class ChunkProviderServer extends IChunkProvider {
  
              this.world.timings.countNaturalMobs.stopTiming(); // Paper - timings
              this.world.getMethodProfiler().exit();
@@ -44,7 +44,6 @@ index 59055cccc5..aad33cdc18 100644
 -                entityPlayer.playerNaturallySpawnedEvent.callEvent();
 -            };
 -            // Paper end
--            this.playerChunkMap.visibleChunks.values().forEach((playerchunk) -> { // Paper - no need to wrap iterator
 +            // Purpur start
 +            if (com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent.getHandlerList().getRegisteredListeners().length > 0) {
 +                // Paper start - call player naturally spawn event
@@ -56,11 +55,10 @@ index 59055cccc5..aad33cdc18 100644
 +                // Paper end
 +            }
 +            // Purpur end
-+                this.playerChunkMap.visibleChunks.values().forEach((playerchunk) -> { // Paper - no need to wrap iterator
+             final int[] chunksTicked = {0}; this.playerChunkMap.forEachVisibleChunk((playerchunk) -> { // Paper - safe iterator incase chunk loads, also no wrapping
                  Optional<Chunk> optional = ((Either) playerchunk.b().getNow(PlayerChunk.UNLOADED_CHUNK)).left();
  
-                 if (optional.isPresent()) {
-@@ -688,40 +691,11 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -690,40 +693,11 @@ public class ChunkProviderServer extends IChunkProvider {
                          if (flag1 && (this.allowMonsters || this.allowAnimals) && this.world.getWorldBorder().isInBounds(chunk.getPos()) && !this.playerChunkMap.isOutsideOfRange(chunkcoordintpair, true)) { // Spigot
                              this.world.getMethodProfiler().enter("spawner");
                              this.world.timings.mobSpawn.startTiming(); // Spigot
@@ -137,10 +135,10 @@ index 3ed7fa324f..7f236585db 100644
 +    // Purpur end
  }
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index fbd3e4ea2c..1c7c3f96fb 100644
+index c21a3ea506..47dcc3e745 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-@@ -1333,28 +1333,28 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1351,28 +1351,28 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
  
      boolean isOutsideOfRange(ChunkCoordIntPair chunkcoordintpair, boolean reducedRange) {
