@@ -1,4 +1,4 @@
-From 768d10e0f31cc40dc3803b8631f953f4de958653 Mon Sep 17 00:00:00 2001
+From 3755fa9ef7cb0798f63098b7cc08db5a4bac6b73 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 25 Oct 2019 02:11:30 -0700
 Subject: [PATCH] Tuinity - Delay chunk unloads
@@ -15,12 +15,12 @@ without tickets get unloaded immediately.
 Configurable under `delay-chunkunloads-by` in config.
 ---
  .../java/net/minecraft/server/ChunkMap.java   |  1 +
- .../minecraft/server/ChunkMapDistance.java    | 69 ++++++++++++++++++-
+ .../minecraft/server/ChunkMapDistance.java    | 68 ++++++++++++++++++-
  .../java/net/minecraft/server/Ticket.java     |  6 +-
  .../java/net/minecraft/server/TicketType.java |  1 +
  .../java/net/pl3x/purpur/PurpurConfig.java    |  9 +++
  .../org/bukkit/craftbukkit/CraftWorld.java    |  1 +
- 6 files changed, 83 insertions(+), 4 deletions(-)
+ 6 files changed, 82 insertions(+), 4 deletions(-)
 
 diff --git a/src/main/java/net/minecraft/server/ChunkMap.java b/src/main/java/net/minecraft/server/ChunkMap.java
 index 55f9f4e6e..ac21fdb4c 100644
@@ -35,7 +35,7 @@ index 55f9f4e6e..ac21fdb4c 100644
          this.a(ChunkCoordIntPair.a, i, j, flag);
      }
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 279c7a85f..f26bc3417 100644
+index 942efe62f..6f710ffa2 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
 @@ -30,7 +30,7 @@ public abstract class ChunkMapDistance {
@@ -44,13 +44,13 @@ index 279c7a85f..f26bc3417 100644
      public final Long2ObjectOpenHashMap<ArraySetSorted<Ticket<?>>> tickets = new Long2ObjectOpenHashMap();
 -    private final ChunkMapDistance.a e = new ChunkMapDistance.a();
 +    private final ChunkMapDistance.a e = new ChunkMapDistance.a(); final ChunkMapDistance.a getTicketTracker() { return this.e; } // Purpur - OBFHELPER
-     private final ChunkMapDistance.b f = new ChunkMapDistance.b(8);
+     public static final int MOB_SPAWN_RANGE = 8; //private final ChunkMapDistance.b f = new ChunkMapDistance.b(8); // Paper - no longer used
      private final ChunkMapDistance.c g = new ChunkMapDistance.c(33);
      private final java.util.Queue<PlayerChunk> pendingChunkUpdates = new java.util.LinkedList<>(); // PAIL pendingChunkUpdates // Paper - use a queue
-@@ -41,6 +41,47 @@ public abstract class ChunkMapDistance {
-     private final Executor m;
+@@ -42,6 +42,46 @@ public abstract class ChunkMapDistance {
      private long currentTick;
  
+     PlayerChunkMap chunkMap; // Paper
 +    // Purpur start
 +    private long nextUnloadId;
 +    private final Long2ObjectOpenHashMap<Ticket<Long>> delayedChunks = new Long2ObjectOpenHashMap<>();
@@ -91,11 +91,10 @@ index 279c7a85f..f26bc3417 100644
 +        tickets.add(ticket); // re-add with new expire time and ticket level
 +    }
 +    // Purpur end
-+
+ 
      protected ChunkMapDistance(Executor executor, Executor executor1) {
          executor1.getClass();
-         Mailbox<Runnable> mailbox = Mailbox.a("player ticket throttler", executor1::execute);
-@@ -56,12 +97,30 @@ public abstract class ChunkMapDistance {
+@@ -58,12 +98,30 @@ public abstract class ChunkMapDistance {
          ++this.currentTick;
          ObjectIterator objectiterator = this.tickets.long2ObjectEntrySet().fastIterator();
  
@@ -127,7 +126,7 @@ index 279c7a85f..f26bc3417 100644
                  this.e.b(entry.getLongKey(), a((ArraySetSorted) entry.getValue()), false);
              }
  
-@@ -72,6 +131,7 @@ public abstract class ChunkMapDistance {
+@@ -74,6 +132,7 @@ public abstract class ChunkMapDistance {
  
      }
  
@@ -135,7 +134,7 @@ index 279c7a85f..f26bc3417 100644
      private static int a(ArraySetSorted<Ticket<?>> arraysetsorted) {
          return !arraysetsorted.isEmpty() ? ((Ticket) arraysetsorted.b()).b() : PlayerChunkMap.GOLDEN_TICKET + 1;
      }
-@@ -154,6 +214,11 @@ public abstract class ChunkMapDistance {
+@@ -156,6 +215,11 @@ public abstract class ChunkMapDistance {
          boolean removed = false; // CraftBukkit
          if (arraysetsorted.remove(ticket)) {
              removed = true; // CraftBukkit
@@ -173,12 +172,12 @@ index 7a8397815..8aae0b63e 100644
          long j = this.a.b();
  
 diff --git a/src/main/java/net/minecraft/server/TicketType.java b/src/main/java/net/minecraft/server/TicketType.java
-index 6e0d0a54a..07f77dbb8 100644
+index 8055f5998..93587068f 100644
 --- a/src/main/java/net/minecraft/server/TicketType.java
 +++ b/src/main/java/net/minecraft/server/TicketType.java
-@@ -24,6 +24,7 @@ public class TicketType<T> {
+@@ -23,6 +23,7 @@ public class TicketType<T> {
+     public static final TicketType<org.bukkit.plugin.Plugin> PLUGIN_TICKET = a("plugin_ticket", (plugin1, plugin2) -> plugin1.getClass().getName().compareTo(plugin2.getClass().getName())); // CraftBukkit
      public static final TicketType<Long> FUTURE_AWAIT = a("future_await", Long::compareTo); // Paper
-     public static final TicketType<Integer> ANTIXRAY = a("antixray", Integer::compareTo); // Paper - Anti-Xray
      public static final TicketType<Long> ASYNC_LOAD = a("async_load", Long::compareTo); // Paper
 +    public static final TicketType<Long> DELAYED_UNLOAD = a("delayed_unload", Long::compareTo); // Purpur
  
@@ -210,7 +209,7 @@ index ab88636ca..becb13e0e 100644
 +    }
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 97c2994a9..1f5e1a5a1 100644
+index 6a50d7de3..513e84f76 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 @@ -487,6 +487,7 @@ public class CraftWorld implements World {
