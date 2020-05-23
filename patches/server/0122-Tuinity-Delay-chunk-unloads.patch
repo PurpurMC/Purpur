@@ -1,4 +1,4 @@
-From fb5246adbd39b33de4c97f8ab9ece717ac69b1cb Mon Sep 17 00:00:00 2001
+From d2c2b464f6e94a3c3904e410164da9c97e9dde84 Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 25 Oct 2019 02:11:30 -0700
 Subject: [PATCH] Tuinity - Delay chunk unloads
@@ -35,10 +35,10 @@ index 55f9f4e6e..ac21fdb4c 100644
          this.a(ChunkCoordIntPair.a, i, j, flag);
      }
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 716d4eab3..8eddb1fa1 100644
+index 771d87971..6d46ca591 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-@@ -30,7 +30,7 @@ public abstract class ChunkMapDistance {
+@@ -31,7 +31,7 @@ public abstract class ChunkMapDistance {
      private static final int b = 33 + ChunkStatus.a(ChunkStatus.FULL) - 2;
      private final Long2ObjectMap<ObjectSet<EntityPlayer>> c = new Long2ObjectOpenHashMap();
      public final Long2ObjectOpenHashMap<ArraySetSorted<Ticket<?>>> tickets = new Long2ObjectOpenHashMap();
@@ -46,8 +46,8 @@ index 716d4eab3..8eddb1fa1 100644
 +    private final ChunkMapDistance.a e = new ChunkMapDistance.a(); final ChunkMapDistance.a getTicketTracker() { return this.e; } // Purpur - OBFHELPER
      public static final int MOB_SPAWN_RANGE = 8; //private final ChunkMapDistance.b f = new ChunkMapDistance.b(8); // Paper - no longer used
      private final ChunkMapDistance.c g = new ChunkMapDistance.c(33);
-     private final java.util.Queue<PlayerChunk> pendingChunkUpdates = new java.util.ArrayDeque<>(); // PAIL pendingChunkUpdates // Paper - use a queue
-@@ -42,6 +42,46 @@ public abstract class ChunkMapDistance {
+     // Paper start use a queue, but still keep unique requirement
+@@ -52,6 +52,46 @@ public abstract class ChunkMapDistance {
      private long currentTick;
  
      PlayerChunkMap chunkMap; // Paper
@@ -94,7 +94,7 @@ index 716d4eab3..8eddb1fa1 100644
  
      protected ChunkMapDistance(Executor executor, Executor executor1) {
          executor1.getClass();
-@@ -58,12 +98,30 @@ public abstract class ChunkMapDistance {
+@@ -68,12 +108,30 @@ public abstract class ChunkMapDistance {
          ++this.currentTick;
          ObjectIterator objectiterator = this.tickets.long2ObjectEntrySet().fastIterator();
  
@@ -126,15 +126,15 @@ index 716d4eab3..8eddb1fa1 100644
                  this.e.b(entry.getLongKey(), a((ArraySetSorted) entry.getValue()), false);
              }
  
-@@ -74,6 +132,7 @@ public abstract class ChunkMapDistance {
+@@ -84,6 +142,7 @@ public abstract class ChunkMapDistance {
  
      }
  
 +    private static int getLowestTicketLevel(ArraySetSorted<Ticket<?>> arraysetsorted) { return a(arraysetsorted); } // Purpur - OBFHELPER
      private static int a(ArraySetSorted<Ticket<?>> arraysetsorted) {
+         AsyncCatcher.catchOp("ChunkMapDistance::getHighestTicketLevel"); // Paper
          return !arraysetsorted.isEmpty() ? ((Ticket) arraysetsorted.b()).b() : PlayerChunkMap.GOLDEN_TICKET + 1;
-     }
-@@ -156,6 +215,11 @@ public abstract class ChunkMapDistance {
+@@ -175,6 +234,11 @@ public abstract class ChunkMapDistance {
          boolean removed = false; // CraftBukkit
          if (arraysetsorted.remove(ticket)) {
              removed = true; // CraftBukkit
@@ -147,7 +147,7 @@ index 716d4eab3..8eddb1fa1 100644
  
          if (arraysetsorted.isEmpty()) {
 diff --git a/src/main/java/net/minecraft/server/Ticket.java b/src/main/java/net/minecraft/server/Ticket.java
-index 7a8397815..8aae0b63e 100644
+index 0d6e0f2dd..ce0aef25c 100644
 --- a/src/main/java/net/minecraft/server/Ticket.java
 +++ b/src/main/java/net/minecraft/server/Ticket.java
 @@ -5,9 +5,10 @@ import java.util.Objects;
@@ -160,10 +160,10 @@ index 7a8397815..8aae0b63e 100644
 -    private long d; public final long getCreationTick() { return this.d; } // Paper - OBFHELPER
 +    private long d; public final long getCreationTick() { return this.d; } public final void setCreationTick(final long value) { this.d = value; } // Paper - OBFHELPER // Purpur - OBFHELPER
 +    boolean isCached; // Purpur - delay chunk unloads, this defends against really stupid plugins
+     public int priority = 0; // Paper
  
      protected Ticket(TicketType<T> tickettype, int i, T t0) {
-         this.a = tickettype;
-@@ -60,6 +61,7 @@ public final class Ticket<T> implements Comparable<Ticket<?>> {
+@@ -61,6 +62,7 @@ public final class Ticket<T> implements Comparable<Ticket<?>> {
          this.d = i;
      }
  
@@ -172,13 +172,13 @@ index 7a8397815..8aae0b63e 100644
          long j = this.a.b();
  
 diff --git a/src/main/java/net/minecraft/server/TicketType.java b/src/main/java/net/minecraft/server/TicketType.java
-index 8055f5998..93587068f 100644
+index 24ec5d77c..1243134bc 100644
 --- a/src/main/java/net/minecraft/server/TicketType.java
 +++ b/src/main/java/net/minecraft/server/TicketType.java
-@@ -23,6 +23,7 @@ public class TicketType<T> {
-     public static final TicketType<org.bukkit.plugin.Plugin> PLUGIN_TICKET = a("plugin_ticket", (plugin1, plugin2) -> plugin1.getClass().getName().compareTo(plugin2.getClass().getName())); // CraftBukkit
-     public static final TicketType<Long> FUTURE_AWAIT = a("future_await", Long::compareTo); // Paper
+@@ -25,6 +25,7 @@ public class TicketType<T> {
      public static final TicketType<Long> ASYNC_LOAD = a("async_load", Long::compareTo); // Paper
+     public static final TicketType<ChunkCoordIntPair> PRIORITY = a("priority", Comparator.comparingLong(ChunkCoordIntPair::pair), 300); // Paper
+     public static final TicketType<ChunkCoordIntPair> URGENT = a("urgent", Comparator.comparingLong(ChunkCoordIntPair::pair), 300); // Paper
 +    public static final TicketType<Long> DELAYED_UNLOAD = a("delayed_unload", Long::compareTo); // Purpur
  
      public static <T> TicketType<T> a(String s, Comparator<T> comparator) {
@@ -209,10 +209,10 @@ index ab88636ca..becb13e0e 100644
 +    }
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index bfd500587..643080f6f 100644
+index 066b07f5a..067272cf3 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-@@ -489,6 +489,7 @@ public class CraftWorld implements World {
+@@ -488,6 +488,7 @@ public class CraftWorld implements World {
          net.minecraft.server.IChunkAccess chunk = world.getChunkProvider().getChunkAtIfLoadedImmediately(x, z); // Paper
          if (chunk != null) {
              world.getChunkProvider().removeTicket(TicketType.PLUGIN, chunk.getPos(), 1, Unit.INSTANCE);
