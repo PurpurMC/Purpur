@@ -1,0 +1,72 @@
+From 8a8266685fcae04ff147307be88cb5a79083572e Mon Sep 17 00:00:00 2001
+From: Spottedleaf <Spottedleaf@users.noreply.github.com>
+Date: Thu, 11 Jun 2020 17:29:42 -0700
+Subject: [PATCH] PaperPR - Fix piston physics inconsistency
+
+Pistons invoke physics when they move blocks. The physics can cause
+tnt blocks to ignite. However, pistons (when storing the blocks they "moved")
+don't actually go back to the world state sometimes to check if something
+like that happened. As a result they end up moving the tnt like it was
+never ignited. This resulted in the ability to create machines
+that can duplicate tnt, called "world eaters".
+This patch makes the piston logic retrieve the block state from the world
+prevent this from occuring.
+
+Tested against the following tnt duper design:
+https://www.youtube.com/watch?v=mS7xxNGhjxs
+
+This patch also affects every type of machine that utilises
+this mechanic. For example, dead coral is removed by a physics
+update when being moved while it is attached to slimeblocks.
+
+Standard piston machines that don't destroy or modify the
+blocks they move by physics updates should be entirely
+unaffected.
+---
+ src/main/java/net/minecraft/server/BlockPiston.java      | 4 ++--
+ src/main/java/net/minecraft/server/TileEntityPiston.java | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/main/java/net/minecraft/server/BlockPiston.java b/src/main/java/net/minecraft/server/BlockPiston.java
+index 1e72b3bbc5..fbcc016941 100644
+--- a/src/main/java/net/minecraft/server/BlockPiston.java
++++ b/src/main/java/net/minecraft/server/BlockPiston.java
+@@ -374,11 +374,11 @@ public class BlockPiston extends BlockDirectional {
+ 
+             for (k = list.size() - 1; k >= 0; --k) {
+                 blockposition3 = (BlockPosition) list.get(k);
+-                iblockdata1 = world.getType(blockposition3);
++                iblockdata1 = world.getType(blockposition3); map.replace(blockposition3, iblockdata1); // Purpur - fix piston physics inconsistency
+                 blockposition3 = blockposition3.shift(enumdirection1);
+                 map.remove(blockposition3);
+                 world.setTypeAndData(blockposition3, (IBlockData) Blocks.MOVING_PISTON.getBlockData().set(BlockPiston.FACING, enumdirection), 68);
+-                world.setTileEntity(blockposition3, BlockPistonMoving.a((IBlockData) list1.get(k), enumdirection, flag, false));
++                world.setTileEntity(blockposition3, BlockPistonMoving.a(iblockdata1, enumdirection, flag, false)); // Purpur - fix piston physics inconsistency
+                 --j;
+                 aiblockdata[j] = iblockdata1;
+             }
+diff --git a/src/main/java/net/minecraft/server/TileEntityPiston.java b/src/main/java/net/minecraft/server/TileEntityPiston.java
+index 79df42f5e5..00608d09b7 100644
+--- a/src/main/java/net/minecraft/server/TileEntityPiston.java
++++ b/src/main/java/net/minecraft/server/TileEntityPiston.java
+@@ -137,7 +137,7 @@ public class TileEntityPiston extends TileEntity implements ITickable {
+     private static void a(EnumDirection enumdirection, Entity entity, double d0, EnumDirection enumdirection1) {
+         TileEntityPiston.h.set(enumdirection);
+         entity.move(EnumMoveType.PISTON, new Vec3D(d0 * (double) enumdirection1.getAdjacentX(), d0 * (double) enumdirection1.getAdjacentY(), d0 * (double) enumdirection1.getAdjacentZ()));
+-        TileEntityPiston.h.set((Object) null);
++        TileEntityPiston.h.set(null); // Purpur - decompile error
+     }
+ 
+     private void g(float f) {
+@@ -275,7 +275,7 @@ public class TileEntityPiston extends TileEntity implements ITickable {
+                 IBlockData iblockdata = Block.b(this.a, (GeneratorAccess) this.world, this.position);
+ 
+                 if (iblockdata.isAir()) {
+-                    this.world.setTypeAndData(this.position, this.a, 84);
++                    this.world.setTypeAndData(this.position, this.a, 84 | 2); // Purpur - force notify (flag 2), it's possible the set type by the piston block (which doesn't notify) set this block to air
+                     Block.a(this.a, iblockdata, this.world, this.position, 3);
+                 } else {
+                     if (iblockdata.b((IBlockState) BlockProperties.C) && (Boolean) iblockdata.get(BlockProperties.C)) {
+-- 
+2.26.2
+
