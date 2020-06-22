@@ -1,4 +1,4 @@
-From 09137fe67786a8988d86e3965fa49639c4792903 Mon Sep 17 00:00:00 2001
+From f8cfeaa389b54346ba976cf1f330dc60d78b571d Mon Sep 17 00:00:00 2001
 From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 14 Dec 2018 21:53:58 -0800
 Subject: [PATCH] Tuinity Server Changes
@@ -37,6 +37,7 @@ Subject: [PATCH] Tuinity Server Changes
  .../java/net/minecraft/server/IBlockData.java |  12 +
  .../minecraft/server/ICollisionAccess.java    |  39 +-
  .../minecraft/server/LightEngineStorage.java  |   5 +-
+ .../minecraft/server/LightEngineThreaded.java |  13 +-
  .../java/net/minecraft/server/MCUtil.java     |  14 +
  .../net/minecraft/server/MinecraftServer.java | 110 +++-
  .../net/minecraft/server/NetworkManager.java  |  59 +-
@@ -87,7 +88,7 @@ Subject: [PATCH] Tuinity Server Changes
  .../bukkit/craftbukkit/util/Versioning.java   |   2 +-
  src/main/java/org/spigotmc/AsyncCatcher.java  |   2 +-
  .../java/org/spigotmc/WatchdogThread.java     |  79 +++
- 83 files changed, 3967 insertions(+), 384 deletions(-)
+ 84 files changed, 3977 insertions(+), 387 deletions(-)
  create mode 100644 src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
  create mode 100644 src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
  create mode 100644 src/main/java/com/tuinity/tuinity/util/CachedLists.java
@@ -2890,6 +2891,38 @@ index f2575fb69..89985a61e 100644
  
              Entry entry;
              long j;
+diff --git a/src/main/java/net/minecraft/server/LightEngineThreaded.java b/src/main/java/net/minecraft/server/LightEngineThreaded.java
+index 604fe8531..bf22ee3d7 100644
+--- a/src/main/java/net/minecraft/server/LightEngineThreaded.java
++++ b/src/main/java/net/minecraft/server/LightEngineThreaded.java
+@@ -282,17 +282,24 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+     }
+ 
+     // Paper start - replace impl
++    private final java.util.List<Runnable> pre = new java.util.ArrayList<>(); // Tuinity - stop allocating
++    private final java.util.List<Runnable> post = new java.util.ArrayList<>(); // Tuinity - stop allocating
+     private void b() {
+-        java.util.List<Runnable> pre = new java.util.ArrayList<>();
+-        java.util.List<Runnable> post = new java.util.ArrayList<>();
++        // Tuinity - stop allocating
++        boolean ran = false; // Tuinity - fix error in updating
+         int i = Math.min(queue.size(), 4);
+         while (i-- > 0 && queue.poll(pre, post)) {
+             pre.forEach(Runnable::run);
+             pre.clear();
+-            super.a(Integer.MAX_VALUE, true, true);
++            super.a(Integer.MAX_VALUE, true, true); ran = true; // Tuinity - fix error in updating
+             post.forEach(Runnable::run);
+             post.clear();
+         }
++        // Tuinity start - fix error in updating
++        if (!ran) {
++            super.a(Integer.MAX_VALUE, true, true);
++        }
++        // Tuinity end - fix error in updating
+         // Paper end
+     }
+ 
 diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
 index 87d580021..973bdd25c 100644
 --- a/src/main/java/net/minecraft/server/MCUtil.java
