@@ -1,118 +1,77 @@
-From 76efcfb3e7f410e243bd132bd2378456d1bab25a Mon Sep 17 00:00:00 2001
+From 8a6ecc99e34b55613d6cfdd89d93dcf4c8ecaaa6 Mon Sep 17 00:00:00 2001
 From: William Blake Galbreath <Blake.Galbreath@GMail.com>
 Date: Mon, 29 Jun 2020 08:56:53 -0500
 Subject: [PATCH] Convert legacy item text
 
 ---
- .../java/net/minecraft/server/ItemStack.java  | 30 +++++++++++++++++--
- .../craftbukkit/inventory/CraftMetaItem.java  |  2 +-
- .../craftbukkit/util/CraftChatMessage.java    | 18 +++++++++++
- 3 files changed, 46 insertions(+), 4 deletions(-)
+ .../java/net/minecraft/server/ItemStack.java  | 40 +++++++++++++++++++
+ 1 file changed, 40 insertions(+)
 
 diff --git a/src/main/java/net/minecraft/server/ItemStack.java b/src/main/java/net/minecraft/server/ItemStack.java
-index 54421c56c1..ec9a891ed1 100644
+index 54421c56c1..54dc3e0600 100644
 --- a/src/main/java/net/minecraft/server/ItemStack.java
 +++ b/src/main/java/net/minecraft/server/ItemStack.java
 @@ -127,6 +127,7 @@ public final class ItemStack {
          if (nbttagcompound.hasKeyOfType("tag", 10)) {
              // CraftBukkit start - make defensive copy as this data may be coming from the save thread
              this.tag = (NBTTagCompound) nbttagcompound.getCompound("tag").clone();
-+            processLore(); // Purpur
++            processText(); // Purpur
              processEnchantOrder(this.tag); // Paper
              this.getItem().b(this.tag);
              // CraftBukkit end
-@@ -138,6 +139,29 @@ public final class ItemStack {
+@@ -138,6 +139,44 @@ public final class ItemStack {
  
      }
  
 +    // Purpur start
-+    public void processLore() {
++    public void processText() {
 +        NBTTagCompound display = getSubTag("display");
-+        if (display != null && display.hasKeyOfType("Lore", 9)) {
-+            NBTTagList list = display.getList("Lore", 8);
-+            try {
-+                for (int i = 0; i < list.size(); i++) {
++        if (display != null) {
++            if (display.hasKeyOfType("Name", 8)) {
++                try {
++                    display.set("Name", convert(display.getString("Name")));
++                } catch (JsonParseException jsonparseexception) {
++                    display.remove("Name");
++                }
++            }
++            if (display.hasKeyOfType("Lore", 9)) {
++                NBTTagList lore = new NBTTagList();
++                NBTTagList list = display.getList("Lore", 8);
++                for (int index = 0; index < list.size(); index++) {
 +                    try {
-+                        String line = org.spigotmc.ValidateUtils.limit(list.getString(i), 8192);
-+                        IChatBaseComponent component = IChatBaseComponent.ChatSerializer.jsonToComponent(line);
-+                        if (component != null) {
-+                            list.set(i, NBTTagString.create(org.bukkit.craftbukkit.util.CraftChatMessage.convertToJson(component)));
-+                        }
++                        lore.add(convert(list.getString(index)));
 +                    } catch (JsonParseException ignore) {
 +                    }
 +                }
-+            } catch (JsonParseException e) {
-+                display.remove("Lore");
++                display.set("Lore", lore);
 +            }
 +        }
++    }
++
++    private NBTTagString convert(String str) {
++        IChatBaseComponent component = IChatBaseComponent.ChatSerializer.jsonToComponent(str);
++        if (component != null) {
++            String txt = component.getText();
++            if (txt != null && txt.contains("\u00A7")) {
++                // found legacy text, converting into proper component
++                component = org.bukkit.craftbukkit.util.CraftChatMessage.fromString(txt)[0];
++            }
++        }
++        return NBTTagString.create(org.bukkit.craftbukkit.util.CraftChatMessage.toJSON(component));
 +    }
 +    // Purpur end
 +
      private ItemStack(NBTTagCompound nbttagcompound) {
          this.load(nbttagcompound);
          // CraftBukkit end
-@@ -632,8 +656,8 @@ public final class ItemStack {
+@@ -632,6 +671,7 @@ public final class ItemStack {
          }
      }
  
--    @Nullable
--    public NBTTagCompound b(String s) {
 +    @Nullable public NBTTagCompound getSubTag(String s) { return b(s); } // Purpur - OBFHELPER
-+    @Nullable public NBTTagCompound b(String s) {
+     @Nullable
+     public NBTTagCompound b(String s) {
          return this.tag != null && this.tag.hasKeyOfType(s, 10) ? this.tag.getCompound(s) : null;
-     }
- 
-@@ -686,7 +710,7 @@ public final class ItemStack {
-                 IChatMutableComponent ichatmutablecomponent = IChatBaseComponent.ChatSerializer.a(nbttagcompound.getString("Name"));
- 
-                 if (ichatmutablecomponent != null) {
--                    return ichatmutablecomponent;
-+                    return org.bukkit.craftbukkit.util.CraftChatMessage.convert(ichatmutablecomponent); // Purpur
-                 }
- 
-                 nbttagcompound.remove("Name");
-diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaItem.java b/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaItem.java
-index 79d8d60ea2..2b2163db33 100644
---- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaItem.java
-+++ b/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaItem.java
-@@ -376,7 +376,7 @@ class CraftMetaItem implements ItemMeta, Damageable, Repairable, BlockDataMeta {
-                 for (int index = 0; index < list.size(); index++) {
-                     String line = limit( list.getString(index), 8192 ); // Spigot
-                     try {
--                        lore.add(IChatBaseComponent.ChatSerializer.a(line));
-+                        lore.add(CraftChatMessage.convert(IChatBaseComponent.ChatSerializer.jsonToComponent(line))); // Purpur
-                     } catch (JsonParseException ex) {
-                         // Ignore (stripped like Vanilla)
-                     }
-diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftChatMessage.java b/src/main/java/org/bukkit/craftbukkit/util/CraftChatMessage.java
-index 3b79ae44c5..85cccba6a6 100644
---- a/src/main/java/org/bukkit/craftbukkit/util/CraftChatMessage.java
-+++ b/src/main/java/org/bukkit/craftbukkit/util/CraftChatMessage.java
-@@ -248,6 +248,24 @@ public final class CraftChatMessage {
-         return out.toString();
-     }
- 
-+    // Purpur start
-+    public static IChatBaseComponent convert(IChatBaseComponent component) {
-+        String txt = component.getText();
-+        if (txt != null && txt.contains("\u00A7")) {
-+            return IChatBaseComponent.ChatSerializer.jsonToComponent(CraftChatMessage.toJSON(CraftChatMessage.fromString(txt)[0]));
-+        }
-+        return component;
-+    }
-+
-+    public static String convertToJson(IChatBaseComponent component) {
-+        String txt = component.getText();
-+        if (txt != null && txt.contains("\u00A7")) {
-+            return CraftChatMessage.toJSON(CraftChatMessage.fromString(txt)[0]);
-+        }
-+        return CraftChatMessage.toJSON(component);
-+    }
-+    // Purpur end
-+
-     public static IChatBaseComponent fixComponent(IChatBaseComponent component) {
-         Matcher matcher = LINK_PATTERN.matcher("");
-         return fixComponent(component, matcher);
 -- 
 2.26.2
 
