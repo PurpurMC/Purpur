@@ -1,0 +1,77 @@
+From 1f13524432c259a3d5b2e876b3dc204435fa14f4 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Mon, 29 Jun 2020 08:56:53 -0500
+Subject: [PATCH] Convert legacy item text
+
+---
+ .../java/net/minecraft/server/ItemStack.java  | 40 +++++++++++++++++++
+ 1 file changed, 40 insertions(+)
+
+diff --git a/src/main/java/net/minecraft/server/ItemStack.java b/src/main/java/net/minecraft/server/ItemStack.java
+index 54421c56c..54dc3e060 100644
+--- a/src/main/java/net/minecraft/server/ItemStack.java
++++ b/src/main/java/net/minecraft/server/ItemStack.java
+@@ -127,6 +127,7 @@ public final class ItemStack {
+         if (nbttagcompound.hasKeyOfType("tag", 10)) {
+             // CraftBukkit start - make defensive copy as this data may be coming from the save thread
+             this.tag = (NBTTagCompound) nbttagcompound.getCompound("tag").clone();
++            processText(); // Purpur
+             processEnchantOrder(this.tag); // Paper
+             this.getItem().b(this.tag);
+             // CraftBukkit end
+@@ -138,6 +139,44 @@ public final class ItemStack {
+ 
+     }
+ 
++    // Purpur start
++    public void processText() {
++        NBTTagCompound display = getSubTag("display");
++        if (display != null) {
++            if (display.hasKeyOfType("Name", 8)) {
++                try {
++                    display.set("Name", convert(display.getString("Name")));
++                } catch (JsonParseException jsonparseexception) {
++                    display.remove("Name");
++                }
++            }
++            if (display.hasKeyOfType("Lore", 9)) {
++                NBTTagList lore = new NBTTagList();
++                NBTTagList list = display.getList("Lore", 8);
++                for (int index = 0; index < list.size(); index++) {
++                    try {
++                        lore.add(convert(list.getString(index)));
++                    } catch (JsonParseException ignore) {
++                    }
++                }
++                display.set("Lore", lore);
++            }
++        }
++    }
++
++    private NBTTagString convert(String str) {
++        IChatBaseComponent component = IChatBaseComponent.ChatSerializer.jsonToComponent(str);
++        if (component != null) {
++            String txt = component.getText();
++            if (txt != null && txt.contains("\u00A7")) {
++                // found legacy text, converting into proper component
++                component = org.bukkit.craftbukkit.util.CraftChatMessage.fromString(txt)[0];
++            }
++        }
++        return NBTTagString.create(org.bukkit.craftbukkit.util.CraftChatMessage.toJSON(component));
++    }
++    // Purpur end
++
+     private ItemStack(NBTTagCompound nbttagcompound) {
+         this.load(nbttagcompound);
+         // CraftBukkit end
+@@ -632,6 +671,7 @@ public final class ItemStack {
+         }
+     }
+ 
++    @Nullable public NBTTagCompound getSubTag(String s) { return b(s); } // Purpur - OBFHELPER
+     @Nullable
+     public NBTTagCompound b(String s) {
+         return this.tag != null && this.tag.hasKeyOfType(s, 10) ? this.tag.getCompound(s) : null;
+-- 
+2.26.2
+
