@@ -2,19 +2,19 @@
 # get base dir regardless of execution location
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
-    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-    SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
 done
 . "$(dirname "$SOURCE")/init.sh"
 
 if [[ "$1" == up* ]]; then
-    (
-        cd "$basedir/Paper/" || exit
-        git fetch && git reset --hard origin/ver/1.16
-        cd ../
-        git add Paper
-    )
+  (
+    cd "$basedir/Paper/" || exit
+    git fetch && git reset --hard origin/ver/1.16
+    cd ../
+    git add Paper
+  )
 fi
 
 paperVer=$(gethead Paper)
@@ -28,7 +28,7 @@ mcVer=$(mvn -o org.apache.maven.plugins:maven-help-plugin:2.1.1:evaluate -Dexpre
 basedir
 . "$basedir"/scripts/importmcdev.sh
 
-minecraftversion=$(< "$basedir"/Paper/work/BuildData/info.json grep minecraftVersion | cut -d '"' -f 4)
+minecraftversion=$(grep <"$basedir"/Paper/work/BuildData/info.json minecraftVersion | cut -d '"' -f 4)
 version=$(echo -e "Paper: $paperVer\nmc-dev:$importedmcdev")
 tag="${minecraftversion}-${mcVer}-$(echo -e "$version" | shasum | awk '{print $1}')"
 echo "$tag" >"$basedir"/current-paper
@@ -38,20 +38,20 @@ echo "$tag" >"$basedir"/current-paper
 cd Paper/ || exit
 
 function tag() {
-    (
-        cd "$1" || exit
-        if [ "$2" == "1" ]; then
-            git tag -d "$tag" 2>/dev/null
-        fi
-        echo -e "$(date)\n\n$version" | git tag -a "$tag" -F - 2>/dev/null
-    )
+  (
+    cd "$1" || exit
+    if [ "$2" == "1" ]; then
+      git tag -d "$tag" 2>/dev/null
+    fi
+    echo -e "$(date)\n\n$version" | git tag -a "$tag" -F - 2>/dev/null
+  )
 }
 echo "Tagging as $tag"
 echo -e "$version"
 
 forcetag=0
 if [ "$(cat "$basedir"/current-paper)" != "$tag" ]; then
-    forcetag=1
+  forcetag=1
 fi
 
 tag Paper-API $forcetag
