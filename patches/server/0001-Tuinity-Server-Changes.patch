@@ -3,219 +3,6 @@ From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 14 Dec 2018 21:53:58 -0800
 Subject: [PATCH] Tuinity Server Changes
 
-Brand changes
-
-MC-Dev fixes
-
-Util patch
-
-Tuinity Server Config
-
-Multi-Threaded Server Ticking Vanilla
-
-This patch is the vanilla server changes
-
-Currently a placeholder patch.
-
-Multi-Threaded ticking CraftBukkit
-
-These are the changes to CB
-
-Currently a placeholder patch.
-
-Add soft async catcher
-
-Must be enabled via -Dtuinity.strict-thread-checks=true
-
-Delay chunk unloads
-
-Chunk unloads are now delayed by 1s. Specifically, ticket level
-reduction is delayed by 1s. This is done to allow players to
-teleport and have their pets follow them, as the chunks will no longer
-unload or have entity ticking status removed.
-
-It's also targetted to reduce performance regressions when
-plugins or edge cases in code do not spam sync loads since chunks
-without tickets get unloaded immediately.
-
-Configurable under `delay-chunkunloads-by` in config.
-
-This patch replaces the paper patch as the paper patch only
-affects player loaded chunks, when we want to target all
-loads.
-
-Attempt to recalculate regionfile header if it is corrupt
-
-Instead of trying to relocate the chunk, which is seems to never
-be the correct choice, so we end up duplicating or swapping chunks,
-we instead drop the current regionfile header and recalculate -
-hoping that at least then we don't swap chunks, and maybe recover
-them all.
-
-Lag compensate block breaking
-
-Use time instead of ticks if ticks fall behind
-
-Update version fetcher repo
-
-Sets the target github repo to Tuinity in the version checker. Also disables the jenkins build lookups.
-
-Per World Spawn Limits
-
-Detail more information in watchdog dumps
-
-- Dump position, world, velocity, and uuid for currently ticking entities
-- Dump player name, player uuid, position, and world for packet handling
-
-Execute chunk tasks mid-tick
-
-This will help the server load chunks if tick times are high.
-
-Change writes to use NORMAL priority rather than LOW
-
-Should limit build up of I/O tasks, or at least properly
-indicate to server owners that I/O is falling behind
-
-Allow controlled flushing for network manager
-
-Only make one flush call when emptying the packet queue too
-
-This patch will be used to optimise out flush calls in later
-patches.
-
-Consolidate flush calls for entity tracker packets
-
-Most server packets seem to be sent from here, so try to avoid
-expensive flush calls from them.
-
-This change was motivated due to local testing:
-
-- My server spawn has 130 cows in it (for testing a prev. patch)
-- Try to let 200 players join spawn
-
-Without this change, I could only get 20 players on before they
-all started timing out due to the load put on the Netty I/O threads.
-
-With this change I could get all 200 on at 0ms ping.
-
-(one of the primary issues is that my CPU is kinda trash, and having
-4 extra threads at 100% is just too much for it).
-
-So in general this patch should reduce Netty I/O thread load.
-
-Time scoreboard search
-
-Plugins leaking scoreboards will make this very expensive,
-let server owners debug it easily
-
-Make CallbackExecutor strict again
-
-The correct fix for double scheduling is to avoid it. The reason
-this class is used is because double scheduling causes issues
-elsewhere, and it acts as an explicit detector of what double
-schedules. Effectively, use the callback executor as a tool of
-finding issues rather than hiding these issues.
-
-This patch also reverts incorrect use(s) of the class by paper.
-
-- getChunkFutureAsynchronously
-  There is no risk at all of recursion. The future is executed on
-  the chunk provider's thread queue, the same place general plugin
-  load callbacks are executed on. Forcing the task execution into
-  the callback executor also prevents the future from catching
-  any exception thrown from it.
-
-Improved oversized chunk data packet handling
-
-Now target all TE data, except for TE's that do not have
-update packets.
-
-This patch relies upon the improve extra packet handling
-patch, as we now use PacketPlayOutMapChunk as an extra packet.
-See its patch notes for further details.
-
-Reduce blockpos allocation from pathfinding
-
-Reduce iterator allocation from chunk gen
-
-Replace via iterating over an array
-
-Prevent long map entry creation in light engine
-
-Use fastiterator to prevent it
-
-Highly optimise single and multi-AABB VoxelShapes and collisions
-
-Reduce allocation rate from crammed entities
-
-Optimise chunk tick iteration
-
-Use a dedicated list of entity ticking chunks to reduce the cost
-
-Use entity ticking chunk map for entity tracker
-
-Should bring us back in-line with tracker performance
-before the loaded entity list reversion.
-
-Temporary fix for large move vectors
-
-Check movement distance also based on current position.
-
-Improve paper prevent moving into unloaded chunk check
-
-Check the AABB of the move
-
-Improve async tp to not load chunks when crossing worlds
-
-Fixes an issue where a getCubes call would load neighbouring chunks.
-
-Optimise getType calls
-
-Remove the map lookup for converting from Block->Bukkit Material
-
-Optimise biome conversion
-
-Avoids the string conversions + map lookup
-
-Revert getChunkAt(Async) retaining chunks for long periods of time
-
-Rework PlayerChunk main thread checks
-
-These need to fail instead of continuing, as hiding these errors
-the way paper has is just going to allow unexpected reordering
-of callbacks.
-
-For example, thanks to this patch incorrect future
-completion (completion of the world gen future,
-PlayerChunkMap#b(PlayerChunk, ChunkStatus)) was detected and fixed.
-
-Piston pushable TileEntities
-
-Configurable under pistons-can-push-tile-entities, globally.
-Defaults to false because some redstone machines are going to rely on
-TE's not being pushable.
-
-Explicitly disabled blocks & their reasons can be found under their override
-of the function TileEntity#isPushable.
-Other disabled blocks are due to the underlying block material not being
-pushable (in general, a TE is pushable if its underlying material is).
-
-Video demonstration:
-https://www.youtube.com/watch?v=Q0dYMtZ-a5c
-
-Allow Entities to be removed from a world while ticking
-
-Fixes issues like disconnecting players while ticking them, or
-issues where teleporting players across worlds while ticking.
-
-Also allows us to run mid tick while ticking entities.
-
-Prevent unload() calls removing tickets for sync loads
-
-Prevent log spam for "Block is water but TE is chest"
-
-Happens when breaking a waterlogged chest.
-Fix is to just not validate the TE while the chest is being removed.
 
 diff --git a/pom.xml b/pom.xml
 index ef8ee637a8..6fd5968178 100644
@@ -1639,6 +1426,42 @@ index ed9b2f9adf..d54bf71409 100644
      public boolean e(double d0, double d1, double d2) {
          return d0 >= this.minX && d0 < this.maxX && d1 >= this.minY && d1 < this.maxY && d2 >= this.minZ && d2 < this.maxZ;
      }
+diff --git a/src/main/java/net/minecraft/server/BaseBlockPosition.java b/src/main/java/net/minecraft/server/BaseBlockPosition.java
+index 1842e69839..dab89b0c69 100644
+--- a/src/main/java/net/minecraft/server/BaseBlockPosition.java
++++ b/src/main/java/net/minecraft/server/BaseBlockPosition.java
+@@ -16,9 +16,9 @@ public class BaseBlockPosition implements Comparable<BaseBlockPosition> {
+         return IntStream.of(new int[]{baseblockposition.getX(), baseblockposition.getY(), baseblockposition.getZ()});
+     });
+     public static final BaseBlockPosition ZERO = new BaseBlockPosition(0, 0, 0);
+-    private int a;
+-    private int b;
+-    private int e;
++    protected int a; // Tuinity - private->protected - diff on change, this is the x coordinate
++    protected int b; // Tuinity - private->protected - diff on change, this is the y coordinate
++    protected int e; // Tuinity - private->protected - diff on change, this is the z coordinate
+ 
+     // Paper start
+     public boolean isValidLocation() {
+@@ -71,15 +71,15 @@ public class BaseBlockPosition implements Comparable<BaseBlockPosition> {
+         return this.e;
+     }
+ 
+-    protected void o(int i) {
++    protected void o_unused(int i) { // Tuinity - not needed here
+         this.a = i;
+     }
+ 
+-    protected void p(int i) {
++    protected void p_unused(int i) { // Tuinity - not needed here
+         this.b = i;
+     }
+ 
+-    protected void q(int i) {
++    protected void q_unused(int i) { // Tuinity - not needed here
+         this.e = i;
+     }
+ 
 diff --git a/src/main/java/net/minecraft/server/BiomeBase.java b/src/main/java/net/minecraft/server/BiomeBase.java
 index db198811dd..52ebdfcc03 100644
 --- a/src/main/java/net/minecraft/server/BiomeBase.java
@@ -1663,17 +1486,128 @@ index db198811dd..52ebdfcc03 100644
          if (biomebase_a.a != null && biomebase_a.b != null && biomebase_a.c != null && biomebase_a.d != null && biomebase_a.e != null && biomebase_a.f != null && biomebase_a.g != null && biomebase_a.j != null) {
              this.m = biomebase_a.a;
 diff --git a/src/main/java/net/minecraft/server/BlockBase.java b/src/main/java/net/minecraft/server/BlockBase.java
-index ff770a3b0e..c4ad88b7e0 100644
+index ff770a3b0e..12027ecad7 100644
 --- a/src/main/java/net/minecraft/server/BlockBase.java
 +++ b/src/main/java/net/minecraft/server/BlockBase.java
-@@ -371,6 +371,7 @@ public abstract class BlockBase {
+@@ -176,8 +176,8 @@ public abstract class BlockBase {
+         return VoxelShapes.a();
+     }
+ 
+-    @Deprecated
+-    public int f(IBlockData iblockdata, IBlockAccess iblockaccess, BlockPosition blockposition) {
++    @Deprecated public final int getOpacity(IBlockData iblockdata, IBlockAccess iblockaccess, BlockPosition blockposition) { return this.f(iblockdata, iblockaccess, blockposition); } // Tuinity - OBFHELPER
++    @Deprecated public int f(IBlockData iblockdata, IBlockAccess iblockaccess, BlockPosition blockposition) { // Tuinity - OBFHELPER
+         return iblockdata.i(iblockaccess, blockposition) ? iblockaccess.H() : (iblockdata.a(iblockaccess, blockposition) ? 0 : 1);
+     }
+ 
+@@ -289,14 +289,14 @@ public abstract class BlockBase {
+ 
+     public abstract static class BlockData extends IBlockDataHolder<Block, IBlockData> {
+ 
+-        private final int b;
+-        private final boolean e;
++        private final int b; public final int getEmittedLight() { return this.b; } // Tuinity - OBFHELPER
++        private final boolean e; public final boolean isTransparentOnSomeFaces() { return this.e; } // Tuinity - OBFHELPER
+         private final boolean f;
+         private final Material g;
+         private final MaterialMapColor h;
+         public final float strength;
+         private final boolean j;
+-        private final boolean k;
++        private final boolean k; public final boolean isOpaque() { return this.k; } // Tuinity - OBFHELPER
+         private final BlockBase.e l;
+         private final BlockBase.e m;
+         private final BlockBase.e n;
+@@ -332,10 +332,25 @@ public abstract class BlockBase {
+         }
+         // Paper end
+ 
++        // Tuinity start - micro the hell out of this call
++        protected boolean shapeExceedsCube = true;
++        public final boolean shapeExceedsCube() {
++            return this.shapeExceedsCube;
++        }
++        // Tuinity end
++
++        // Tuinity start
++        protected boolean isTicking;
++        protected Fluid fluid;
++        // Tuinity end
++
+         public void a() {
++            this.fluid = this.getBlock().d(this.p()); // Tuinity - moved from getFluid()
++            this.isTicking = this.getBlock().isTicking(this.p()); // Tuinity - moved from isTicking()
+             if (!this.getBlock().o()) {
+                 this.a = new BlockBase.BlockData.a(this.p());
+             }
++            this.shapeExceedsCube = this.a == null || this.a.c; // Tuinity - moved from actual method to here
+ 
+         }
+ 
+@@ -359,10 +374,12 @@ public abstract class BlockBase {
+             return this.a != null ? this.a.g : this.getBlock().b(this.p(), iblockaccess, blockposition);
+         }
+ 
++        public final int getOpacity(IBlockAccess iblockaccess, BlockPosition blockposition) { return this.b(iblockaccess, blockposition); } // Tuinity - OBFHELPER
+         public int b(IBlockAccess iblockaccess, BlockPosition blockposition) {
+             return this.a != null ? this.a.h : this.getBlock().f(this.p(), iblockaccess, blockposition);
+         }
+ 
++        public final VoxelShape getCullingFace(IBlockAccess iblockaccess, BlockPosition blockposition, EnumDirection enumdirection) { return this.a(iblockaccess, blockposition, enumdirection); } // Tuinity - OBFHELPER
+         public VoxelShape a(IBlockAccess iblockaccess, BlockPosition blockposition, EnumDirection enumdirection) {
+             return this.a != null && this.a.i != null ? this.a.i[enumdirection.ordinal()] : VoxelShapes.a(this.c(iblockaccess, blockposition), enumdirection);
+         }
+@@ -371,19 +388,19 @@ public abstract class BlockBase {
              return this.getBlock().d(this.p(), iblockaccess, blockposition);
          }
  
-+        public final boolean collisionBoxExceedsCube() { return this.d(); } // Tuinity - OBFHELPER
-         public boolean d() {
-             return this.a == null || this.a.c;
+-        public boolean d() {
+-            return this.a == null || this.a.c;
++        public final boolean d() { // Tuinity
++            return this.shapeExceedsCube; // Tuinity - moved into shape cache init
          }
+ 
+-        public boolean e() {
++        public final boolean e() { // Tuinity
+             return this.e;
+         }
+ 
+-        public int f() {
++        public final int f() { // Tuinity
+             return this.b;
+         }
+ 
+-        public boolean isAir() {
++        public final boolean isAir() { // Tuinity
+             return this.f;
+         }
+ 
+@@ -449,7 +466,7 @@ public abstract class BlockBase {
+             }
+         }
+ 
+-        public boolean l() {
++        public final boolean l() { // Tuinity
+             return this.k;
+         }
+ 
+@@ -621,12 +638,12 @@ public abstract class BlockBase {
+             return this.getBlock().a(block);
+         }
+ 
+-        public Fluid getFluid() {
+-            return this.getBlock().d(this.p());
++        public final Fluid getFluid() { // Tuinity
++            return this.fluid; // Tuinity - moved into init
+         }
+ 
+-        public boolean isTicking() {
+-            return this.getBlock().isTicking(this.p());
++        public final boolean isTicking() { // Tuinity
++            return this.isTicking; // Tuinity - moved into init
+         }
+ 
+         public SoundEffectType getStepSound() {
 diff --git a/src/main/java/net/minecraft/server/BlockChest.java b/src/main/java/net/minecraft/server/BlockChest.java
 index 44b9bfcdc7..dba774018c 100644
 --- a/src/main/java/net/minecraft/server/BlockChest.java
@@ -1771,10 +1705,121 @@ index 4bf66420f5..bf76615d72 100644
      }
  
      @Override
+diff --git a/src/main/java/net/minecraft/server/BlockPosition.java b/src/main/java/net/minecraft/server/BlockPosition.java
+index 8c2a4b57ab..7ff4948a47 100644
+--- a/src/main/java/net/minecraft/server/BlockPosition.java
++++ b/src/main/java/net/minecraft/server/BlockPosition.java
+@@ -386,11 +386,11 @@ public class BlockPosition extends BaseBlockPosition {
+             return super.a(enumblockrotation).immutableCopy();
+         }
+ 
+-        public BlockPosition.MutableBlockPosition setValues(int i, int j, int k) { return d(i, j, k);} // Paper - OBFHELPER
+-        public BlockPosition.MutableBlockPosition d(int i, int j, int k) {
+-            this.o(i);
+-            this.p(j);
+-            this.q(k);
++        public final BlockPosition.MutableBlockPosition setValues(int i, int j, int k) { return d(i, j, k);} // Paper - OBFHELPER // Tuinity
++        public final BlockPosition.MutableBlockPosition d(int i, int j, int k) { // Tuinity
++            ((BaseBlockPosition)this).a = i; // Tuinity - force inline
++            ((BaseBlockPosition)this).b = j; // Tuinity - force inline
++            ((BaseBlockPosition)this).e = k; // Tuinity - force inline
+             return this;
+         }
+ 
+@@ -400,12 +400,18 @@ public class BlockPosition extends BaseBlockPosition {
+         }
+ 
+         public final BlockPosition.MutableBlockPosition setValues(final BaseBlockPosition baseblockposition) { return this.g(baseblockposition); } // Paper - OBFHELPER
+-        public BlockPosition.MutableBlockPosition g(BaseBlockPosition baseblockposition) {
+-            return this.d(baseblockposition.getX(), baseblockposition.getY(), baseblockposition.getZ());
++        public final BlockPosition.MutableBlockPosition g(BaseBlockPosition baseblockposition) { // Tuinity
++            ((BaseBlockPosition)this).a = baseblockposition.a; // Tuinity - force inline
++            ((BaseBlockPosition)this).b = baseblockposition.b; // Tuinity - force inline
++            ((BaseBlockPosition)this).e = baseblockposition.e; // Tuinity - force inline
++            return this;
+         }
+ 
+-        public BlockPosition.MutableBlockPosition g(long i) {
+-            return this.d(b(i), c(i), d(i));
++        public final BlockPosition.MutableBlockPosition g(long i) { // Tuinity
++            ((BaseBlockPosition)this).a = (int)(i >> 38); // Tuinity - force inline
++            ((BaseBlockPosition)this).b = (int)((i << 52) >> 52); // Tuinity - force inline
++            ((BaseBlockPosition)this).e = (int)((i << 26) >> 38); // Tuinity - force inline
++            return this;
+         }
+ 
+         public BlockPosition.MutableBlockPosition a(EnumAxisCycle enumaxiscycle, int i, int j, int k) {
+@@ -420,8 +426,11 @@ public class BlockPosition extends BaseBlockPosition {
+             return this.d(baseblockposition.getX() + i, baseblockposition.getY() + j, baseblockposition.getZ() + k);
+         }
+ 
+-        public BlockPosition.MutableBlockPosition c(EnumDirection enumdirection) {
+-            return this.c(enumdirection, 1);
++        public final BlockPosition.MutableBlockPosition c(EnumDirection enumdirection) { // Tuinity
++            ((BaseBlockPosition)this).a += enumdirection.getAdjacentX(); // Tuinity - force inline
++            ((BaseBlockPosition)this).b += enumdirection.getAdjacentY(); // Tuinity - force inline
++            ((BaseBlockPosition)this).e += enumdirection.getAdjacentZ(); // Tuinity - force inline
++            return this;
+         }
+ 
+         public BlockPosition.MutableBlockPosition c(EnumDirection enumdirection, int i) {
+@@ -445,22 +454,31 @@ public class BlockPosition extends BaseBlockPosition {
+             }
+         }
+ 
+-        public final void setX(final int x) { super.o(x); } // Paper - OBFHELPER
+-        @Override
+-        public void o(int i) {
+-            super.o(i);
++        // Tuinity start
++        public final void setX(int value) {
++            ((BaseBlockPosition)this).a = value;
++        }
++        public final void setY(int value) {
++            ((BaseBlockPosition)this).b = value;
+         }
++        public final void setZ(int value) {
++            ((BaseBlockPosition)this).e = value;
++        }
++        // Tuinity end
+ 
+-        public final void setY(final int y) { super.p(y); } // Paper - OBFHELPER
+-        @Override
+-        public void p(int i) {
+-            super.p(i);
++        // Tuinity - moved up
++        public final void o(int i) { // Tuinity
++            ((BaseBlockPosition)this).a = i; // need cast thanks to name conflict
+         }
+ 
+-        public final void setZ(final int z) { super.q(z); } // Paper - OBFHELPER
+-        @Override
+-        public void q(int i) {
+-            super.q(i);
++        // Tuinity - moved up
++        public final void p(int i) { // Tuinity
++            ((BaseBlockPosition)this).b = i; // Tuinity
++        }
++
++        // Tuinity - moved up
++        public final void q(int i) { // Tuinity
++            ((BaseBlockPosition)this).e = i; // Tuinity
+         }
+ 
+         @Override
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index 84dc89d961..996438b00f 100644
+index 84dc89d961..09b8f9a3f6 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
+@@ -375,7 +375,7 @@ public class Chunk implements IChunkAccess {
+             Entry<HeightMap.Type, HeightMap> entry = (Entry) iterator.next();
+ 
+             if (ChunkStatus.FULL.h().contains(entry.getKey())) {
+-                this.a((HeightMap.Type) entry.getKey()).a(((HeightMap) entry.getValue()).a());
++                this.a((HeightMap.Type) entry.getKey()).copyFrom(((HeightMap) entry.getValue())); // Tuinity
+             }
+         }
+ 
 @@ -510,8 +510,35 @@ public class Chunk implements IChunkAccess {
          return this.setType(blockposition, iblockdata, flag, true);
      }
@@ -2040,7 +2085,7 @@ index 893c0085bc..d83d3b54d3 100644
  
          for (java.util.Iterator<Entry<ArraySetSorted<Ticket<?>>>> iterator = this.tickets.long2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index ef980f9859..507105a2cd 100644
+index ef980f9859..0459a591ac 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -120,7 +120,7 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -2273,6 +2318,17 @@ index ef980f9859..507105a2cd 100644
          if (isUrgent) {
              future.thenAccept(either -> this.chunkMapDistance.clearUrgent(chunkcoordintpair));
          }
+@@ -599,8 +770,8 @@ public class ChunkProviderServer extends IChunkProvider {
+         return !this.a(playerchunk, k);
+     }
+ 
+-    @Override
+-    public IBlockAccess c(int i, int j) {
++    public final IBlockAccess getFeaturesReadyChunk(int x, int z) { return this.c(x, z); } // Tuinity - OBFHELPER
++    @Override public IBlockAccess c(int i, int j) { // Tuinity - OBFHELPER
+         long k = ChunkCoordIntPair.pair(i, j);
+         PlayerChunk playerchunk = this.getChunk(k);
+ 
 @@ -734,7 +905,7 @@ public class ChunkProviderServer extends IChunkProvider {
          this.world.getMethodProfiler().enter("purge");
          this.world.timings.doChunkMap.startTiming(); // Spigot
@@ -2505,6 +2561,34 @@ index 36c2651229..dd8a3dc4fe 100644
          this.t = chunkstatus == null ? 0 : chunkstatus.c() + 1;
      }
  
+diff --git a/src/main/java/net/minecraft/server/DataBits.java b/src/main/java/net/minecraft/server/DataBits.java
+index 235c9ec37c..dba3c407c1 100644
+--- a/src/main/java/net/minecraft/server/DataBits.java
++++ b/src/main/java/net/minecraft/server/DataBits.java
+@@ -52,6 +52,7 @@ public class DataBits {
+         return (int) ((long) i * j + k >> 32 >> this.i);
+     }
+ 
++    public final int getAndSet(final int index, final int value) { return this.a(index, value); } // Tuinity - OBFHELPER
+     public int a(int i, int j) {
+         //Validate.inclusiveBetween(0L, (long) (this.e - 1), (long) i); // Paper
+         //Validate.inclusiveBetween(0L, this.d, (long) j); // Paper
+@@ -64,6 +65,7 @@ public class DataBits {
+         return j1;
+     }
+ 
++    public final void set(final int index, final int value) { this.b(index, value); } // Tuinity - OBFHELPER
+     public void b(int i, int j) {
+         //Validate.inclusiveBetween(0L, (long) (this.e - 1), (long) i); // Paper
+         //Validate.inclusiveBetween(0L, this.d, (long) j); // Paper
+@@ -74,6 +76,7 @@ public class DataBits {
+         this.b[k] = l & ~(this.d << i1) | ((long) j & this.d) << i1;
+     }
+ 
++    public final int get(final int index) { return this.a(index); } // Tuinity - OBFHELPER
+     public int a(int i) {
+         //Validate.inclusiveBetween(0L, (long) (this.e - 1), (long) i); // Paper
+         int j = this.b(i);
 diff --git a/src/main/java/net/minecraft/server/DataPaletteBlock.java b/src/main/java/net/minecraft/server/DataPaletteBlock.java
 index 1cb45f97b6..e60ad41b22 100644
 --- a/src/main/java/net/minecraft/server/DataPaletteBlock.java
@@ -2543,7 +2627,7 @@ index 550232cb38..229c3b0f0c 100644
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 9c4b02d776..17afddf4f4 100644
+index 9c4b02d776..3db19a9bab 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -136,7 +136,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -2570,7 +2654,7 @@ index 9c4b02d776..17afddf4f4 100644
      // Paper start
      /**
       * Overriding this field will cause memory leaks.
-@@ -625,7 +633,44 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -625,7 +633,40 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return this.onGround;
      }
  
@@ -2597,9 +2681,6 @@ index 9c4b02d776..17afddf4f4 100644
 +    }
 +    // Tuinity end - detailed watchdog information
 +
-+    boolean collidedOnSomething; // Tuinity - optimise collisions
-+    boolean requiredRelaxedCollisionCheck; // Tuinity - optimise collisions
-+
      public void move(EnumMoveType enummovetype, Vec3D vec3d) {
 +        // Tuinity start - detailed watchdog information
 +        com.tuinity.tuinity.util.TickThread.ensureTickThread("Cannot move an entity off-main");
@@ -2609,23 +2690,21 @@ index 9c4b02d776..17afddf4f4 100644
 +            this.moveStartZ = this.locZ();
 +            this.moveVector = vec3d;
 +        }
-+        this.collidedOnSomething = false; // Tuinity - optimise collisions
 +        try {
 +        // Tuinity end - detailed watchdog information
          if (this.noclip) {
              this.a(this.getBoundingBox().c(vec3d));
              this.recalcPosition();
-@@ -653,7 +698,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -653,7 +694,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              // Paper end
  
              vec3d = this.a(vec3d, enummovetype);
 -            Vec3D vec3d1 = this.f(vec3d);
-+            Vec3D vec3d1 = !this.requiredRelaxedCollisionCheck ? this.performCollision(vec3d) : this.performCollision(vec3d, 0.0625); // Tuinity - optimise collisions
-+            this.collidedOnSomething = !vec3d.equals(vec3d1); // Tuinity - optimise collisions
++            Vec3D vec3d1 = this.performCollision(vec3d); // Tuinity - optimise collisions
  
              if (vec3d1.g() > 1.0E-7D) {
                  this.a(this.getBoundingBox().c(vec3d1));
-@@ -770,6 +816,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -770,6 +811,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
              this.world.getMethodProfiler().exit();
          }
@@ -2639,7 +2718,7 @@ index 9c4b02d776..17afddf4f4 100644
      }
  
      protected BlockPosition ak() {
-@@ -850,6 +903,138 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -850,6 +898,132 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return d0;
      }
  
@@ -2716,24 +2795,18 @@ index 9c4b02d776..17afddf4f4 100644
 +    }
 +
 +    Vec3D performCollision(Vec3D moveVector) {
-+        return this.performCollision(moveVector, 0.0);
-+    }
-+    Vec3D performCollision(Vec3D moveVector, double contractAmount) {
 +        if (moveVector.getX() == 0.0 && moveVector.getY() == 0.0 && moveVector.getZ() == 0.0) {
 +            return moveVector;
 +        }
 +
 +        WorldServer world = ((WorldServer)this.world);
-+        AxisAlignedBB currBoundingBox = contractAmount == 0.0 ? this.getBoundingBox() : this.getBoundingBox().grow(-contractAmount);
++        AxisAlignedBB currBoundingBox = this.getBoundingBox();
 +
 +        List<AxisAlignedBB> potentialCollisions = com.tuinity.tuinity.util.CachedLists.getTempCollisionList();
 +        try {
-+            // We take a fat guess that we actually need to do the step height checks.
-+            // So we collect all of the AABB's we would ever need into one list, and use that list
-+            // for every collision check we want.
 +            AxisAlignedBB collisionBox;
 +            double stepHeight = (double)this.getStepHeight();
-+            if ((this.onGround || (moveVector.y < 0.0)) && (moveVector.x != 0.0 || moveVector.z != 0.0)) {
++            if (stepHeight > 0.0 && (this.onGround || (moveVector.y < 0.0)) && (moveVector.x != 0.0 || moveVector.z != 0.0)) {
 +                // don't bother getting the collisions if we don't need them.
 +                if (moveVector.y <= 0.0) {
 +                    collisionBox = currBoundingBox.expand(moveVector.x, moveVector.y, moveVector.z).expandUpwards(stepHeight);
@@ -2778,7 +2851,7 @@ index 9c4b02d776..17afddf4f4 100644
      private Vec3D f(Vec3D vec3d) {
          AxisAlignedBB axisalignedbb = this.getBoundingBox();
          VoxelShapeCollision voxelshapecollision = VoxelShapeCollision.a(this);
-@@ -885,6 +1070,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -885,6 +1059,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return vec3d1;
      }
  
@@ -2786,7 +2859,7 @@ index 9c4b02d776..17afddf4f4 100644
      public static double b(Vec3D vec3d) {
          return vec3d.x * vec3d.x + vec3d.z * vec3d.z;
      }
-@@ -1091,6 +1277,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1091,6 +1266,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
  
      @Nullable public final AxisAlignedBB getCollisionBox(){return ay();} //Paper - OBFHELPER
@@ -2794,7 +2867,7 @@ index 9c4b02d776..17afddf4f4 100644
      @Nullable public AxisAlignedBB ay() {
          return null;
      }
-@@ -1974,8 +2161,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1974,8 +2150,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
  
      public final AxisAlignedBB getHardCollisionBox(Entity entity){ return j(entity);}//Paper - OBFHELPER
@@ -2805,7 +2878,7 @@ index 9c4b02d776..17afddf4f4 100644
          return null;
      }
  
-@@ -3299,12 +3486,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3299,12 +3475,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return this.locBlock;
      }
  
@@ -2822,7 +2895,7 @@ index 9c4b02d776..17afddf4f4 100644
      }
  
      public void setMot(double d0, double d1, double d2) {
-@@ -3361,7 +3552,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3361,7 +3541,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          }
          // Paper end
          if (this.loc.x != d0 || this.loc.y != d1 || this.loc.z != d2) {
@@ -2871,11 +2944,64 @@ index f75c09d44a..bfb931268d 100644
          List<Entity> list = this.tracker.getPassengers();
  
          if (!list.equals(this.p)) {
+diff --git a/src/main/java/net/minecraft/server/Fluid.java b/src/main/java/net/minecraft/server/Fluid.java
+index 05fa52c0b1..8ffc5db509 100644
+--- a/src/main/java/net/minecraft/server/Fluid.java
++++ b/src/main/java/net/minecraft/server/Fluid.java
+@@ -9,8 +9,12 @@ public final class Fluid extends IBlockDataHolder<FluidType, Fluid> {
+ 
+     public static final Codec<Fluid> a = a((Codec) IRegistry.FLUID, FluidType::h).stable();
+ 
++    // Tuinity start
++    protected final boolean isEmpty;
++    // Tuinity end
+     public Fluid(FluidType fluidtype, ImmutableMap<IBlockState<?>, Comparable<?>> immutablemap, MapCodec<Fluid> mapcodec) {
+         super(fluidtype, immutablemap, mapcodec);
++        this.isEmpty = fluidtype.b(); // Tuinity - moved from isEmpty()
+     }
+ 
+     public FluidType getType() {
+@@ -22,7 +26,7 @@ public final class Fluid extends IBlockDataHolder<FluidType, Fluid> {
+     }
+ 
+     public boolean isEmpty() {
+-        return this.getType().b();
++        return this.isEmpty; // Tuinity - moved into constructor
+     }
+ 
+     public float getHeight(IBlockAccess iblockaccess, BlockPosition blockposition) {
 diff --git a/src/main/java/net/minecraft/server/HeightMap.java b/src/main/java/net/minecraft/server/HeightMap.java
-index 068b92c5c4..476da43b9f 100644
+index 068b92c5c4..a43c4ca3ea 100644
 --- a/src/main/java/net/minecraft/server/HeightMap.java
 +++ b/src/main/java/net/minecraft/server/HeightMap.java
-@@ -101,6 +101,7 @@ public class HeightMap {
+@@ -19,7 +19,25 @@ public class HeightMap {
+     private static final Predicate<IBlockData> b = (iblockdata) -> {
+         return iblockdata.getMaterial().isSolid();
+     };
+-    private final DataBits c = new DataBits(9, 256);
++    // Tuinity start
++    private final char[] heightmap = new char[16 * 16]; // Tuinity - replace with faster access
++    public DataBits toDataBits() {
++        final DataBits ret = new DataBits(9, 256);
++
++        for (int i = 0, len = this.heightmap.length; i < len; ++i) {
++            ret.set(i, this.heightmap[i]);
++        }
++
++        return ret;
++    }
++
++    public void copyFrom(HeightMap other) {
++        if (other.heightmap.length != this.heightmap.length) {
++            throw new IllegalStateException("Heightmap lengths must match");
++        }
++        System.arraycopy(other.heightmap, 0, this.heightmap, 0, this.heightmap.length);
++    }
++    // Tuinity end
+     private final Predicate<IBlockData> d;
+     private final IChunkAccess e;
+ 
+@@ -101,24 +119,30 @@ public class HeightMap {
          }
      }
  
@@ -2883,7 +3009,34 @@ index 068b92c5c4..476da43b9f 100644
      public int a(int i, int j) {
          return this.a(c(i, j));
      }
-@@ -137,7 +138,7 @@ public class HeightMap {
+ 
+     private int a(int i) {
+-        return this.c.a(i);
++        return this.heightmap[i]; // Tuinity
+     }
+ 
+     private void a(int i, int j, int k) {
+-        this.c.b(c(i, j), k);
++        this.heightmap[c(i, j)] = (char)k; // Tuinity
+     }
+ 
+     public void a(long[] along) {
+-        System.arraycopy(along, 0, this.c.a(), 0, along.length);
++        // Tuinity start
++        final DataBits databits = new DataBits(9, 256, along);
++        for (int i = 0, len = this.heightmap.length; i < len; ++i) {
++            this.heightmap[i] = (char)databits.get(i);
++        }
++        // Tuinity end
+     }
+ 
+     public long[] a() {
+-        return this.c.a();
++        return this.toDataBits().a(); // Tuinity
+     }
+ 
+     private static int c(int i, int j) {
+@@ -137,7 +161,7 @@ public class HeightMap {
          private final String h;
          private final HeightMap.Use i;
          private final Predicate<IBlockData> j;
@@ -2892,7 +3045,7 @@ index 068b92c5c4..476da43b9f 100644
              HeightMap.Type[] aheightmap_type = values();
              int i = aheightmap_type.length;
  
-@@ -149,7 +150,7 @@ public class HeightMap {
+@@ -149,7 +173,7 @@ public class HeightMap {
  
          });
  
@@ -5621,7 +5774,7 @@ index caf297fe97..8d68c783f6 100644
 +    // Tuinity end - optimise multi-aabb shapes
  }
 diff --git a/src/main/java/net/minecraft/server/VoxelShapes.java b/src/main/java/net/minecraft/server/VoxelShapes.java
-index 1fa7061f7a..f6f3bdc61d 100644
+index 1fa7061f7a..52aee91d2d 100644
 --- a/src/main/java/net/minecraft/server/VoxelShapes.java
 +++ b/src/main/java/net/minecraft/server/VoxelShapes.java
 @@ -17,18 +17,81 @@ public final class VoxelShapes {
@@ -5718,13 +5871,19 @@ index 1fa7061f7a..f6f3bdc61d 100644
          }
      }
  
-@@ -132,6 +195,14 @@ public final class VoxelShapes {
+@@ -132,6 +195,20 @@ public final class VoxelShapes {
  
      public static final boolean applyOperation(VoxelShape voxelshape, VoxelShape voxelshape1, OperatorBoolean operatorboolean) { return VoxelShapes.c(voxelshape, voxelshape1, operatorboolean); } // Paper - OBFHELPER
      public static boolean c(VoxelShape voxelshape, VoxelShape voxelshape1, OperatorBoolean operatorboolean) {
 +        // Tuinity start - optimise voxelshape
-+        if (operatorboolean == OperatorBoolean.AND && voxelshape instanceof com.tuinity.tuinity.voxel.AABBVoxelShape && voxelshape1 instanceof com.tuinity.tuinity.voxel.AABBVoxelShape) {
-+            return ((com.tuinity.tuinity.voxel.AABBVoxelShape) voxelshape).aabb.intersects(((com.tuinity.tuinity.voxel.AABBVoxelShape) voxelshape1).aabb);
++        if (operatorboolean == OperatorBoolean.AND) {
++            if (voxelshape instanceof com.tuinity.tuinity.voxel.AABBVoxelShape && voxelshape1 instanceof com.tuinity.tuinity.voxel.AABBVoxelShape) {
++                return ((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape).aabb.intersects(((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape1).aabb);
++            } else if (voxelshape instanceof com.tuinity.tuinity.voxel.AABBVoxelShape && voxelshape1 instanceof VoxelShapeArray) {
++                return ((VoxelShapeArray)voxelshape1).intersects(((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape).aabb);
++            } else if (voxelshape1 instanceof com.tuinity.tuinity.voxel.AABBVoxelShape && voxelshape instanceof VoxelShapeArray) {
++                return ((VoxelShapeArray)voxelshape).intersects(((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape1).aabb);
++            }
 +        }
 +        return abstract_c(voxelshape, voxelshape1, operatorboolean);
 +    }
@@ -5733,6 +5892,14 @@ index 1fa7061f7a..f6f3bdc61d 100644
          if (operatorboolean.apply(false, false)) {
              throw (IllegalArgumentException) SystemUtils.c(new IllegalArgumentException());
          } else if (voxelshape == voxelshape1) {
+@@ -314,6 +391,7 @@ public final class VoxelShapes {
+         }
+     }
+ 
++    public static boolean combinationOccludes(VoxelShape voxelshape, VoxelShape voxelshape1) { return b(voxelshape, voxelshape1); } // Tuinity - OBFHELPER
+     public static boolean b(VoxelShape voxelshape, VoxelShape voxelshape1) {
+         return voxelshape != b() && voxelshape1 != b() ? (voxelshape.isEmpty() && voxelshape1.isEmpty() ? false : !c(b(), b(voxelshape, voxelshape1, OperatorBoolean.OR), OperatorBoolean.ONLY_FIRST)) : true;
+     }
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
 index 5f81997db7..4a956f3681 100644
 --- a/src/main/java/net/minecraft/server/World.java
@@ -5928,7 +6095,7 @@ index b651eb87bb..5cba3b0e61 100644
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index 3a740f5669..6d37bbfeb7 100644
+index 3a740f5669..fff694c370 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -55,7 +55,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
@@ -6155,7 +6322,7 @@ index 3a740f5669..6d37bbfeb7 100644
 +                            int blockKeyFull = blockKeyXY | (currZ << 4);
 +                            IBlockData blockData = blocks.rawGet(blockKeyFull);
 +
-+                            if (!blockData.isAir() && (edgeCountFull != 1 || blockData.collisionBoxExceedsCube()) && (edgeCountFull != 2 || blockData.getBlock() == Blocks.MOVING_PISTON)) {
++                            if (!blockData.isAir() && (edgeCountFull != 1 || blockData.shapeExceedsCube()) && (edgeCountFull != 2 || blockData.getBlock() == Blocks.MOVING_PISTON)) {
 +                                mutablePos.setValues(blockX, currY, blockZ);
 +                                VoxelShape voxelshape2 = blockData.getCollisionShape(this, mutablePos, collisionShape);
 +                                if (voxelshape2 != VoxelShapes.getEmptyShape()) {
@@ -6319,7 +6486,7 @@ index 3a740f5669..6d37bbfeb7 100644
 +                            int blockKeyFull = blockKeyXY | (currZ << 4);
 +                            IBlockData blockData = blocks.rawGet(blockKeyFull);
 +
-+                            if (!blockData.isAir() && (edgeCountFull != 1 || blockData.collisionBoxExceedsCube()) && (edgeCountFull != 2 || blockData.getBlock() == Blocks.MOVING_PISTON)) {
++                            if (!blockData.isAir() && (edgeCountFull != 1 || blockData.shapeExceedsCube()) && (edgeCountFull != 2 || blockData.getBlock() == Blocks.MOVING_PISTON)) {
 +                                mutablePos.setValues(blockX, currY, blockZ);
 +                                VoxelShape voxelshape2 = blockData.getCollisionShape(this, mutablePos, collisionShape);
 +                                if (voxelshape2 != VoxelShapes.getEmptyShape()) {
