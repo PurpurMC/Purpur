@@ -6,7 +6,7 @@ Pugpur is a fork of Purpur.
 It contains many gameplay changes to suit our server that are deemed too wild to be included directly upstream into Paper.
 
 ## Contact
-[Discord](https://discord.gg/mtAAnkk)
+[Discord](https://discord.gg/UAJ7JBm)
 
 ## License
 Everything is licensed under the MIT license, and is free to be used in your own fork.
