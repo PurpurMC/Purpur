@@ -1,7 +1,7 @@
-Purpur
+Pugpur
 ==
 
-Purpur is a fork of Paper used by the Pl3xCraft server.
+Pugpur is a fork of Purpur.
 
 It contains many gameplay changes to suit our server that are deemed too wild to be included directly upstream into Paper.
 
@@ -14,19 +14,9 @@ Everything is licensed under the MIT license, and is free to be used in your own
 See [starlis/empirecraft](https://github.com/starlis/empirecraft) and [electronicboy/byof](https://github.com/electronicboy/byof) 
 for the license of material used/modified by this project.
 
-## bStats
+## bStats (Purpur)
 
 [![bStats Graph Data](https://bstats.org/signatures/server-implementation/Purpur.svg)](https://bstats.org/plugin/server-implementation/Purpur)
-
-
-## Server owners
-
-Downloads can be obtained from Pl3x's [Jenkins server](https://ci.pl3x.net/job/Purpur/).
-
-* 1.15.2 builds 398+
-* 1.15.1 builds 348-397
-* 1.15 builds 339-346
-* 1.14.x builds 337 and below
 
 ## Plugin developers
 
