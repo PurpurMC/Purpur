@@ -24,7 +24,7 @@ for the license of material used/modified by this project.
 Downloads can be obtained from Pl3x's [Jenkins server](https://ci.pl3x.net/job/Purpur/).
 
 * 1.16.1 builds 608+
-* 1.15.2 builds 398+
+* 1.15.2 builds 398-606
 * 1.15.1 builds 348-397
 * 1.15 builds 339-346
 * 1.14.x builds 337 and below
