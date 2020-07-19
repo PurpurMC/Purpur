@@ -65,14 +65,15 @@ index ef8ee637a..6fd596817 100644
                  </configuration>
                  <executions>
 diff --git a/src/main/java/co/aikar/timings/MinecraftTimings.java b/src/main/java/co/aikar/timings/MinecraftTimings.java
-index dd0722397..2966c5731 100644
+index dd0722397..85b25eace 100644
 --- a/src/main/java/co/aikar/timings/MinecraftTimings.java
 +++ b/src/main/java/co/aikar/timings/MinecraftTimings.java
-@@ -43,6 +43,8 @@ public final class MinecraftTimings {
+@@ -43,6 +43,9 @@ public final class MinecraftTimings {
      public static final Timing antiXrayUpdateTimer = Timings.ofSafe("anti-xray - update");
      public static final Timing antiXrayObfuscateTimer = Timings.ofSafe("anti-xray - obfuscate");
  
 +    public static final Timing scoreboardScoreSearch = Timings.ofSafe("Scoreboard score search"); // Tuinity - add timings for scoreboard search
++    public static final Timing distanceManagerTick = Timings.ofSafe("Distance Manager Tick"); // Tuinity - add timings for distance manager
 +
      private static final Map<Class<?>, String> taskNameCache = new MapMaker().weakKeys().makeMap();
  
@@ -92,9 +93,18 @@ index e33e889c2..5dfa06588 100644
  
          new TimingsExport(listeners, parent, history).start();
 diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-index 49a38c660..255bbd6e4 100644
+index 49a38c660..60d6469b8 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
+@@ -13,7 +13,7 @@ import java.net.URL;
+ 
+ public class PaperVersionFetcher implements VersionFetcher {
+     private static final java.util.regex.Pattern VER_PATTERN = java.util.regex.Pattern.compile("^([0-9\\.]*)\\-.*R"); // R is an anchor, will always give '-R' at end
+-    private static final String GITHUB_BRANCH_NAME = "master";
++    private static final String GITHUB_BRANCH_NAME = "ver/1.16"; // TODO TEMPORARY, REMOVE ONCE MASTER
+     private static @Nullable String mcVer;
+ 
+     @Override
 @@ -24,8 +24,8 @@ public class PaperVersionFetcher implements VersionFetcher {
      @Nonnull
      @Override
@@ -2102,7 +2112,7 @@ index 893c0085b..d83d3b54d 100644
  
          for (java.util.Iterator<Entry<ArraySetSorted<Ticket<?>>>> iterator = this.tickets.long2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index ef980f985..0459a591a 100644
+index ef980f985..306f45ecb 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -120,7 +120,7 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -2346,7 +2356,23 @@ index ef980f985..0459a591a 100644
          long k = ChunkCoordIntPair.pair(i, j);
          PlayerChunk playerchunk = this.getChunk(k);
  
-@@ -734,7 +905,7 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -637,6 +808,7 @@ public class ChunkProviderServer extends IChunkProvider {
+ 
+     public boolean tickDistanceManager() { // Paper - private -> public
+         if (chunkMapDistance.delayDistanceManagerTick) return false; // Paper
++        co.aikar.timings.MinecraftTimings.distanceManagerTick.startTiming(); try { // Tuinity - add timings for distance manager
+         boolean flag = this.chunkMapDistance.a(this.playerChunkMap);
+         boolean flag1 = this.playerChunkMap.b();
+ 
+@@ -646,6 +818,7 @@ public class ChunkProviderServer extends IChunkProvider {
+             this.clearCache();
+             return true;
+         }
++        } finally { co.aikar.timings.MinecraftTimings.distanceManagerTick.stopTiming(); } // Tuinity - add timings for distance manager
+     }
+ 
+     public final boolean isInEntityTickingChunk(Entity entity) { return this.a(entity); } // Paper - OBFHELPER
+@@ -734,7 +907,7 @@ public class ChunkProviderServer extends IChunkProvider {
          this.world.getMethodProfiler().enter("purge");
          this.world.timings.doChunkMap.startTiming(); // Spigot
          this.chunkMapDistance.purgeTickets();
@@ -2355,7 +2381,7 @@ index ef980f985..0459a591a 100644
          this.tickDistanceManager();
          this.world.timings.doChunkMap.stopTiming(); // Spigot
          this.world.getMethodProfiler().exitEnter("chunks");
-@@ -744,12 +915,22 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -744,12 +917,22 @@ public class ChunkProviderServer extends IChunkProvider {
          this.world.timings.doChunkUnload.startTiming(); // Spigot
          this.world.getMethodProfiler().exitEnter("unload");
          this.playerChunkMap.unloadChunks(booleansupplier);
@@ -2379,7 +2405,7 @@ index ef980f985..0459a591a 100644
      private void tickChunks() {
          long i = this.world.getTime();
          long j = i - this.lastTickTime;
-@@ -820,19 +1001,21 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -820,19 +1003,21 @@ public class ChunkProviderServer extends IChunkProvider {
              //List<PlayerChunk> list = Lists.newArrayList(this.playerChunkMap.f()); // Paper
              //Collections.shuffle(list); // Paper
              // Paper - moved up
@@ -2409,7 +2435,7 @@ index ef980f985..0459a591a 100644
                          ChunkCoordIntPair chunkcoordintpair = playerchunk.i();
  
                          if (!this.playerChunkMap.isOutsideOfRange(playerchunk, chunkcoordintpair, false)) { // Paper - optimise isOutsideOfRange
-@@ -844,11 +1027,27 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -844,11 +1029,27 @@ public class ChunkProviderServer extends IChunkProvider {
                              this.world.timings.chunkTicks.startTiming(); // Spigot // Paper
                              this.world.a(chunk, k);
                              this.world.timings.chunkTicks.stopTiming(); // Spigot // Paper
@@ -2439,7 +2465,7 @@ index ef980f985..0459a591a 100644
              this.world.getMethodProfiler().enter("customSpawners");
              if (flag1) {
                  try (co.aikar.timings.Timing ignored = this.world.timings.miscMobSpawning.startTiming()) { // Paper - timings
-@@ -860,7 +1059,25 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -860,7 +1061,25 @@ public class ChunkProviderServer extends IChunkProvider {
              this.world.getMethodProfiler().exit();
          }
  
@@ -2465,7 +2491,7 @@ index ef980f985..0459a591a 100644
      }
  
      private void a(long i, Consumer<Chunk> consumer) {
-@@ -1000,44 +1217,11 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -1000,44 +1219,11 @@ public class ChunkProviderServer extends IChunkProvider {
              ChunkProviderServer.this.world.getMethodProfiler().c("runTask");
              super.executeTask(runnable);
          }
@@ -4018,7 +4044,7 @@ index 5544254a6..ab751b48d 100644
      // Paper end - optimised tracker
  
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
-index cf83059fe..37f55c66b 100644
+index 95d57c6de..5af6140a7 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
 @@ -322,19 +322,24 @@ public class PlayerConnection implements PacketListenerPlayIn {
@@ -6265,7 +6291,7 @@ index b651eb87b..5cba3b0e6 100644
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index 5ee9d3009..a7a63bb06 100644
+index d048ee231..d1dbb3cb4 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -55,7 +55,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
@@ -7092,7 +7118,7 @@ index 65b36a174..39decca9c 100644
          }, MinecraftServer.getServer());
      }
 diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
-index bac292e6d..b4e65963e 100644
+index 9dd994f8b..2cebdb36f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/Main.java
 +++ b/src/main/java/org/bukkit/craftbukkit/Main.java
 @@ -138,6 +138,13 @@ public class Main {
