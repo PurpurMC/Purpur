@@ -1,0 +1,81 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Spottedleaf <Spottedleaf@users.noreply.github.com>
+Date: Sat, 18 Jul 2020 11:27:43 -0500
+Subject: [PATCH] Populator seed controls
+
+
+diff --git a/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
+index 1c7b858ed..9257da968 100644
+--- a/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
++++ b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
+@@ -249,6 +249,11 @@ public final class TuinityConfig {
+             return this.config.getDouble(path, this.worldDefaults.getDouble(path));
+         }
+ 
++        String getString(final String path, final String dfl) {
++            this.worldDefaults.addDefault(path, dfl);
++            return this.config.getString(path, this.worldDefaults.getString(path));
++        }
++
+         /** ignored if {@link TuinityConfig#tickWorldsInParallel} == false */
+         public int threads;
+ 
+@@ -274,6 +279,18 @@ public final class TuinityConfig {
+             this.spawnLimitAmbient = this.getInt(path + ".ambient", -1);
+         }
+ 
++        public Long populatorSeed;
++        public boolean useRandomPopulatorSeed;
++
++        private void populatorSeed() {
++            final String seedString = this.getString("worldgen.seeds.populator", "default");
++            if (seedString.equalsIgnoreCase("random")) {
++                this.useRandomPopulatorSeed = true;
++            } else if (!seedString.equalsIgnoreCase("default")) {
++                this.populatorSeed = Long.parseLong(seedString);
++            }
++        }
++
+     }
+ 
+ }
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/server/BiomeBase.java b/src/main/java/net/minecraft/server/BiomeBase.java
+index 9259ba1af..37359b1cd 100644
+--- a/src/main/java/net/minecraft/server/BiomeBase.java
++++ b/src/main/java/net/minecraft/server/BiomeBase.java
+@@ -350,6 +350,10 @@ public class BiomeBase {
+         return (List) this.r.get(worldgenstage_decoration);
+     }
+ 
++    // Tuinity start - populator seed control
++    private static final java.security.SecureRandom SECURE_RANDOM = new java.security.SecureRandom();
++    // Tuinity end - populator seed control
++
+     public void a(WorldGenStage.Decoration worldgenstage_decoration, StructureManager structuremanager, ChunkGenerator chunkgenerator, GeneratorAccessSeed generatoraccessseed, long i, SeededRandom seededrandom, BlockPosition blockposition) {
+         int j = 0;
+         Iterator iterator;
+@@ -387,10 +391,22 @@ public class BiomeBase {
+             }
+         }
+ 
++        // Tuinity start - populator seed control
++        long populatorSeed;
++        WorldServer world = (WorldServer)((ChunkProviderServer)generatoraccessseed.getChunkProvider()).getWorld();
++        if (world.tuinityConfig.useRandomPopulatorSeed) {
++            populatorSeed = SECURE_RANDOM.nextLong();
++        } else if (world.tuinityConfig.populatorSeed != null) {
++            populatorSeed = world.tuinityConfig.populatorSeed.longValue();
++        } else {
++            populatorSeed = i;
++        }
++        // Tuinity end - populator seed control
++
+         for (iterator = ((List) this.r.get(worldgenstage_decoration)).iterator(); iterator.hasNext(); ++j) {
+             WorldGenFeatureConfigured<?, ?> worldgenfeatureconfigured = (WorldGenFeatureConfigured) iterator.next();
+ 
+-            seededrandom.b(i, j, worldgenstage_decoration.ordinal());
++            seededrandom.b(populatorSeed, j, worldgenstage_decoration.ordinal()); // Tuinity - populator seed control - move i up into default branch
+ 
+             try {
+                 worldgenfeatureconfigured.a(generatoraccessseed, structuremanager, chunkgenerator, seededrandom, blockposition);
