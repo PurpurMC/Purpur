@@ -161,7 +161,7 @@ index bd0267ee4b..8b36ac2b09 100644
          this.B = true;
          return this;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 4282baab07..54aa394b46 100644
+index 4282baab07..14332bf205 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -81,7 +81,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -278,7 +278,7 @@ index 4282baab07..54aa394b46 100644
      @Override
      public void sendMessage(IChatBaseComponent ichatbasecomponent, UUID uuid) {}
  
-@@ -3589,4 +3618,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3589,4 +3618,47 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
          void accept(Entity entity, double d0, double d1, double d2);
      }
@@ -314,6 +314,14 @@ index 4282baab07..54aa394b46 100644
 +    }
 +
 +    public boolean onSpacebar() {
++        return false;
++    }
++
++    public boolean onClick(EnumHand hand) {
++        return false;
++    }
++
++    public boolean processClick(EnumHand hand) {
 +        return false;
 +    }
 +    // Purpur end
@@ -2131,6 +2139,26 @@ index acc5b8ca90..6e9806662d 100644
      @Override
 -    protected void eV() {}
 +    protected void eV() { if (world.purpurConfig.zombieHorseCanSwim) goalSelector.a(0, new PathfinderGoalFloat(this)); } // Purpur
+ }
+diff --git a/src/main/java/net/minecraft/server/EntityHuman.java b/src/main/java/net/minecraft/server/EntityHuman.java
+index 48f9feaea1..6c2b57a294 100644
+--- a/src/main/java/net/minecraft/server/EntityHuman.java
++++ b/src/main/java/net/minecraft/server/EntityHuman.java
+@@ -2148,4 +2148,15 @@ public abstract class EntityHuman extends EntityLiving {
+             return this.g;
+         }
+     }
++
++    // Purpur start
++    @Override
++    public boolean processClick(EnumHand hand) {
++        Entity vehicle = getRootVehicle();
++        if (vehicle != null && vehicle.getRider() == this) {
++            return vehicle.onClick(hand);
++        }
++        return false;
++    }
++    // Purpur end
  }
 diff --git a/src/main/java/net/minecraft/server/EntityIllagerIllusioner.java b/src/main/java/net/minecraft/server/EntityIllagerIllusioner.java
 index 7b2c459adc..b9c4ead235 100644
@@ -4387,6 +4415,213 @@ index 0ef981e5ad..76fd72f33c 100644
          this.targetSelector.a(1, new PathfinderGoalHurtByTarget(this, new Class[]{EntityRaider.class}));
          this.targetSelector.a(2, this.br);
          this.targetSelector.a(3, this.bs);
+diff --git a/src/main/java/net/minecraft/server/EntityWither.java b/src/main/java/net/minecraft/server/EntityWither.java
+index 29bb74e51e..6c48c9659d 100644
+--- a/src/main/java/net/minecraft/server/EntityWither.java
++++ b/src/main/java/net/minecraft/server/EntityWither.java
+@@ -32,6 +32,7 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+         return entityliving.getMonsterType() != EnumMonsterType.UNDEAD && entityliving.eh();
+     };
+     private static final PathfinderTargetCondition bz = (new PathfinderTargetCondition()).a(20.0D).a(EntityWither.by);
++    private int shootCooldown = 0; // Purpur
+ 
+     public EntityWither(EntityTypes<? extends EntityWither> entitytypes, World world) {
+         super(entitytypes, world);
+@@ -39,15 +40,121 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+         this.setHealth(this.getMaxHealth());
+         this.getNavigation().d(true);
+         this.f = 50;
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASDFlyingWithSpacebar(this, 0.1F); // Purpur
+     }
+ 
++    // Purpur start
++    @Override
++    public boolean isRidable() {
++        return world.purpurConfig.witherRidable;
++    }
++
++    @Override
++    public boolean isRidableInWater() {
++        return world.purpurConfig.witherRidableInWater;
++    }
++
++    @Override
++    public double getMaxY() {
++        return world.purpurConfig.witherMaxY;
++    }
++
++    @Override
++    public void g(Vec3D vec3d) {
++        super.g(vec3d);
++        if (hasRider() && !onGround) {
++            float speed = (float) getAttributeInstance(GenericAttributes.FLYING_SPEED).getValue() * 5F;
++            setSpeed(speed);
++            Vec3D mot = getMot();
++            move(EnumMoveType.SELF, mot.multiply(speed, 0.5, speed));
++            setMot(mot.a(0.9D));
++        }
++    }
++
++    @Override
++    public void onMount(EntityHuman entityhuman) {
++        this.datawatcher.set(bo.get(0), 0);
++        this.datawatcher.set(bo.get(1), 0);
++        this.datawatcher.set(bo.get(2), 0);
++        getNavigation().stopPathfinding();
++        shootCooldown = 20;
++    }
++
++    @Override
++    public boolean onClick(EnumHand hand) {
++        return shoot(getRider(), hand == EnumHand.MAIN_HAND ? new int[]{1} : new int[]{2});
++    }
++
++    public boolean shoot(EntityHuman rider, int[] heads) {
++        if (shootCooldown > 0) {
++            return false;
++        }
++
++        shootCooldown = 20;
++        if (rider == null) {
++            return false;
++        }
++
++        org.bukkit.craftbukkit.entity.CraftHumanEntity player = rider.getBukkitEntity();
++        if (!player.hasPermission("allow.special.wither")) {
++            return false;
++        }
++
++        MovingObjectPosition rayTrace = getRayTrace(120, RayTrace.FluidCollisionOption.NONE);
++        if (rayTrace == null) {
++            return false;
++        }
++        
++        Vec3D loc;
++        if (rayTrace.getType() == MovingObjectPosition.EnumMovingObjectType.BLOCK) {
++            BlockPosition pos = ((MovingObjectPositionBlock) rayTrace).getBlockPosition();
++            loc = new Vec3D(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D);
++        } else if (rayTrace.getType() == MovingObjectPosition.EnumMovingObjectType.ENTITY) {
++            Entity target = ((MovingObjectPositionEntity) rayTrace).getEntity();
++            loc = new Vec3D(target.locX(), target.locY() + (target.getHeadHeight() / 2), target.locZ());
++        } else {
++            org.bukkit.block.Block block = player.getTargetBlock(null, 120);
++            loc = new Vec3D(block.getX() + 0.5D, block.getY() + 0.5D, block.getZ() + 0.5D);
++        }
++
++        for (int head : heads) {
++            shoot(head, loc.getX(), loc.getY(), loc.getZ(), rider);
++        }
++
++        return true; // handled
++    }
++
++    public void shoot(int head, double x, double y, double z, EntityHuman rider) {
++        world.playEvent(null, 1024, getChunkCoordinates(), 0);
++        double headX = getHeadX(head);
++        double headY = getHeadY(head);
++        double headZ = getHeadZ(head);
++        EntityWitherSkull skull = new EntityWitherSkull(world, this, x - headX, y - headY, z - headZ) {
++            @Override
++            public boolean canSaveToDisk() {
++                return false;
++            }
++
++            @Override
++            public boolean hitPredicate(Entity target) {
++                // do not hit rider
++                return target != rider && super.hitPredicate(target);
++            }
++        };
++        skull.setPositionRaw(headX, headY, headZ);
++        world.addEntity(skull);
++    }
++    // Purpur end
++
+     @Override
+     protected void initPathfinder() {
+-        this.goalSelector.a(0, new EntityWither.a());
++        this.goalSelector.a(0, new net.pl3x.purpur.pathfinder.PathfinderGoalHasRider(this)); // Purpur
++        this.goalSelector.a(1, new EntityWither.a()); // Purpur
+         this.goalSelector.a(2, new PathfinderGoalArrowAttack(this, 1.0D, 40, 20.0F));
+         this.goalSelector.a(5, new PathfinderGoalRandomStrollLand(this, 1.0D));
+         this.goalSelector.a(6, new PathfinderGoalLookAtPlayer(this, EntityHuman.class, 8.0F));
+         this.goalSelector.a(7, new PathfinderGoalRandomLookaround(this));
++        this.targetSelector.a(0, new net.pl3x.purpur.pathfinder.PathfinderGoalHasRider(this)); // Purpur
+         this.targetSelector.a(1, new PathfinderGoalHurtByTarget(this, new Class[0]));
+         this.targetSelector.a(2, new PathfinderGoalNearestAttackableTarget<>(this, EntityInsentient.class, 0, false, false, EntityWither.by));
+     }
+@@ -189,6 +296,16 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+ 
+     @Override
+     protected void mobTick() {
++        // Purpur start
++        if (hasRider()) {
++            Vec3D mot = getMot();
++            setMot(mot.x, mot.y + (getVertical() > 0 ? 0.07D : 0.0D), mot.z);
++        }
++        if (shootCooldown > 0) {
++            shootCooldown--;
++        }
++        // Purpur end
++
+         int i;
+ 
+         if (this.getInvul() > 0) {
+@@ -372,7 +489,7 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+         this.bossBattle.removePlayer(entityplayer);
+     }
+ 
+-    private double u(int i) {
++    private double u(int i) { return getHeadX(i); } private double getHeadX(int i) { // Purpur - OBFHELPER
+         if (i <= 0) {
+             return this.locX();
+         } else {
+@@ -383,11 +500,11 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+         }
+     }
+ 
+-    private double v(int i) {
++    private double v(int i) { return getHeadY(i); } private double getHeadY(int i) { // Purpur - OBFHELPER
+         return i <= 0 ? this.locY() + 3.0D : this.locY() + 2.2D;
+     }
+ 
+-    private double w(int i) {
++    private double w(int i) { return getHeadZ(i); } private double getHeadZ(int i) { // Purpur - OBFHELPER
+         if (i <= 0) {
+             return this.locZ();
+         } else {
+@@ -511,7 +628,7 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+     }
+ 
+     public static AttributeProvider.Builder eK() {
+-        return EntityMonster.eR().a(GenericAttributes.MAX_HEALTH, 300.0D).a(GenericAttributes.MOVEMENT_SPEED, 0.6000000238418579D).a(GenericAttributes.FOLLOW_RANGE, 40.0D).a(GenericAttributes.ARMOR, 4.0D);
++        return EntityMonster.eR().a(GenericAttributes.MAX_HEALTH, 300.0D).a(GenericAttributes.MOVEMENT_SPEED, 0.6000000238418579D).a(GenericAttributes.FOLLOW_RANGE, 40.0D).a(GenericAttributes.ARMOR, 4.0D).a(GenericAttributes.FLYING_SPEED, 0.6D); // Purpur
+     }
+ 
+     public int getInvul() {
+@@ -523,11 +640,11 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+     }
+ 
+     public int getHeadTarget(int i) {
+-        return (Integer) this.datawatcher.get((DataWatcherObject) EntityWither.bo.get(i));
++        return hasRider() ? 0 : this.datawatcher.get(EntityWither.bo.get(i)); // Purpur
+     }
+ 
+     public void setHeadTarget(int i, int j) {
+-        this.datawatcher.set((DataWatcherObject) EntityWither.bo.get(i), j);
++        if (!hasRider()) this.datawatcher.set(EntityWither.bo.get(i), j); // Purpur
+     }
+ 
+     public boolean S_() {
+@@ -541,7 +658,7 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
+ 
+     @Override
+     protected boolean n(Entity entity) {
+-        return false;
++        return getRideCooldown() <= 0; // Purpur
+     }
+ 
+     @Override
 diff --git a/src/main/java/net/minecraft/server/EntityWolf.java b/src/main/java/net/minecraft/server/EntityWolf.java
 index 5779d1c9f9..506b2a96f2 100644
 --- a/src/main/java/net/minecraft/server/EntityWolf.java
@@ -4566,8 +4801,20 @@ index 69e98dcebe..cdcf3d1cf5 100644
      @Override
      public boolean jockeyOnlyBaby() {
          return world.purpurConfig.zombieVillagerJockeyOnlyBaby;
+diff --git a/src/main/java/net/minecraft/server/GeneratorAccess.java b/src/main/java/net/minecraft/server/GeneratorAccess.java
+index b67aede005..ed09fe7fdd 100644
+--- a/src/main/java/net/minecraft/server/GeneratorAccess.java
++++ b/src/main/java/net/minecraft/server/GeneratorAccess.java
+@@ -37,6 +37,7 @@ public interface GeneratorAccess extends ICombinedAccess, IWorldTime {
+ 
+     void addParticle(ParticleParam particleparam, double d0, double d1, double d2, double d3, double d4, double d5);
+ 
++    default void playEvent(@Nullable EntityHuman entityhuman, int i, BlockPosition blockposition, int j) { a(entityhuman, i, blockposition, j); } // Purpur - OBFHELPER
+     void a(@Nullable EntityHuman entityhuman, int i, BlockPosition blockposition, int j);
+ 
+     default int getHeight() {
 diff --git a/src/main/java/net/minecraft/server/IProjectile.java b/src/main/java/net/minecraft/server/IProjectile.java
-index 0bac6b0506..6c52af04a7 100644
+index 0bac6b0506..9a17eb6066 100644
 --- a/src/main/java/net/minecraft/server/IProjectile.java
 +++ b/src/main/java/net/minecraft/server/IProjectile.java
 @@ -12,7 +12,7 @@ public abstract class IProjectile extends Entity {
@@ -4587,14 +4834,28 @@ index 0bac6b0506..6c52af04a7 100644
      private boolean h() {
          Entity entity = this.getShooter();
  
-@@ -144,6 +145,7 @@ public abstract class IProjectile extends Entity {
+@@ -144,7 +145,7 @@ public abstract class IProjectile extends Entity {
          iblockdata.a(this.world, iblockdata, movingobjectpositionblock, this);
      }
  
-+    public boolean hitPredicate(Entity target) { return a(target); } // Purpur - OBFHELPER
-     protected boolean a(Entity entity) {
+-    protected boolean a(Entity entity) {
++    protected boolean a(Entity entity) { return hitPredicate(entity); } public boolean hitPredicate(Entity entity) { // Purpur - OBFHELPER
          if (!entity.isSpectator() && entity.isAlive() && entity.isInteractable()) {
              Entity entity1 = this.getShooter();
+             // Paper start - Cancel hit for vanished players
+diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
+index 7096e5aab8..507291f2b4 100644
+--- a/src/main/java/net/minecraft/server/PlayerConnection.java
++++ b/src/main/java/net/minecraft/server/PlayerConnection.java
+@@ -2145,6 +2145,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+                     }
+                     this.server.getPluginManager().callEvent(event);
+ 
++                    player.processClick(enumhand); // Purpur
++
+                     // Fish bucket - SPIGOT-4048
+                     if ((entity instanceof EntityFish && origItem != null && origItem.getItem() == Items.WATER_BUCKET) && (event.isCancelled() || this.player.inventory.getItemInHand() == null || this.player.inventory.getItemInHand().getItem() != origItem)) {
+                         this.sendPacket(new PacketPlayOutSpawnEntityLiving((EntityFish) entity));
 diff --git a/src/main/java/net/minecraft/server/ProjectileHelper.java b/src/main/java/net/minecraft/server/ProjectileHelper.java
 index b2c64b3144..515ba50aec 100644
 --- a/src/main/java/net/minecraft/server/ProjectileHelper.java
@@ -4669,7 +4930,7 @@ index 8714d1574d..af3739c79a 100644
  
      public static int dungeonSeed = -1;
 diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-index 421781136c..2bb1f1e8b6 100644
+index 421781136c..aa2c41e4d4 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 @@ -42,11 +42,6 @@ public class PurpurWorldConfig {
@@ -5201,7 +5462,7 @@ index 421781136c..2bb1f1e8b6 100644
          villagerBrainTicks = getInt("mobs.villager.brain-ticks", villagerBrainTicks);
          villagerUseBrainTicksOnlyWhenLagging = getBoolean("mobs.villager.use-brain-ticks-only-when-lagging", villagerUseBrainTicksOnlyWhenLagging);
          villagerCanBeLeashed = getBoolean("mobs.villager.can-be-leashed", villagerCanBeLeashed);
-@@ -501,48 +855,102 @@ public class PurpurWorldConfig {
+@@ -501,48 +855,111 @@ public class PurpurWorldConfig {
          villagerCanBreed = getBoolean("mobs.villager.can-breed", villagerCanBreed);
      }
  
@@ -5230,6 +5491,15 @@ index 421781136c..2bb1f1e8b6 100644
 +    private void witchSettings() {
 +        witchRidable = getBoolean("mobs.witch.ridable", witchRidable);
 +        witchRidableInWater = getBoolean("mobs.witch.ridable-in-water", witchRidableInWater);
++    }
++
++    public boolean witherRidable = false;
++    public boolean witherRidableInWater = false;
++    public double witherMaxY = 256D;
++    private void witherSettings() {
++        witherRidable = getBoolean("mobs.wither.ridable", witherRidable);
++        witherRidableInWater = getBoolean("mobs.wither.ridable-in-water", witherRidableInWater);
++        witherMaxY = getDouble("mobs.wither.ridable-max-y", witherMaxY);
 +    }
 +
 +    public boolean witherSkeletonRidable = false;
@@ -6002,3 +6272,50 @@ index f1710a53fa..ecba7b02f0 100644
 +    }
 +    // Purpur end
  }
+diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+index 68e3d29787..ca4dacdae0 100644
+--- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
++++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+@@ -501,6 +501,18 @@ public class CraftEventFactory {
+         }
+         craftServer.getPluginManager().callEvent(event);
+ 
++        // Purpur start
++        switch (action) {
++            case LEFT_CLICK_BLOCK:
++            case LEFT_CLICK_AIR:
++                who.processClick(EnumHand.MAIN_HAND);
++                break;
++            case RIGHT_CLICK_BLOCK:
++            case RIGHT_CLICK_AIR:
++                who.processClick(EnumHand.OFF_HAND);
++        }
++        // Purpur end
++
+         return event;
+     }
+ 
+@@ -899,6 +911,7 @@ public class CraftEventFactory {
+                     damageCause = DamageCause.ENTITY_EXPLOSION;
+                 }
+                 event = new EntityDamageByEntityEvent(damager.getBukkitEntity(), entity.getBukkitEntity(), damageCause, modifiers, modifierFunctions);
++                damager.processClick(EnumHand.MAIN_HAND); // Purpur
+             }
+             event.setCancelled(cancelled);
+ 
+@@ -983,6 +996,7 @@ public class CraftEventFactory {
+             if (!event.isCancelled()) {
+                 event.getEntity().setLastDamageCause(event);
+             }
++            damager.getHandle().processClick(EnumHand.MAIN_HAND); // Purpur
+             return event;
+         }
+ 
+@@ -1032,6 +1046,7 @@ public class CraftEventFactory {
+         EntityDamageEvent event;
+         if (damager != null) {
+             event = new EntityDamageByEntityEvent(damager.getBukkitEntity(), damagee.getBukkitEntity(), cause, modifiers, modifierFunctions);
++            damager.processClick(EnumHand.MAIN_HAND); // Purpur
+         } else {
+             event = new EntityDamageEvent(damagee.getBukkitEntity(), cause, modifiers, modifierFunctions);
+         }
