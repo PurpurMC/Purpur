@@ -161,7 +161,7 @@ index bd0267ee4b..8b36ac2b09 100644
          this.B = true;
          return this;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 26a08b9520..6d01021e28 100644
+index 4282baab07..54aa394b46 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -81,7 +81,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -191,7 +191,24 @@ index 26a08b9520..6d01021e28 100644
      public boolean positionChanged;
      public boolean v;
      public boolean velocityChanged;
-@@ -2195,6 +2195,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -178,7 +178,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     private boolean az;
+     private final double[] aA;
+     private long aB;
+-    private EntitySize size;
++    protected EntitySize size; // Purpur - private -> protected
+     private float headHeight;
+     // CraftBukkit start
+     public boolean persist = true;
+@@ -1460,6 +1460,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+         return !this.justCreated && this.M.getDouble(TagsFluid.LAVA) > 0.0D;
+     }
+ 
++    public void moveRelative(float speed, Vec3D motion) { this.a(speed, motion); } // Purpur - OBFHELPER
+     public void a(float f, Vec3D vec3d) {
+         Vec3D vec3d1 = a(vec3d, f, this.yaw);
+ 
+@@ -2195,6 +2196,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return this.a(entity, false);
      }
  
@@ -199,7 +216,7 @@ index 26a08b9520..6d01021e28 100644
      public boolean a(Entity entity, boolean flag) {
          for (Entity entity1 = entity; entity1.vehicle != null; entity1 = entity1.vehicle) {
              if (entity1.vehicle == this) {
-@@ -2290,6 +2291,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2290,6 +2292,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
                  this.passengers.add(entity);
              }
  
@@ -213,7 +230,7 @@ index 26a08b9520..6d01021e28 100644
          }
          return true; // CraftBukkit
      }
-@@ -2330,6 +2338,12 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2330,6 +2339,12 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
                  return false;
              }
              // Spigot end
@@ -226,7 +243,7 @@ index 26a08b9520..6d01021e28 100644
              this.passengers.remove(entity);
              entity.j = 60;
          }
-@@ -2495,6 +2509,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2495,6 +2510,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          this.setFlag(4, flag);
      }
  
@@ -234,7 +251,7 @@ index 26a08b9520..6d01021e28 100644
      public boolean bD() {
          return this.glowing || this.world.isClientSide && this.getFlag(6);
      }
-@@ -2713,6 +2728,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2713,6 +2729,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
      public void setHeadRotation(float f) {}
  
@@ -242,7 +259,7 @@ index 26a08b9520..6d01021e28 100644
      public void n(float f) {}
  
      public boolean bK() {
-@@ -3147,6 +3163,18 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3147,6 +3164,18 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return false;
      }
  
@@ -261,7 +278,7 @@ index 26a08b9520..6d01021e28 100644
      @Override
      public void sendMessage(IChatBaseComponent ichatbasecomponent, UUID uuid) {}
  
-@@ -3589,4 +3617,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3589,4 +3618,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
          void accept(Entity entity, double d0, double d1, double d2);
      }
@@ -1157,6 +1174,156 @@ index 6853ba3194..8aa53c617b 100644
          }
  
          @Override
+diff --git a/src/main/java/net/minecraft/server/EntityEnderDragon.java b/src/main/java/net/minecraft/server/EntityEnderDragon.java
+index d617b5345d..088aede370 100644
+--- a/src/main/java/net/minecraft/server/EntityEnderDragon.java
++++ b/src/main/java/net/minecraft/server/EntityEnderDragon.java
+@@ -46,6 +46,7 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+     private final int[] bK = new int[24];
+     private final Path bL = new Path();
+     private Explosion explosionSource = new Explosion(null, this, null, null, Double.NaN, Double.NaN, Double.NaN, Float.NaN, true, Explosion.Effect.DESTROY); // CraftBukkit - reusable source for CraftTNTPrimed.getSource()
++    private boolean hadRider; // Purpur
+ 
+     public EntityEnderDragon(EntityTypes<? extends EntityEnderDragon> entitytypes, World world) {
+         super(EntityTypes.ENDER_DRAGON, world);
+@@ -60,9 +61,43 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+         }
+ 
+         this.bG = new DragonControllerManager(this);
++        // Purpur start
++        this.moveController = new net.pl3x.purpur.controller.ControllerMoveWASDFlying(this) {
++            @Override
++            public void tick() {
++                // dragon doesn't use the controller. do nothing
++            }
++        };
++        this.lookController = new net.pl3x.purpur.controller.ControllerLookWASD(this) {
++            @Override
++            public void tick() {
++                // dragon doesn't use the controller. do nothing
++            }
++
++            @Override
++            public void tick(EntityHuman rider) {
++                setYawPitch(rider.yaw - 180F, rider.pitch * 0.5F);
++            }
++        };
++        // Purpur end
+     }
+ 
+     // Purpur start
++    @Override
++    public boolean isRidable() {
++        return world.purpurConfig.enderDragonRidable;
++    }
++
++    @Override
++    public boolean isRidableInWater() {
++        return world.purpurConfig.enderDragonRidableInWater;
++    }
++
++    @Override
++    public double getMaxY() {
++        return world.purpurConfig.enderDragonMaxY;
++    }
++
+     @Override
+     public void initAttributes(World world) {
+         if (world != null) {
+@@ -104,6 +139,37 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+ 
+     @Override
+     public void movementTick() {
++        // Purpur start
++        boolean hasRider = getRider() != null;
++        if (hasRider) {
++            if (!hadRider) {
++                hadRider = true;
++                noclip = false;
++                this.size = EntitySize.b(4.0F, 2.0F);
++            }
++
++            // dragon doesn't use controllers, so must tick manually
++            moveController.a();
++            lookController.a();
++
++            moveRelative((float) getAttributeInstance(GenericAttributes.MOVEMENT_SPEED).getValue() * 0.1F, new Vec3D(-getStrafe(), getVertical(), -getForward()));
++            Vec3D mot = getMot();
++            setMot(mot);
++            move(EnumMoveType.PLAYER, mot);
++
++            mot = mot.multiply(0.9F, 0.9F, 0.9F);
++            setMot(mot);
++
++            // control wing flap speed on client
++            getDragonControllerManager().setControllerPhase(mot.getX() * mot.getX() + mot.getZ() * mot.getZ() < 0.005F ? DragonControllerPhase.HOVER : DragonControllerPhase.HOLDING_PATTERN);
++        } else if (hadRider) {
++            hadRider = false;
++            noclip = true;
++            this.size = EntitySize.b(16.0F, 8.0F);
++            getDragonControllerManager().setControllerPhase(DragonControllerPhase.HOLDING_PATTERN); // HoldingPattern
++        }
++        // Purpur end
++
+         float f;
+         float f1;
+ 
+@@ -125,6 +191,7 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+ 
+         this.bp = this.bq;
+         if (this.dk()) {
++            if (hasRider) ejectPassengers(); // Purpur
+             f = (this.random.nextFloat() - 0.5F) * 8.0F;
+             f1 = (this.random.nextFloat() - 0.5F) * 4.0F;
+             float f2 = (this.random.nextFloat() - 0.5F) * 8.0F;
+@@ -136,9 +203,9 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+ 
+             f1 = 0.2F / (MathHelper.sqrt(c(vec3d)) * 10.0F + 1.0F);
+             f1 *= (float) Math.pow(2.0D, vec3d.y);
+-            if (this.bG.a().a()) {
++            if (!hasRider && this.bG.a().a()) { // Purpur
+                 this.bq += 0.1F;
+-            } else if (this.br) {
++            } else if (!hasRider && this.br) { // Purpur
+                 this.bq += f1 * 0.5F;
+             } else {
+                 this.bq += f1;
+@@ -182,7 +249,7 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+                     }
+ 
+                     this.bG.a().b();
+-                } else {
++                } else if (!hasRider) { // Purpur
+                     IDragonController idragoncontroller = this.bG.a();
+ 
+                     idragoncontroller.c();
+@@ -249,7 +316,7 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+                 this.a(this.bz, (double) (f11 * 0.5F), 0.0D, (double) (-f12 * 0.5F));
+                 this.a(this.bD, (double) (f12 * 4.5F), 2.0D, (double) (f11 * 4.5F));
+                 this.a(this.bE, (double) (f12 * -4.5F), 2.0D, (double) (f11 * -4.5F));
+-                if (!this.world.isClientSide && this.hurtTicks == 0) {
++                if (!hasRider && !this.world.isClientSide && this.hurtTicks == 0) { // Purpur
+                     this.a(this.world.getEntities(this, this.bD.getBoundingBox().grow(4.0D, 2.0D, 4.0D).d(0.0D, -2.0D, 0.0D), IEntitySelector.e));
+                     this.a(this.world.getEntities(this, this.bE.getBoundingBox().grow(4.0D, 2.0D, 4.0D).d(0.0D, -2.0D, 0.0D), IEntitySelector.e));
+                     this.b(this.world.getEntities(this, this.bo.getBoundingBox().g(1.0D), IEntitySelector.e));
+@@ -292,7 +359,7 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+                 }
+ 
+                 if (!this.world.isClientSide) {
+-                    this.br = this.b(this.bo.getBoundingBox()) | this.b(this.by.getBoundingBox()) | this.b(this.bz.getBoundingBox());
++                    this.br = !hasRider && this.b(this.bo.getBoundingBox()) | this.b(this.by.getBoundingBox()) | this.b(this.bz.getBoundingBox()); // Purpur
+                     if (this.bF != null) {
+                         this.bF.b(this);
+                     }
+@@ -959,7 +1026,7 @@ public class EntityEnderDragon extends EntityInsentient implements IMonster {
+ 
+     @Override
+     protected boolean n(Entity entity) {
+-        return false;
++        return getRideCooldown() <= 0; // Purpur
+     }
+ 
+     @Override
 diff --git a/src/main/java/net/minecraft/server/EntityEnderman.java b/src/main/java/net/minecraft/server/EntityEnderman.java
 index fde60d6c89..7687649300 100644
 --- a/src/main/java/net/minecraft/server/EntityEnderman.java
@@ -4502,7 +4669,7 @@ index 8714d1574d..af3739c79a 100644
  
      public static int dungeonSeed = -1;
 diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-index 421781136c..153735b0de 100644
+index 421781136c..2bb1f1e8b6 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 @@ -42,11 +42,6 @@ public class PurpurWorldConfig {
@@ -4517,7 +4684,7 @@ index 421781136c..153735b0de 100644
      private ConfigurationSection getConfigurationSection(String path) {
          ConfigurationSection section = PurpurConfig.config.getConfigurationSection("world-settings." + worldName + "." + path);
          return section != null ? section : PurpurConfig.config.getConfigurationSection("world-settings.default." + path);
-@@ -310,46 +305,123 @@ public class PurpurWorldConfig {
+@@ -310,65 +305,181 @@ public class PurpurWorldConfig {
          turtleEggsBreakFromMinecarts = getBoolean("blocks.turtle_egg.break-from-minecarts", turtleEggsBreakFromMinecarts);
      }
  
@@ -4638,10 +4805,18 @@ index 421781136c..153735b0de 100644
 +        elderGuardianRidable = getBoolean("mobs.elder_guardian.ridable", elderGuardianRidable);
 +    }
 +
++    public boolean enderDragonRidable = false;
++    public boolean enderDragonRidableInWater = false;
++    public double enderDragonMaxY = 256D;
      public boolean enderDragonAlwaysDropsEggBlock = false;
      public boolean enderDragonAlwaysDropsFullExp = false;
      public double enderDragonMaxHealth = 200.0D;
-@@ -359,16 +431,49 @@ public class PurpurWorldConfig {
+     private void enderDragonSettings() {
++        enderDragonRidable = getBoolean("mobs.ender_dragon.ridable", enderDragonRidable);
++        enderDragonRidableInWater = getBoolean("mobs.ender_dragon.ridable-in-water", enderDragonRidableInWater);
++        enderDragonMaxY = getDouble("mobs.ender_dragon.ridable-max-y", enderDragonMaxY);
+         enderDragonAlwaysDropsEggBlock = getBoolean("mobs.ender_dragon.always-drop-egg-block", enderDragonAlwaysDropsEggBlock);
+         enderDragonAlwaysDropsFullExp = getBoolean("mobs.ender_dragon.always-drop-full-exp", enderDragonAlwaysDropsFullExp);
          enderDragonMaxHealth = getDouble("mobs.ender_dragon.max-health", enderDragonMaxHealth);
      }
  
@@ -4691,7 +4866,7 @@ index 421781136c..153735b0de 100644
      public float giantStepHeight = 2.0F;
      public float giantJumpHeight = 1.0F;
      public double giantMaxHealth = 100.0D;
-@@ -377,6 +482,8 @@ public class PurpurWorldConfig {
+@@ -377,6 +488,8 @@ public class PurpurWorldConfig {
      public boolean giantHaveAI = false;
      public boolean giantHaveHostileAI = false;
      private void giantSettings() {
@@ -4700,7 +4875,7 @@ index 421781136c..153735b0de 100644
          giantStepHeight = (float) getDouble("mobs.giant.step-height", giantStepHeight);
          giantJumpHeight = (float) getDouble("mobs.giant.jump-height", giantJumpHeight);
          giantMaxHealth = getDouble("mobs.giant.max-health", giantMaxHealth);
-@@ -386,29 +493,119 @@ public class PurpurWorldConfig {
+@@ -386,29 +499,119 @@ public class PurpurWorldConfig {
          giantHaveHostileAI = getBoolean("mobs.giant.have-hostile-ai", giantHaveHostileAI);
      }
  
@@ -4820,7 +4995,7 @@ index 421781136c..153735b0de 100644
      public double phantomAttackedByCrystalRadius = 0.0D;
      public float phantomAttackedByCrystalDamage = 1.0F;
      public double phantomOrbitCrystalRadius = 0.0D;
-@@ -428,6 +625,11 @@ public class PurpurWorldConfig {
+@@ -428,6 +631,11 @@ public class PurpurWorldConfig {
      public boolean phantomIgnorePlayersWithTorch = false;
      public boolean phantomBurnInDaylight = true;
      private void phantomSettings() {
@@ -4832,7 +5007,7 @@ index 421781136c..153735b0de 100644
          phantomAttackedByCrystalRadius = getDouble("mobs.phantom.attacked-by-crystal-range", phantomAttackedByCrystalRadius);
          phantomAttackedByCrystalDamage = (float) getDouble("mobs.phantom.attacked-by-crystal-damage", phantomAttackedByCrystalDamage);
          phantomOrbitCrystalRadius = getDouble("mobs.phantom.orbit-crystal-radius", phantomOrbitCrystalRadius);
-@@ -448,40 +650,184 @@ public class PurpurWorldConfig {
+@@ -448,40 +656,184 @@ public class PurpurWorldConfig {
          phantomIgnorePlayersWithTorch = getBoolean("mobs.phantom.ignore-players-with-torch", phantomIgnorePlayersWithTorch);
      }
  
@@ -5017,7 +5192,7 @@ index 421781136c..153735b0de 100644
      public int villagerBrainTicks = 1;
      public boolean villagerUseBrainTicksOnlyWhenLagging = true;
      public boolean villagerCanBeLeashed = false;
-@@ -491,6 +837,8 @@ public class PurpurWorldConfig {
+@@ -491,6 +843,8 @@ public class PurpurWorldConfig {
      public int villagerSpawnIronGolemLimit = 0;
      public boolean villagerCanBreed = true;
      private void villagerSettings() {
@@ -5026,7 +5201,7 @@ index 421781136c..153735b0de 100644
          villagerBrainTicks = getInt("mobs.villager.brain-ticks", villagerBrainTicks);
          villagerUseBrainTicksOnlyWhenLagging = getBoolean("mobs.villager.use-brain-ticks-only-when-lagging", villagerUseBrainTicksOnlyWhenLagging);
          villagerCanBeLeashed = getBoolean("mobs.villager.can-be-leashed", villagerCanBeLeashed);
-@@ -501,48 +849,102 @@ public class PurpurWorldConfig {
+@@ -501,48 +855,102 @@ public class PurpurWorldConfig {
          villagerCanBreed = getBoolean("mobs.villager.can-breed", villagerCanBreed);
      }
  
