@@ -4546,7 +4546,7 @@ index 5b0cd414c..a3ac88350 100644
                  }
  
 diff --git a/src/main/java/net/minecraft/server/RegionFile.java b/src/main/java/net/minecraft/server/RegionFile.java
-index 1751fb693..850673aa6 100644
+index 1751fb693..1ffa213a8 100644
 --- a/src/main/java/net/minecraft/server/RegionFile.java
 +++ b/src/main/java/net/minecraft/server/RegionFile.java
 @@ -5,6 +5,7 @@ import java.io.BufferedInputStream;
@@ -4979,7 +4979,7 @@ index 1751fb693..850673aa6 100644
                          } else {
 -                            this.freeSectors.a(i1, j1);
 +                            //this.freeSectors.a(i1, j1); // Tuinity - move this down so we can check if it fails to allocate
-                         }
++                        }
 +                        // Tuinity start - recalculate header on header corruption
 +                        if (offset < 2 || sectorLength <= 0 || ((long)offset * 4096L) > regionFileSize) {
 +                            if (canRecalcHeader) {
@@ -5002,7 +5002,7 @@ index 1751fb693..850673aa6 100644
 +                        boolean failedToAllocate = !this.freeSectors.tryAllocate(offset, sectorLength);
 +                        if (failedToAllocate) {
 +                            MinecraftServer.LOGGER.error("Overlapping allocation by local chunk (" + (headerLocation & 31) + "," + (headerLocation >>> 5) + ") in regionfile " + this.file.getAbsolutePath());
-+                        }
+                         }
 +                        if (failedToAllocate & !canRecalcHeader) {
 +                            // location = chunkX | (chunkZ << 5);
 +                            MinecraftServer.LOGGER.fatal("Detected invalid header for regionfile " + this.file.getAbsolutePath() +
@@ -5068,19 +5068,19 @@ index 1751fb693..850673aa6 100644
      @Nullable public synchronized DataInputStream getReadStream(ChunkCoordIntPair chunkCoordIntPair) throws IOException { return a(chunkCoordIntPair);} // Paper - OBFHELPER
      @Nullable
      public synchronized DataInputStream a(ChunkCoordIntPair chunkcoordintpair) throws IOException {
-@@ -162,6 +583,12 @@ public class RegionFile implements AutoCloseable {
-             this.dataFile.read(bytebuffer, (long) (j * 4096));
+@@ -163,6 +584,12 @@ public class RegionFile implements AutoCloseable {
              ((java.nio.Buffer) bytebuffer).flip();
              if (bytebuffer.remaining() < 5) {
+                 RegionFile.LOGGER.error("Chunk {} header is truncated: expected {} but read {}", chunkcoordintpair, l, bytebuffer.remaining());
 +                // Tuinity start - recalculate header on regionfile corruption
 +                if (this.canRecalcHeader) {
 +                    this.recalculateHeader();
 +                    return this.getReadStream(chunkcoordintpair);
 +                }
 +                // Tuinity end
-                 RegionFile.LOGGER.error("Chunk {} header is truncated: expected {} but read {}", chunkcoordintpair, l, bytebuffer.remaining());
                  return null;
              } else {
+                 int i1 = bytebuffer.getInt();
 @@ -170,6 +597,12 @@ public class RegionFile implements AutoCloseable {
  
                  if (i1 == 0) {
@@ -5090,12 +5090,31 @@ index 1751fb693..850673aa6 100644
 +                        this.recalculateHeader();
 +                        return this.getReadStream(chunkcoordintpair);
 +                    }
-+                    // Tuinity end
++                    // Tuinity end - recalculate header on regionfile corruption
                      return null;
                  } else {
                      int j1 = i1 - 1;
-@@ -182,9 +615,21 @@ public class RegionFile implements AutoCloseable {
-                         return this.a(chunkcoordintpair, b(b0));
+@@ -177,17 +610,49 @@ public class RegionFile implements AutoCloseable {
+                     if (a(b0)) {
+                         if (j1 != 0) {
+                             RegionFile.LOGGER.warn("Chunk has both internal and external streams");
++                            // Tuinity start - recalculate header on regionfile corruption
++                            if (this.canRecalcHeader) {
++                                this.recalculateHeader();
++                                return this.getReadStream(chunkcoordintpair);
++                            }
++                            // Tuinity end - recalculate header on regionfile corruption
+                         }
+ 
+-                        return this.a(chunkcoordintpair, b(b0));
++                        // Tuinity start - recalculate header on regionfile corruption
++                        DataInputStream ret = this.a(chunkcoordintpair, b(b0));
++                        if (ret == null && this.canRecalcHeader) {
++                            this.recalculateHeader();
++                            return this.getReadStream(chunkcoordintpair);
++                        }
++                        return ret;
++                        // Tuinity end - recalculate header on regionfile corruption
                      } else if (j1 > bytebuffer.remaining()) {
                          RegionFile.LOGGER.error("Chunk {} stream is truncated: expected {} but read {}", chunkcoordintpair, j1, bytebuffer.remaining());
 +                        // Tuinity start - recalculate header on regionfile corruption
@@ -5112,11 +5131,22 @@ index 1751fb693..850673aa6 100644
 +                            this.recalculateHeader();
 +                            return this.getReadStream(chunkcoordintpair);
 +                        }
-+                        // Tuinity end
++                        // Tuinity end - recalculate header on regionfile corruption
                          return null;
                      } else {
-                         return this.a(chunkcoordintpair, b0, a(bytebuffer, j1));
-@@ -347,10 +792,15 @@ public class RegionFile implements AutoCloseable {
+-                        return this.a(chunkcoordintpair, b0, a(bytebuffer, j1));
++                        // Tuinity start - recalculate header on regionfile corruption
++                        DataInputStream ret = this.a(chunkcoordintpair, b0, a(bytebuffer, j1));
++                        if (ret == null && this.canRecalcHeader) {
++                            this.recalculateHeader();
++                            return this.getReadStream(chunkcoordintpair);
++                        }
++                        return ret;
++                        // Tuinity end - recalculate header on regionfile corruption
+                     }
+                 }
+             }
+@@ -347,10 +812,15 @@ public class RegionFile implements AutoCloseable {
      }
  
      private ByteBuffer b() {
@@ -5133,7 +5163,7 @@ index 1751fb693..850673aa6 100644
          ((java.nio.Buffer) bytebuffer).flip();
          return bytebuffer;
      }
-@@ -387,6 +837,7 @@ public class RegionFile implements AutoCloseable {
+@@ -387,6 +857,7 @@ public class RegionFile implements AutoCloseable {
          };
      }
  
@@ -5190,7 +5220,7 @@ index 1ebdf73cc..cfa3ecb03 100644
          int j = 0;
  
 diff --git a/src/main/java/net/minecraft/server/RegionFileCache.java b/src/main/java/net/minecraft/server/RegionFileCache.java
-index d64f7ad92..33624f838 100644
+index d64f7ad92..8b341c14e 100644
 --- a/src/main/java/net/minecraft/server/RegionFileCache.java
 +++ b/src/main/java/net/minecraft/server/RegionFileCache.java
 @@ -15,12 +15,43 @@ public class RegionFileCache implements AutoCloseable { // Paper - no final
@@ -5263,7 +5293,7 @@ index d64f7ad92..33624f838 100644
          try { // Paper
          DataInputStream datainputstream = regionfile.a(chunkcoordintpair);
          // Paper start
-@@ -160,6 +198,16 @@ public class RegionFileCache implements AutoCloseable { // Paper - no final
+@@ -160,6 +198,17 @@ public class RegionFileCache implements AutoCloseable { // Paper - no final
          try {
              if (datainputstream != null) {
                  nbttagcompound = NBTCompressedStreamTools.a((DataInput) datainputstream);
@@ -5271,6 +5301,7 @@ index d64f7ad92..33624f838 100644
 +                if (this.isChunkData) {
 +                    ChunkCoordIntPair chunkPos = ChunkRegionLoader.getChunkCoordinate(nbttagcompound);
 +                    if (!chunkPos.equals(chunkcoordintpair)) {
++                        MinecraftServer.LOGGER.error("Attempting to read chunk data at " + chunkcoordintpair.toString() + " but got chunk data for " + chunkPos.toString() + " instead! Attempting regionfile recalculation for regionfile " + regionfile.file.getAbsolutePath());
 +                        regionfile.recalculateHeader();
 +                        regionfile.fileLock.lock(); // otherwise we will unlock twice and only lock once.
 +                        return this.readFromRegionFile(regionfile, chunkcoordintpair);
