@@ -15,7 +15,7 @@
     logsuffix="$logsuffix\n\nPaper Changes:\n$paper"
     if [ -z "$updated" ]; then updated="Paper"; else updated="$updated/Paper"; fi
   fi
-  disclaimer="Upstream has released updates that appears to apply and compile correctly"
+  disclaimer="Upstream has released updates that appear to apply and compile correctly"
 
   if [ -n "$1" ]; then
     disclaimer=("$@")
