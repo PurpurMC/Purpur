@@ -1,0 +1,118 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: jmp <jasonpenilla2@me.com>
+Date: Fri, 28 Aug 2020 19:25:53 -0700
+Subject: [PATCH] Add Wandering Trader spawn rate config options
+
+
+diff --git a/src/main/java/net/minecraft/server/MobSpawnerTrader.java b/src/main/java/net/minecraft/server/MobSpawnerTrader.java
+index f88c7b548..ad9c1e52c 100644
+--- a/src/main/java/net/minecraft/server/MobSpawnerTrader.java
++++ b/src/main/java/net/minecraft/server/MobSpawnerTrader.java
+@@ -9,49 +9,58 @@ public class MobSpawnerTrader implements MobSpawner {
+ 
+     private final Random a = new Random();
+     private final IWorldDataServer b;
+-    private int c;
+-    private int d;
+-    private int e;
++    private int c; public final int getMinuteTimer() { return this.c; } public final void setMinuteTimer(int x) { this.c = x; } // Purpur - OBFHELPER
++    private int d; public final int getDayTimer() { return this.d; } public final void setDayTimer(int x) { this.d = x; } // Purpur - OBFHELPER
++    private int e; public final int getSpawnChance() { return this.e; } public final void setSpawnChance(int x) { this.e = x; } // Purpur - OBFHELPER
+ 
+     public MobSpawnerTrader(IWorldDataServer iworlddataserver) {
+         this.b = iworlddataserver;
+-        this.c = 1200;
+-        this.d = iworlddataserver.v();
+-        this.e = iworlddataserver.w();
+-        if (this.d == 0 && this.e == 0) {
+-            this.d = 24000;
+-            iworlddataserver.g(this.d);
+-            this.e = 25;
+-            iworlddataserver.h(this.e);
+-        }
+-
++        // Purpur start
++        this.setMinuteTimer(Integer.MIN_VALUE);
++        //this.d = iworlddataserver.v(); // Purpur - This value is read from the world file only for the first spawn, after which vanilla uses a hardcoded value
++        //this.e = iworlddataserver.w(); // Purpur - This value is read from the world file only for the first spawn, after which vanilla uses a hardcoded value
++        //if (this.d == 0 && this.e == 0) {
++        //    this.d = 24000;
++        //    iworlddataserver.g(this.d);
++        //    this.e = 25;
++        //    iworlddataserver.h(this.e);
++        //}
++        // Purpur end
+     }
+ 
+     @Override
+     public int a(WorldServer worldserver, boolean flag, boolean flag1) {
++        // Purpur start
++        if (this.getMinuteTimer() == Integer.MIN_VALUE) {
++            this.setMinuteTimer(worldserver.purpurConfig.villagerTraderSpawnMinuteTicks);
++            this.setDayTimer(worldserver.purpurConfig.villagerTraderSpawnDayTicks);
++            this.setSpawnChance(worldserver.purpurConfig.villagerTraderSpawnChanceMin);
++        }
+         if (!worldserver.getGameRules().getBoolean(GameRules.DO_TRADER_SPAWNING)) {
+             return 0;
+-        } else if (--this.c > 0) {
++        } else if (this.getMinuteTimer() - 1 > 0) {
++            this.setMinuteTimer(this.getMinuteTimer() - 1);
+             return 0;
+         } else {
+-            this.c = 1200;
+-            this.d -= 1200;
+-            this.b.g(this.d);
+-            if (this.d > 0) {
++            this.setMinuteTimer(worldserver.purpurConfig.villagerTraderSpawnMinuteTicks);
++            this.setDayTimer(getDayTimer() - worldserver.purpurConfig.villagerTraderSpawnMinuteTicks);
++            //this.b.g(this.d); // Purpur - We don't need to save this value to disk if it gets set back to a hardcoded value anyways
++            if (this.getDayTimer() > 0) {
+                 return 0;
+             } else {
+-                this.d = 24000;
++                this.setDayTimer(worldserver.purpurConfig.villagerTraderSpawnDayTicks);
+                 if (!worldserver.getGameRules().getBoolean(GameRules.DO_MOB_SPAWNING)) {
+                     return 0;
+                 } else {
+-                    int i = this.e;
++                    int i = this.getSpawnChance();
+ 
+-                    this.e = MathHelper.clamp(this.e + 25, 25, 75);
+-                    this.b.h(this.e);
++                    this.setSpawnChance(MathHelper.clamp(i + worldserver.purpurConfig.villagerTraderSpawnChanceFailureIncrement, worldserver.purpurConfig.villagerTraderSpawnChanceMin, worldserver.purpurConfig.villagerTraderSpawnChanceMax));
++                    //this.b.h(this.e); // Purpur - We don't need to save this value to disk if it gets set back to a hardcoded value anyways
+                     if (this.a.nextInt(100) > i) {
+                         return 0;
+                     } else if (this.a(worldserver)) {
+-                        this.e = 25;
++                        this.setSpawnChance(worldserver.purpurConfig.villagerTraderSpawnChanceMin);
++                        // Purpur end
+                         return 1;
+                     } else {
+                         return 0;
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 54e460ca8..0d37e1273 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -896,11 +896,21 @@ public class PurpurWorldConfig {
+     public boolean villagerTraderRidableInWater = false;
+     public boolean villagerTraderCanBeLeashed = false;
+     public boolean villagerTraderFollowEmeraldBlock = false;
++    public int villagerTraderSpawnMinuteTicks = 1200;
++    public int villagerTraderSpawnDayTicks = 24000;
++    public int villagerTraderSpawnChanceFailureIncrement = 25;
++    public int villagerTraderSpawnChanceMin = 25;
++    public int villagerTraderSpawnChanceMax = 75;
+     private void villagerTraderSettings() {
+         villagerTraderRidable = getBoolean("mobs.wandering_trader.ridable", villagerTraderRidable);
+         villagerTraderRidableInWater = getBoolean("mobs.wandering_trader.ridable-in-water", villagerTraderRidableInWater);
+         villagerTraderCanBeLeashed = getBoolean("mobs.wandering_trader.can-be-leashed", villagerTraderCanBeLeashed);
+         villagerTraderFollowEmeraldBlock = getBoolean("mobs.wandering_trader.follow-emerald-blocks", villagerTraderFollowEmeraldBlock);
++        villagerTraderSpawnMinuteTicks = getInt("mobs.wandering_trader.spawn-minute-ticks", villagerTraderSpawnMinuteTicks);
++        villagerTraderSpawnDayTicks = getInt("mobs.wandering_trader.spawn-day-ticks", villagerTraderSpawnDayTicks);
++        villagerTraderSpawnChanceFailureIncrement = getInt("mobs.wandering_trader.spawn-chance-failure-increment", villagerTraderSpawnChanceFailureIncrement);
++        villagerTraderSpawnChanceMin = getInt("mobs.wandering_trader.spawn-chance-min", villagerTraderSpawnChanceMin);
++        villagerTraderSpawnChanceMax = getInt("mobs.wandering_trader.spawn-chance-max", villagerTraderSpawnChanceMax);
+     }
+ 
+     public boolean vindicatorRidable = false;
