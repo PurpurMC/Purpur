@@ -3,9 +3,289 @@ From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 14 Dec 2018 21:53:58 -0800
 Subject: [PATCH] Tuinity Server Changes
 
+Brand changes
+
+MC-Dev fixes
+
+Util patch
+
+Tuinity Server Config
+
+Multi-Threaded Server Ticking Vanilla
+
+This patch is the vanilla server changes
+
+Currently a placeholder patch.
+
+Multi-Threaded ticking CraftBukkit
+
+These are the changes to CB
+
+Currently a placeholder patch.
+
+Add soft async catcher
+
+Must be enabled via -Dtuinity.strict-thread-checks=true
+
+Delay chunk unloads
+
+Chunk unloads are now delayed by 1s. Specifically, ticket level
+reduction is delayed by 1s. This is done to allow players to
+teleport and have their pets follow them, as the chunks will no longer
+unload or have entity ticking status removed.
+
+It's also targetted to reduce performance regressions when
+plugins or edge cases in code do not spam sync loads since chunks
+without tickets get unloaded immediately.
+
+Configurable under `delay-chunkunloads-by` in config.
+
+This patch replaces the paper patch as the paper patch only
+affects player loaded chunks, when we want to target all
+loads.
+
+Attempt to recalculate regionfile header if it is corrupt
+
+Instead of trying to relocate the chunk, which is seems to never
+be the correct choice, so we end up duplicating or swapping chunks,
+we instead drop the current regionfile header and recalculate -
+hoping that at least then we don't swap chunks, and maybe recover
+them all.
+
+Lag compensate block breaking
+
+Use time instead of ticks if ticks fall behind
+
+Update version fetcher repo
+
+Sets the target github repo to Tuinity in the version checker. Also disables the jenkins build lookups.
+
+Per World Spawn Limits
+
+Detail more information in watchdog dumps
+
+- Dump position, world, velocity, and uuid for currently ticking entities
+- Dump player name, player uuid, position, and world for packet handling
+
+Execute chunk tasks mid-tick
+
+This will help the server load chunks if tick times are high.
+
+Change writes to use NORMAL priority rather than LOW
+
+Should limit build up of I/O tasks, or at least properly
+indicate to server owners that I/O is falling behind
+
+Allow controlled flushing for network manager
+
+Only make one flush call when emptying the packet queue too
+
+This patch will be used to optimise out flush calls in later
+patches.
+
+Consolidate flush calls for entity tracker packets
+
+Most server packets seem to be sent from here, so try to avoid
+expensive flush calls from them.
+
+This change was motivated due to local testing:
+
+- My server spawn has 130 cows in it (for testing a prev. patch)
+- Try to let 200 players join spawn
+
+Without this change, I could only get 20 players on before they
+all started timing out due to the load put on the Netty I/O threads.
+
+With this change I could get all 200 on at 0ms ping.
+
+(one of the primary issues is that my CPU is kinda trash, and having
+4 extra threads at 100% is just too much for it).
+
+So in general this patch should reduce Netty I/O thread load.
+
+Time scoreboard search
+
+Plugins leaking scoreboards will make this very expensive,
+let server owners debug it easily
+
+Make CallbackExecutor strict again
+
+The correct fix for double scheduling is to avoid it. The reason
+this class is used is because double scheduling causes issues
+elsewhere, and it acts as an explicit detector of what double
+schedules. Effectively, use the callback executor as a tool of
+finding issues rather than hiding these issues.
+
+This patch also reverts incorrect use(s) of the class by paper.
+
+- getChunkFutureAsynchronously
+  There is no risk at all of recursion. The future is executed on
+  the chunk provider's thread queue, the same place general plugin
+  load callbacks are executed on. Forcing the task execution into
+  the callback executor also prevents the future from catching
+  any exception thrown from it.
+
+Optimise entity hard collision checking
+
+Very few entities actually hard collide, so store them in their own
+entity slices and provide a special getEntites type call just for them.
+This reduces entity collision checking impact (in my testing) by 25%
+for crammed entities (shove 130 cows into an 8x6 area in one chunk).
+Less crammed entities are likely to show significantly less benefit.
+Effectively, this patch optimises crammed entity situations.
+
+Improved oversized chunk data packet handling
+
+Now target all TE data, except for TE's that do not have
+update packets.
+
+This patch relies upon the improve extra packet handling
+patch, as we now use PacketPlayOutMapChunk as an extra packet.
+See its patch notes for further details.
+
+Reduce blockpos allocation from pathfinding
+
+Reduce iterator allocation from chunk gen
+
+Replace via iterating over an array
+
+Prevent long map entry creation in light engine
+
+Use fastiterator to prevent it
+
+Highly optimise single and multi-AABB VoxelShapes and collisions
+
+Reduce allocation rate from crammed entities
+
+Optimise chunk tick iteration
+
+Use a dedicated list of entity ticking chunks to reduce the cost
+
+Use entity ticking chunk map for entity tracker
+
+Should bring us back in-line with tracker performance
+before the loaded entity list reversion.
+
+Temporary fix for large move vectors
+
+Check movement distance also based on current position.
+
+Improve paper prevent moving into unloaded chunk check
+
+Check the AABB of the move
+
+Improve async tp to not load chunks when crossing worlds
+
+Fixes an issue where a getCubes call would load neighbouring chunks.
+Loads less chunks than paper's implementation
+
+Optimise getType calls
+
+Remove the map lookup for converting from Block->Bukkit Material
+
+Revert getChunkAt(Async) retaining chunks for long periods of time
+
+Rework PlayerChunk main thread checks
+
+These need to fail instead of continuing, as hiding these errors
+the way paper has is just going to allow unexpected reordering
+of callbacks.
+
+For example, thanks to this patch incorrect future
+completion (completion of the world gen future,
+PlayerChunkMap#b(PlayerChunk, ChunkStatus)) was detected and fixed.
+
+Allow Entities to be removed from a world while ticking
+
+Fixes issues like disconnecting players while ticking them, or
+issues where teleporting players across worlds while ticking.
+
+Also allows us to run mid tick while ticking entities.
+
+Prevent unload() calls removing tickets for sync loads
+
+Prevent log spam for "Block is water but TE is chest"
+
+Happens when breaking a waterlogged chest.
+Fix is to just not validate the TE while the chest is being removed.
+
+Optimise collision checking in player move packet handling
+
+Don't need to do another getCubes call if the move() call
+doesn't find any collisions
+
+Optimise heightmap access
+
+HeightMap uses DataBits for storage to reduce the memory footprint
+of the underlying heightmap. However, this reduction in memory
+footprint comes at the cost of encoding/decoding each access.
+
+So we can make the tradeoff of raw array access by using a char
+array internally. For every 100,000 chunks, this will add approximately
+80MB overhead (4 heightmaps per full chunk) - which is acceptable.
+
+Improve inlinig for some hot IBlockData methods
+
+Manually inline methods in BlockPosition
+
+Separate lookup locking from state access in UserCache
+
+Prevent lookups from stalling simple state access/write calls
+
+Distance manager tick timings
+
+Recently this has been taking up more time, so add a timings to
+really figure out how much.
+
+Name craft scheduler threads according to the plugin using them
+
+Provides quick access to culprits running far more threads than
+they should be
+
+Optimise WorldServer#notify
+
+Iterating over all of the navigators in the world is pretty expensive.
+Instead, only iterate over navigators in the current region that are
+eligible for repathing.
+
+Retain block place order when capturing blockstates
+
+Fixes twisted vines not connecting properly when grown via
+bonemeal by a player.
+
+In general, look at making this logic more robust (i.e properly handling
+cases where a captured entry is overriden) - but for now this will do.
+
+Fix ghost blocks in ticking view distance
+
+Post processing doesn't notify, and my changes to chunk sending
+send chunks before post processing.
+
+Use visible chunks for light engine status checks
+
+Not mt-safe to use getUpdating
+
+Fix swamp hut cat generation deadlock
+
+The worldgen thread will attempt to get structure references
+via the world's getChunkAt method, which is fine if the gen is
+not cancelled - but if the chunk was unloaded, the call will block
+indefinitely. Instead of using the world state, we use the already
+supplied generatoraccess which will always have the chunk available.
+
+Range check flag dirty calls in PlayerChunk
+
+Simply return.
+
+Do not run vanilla update logic when eigencraft is enabled
+
+Fix missing block property portal crash
+
+Looks like it appears when the portal isn't created (cancelled
+event). So, just use the original direction and call it a day.
 
 diff --git a/pom.xml b/pom.xml
-index 594ab9afb..ee19a2874 100644
+index d018f900d..4f45b8158 100644
 --- a/pom.xml
 +++ b/pom.xml
 @@ -1,11 +1,11 @@
@@ -1209,10 +1489,10 @@ index 000000000..b0f1e21e6
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/voxel/AABBVoxelShape.java b/src/main/java/com/tuinity/tuinity/voxel/AABBVoxelShape.java
 new file mode 100644
-index 000000000..56b955227
+index 000000000..b321ad516
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/voxel/AABBVoxelShape.java
-@@ -0,0 +1,237 @@
+@@ -0,0 +1,162 @@
 +package com.tuinity.tuinity.voxel;
 +
 +import it.unimi.dsi.fastutil.doubles.DoubleArrayList;
@@ -1358,187 +1638,142 @@ index 000000000..56b955227
 +
 +    @Override
 +    public double a(EnumDirection.EnumAxis enumdirection_enumaxis, AxisAlignedBB axisalignedbb, double d0) { // collide
-+        if (Math.abs(d0) < 1.0e-7) {
-+            return 0.0;
-+        }
 +        switch (enumdirection_enumaxis.ordinal()) {
 +            case 0:
-+                return this.collideX(axisalignedbb, d0);
++                return AxisAlignedBB.collideX(this.aabb, axisalignedbb, d0);
 +            case 1:
-+                return this.collideY(axisalignedbb, d0);
++                return AxisAlignedBB.collideY(this.aabb, axisalignedbb, d0);
 +            case 2:
-+                return this.collideZ(axisalignedbb, d0);
++                return AxisAlignedBB.collideZ(this.aabb, axisalignedbb, d0);
 +            default:
 +                throw new IllegalStateException("Unknown axis requested");
 +        }
 +    }
 +
-+    // collideX, collideY, collideZ are copied from 1.12 src and remapped
-+    // so the code all belongs to mojang
-+
-+    public double collideX(AxisAlignedBB axisalignedbb, double d0) {
-+        if (axisalignedbb.maxY > this.aabb.minY && axisalignedbb.minY < this.aabb.maxY
-+                && axisalignedbb.maxZ > this.aabb.minZ && axisalignedbb.minZ < this.aabb.maxZ) {
-+            double d1;
-+
-+            if (d0 > 0.0D && axisalignedbb.maxX <= this.aabb.minX) {
-+                d1 = this.aabb.minX - axisalignedbb.maxX;
-+                if (d1 < d0) {
-+                    d0 = d1;
-+                }
-+            } else if (d0 < 0.0D && axisalignedbb.minX >= this.aabb.maxX) {
-+                d1 = this.aabb.maxX - axisalignedbb.minX;
-+                if (d1 > d0) {
-+                    d0 = d1;
-+                }
-+            }
-+
-+            return d0;
-+        } else {
-+            return d0;
-+        }
-+    }
-+
-+    public double collideY(AxisAlignedBB axisalignedbb, double d0) {
-+        if (axisalignedbb.maxX > this.aabb.minX && axisalignedbb.minX < this.aabb.maxX
-+                && axisalignedbb.maxZ > this.aabb.minZ && axisalignedbb.minZ < this.aabb.maxZ) {
-+            double d1;
-+
-+            if (d0 > 0.0D && axisalignedbb.maxY <= this.aabb.minY) {
-+                d1 = this.aabb.minY - axisalignedbb.maxY;
-+                if (d1 < d0) {
-+                    d0 = d1;
-+                }
-+            } else if (d0 < 0.0D && axisalignedbb.minY >= this.aabb.maxY) {
-+                d1 = this.aabb.maxY - axisalignedbb.minY;
-+                if (d1 > d0) {
-+                    d0 = d1;
-+                }
-+            }
-+
-+            return d0;
-+        } else {
-+            return d0;
-+        }
-+    }
-+
-+    public double collideZ(AxisAlignedBB axisalignedbb, double d0) {
-+        if (axisalignedbb.maxX > this.aabb.minX && axisalignedbb.minX < this.aabb.maxX
-+                && axisalignedbb.maxY > this.aabb.minY && axisalignedbb.minY < this.aabb.maxY) {
-+            double d1;
-+
-+            if (d0 > 0.0D && axisalignedbb.maxZ <= this.aabb.minZ) {
-+                d1 = this.aabb.minZ - axisalignedbb.maxZ;
-+                if (d1 < d0) {
-+                    d0 = d1;
-+                }
-+            } else if (d0 < 0.0D && axisalignedbb.minZ >= this.aabb.maxZ) {
-+                d1 = this.aabb.maxZ - axisalignedbb.minZ;
-+                if (d1 > d0) {
-+                    d0 = d1;
-+                }
-+            }
-+
-+            return d0;
-+        } else {
-+            return d0;
-+        }
-+    }
-+
 +    @Override
 +    public boolean intersects(AxisAlignedBB axisalingedbb) {
-+        return this.aabb.intersects(axisalingedbb);
++        return this.aabb.voxelShapeIntersect(axisalingedbb);
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/server/AxisAlignedBB.java b/src/main/java/net/minecraft/server/AxisAlignedBB.java
-index ed9b2f9ad..d54bf7140 100644
+index ed9b2f9ad..6aa9f0733 100644
 --- a/src/main/java/net/minecraft/server/AxisAlignedBB.java
 +++ b/src/main/java/net/minecraft/server/AxisAlignedBB.java
-@@ -13,6 +13,119 @@ public class AxisAlignedBB {
+@@ -13,6 +13,149 @@ public class AxisAlignedBB {
      public final double maxY;
      public final double maxZ;
  
 +    // Tuinity start
 +    public final boolean isEmpty() {
-+        return (this.maxX - this.minX) < 1.0E-7 && (this.maxY - this.minY) < 1.0E-7 && (this.maxZ - this.minZ) < 1.0E-7;
++        return (this.maxX - this.minX) < MCUtil.COLLISION_EPSILON && (this.maxY - this.minY) < MCUtil.COLLISION_EPSILON && (this.maxZ - this.minZ) < MCUtil.COLLISION_EPSILON;
 +    }
 +
 +    public static AxisAlignedBB getBoxForChunk(int chunkX, int chunkZ) {
 +        double x = (double)(chunkX << 4);
 +        double z = (double)(chunkZ << 4);
 +        // use a bounding box bigger than the chunk to prevent entities from entering it on move
-+        return new AxisAlignedBB(x - 1.0E-7, 0.0, z - 1.0E-7, x + (16.0 + 1.0E-7), 255.0, z + (16.0 + 1.0E-7), false);
++        return new AxisAlignedBB(x - 3*MCUtil.COLLISION_EPSILON, Double.NEGATIVE_INFINITY, z - 3*MCUtil.COLLISION_EPSILON, x + (16.0 + 3*MCUtil.COLLISION_EPSILON), Double.POSITIVE_INFINITY, z + (16.0 + 3*MCUtil.COLLISION_EPSILON), false);
 +    }
 +
-+    // collideX, collideY, collideZ are copied from 1.12 src
-+    // so the code all belongs to mojang
-+    public double collideX(AxisAlignedBB axisalignedbb, double d0) {
-+        if (axisalignedbb.maxY > this.minY && axisalignedbb.minY < this.maxY
-+                && axisalignedbb.maxZ > this.minZ && axisalignedbb.minZ < this.maxZ) {
-+            double d1;
++    /*
++      A couple of rules for VoxelShape collisions:
++      Two shapes only intersect if they are actually more than EPSILON units into each other. This also applies to movement
++      checks.
++      If the two shapes strictly collide, then the return value of a collide call will return a value in the opposite
++      direction of the source move. However, this value will not be greater in magnitude than EPSILON. Collision code
++      will automatically round it to 0.
++     */
 +
-+            if (d0 > 0.0D && axisalignedbb.maxX <= this.minX) {
-+                d1 = this.minX - axisalignedbb.maxX;
-+                if (d1 < d0) {
-+                    d0 = d1;
-+                }
-+            } else if (d0 < 0.0D && axisalignedbb.minX >= this.maxX) {
-+                d1 = this.maxX - axisalignedbb.minX;
-+                if (d1 > d0) {
-+                    d0 = d1;
-+                }
-+            }
-+
-+            return d0;
-+        } else {
-+            return d0;
-+        }
++    public final boolean voxelShapeIntersect(AxisAlignedBB other) {
++        return this.voxelShapeIntersect(other.minX, other.minY, other.minZ, other.maxX, other.maxY, other.maxZ);
 +    }
 +
-+    public double collideY(AxisAlignedBB axisalignedbb, double d0) {
-+        if (axisalignedbb.maxX > this.minX && axisalignedbb.minX < this.maxX
-+                && axisalignedbb.maxZ > this.minZ && axisalignedbb.minZ < this.maxZ) {
-+            double d1;
-+
-+            if (d0 > 0.0D && axisalignedbb.maxY <= this.minY) {
-+                d1 = this.minY - axisalignedbb.maxY;
-+                if (d1 < d0) {
-+                    d0 = d1;
-+                }
-+            } else if (d0 < 0.0D && axisalignedbb.minY >= this.maxY) {
-+                d1 = this.maxY - axisalignedbb.minY;
-+                if (d1 > d0) {
-+                    d0 = d1;
-+                }
-+            }
-+
-+            return d0;
-+        } else {
-+            return d0;
-+        }
++    public final boolean voxelShapeIntersect(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
++        return (this.minX - maxX) < -MCUtil.COLLISION_EPSILON && (this.maxX - minX) > MCUtil.COLLISION_EPSILON &&
++               (this.minY - maxY) < -MCUtil.COLLISION_EPSILON && (this.maxY - minY) > MCUtil.COLLISION_EPSILON &&
++               (this.minZ - maxZ) < -MCUtil.COLLISION_EPSILON && (this.maxZ - minZ) > MCUtil.COLLISION_EPSILON;
 +    }
 +
-+    public double collideZ(AxisAlignedBB axisalignedbb, double d0) {
-+        if (axisalignedbb.maxX > this.minX && axisalignedbb.minX < this.maxX
-+                && axisalignedbb.maxY > this.minY && axisalignedbb.minY < this.maxY) {
-+            double d1;
-+
-+            if (d0 > 0.0D && axisalignedbb.maxZ <= this.minZ) {
-+                d1 = this.minZ - axisalignedbb.maxZ;
-+                if (d1 < d0) {
-+                    d0 = d1;
-+                }
-+            } else if (d0 < 0.0D && axisalignedbb.minZ >= this.maxZ) {
-+                d1 = this.maxZ - axisalignedbb.minZ;
-+                if (d1 > d0) {
-+                    d0 = d1;
-+                }
-+            }
-+
-+            return d0;
-+        } else {
-+            return d0;
++    public static double collideX(AxisAlignedBB target, AxisAlignedBB source, double source_move) {
++        if (target.isEmpty() || source.isEmpty()) {
++            return source_move;
 +        }
++        if (Math.abs(source_move) < MCUtil.COLLISION_EPSILON) {
++            return 0.0;
++        }
++
++        if ((source.minY - target.maxY) < -MCUtil.COLLISION_EPSILON && (source.maxY - target.minY) > MCUtil.COLLISION_EPSILON &&
++                (source.minZ - target.maxZ) < -MCUtil.COLLISION_EPSILON && (source.maxZ - target.minZ) > MCUtil.COLLISION_EPSILON) {
++
++            if (source_move >= 0.0) {
++                double max_move = target.minX - source.maxX; // < 0.0 if no strict collision
++                if (max_move < -MCUtil.COLLISION_EPSILON) {
++                    return source_move;
++                }
++                return Math.min(max_move, source_move);
++            } else {
++                double max_move = target.maxX - source.minX; // > 0.0 if no strict collision
++                if (max_move > MCUtil.COLLISION_EPSILON) {
++                    return source_move;
++                }
++                return Math.max(max_move, source_move);
++            }
++        }
++        return source_move;
++    }
++
++    public static double collideY(AxisAlignedBB target, AxisAlignedBB source, double source_move) {
++        if (target.isEmpty() || source.isEmpty()) {
++            return source_move;
++        }
++        if (Math.abs(source_move) < MCUtil.COLLISION_EPSILON) {
++            return 0.0;
++        }
++
++        if ((source.minX - target.maxX) < -MCUtil.COLLISION_EPSILON && (source.maxX - target.minX) > MCUtil.COLLISION_EPSILON &&
++                (source.minZ - target.maxZ) < -MCUtil.COLLISION_EPSILON && (source.maxZ - target.minZ) > MCUtil.COLLISION_EPSILON) {
++            if (source_move >= 0.0) {
++                double max_move = target.minY - source.maxY; // < 0.0 if no strict collision
++                if (max_move < -MCUtil.COLLISION_EPSILON) {
++                    return source_move;
++                }
++                return Math.min(max_move, source_move);
++            } else {
++                double max_move = target.maxY - source.minY; // > 0.0 if no strict collision
++                if (max_move > MCUtil.COLLISION_EPSILON) {
++                    return source_move;
++                }
++                return Math.max(max_move, source_move);
++            }
++        }
++        return source_move;
++    }
++
++    public static double collideZ(AxisAlignedBB target, AxisAlignedBB source, double source_move) {
++        if (target.isEmpty() || source.isEmpty()) {
++            return source_move;
++        }
++        if (Math.abs(source_move) < MCUtil.COLLISION_EPSILON) {
++            return 0.0;
++        }
++
++        if ((source.minX - target.maxX) < -MCUtil.COLLISION_EPSILON && (source.maxX - target.minX) > MCUtil.COLLISION_EPSILON &&
++                (source.minY - target.maxY) < -MCUtil.COLLISION_EPSILON && (source.maxY - target.minY) > MCUtil.COLLISION_EPSILON) {
++            if (source_move >= 0.0) {
++                double max_move = target.minZ - source.maxZ; // < 0.0 if no strict collision
++                if (max_move < -MCUtil.COLLISION_EPSILON) {
++                    return source_move;
++                }
++                return Math.min(max_move, source_move);
++            } else {
++                double max_move = target.maxZ - source.minZ; // > 0.0 if no strict collision
++                if (max_move > MCUtil.COLLISION_EPSILON) {
++                    return source_move;
++                }
++                return Math.max(max_move, source_move);
++            }
++        }
++        return source_move;
 +    }
 +
 +    public final AxisAlignedBB offsetX(double dx) {
@@ -1574,7 +1809,7 @@ index ed9b2f9ad..d54bf7140 100644
      public AxisAlignedBB(double d0, double d1, double d2, double d3, double d4, double d5) {
          this.minX = Math.min(d0, d3);
          this.minY = Math.min(d1, d4);
-@@ -185,6 +298,7 @@ public class AxisAlignedBB {
+@@ -185,6 +328,7 @@ public class AxisAlignedBB {
          return new AxisAlignedBB(d0, d1, d2, d3, d4, d5);
      }
  
@@ -1582,7 +1817,7 @@ index ed9b2f9ad..d54bf7140 100644
      public AxisAlignedBB d(double d0, double d1, double d2) {
          return new AxisAlignedBB(this.minX + d0, this.minY + d1, this.minZ + d2, this.maxX + d0, this.maxY + d1, this.maxZ + d2);
      }
-@@ -193,6 +307,7 @@ public class AxisAlignedBB {
+@@ -193,6 +337,7 @@ public class AxisAlignedBB {
          return new AxisAlignedBB(this.minX + (double) blockposition.getX(), this.minY + (double) blockposition.getY(), this.minZ + (double) blockposition.getZ(), this.maxX + (double) blockposition.getX(), this.maxY + (double) blockposition.getY(), this.maxZ + (double) blockposition.getZ());
      }
  
@@ -1590,7 +1825,7 @@ index ed9b2f9ad..d54bf7140 100644
      public AxisAlignedBB c(Vec3D vec3d) {
          return this.d(vec3d.x, vec3d.y, vec3d.z);
      }
-@@ -212,6 +327,7 @@ public class AxisAlignedBB {
+@@ -212,6 +357,7 @@ public class AxisAlignedBB {
          return this.e(vec3d.x, vec3d.y, vec3d.z);
      }
  
@@ -1599,7 +1834,7 @@ index ed9b2f9ad..d54bf7140 100644
          return d0 >= this.minX && d0 < this.maxX && d1 >= this.minY && d1 < this.maxY && d2 >= this.minZ && d2 < this.maxZ;
      }
 diff --git a/src/main/java/net/minecraft/server/BaseBlockPosition.java b/src/main/java/net/minecraft/server/BaseBlockPosition.java
-index 4d574f83a..f0e5ba3b2 100644
+index 6b655b744..e811295b4 100644
 --- a/src/main/java/net/minecraft/server/BaseBlockPosition.java
 +++ b/src/main/java/net/minecraft/server/BaseBlockPosition.java
 @@ -16,9 +16,9 @@ public class BaseBlockPosition implements Comparable<BaseBlockPosition> {
@@ -1619,26 +1854,26 @@ index 4d574f83a..f0e5ba3b2 100644
          return this.e;
      }
  
--    protected void o(int i) {
-+    protected void o_unused(int i) { // Tuinity - not needed here
+-    public void o(int i) { // Paper - protected -> public
++    protected void o_unused(int i) { // Paper - protected -> public // Tuinity - not needed here - Also revert the decision to expose set on an immutable type
          this.a = i;
      }
  
--    protected void p(int i) {
-+    protected void p_unused(int i) { // Tuinity - not needed here
+-    public void p(int i) { // Paper - protected -> public
++    protected void p_unused(int i) { // Paper - protected -> public // Tuinity - not needed here - Also revert the decision to expose set on an immutable type
          this.b = i;
      }
  
--    protected void q(int i) {
-+    protected void q_unused(int i) { // Tuinity - not needed here
+-    public void q(int i) { // Paper - protected -> public
++    protected void q_unused(int i) { // Paper - protected -> public // Tuinity - not needed here - Also revert the decision to expose set on an immutable type
          this.e = i;
      }
  
 diff --git a/src/main/java/net/minecraft/server/BlockBase.java b/src/main/java/net/minecraft/server/BlockBase.java
-index 440c959b1..82e07b357 100644
+index 8265ed4da..2db488aba 100644
 --- a/src/main/java/net/minecraft/server/BlockBase.java
 +++ b/src/main/java/net/minecraft/server/BlockBase.java
-@@ -176,8 +176,8 @@ public abstract class BlockBase {
+@@ -182,8 +182,8 @@ public abstract class BlockBase {
          return VoxelShapes.a();
      }
  
@@ -1649,7 +1884,7 @@ index 440c959b1..82e07b357 100644
          return iblockdata.i(iblockaccess, blockposition) ? iblockaccess.J() : (iblockdata.a(iblockaccess, blockposition) ? 0 : 1);
      }
  
-@@ -289,14 +289,14 @@ public abstract class BlockBase {
+@@ -295,14 +295,14 @@ public abstract class BlockBase {
  
      public abstract static class BlockData extends IBlockDataHolder<Block, IBlockData> {
  
@@ -1667,7 +1902,7 @@ index 440c959b1..82e07b357 100644
          private final BlockBase.e l;
          private final BlockBase.e m;
          private final BlockBase.e n;
-@@ -332,10 +332,25 @@ public abstract class BlockBase {
+@@ -338,10 +338,25 @@ public abstract class BlockBase {
          }
          // Paper end
  
@@ -1693,7 +1928,7 @@ index 440c959b1..82e07b357 100644
  
          }
  
-@@ -359,10 +374,12 @@ public abstract class BlockBase {
+@@ -365,10 +380,12 @@ public abstract class BlockBase {
              return this.a != null ? this.a.g : this.getBlock().b(this.p(), iblockaccess, blockposition);
          }
  
@@ -1706,7 +1941,7 @@ index 440c959b1..82e07b357 100644
          public VoxelShape a(IBlockAccess iblockaccess, BlockPosition blockposition, EnumDirection enumdirection) {
              return this.a != null && this.a.i != null ? this.a.i[enumdirection.ordinal()] : VoxelShapes.a(this.c(iblockaccess, blockposition), enumdirection);
          }
-@@ -371,19 +388,19 @@ public abstract class BlockBase {
+@@ -377,19 +394,19 @@ public abstract class BlockBase {
              return this.getBlock().d(this.p(), iblockaccess, blockposition);
          }
  
@@ -1731,7 +1966,7 @@ index 440c959b1..82e07b357 100644
              return this.f;
          }
  
-@@ -449,7 +466,7 @@ public abstract class BlockBase {
+@@ -455,7 +472,7 @@ public abstract class BlockBase {
              }
          }
  
@@ -1740,7 +1975,7 @@ index 440c959b1..82e07b357 100644
              return this.k;
          }
  
-@@ -621,12 +638,12 @@ public abstract class BlockBase {
+@@ -627,12 +644,12 @@ public abstract class BlockBase {
              return this.getBlock().a(block);
          }
  
@@ -1770,6 +2005,19 @@ index 12a023044..9e5e6de52 100644
  
              if (tileentity instanceof IInventory) {
                  InventoryUtils.dropInventory(world, blockposition, (IInventory) tileentity);
+diff --git a/src/main/java/net/minecraft/server/BlockPortalShape.java b/src/main/java/net/minecraft/server/BlockPortalShape.java
+index 6ef81aeb4..a84844726 100644
+--- a/src/main/java/net/minecraft/server/BlockPortalShape.java
++++ b/src/main/java/net/minecraft/server/BlockPortalShape.java
+@@ -227,7 +227,7 @@ public class BlockPortalShape {
+     public static ShapeDetectorShape a(WorldServer worldserver, BlockUtil.Rectangle blockutil_rectangle, EnumDirection.EnumAxis enumdirection_enumaxis, Vec3D vec3d, EntitySize entitysize, Vec3D vec3d1, float f, float f1, CraftPortalEvent portalEventInfo) { // CraftBukkit // PAIL rename toDetectorShape
+         BlockPosition blockposition = blockutil_rectangle.origin;
+         IBlockData iblockdata = worldserver.getType(blockposition);
+-        EnumDirection.EnumAxis enumdirection_enumaxis1 = (EnumDirection.EnumAxis) iblockdata.get(BlockProperties.E);
++        EnumDirection.EnumAxis enumdirection_enumaxis1 = !iblockdata.contains(BlockProperties.E) ? enumdirection_enumaxis : (EnumDirection.EnumAxis) iblockdata.get(BlockProperties.E); // Tuinity - use provided direction if the block doesn't have one
+         double d0 = (double) blockutil_rectangle.side1;
+         double d1 = (double) blockutil_rectangle.side2;
+         int i = enumdirection_enumaxis == enumdirection_enumaxis1 ? 0 : 90;
 diff --git a/src/main/java/net/minecraft/server/BlockPosition.java b/src/main/java/net/minecraft/server/BlockPosition.java
 index 2d887af90..2291135ea 100644
 --- a/src/main/java/net/minecraft/server/BlockPosition.java
@@ -1867,6 +2115,18 @@ index 2d887af90..2291135ea 100644
  
          @Override
          public BlockPosition immutableCopy() {
+diff --git a/src/main/java/net/minecraft/server/BlockRedstoneWire.java b/src/main/java/net/minecraft/server/BlockRedstoneWire.java
+index 6abc3d4cf..a8ef41dcf 100644
+--- a/src/main/java/net/minecraft/server/BlockRedstoneWire.java
++++ b/src/main/java/net/minecraft/server/BlockRedstoneWire.java
+@@ -226,6 +226,7 @@ public class BlockRedstoneWire extends Block {
+     private void updateSurroundingRedstone(World worldIn, BlockPosition pos, IBlockData state, BlockPosition source) {
+         if (worldIn.paperConfig.useEigencraftRedstone) {
+             turbo.updateSurroundingRedstone(worldIn, pos, state, source);
++            return; // Tuinity - Don't run old logic as well
+         }
+         a(worldIn, pos, state);
+     }
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
 index 299d7d7a5..ac6e5e330 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
@@ -2005,7 +2265,7 @@ index 299d7d7a5..ac6e5e330 100644
  
                  this.n[i].clear();
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 3c7b225ed..0c4aed5f5 100644
+index 3c7b225ed..1b750da9e 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
 @@ -31,7 +31,7 @@ public abstract class ChunkMapDistance {
@@ -2084,7 +2344,7 @@ index 3c7b225ed..0c4aed5f5 100644
 +                if (com.tuinity.tuinity.config.TuinityConfig.delayChunkUnloadsBy <= 0) {
 +                    return ret;
 +                }
-+                if (ret && ticket.getTicketType() != TicketType.DELAYED_UNLOAD && ticket.getTicketLevel() < tempLevel[0]) {
++                if (ret && ticket.getTicketType().delayUnloadViable && ticket.getTicketLevel() < tempLevel[0]) {
 +                    tempLevel[0] = ticket.getTicketLevel();
 +                }
 +                if (ticket.getTicketType() == TicketType.DELAYED_UNLOAD && ticket.isCached) {
@@ -2133,7 +2393,7 @@ index 3c7b225ed..0c4aed5f5 100644
 -                    arraysetsorted.add(delayUnload);
 -                }
 +            // Tuinity start - delay chunk unloads
-+            if (com.tuinity.tuinity.config.TuinityConfig.delayChunkUnloadsBy > 0 && ticket.getTicketType() != TicketType.DELAYED_UNLOAD) {
++            if (com.tuinity.tuinity.config.TuinityConfig.delayChunkUnloadsBy > 0 && ticket.getTicketType().delayUnloadViable) {
 +                this.computeDelayedTicketFor(i, ticket.getTicketLevel(), arraysetsorted);
              }
 -            // Paper end
@@ -2745,7 +3005,7 @@ index 550232cb3..229c3b0f0 100644
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 97e61dae7..958f361a5 100644
+index 1ee01486f..630fb5265 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -137,7 +137,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -2884,11 +3144,11 @@ index 97e61dae7..958f361a5 100644
 +    // Tuinity start - optimise entity movement
 +    private static double performCollisionsX(AxisAlignedBB currentBoundingBox, double value, List<AxisAlignedBB> potentialCollisions) {
 +        for (int i = 0, len = potentialCollisions.size(); i < len; ++i) {
-+            if (Math.abs(value) < 1.0E-7) {
++            if (Math.abs(value) < MCUtil.COLLISION_EPSILON) {
 +                return 0.0;
 +            }
 +            AxisAlignedBB target = potentialCollisions.get(i);
-+            value = target.collideX(currentBoundingBox, value);
++            value = AxisAlignedBB.collideX(target, currentBoundingBox, value);
 +        }
 +
 +        return value;
@@ -2896,11 +3156,11 @@ index 97e61dae7..958f361a5 100644
 +
 +    private static double performCollisionsY(AxisAlignedBB currentBoundingBox, double value, List<AxisAlignedBB> potentialCollisions) {
 +        for (int i = 0, len = potentialCollisions.size(); i < len; ++i) {
-+            if (Math.abs(value) < 1.0E-7) {
++            if (Math.abs(value) < MCUtil.COLLISION_EPSILON) {
 +                return 0.0;
 +            }
 +            AxisAlignedBB target = potentialCollisions.get(i);
-+            value = target.collideY(currentBoundingBox, value);
++            value = AxisAlignedBB.collideY(target, currentBoundingBox, value);
 +        }
 +
 +        return value;
@@ -2908,11 +3168,11 @@ index 97e61dae7..958f361a5 100644
 +
 +    private static double performCollisionsZ(AxisAlignedBB currentBoundingBox, double value, List<AxisAlignedBB> potentialCollisions) {
 +        for (int i = 0, len = potentialCollisions.size(); i < len; ++i) {
-+            if (Math.abs(value) < 1.0E-7) {
++            if (Math.abs(value) < MCUtil.COLLISION_EPSILON) {
 +                return 0.0;
 +            }
 +            AxisAlignedBB target = potentialCollisions.get(i);
-+            value = target.collideZ(currentBoundingBox, value);
++            value = AxisAlignedBB.collideZ(target, currentBoundingBox, value);
 +        }
 +
 +        return value;
@@ -3018,7 +3278,7 @@ index 97e61dae7..958f361a5 100644
      public static double c(Vec3D vec3d) {
          return vec3d.x * vec3d.x + vec3d.z * vec3d.z;
      }
-@@ -1929,11 +2138,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1934,11 +2143,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return EnumInteractionResult.PASS;
      }
  
@@ -3034,7 +3294,7 @@ index 97e61dae7..958f361a5 100644
          return false;
      }
  
-@@ -3270,12 +3481,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3275,12 +3486,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return this.locBlock;
      }
  
@@ -3051,7 +3311,7 @@ index 97e61dae7..958f361a5 100644
      }
  
      public void setMot(double d0, double d1, double d2) {
-@@ -3330,7 +3545,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3335,7 +3550,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          }
          // Paper end
          if (this.loc.x != d0 || this.loc.y != d1 || this.loc.z != d2) {
@@ -3075,10 +3335,10 @@ index 314886398..79de11ce2 100644
              this.setPersistent();
          }
 diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
-index b92e74349..aba9f08db 100644
+index c622fb704..ec9174206 100644
 --- a/src/main/java/net/minecraft/server/EntityLiving.java
 +++ b/src/main/java/net/minecraft/server/EntityLiving.java
-@@ -2835,7 +2835,11 @@ public abstract class EntityLiving extends Entity {
+@@ -2846,7 +2846,11 @@ public abstract class EntityLiving extends Entity {
              return;
          }
          // Paper - end don't run getEntities if we're not going to use its result
@@ -3091,7 +3351,7 @@ index b92e74349..aba9f08db 100644
  
          if (!list.isEmpty()) {
              // Paper - move up
-@@ -2864,6 +2868,9 @@ public abstract class EntityLiving extends Entity {
+@@ -2875,6 +2879,9 @@ public abstract class EntityLiving extends Entity {
                  this.C(entity);
              }
          }
@@ -3363,8 +3623,20 @@ index ec8498c3d..ceaa92400 100644
          if (playerChunk == null) {
              return false;
          }
+diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
+index ff74be145..653ba0f1d 100644
+--- a/src/main/java/net/minecraft/server/MCUtil.java
++++ b/src/main/java/net/minecraft/server/MCUtil.java
+@@ -38,6 +38,7 @@ import java.util.function.Consumer;
+ import java.util.function.Supplier;
+ 
+ public final class MCUtil {
++    public static final double COLLISION_EPSILON = 1.0E-7; // Tuinity - Just in case mojang changes this...
+     public static final ThreadPoolExecutor asyncExecutor = new ThreadPoolExecutor(
+         0, 2, 60L, TimeUnit.SECONDS,
+         new LinkedBlockingQueue<Runnable>(),
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index bbe793ca3..615a71a78 100644
+index 65e8dc340..106661fae 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -985,7 +985,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
@@ -3593,7 +3865,7 @@ index a85154aa2..94533e416 100644
              Vec3D vec3d = new Vec3D(((double) pathpoint.a + this.a.locX()) / 2.0D, ((double) pathpoint.b + this.a.locY()) / 2.0D, ((double) pathpoint.c + this.a.locZ()) / 2.0D);
  
 diff --git a/src/main/java/net/minecraft/server/NetworkManager.java b/src/main/java/net/minecraft/server/NetworkManager.java
-index 48fc9f400..66f239040 100644
+index c9b36e604..aa1597c77 100644
 --- a/src/main/java/net/minecraft/server/NetworkManager.java
 +++ b/src/main/java/net/minecraft/server/NetworkManager.java
 @@ -71,6 +71,39 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
@@ -3999,7 +4271,7 @@ index fc6197dd5..d4fd01cd2 100644
                  if (chunk != null) {
                      playerchunkmap.callbackExecutor.execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 8a069cfcb..66d6c15ab 100644
+index fcd3388d8..1887b93e5 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -121,31 +121,28 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -4222,10 +4494,10 @@ index 8a069cfcb..66d6c15ab 100644
      // Paper end - optimised tracker
  
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
-index 250ae81b8..b44038534 100644
+index b067f3b70..602ed9aaa 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
-@@ -325,19 +325,24 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -326,19 +326,24 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
              if (entity != this.player && entity.getRidingPassenger() == this.player && entity == this.r) {
                  WorldServer worldserver = this.player.getWorldServer();
@@ -4257,7 +4529,7 @@ index 250ae81b8..b44038534 100644
  
  
                  // CraftBukkit start - handle custom speeds and skipped ticks
-@@ -366,7 +371,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -367,7 +372,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  speed *= 2f; // TODO: Get the speed of the vehicle instead of the player
  
                  // Paper start - Prevent moving into unloaded chunks
@@ -4268,7 +4540,7 @@ index 250ae81b8..b44038534 100644
                      this.networkManager.sendPacket(new PacketPlayOutVehicleMove(entity));
                      return;
                  }
-@@ -972,7 +979,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -973,7 +980,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  }
  
                  if (this.teleportPos != null) {
@@ -4277,7 +4549,7 @@ index 250ae81b8..b44038534 100644
                          this.A = this.e;
                          this.a(this.teleportPos.x, this.teleportPos.y, this.teleportPos.z, this.player.yaw, this.player.pitch);
                      }
-@@ -996,7 +1003,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -997,7 +1004,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          double d2 = this.player.locZ();
                          double d3 = this.player.locY();
                          double d4 = packetplayinflying.a(this.player.locX());double toX = d4; // Paper - OBFHELPER
@@ -4286,7 +4558,7 @@ index 250ae81b8..b44038534 100644
                          double d6 = packetplayinflying.c(this.player.locZ());double toZ = d6; // Paper - OBFHELPER
                          float f = packetplayinflying.a(this.player.yaw);
                          float f1 = packetplayinflying.b(this.player.pitch);
-@@ -1004,7 +1011,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1005,7 +1012,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          double d8 = d5 - this.m;
                          double d9 = d6 - this.n;
                          double d10 = this.player.getMot().g();
@@ -4300,7 +4572,7 @@ index 250ae81b8..b44038534 100644
  
                          if (this.player.isSleeping()) {
                              if (d11 > 1.0D) {
-@@ -1037,7 +1049,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1038,7 +1050,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                  speed = player.abilities.walkSpeed * 10f;
                              }
                              // Paper start - Prevent moving into unloaded chunks
@@ -4309,7 +4581,7 @@ index 250ae81b8..b44038534 100644
                                  this.internalTeleport(this.player.locX(), this.player.locY(), this.player.locZ(), this.player.yaw, this.player.pitch, Collections.emptySet());
                                  return;
                              }
-@@ -1093,6 +1105,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1094,6 +1106,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              }
  
                              this.player.move(EnumMoveType.PLAYER, new Vec3D(d7, d8, d9));
@@ -4317,7 +4589,7 @@ index 250ae81b8..b44038534 100644
                              this.player.setOnGround(packetplayinflying.b()); // CraftBukkit - SPIGOT-5810, SPIGOT-5835: reset by this.player.move
                              // Paper start - prevent position desync
                              if (this.teleportPos != null) {
-@@ -1117,7 +1130,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1118,7 +1131,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              }
  
                              this.player.setLocation(d4, d5, d6, f, f1);
@@ -5422,10 +5694,10 @@ index e41cb8613..c19ffb925 100644
          return j != 0L && i - this.d > j;
      }
 diff --git a/src/main/java/net/minecraft/server/TicketType.java b/src/main/java/net/minecraft/server/TicketType.java
-index 5c789b25f..4657b05a4 100644
+index 5c789b25f..25cff70b4 100644
 --- a/src/main/java/net/minecraft/server/TicketType.java
 +++ b/src/main/java/net/minecraft/server/TicketType.java
-@@ -26,7 +26,8 @@ public class TicketType<T> {
+@@ -26,8 +26,19 @@ public class TicketType<T> {
      public static final TicketType<Long> ASYNC_LOAD = a("async_load", Long::compareTo); // Paper
      public static final TicketType<ChunkCoordIntPair> PRIORITY = a("priority", Comparator.comparingLong(ChunkCoordIntPair::pair), 300); // Paper
      public static final TicketType<ChunkCoordIntPair> URGENT = a("urgent", Comparator.comparingLong(ChunkCoordIntPair::pair), 300); // Paper
@@ -5433,8 +5705,19 @@ index 5c789b25f..4657b05a4 100644
 +    public static final TicketType<Long> DELAYED_UNLOAD = a("delayed_unload", Long::compareTo); // Tuinity - delay chunk unloads
 +    public static final TicketType<Long> REQUIRED_LOAD = a("required_load", Long::compareTo); // Tuinity - make sure getChunkAt does not fail
  
++    // Tuinity start - delay chunk unloads
++    boolean delayUnloadViable = true;
++    static {
++        TicketType.LIGHT.delayUnloadViable = false;
++        TicketType.PLUGIN.delayUnloadViable = false;
++        TicketType.PRIORITY.delayUnloadViable = false;
++        TicketType.URGENT.delayUnloadViable = false;
++        TicketType.DELAYED_UNLOAD.delayUnloadViable = false;
++    }
++    // Tuinity end - delay chunk unloads
      public static <T> TicketType<T> a(String s, Comparator<T> comparator) {
          return new TicketType<>(s, comparator, 0L);
+     }
 diff --git a/src/main/java/net/minecraft/server/UserCache.java b/src/main/java/net/minecraft/server/UserCache.java
 index 2484293b1..1496c43fc 100644
 --- a/src/main/java/net/minecraft/server/UserCache.java
@@ -5611,7 +5894,7 @@ index eb926b74e..700660dd9 100644
          List<AxisAlignedBB> list = Lists.newArrayList();
  
 diff --git a/src/main/java/net/minecraft/server/VoxelShapeArray.java b/src/main/java/net/minecraft/server/VoxelShapeArray.java
-index 3c29cb145..43b0b4c34 100644
+index 3c29cb145..d318ec207 100644
 --- a/src/main/java/net/minecraft/server/VoxelShapeArray.java
 +++ b/src/main/java/net/minecraft/server/VoxelShapeArray.java
 @@ -3,6 +3,7 @@ package net.minecraft.server;
@@ -5667,7 +5950,7 @@ index 3c29cb145..43b0b4c34 100644
      }
  
      @Override
-@@ -42,4 +69,49 @@ public final class VoxelShapeArray extends VoxelShape {
+@@ -42,4 +69,46 @@ public final class VoxelShapeArray extends VoxelShape {
                  throw new IllegalArgumentException();
          }
      }
@@ -5698,17 +5981,14 @@ index 3c29cb145..43b0b4c34 100644
 +    }
 +
 +    public final boolean intersects(AxisAlignedBB axisalingedbb) {
-+        double minX = axisalingedbb.minX - this.offsetX;
-+        double maxX = axisalingedbb.maxX - this.offsetX;
-+        double minY = axisalingedbb.minY - this.offsetY;
-+        double maxY = axisalingedbb.maxY - this.offsetY;
-+        double minZ = axisalingedbb.minZ - this.offsetZ;
-+        double maxZ = axisalingedbb.maxZ - this.offsetZ;
-+
-+        // this can be optimised by checking an "overall shape"
++        // this can be optimised by checking an "overall shape" first, but not needed
++        double offX = this.offsetX;
++        double offY = this.offsetY;
++        double offZ = this.offsetZ;
 +
 +        for (AxisAlignedBB boundingBox : this.boundingBoxesRepresentation) {
-+            if (boundingBox.intersects(minX, minY, minZ, maxX, maxY, maxZ)) {
++            if (axisalingedbb.voxelShapeIntersect(boundingBox.minX + offX, boundingBox.minY + offY, boundingBox.minZ + offZ,
++                    boundingBox.maxX + offX, boundingBox.maxY + offY, boundingBox.maxZ + offZ)) {
 +                return true;
 +            }
 +        }
@@ -5717,11 +5997,24 @@ index 3c29cb145..43b0b4c34 100644
 +    }
 +    // Tuinity end - optimise multi-aabb shapes
  }
+diff --git a/src/main/java/net/minecraft/server/VoxelShapeSpliterator.java b/src/main/java/net/minecraft/server/VoxelShapeSpliterator.java
+index e841611bb..259605daa 100644
+--- a/src/main/java/net/minecraft/server/VoxelShapeSpliterator.java
++++ b/src/main/java/net/minecraft/server/VoxelShapeSpliterator.java
+@@ -91,7 +91,7 @@ public class VoxelShapeSpliterator extends AbstractSpliterator<VoxelShape> {
+                 VoxelShape voxelshape = iblockdata.b((IBlockAccess) this.g, this.e, this.c);
+ 
+                 if (voxelshape == VoxelShapes.b()) {
+-                    if (!this.b.a((double) i, (double) j, (double) k, (double) i + 1.0D, (double) j + 1.0D, (double) k + 1.0D)) {
++                    if (!this.b.voxelShapeIntersect((double) i, (double) j, (double) k, (double) i + 1.0D, (double) j + 1.0D, (double) k + 1.0D)) { // Tuinity - keep vanilla behavior for voxelshape intersection - See comment in AxisAlignedBB
+                         continue;
+                     }
+ 
 diff --git a/src/main/java/net/minecraft/server/VoxelShapes.java b/src/main/java/net/minecraft/server/VoxelShapes.java
-index e21c747b6..6667e699c 100644
+index e21c747b6..4bdadffee 100644
 --- a/src/main/java/net/minecraft/server/VoxelShapes.java
 +++ b/src/main/java/net/minecraft/server/VoxelShapes.java
-@@ -17,18 +17,81 @@ public final class VoxelShapes {
+@@ -17,18 +17,80 @@ public final class VoxelShapes {
  
          voxelshapebitset.a(0, 0, 0, true, true);
          return new VoxelShapeCube(voxelshapebitset);
@@ -5749,30 +6042,29 @@ index e21c747b6..6667e699c 100644
 +    public static void addBoxesToIfIntersects(VoxelShape shape, AxisAlignedBB aabb, java.util.List<AxisAlignedBB> list) {
 +        if (shape instanceof com.tuinity.tuinity.voxel.AABBVoxelShape) {
 +            com.tuinity.tuinity.voxel.AABBVoxelShape shapeCasted = (com.tuinity.tuinity.voxel.AABBVoxelShape)shape;
-+            if (shapeCasted.aabb.intersects(aabb)) {
++            if (shapeCasted.aabb.voxelShapeIntersect(aabb)) {
 +                list.add(shapeCasted.aabb);
 +            }
 +        } else if (shape instanceof VoxelShapeArray) {
 +            VoxelShapeArray shapeCasted = (VoxelShapeArray)shape;
-+            double minX = aabb.minX - shapeCasted.offsetX;
-+            double maxX = aabb.maxX - shapeCasted.offsetX;
-+            double minY = aabb.minY - shapeCasted.offsetY;
-+            double maxY = aabb.maxY - shapeCasted.offsetY;
-+            double minZ = aabb.minZ - shapeCasted.offsetZ;
-+            double maxZ = aabb.maxZ - shapeCasted.offsetZ;
++            // this can be optimised by checking an "overall shape" first, but not needed
 +
-+            // this can be optimised by checking an "overall shape"
++            double offX = shapeCasted.offsetX;
++            double offY = shapeCasted.offsetY;
++            double offZ = shapeCasted.offsetZ;
 +
 +            for (AxisAlignedBB boundingBox : shapeCasted.boundingBoxesRepresentation) {
-+                if (boundingBox.intersects(minX, minY, minZ, maxX, maxY, maxZ)) {
-+                    list.add(boundingBox.offset(shapeCasted.offsetX, shapeCasted.offsetY, shapeCasted.offsetZ));
++                double minX, minY, minZ, maxX, maxY, maxZ;
++                if (aabb.voxelShapeIntersect(minX = boundingBox.minX + offX, minY = boundingBox.minY + offY, minZ = boundingBox.minZ + offZ,
++                        maxX = boundingBox.maxX + offX, maxY = boundingBox.maxY + offY, maxZ = boundingBox.maxZ + offZ)) {
++                    list.add(new AxisAlignedBB(minX, minY, minZ, maxX, maxY, maxZ, false));
 +                }
 +            }
 +        } else {
 +            java.util.List<AxisAlignedBB> boxes = shape.getBoundingBoxesRepresentation();
 +            for (int i = 0, len = boxes.size(); i < len; ++i) {
 +                AxisAlignedBB box = boxes.get(i);
-+                if (box.intersects(aabb)) {
++                if (box.voxelShapeIntersect(aabb)) {
 +                    list.add(box);
 +                }
 +            }
@@ -5806,7 +6098,7 @@ index e21c747b6..6667e699c 100644
      }
  
      public static VoxelShape create(double d0, double d1, double d2, double d3, double d4, double d5) {
-@@ -67,7 +130,7 @@ public final class VoxelShapes {
+@@ -67,7 +129,7 @@ public final class VoxelShapes {
                  return new VoxelShapeCube(voxelshapebitset);
              }
          } else {
@@ -5815,14 +6107,14 @@ index e21c747b6..6667e699c 100644
          }
      }
  
-@@ -132,6 +195,20 @@ public final class VoxelShapes {
+@@ -132,6 +194,20 @@ public final class VoxelShapes {
  
      public static final boolean applyOperation(VoxelShape voxelshape, VoxelShape voxelshape1, OperatorBoolean operatorboolean) { return VoxelShapes.c(voxelshape, voxelshape1, operatorboolean); } // Paper - OBFHELPER
      public static boolean c(VoxelShape voxelshape, VoxelShape voxelshape1, OperatorBoolean operatorboolean) {
 +        // Tuinity start - optimise voxelshape
 +        if (operatorboolean == OperatorBoolean.AND) {
 +            if (voxelshape instanceof com.tuinity.tuinity.voxel.AABBVoxelShape && voxelshape1 instanceof com.tuinity.tuinity.voxel.AABBVoxelShape) {
-+                return ((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape).aabb.intersects(((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape1).aabb);
++                return ((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape).aabb.voxelShapeIntersect(((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape1).aabb);
 +            } else if (voxelshape instanceof com.tuinity.tuinity.voxel.AABBVoxelShape && voxelshape1 instanceof VoxelShapeArray) {
 +                return ((VoxelShapeArray)voxelshape1).intersects(((com.tuinity.tuinity.voxel.AABBVoxelShape)voxelshape).aabb);
 +            } else if (voxelshape1 instanceof com.tuinity.tuinity.voxel.AABBVoxelShape && voxelshape instanceof VoxelShapeArray) {
@@ -5836,7 +6128,7 @@ index e21c747b6..6667e699c 100644
          if (operatorboolean.apply(false, false)) {
              throw (IllegalArgumentException) SystemUtils.c((Throwable) (new IllegalArgumentException()));
          } else if (voxelshape == voxelshape1) {
-@@ -314,6 +391,7 @@ public final class VoxelShapes {
+@@ -314,6 +390,7 @@ public final class VoxelShapes {
          }
      }
  
@@ -5845,16 +6137,14 @@ index e21c747b6..6667e699c 100644
          return voxelshape != b() && voxelshape1 != b() ? (voxelshape.isEmpty() && voxelshape1.isEmpty() ? false : !c(b(), b(voxelshape, voxelshape1, OperatorBoolean.OR), OperatorBoolean.ONLY_FIRST)) : true;
      }
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index 287db5203..4834f7569 100644
+index 724aec660..699dc4343 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
-@@ -74,8 +74,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
- 
+@@ -75,7 +75,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
      public boolean captureBlockStates = false;
      public boolean captureTreeGeneration = false;
--    public Map<BlockPosition, org.bukkit.craftbukkit.block.CraftBlockState> capturedBlockStates = new HashMap<>(); // Paper
+     public Map<BlockPosition, org.bukkit.craftbukkit.block.CraftBlockState> capturedBlockStates = new java.util.LinkedHashMap<>(); // Paper
 -    public Map<BlockPosition, TileEntity> capturedTileEntities = new HashMap<>();
-+    public Map<BlockPosition, org.bukkit.craftbukkit.block.CraftBlockState> capturedBlockStates = new java.util.LinkedHashMap<>(); // Paper // Tuinity
 +    public Map<BlockPosition, TileEntity> capturedTileEntities = new java.util.LinkedHashMap<>(); // Tuinity
      public List<EntityItem> captureDrops;
      public long ticksPerAnimalSpawns;
@@ -5892,7 +6182,7 @@ index 287db5203..4834f7569 100644
          IBlockData iblockdata = newBlock;
          IBlockData iblockdata1 = oldBlock;
          IBlockData iblockdata2 = actualBlock;
-@@ -901,6 +906,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -902,6 +907,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
              return;
              // Paper end
          }
@@ -5900,7 +6190,7 @@ index 287db5203..4834f7569 100644
      }
      // Paper start - Prevent armor stands from doing entity lookups
      @Override
-@@ -1080,10 +1086,44 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1081,10 +1087,44 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          return this.getChunkAt(i, j, ChunkStatus.FULL, false);
      }
  
@@ -5947,7 +6237,7 @@ index 287db5203..4834f7569 100644
          int j = MathHelper.floor((axisalignedbb.maxX + 2.0D) / 16.0D);
          int k = MathHelper.floor((axisalignedbb.minZ - 2.0D) / 16.0D);
 diff --git a/src/main/java/net/minecraft/server/WorldBorder.java b/src/main/java/net/minecraft/server/WorldBorder.java
-index f01186988..f52132604 100644
+index f01186988..26a8c4ffe 100644
 --- a/src/main/java/net/minecraft/server/WorldBorder.java
 +++ b/src/main/java/net/minecraft/server/WorldBorder.java
 @@ -47,11 +47,43 @@ public class WorldBorder {
@@ -5961,11 +6251,11 @@ index f01186988..f52132604 100644
 +    }
 +
 +    public final boolean isCollidingOnBorderEdge(double boxMinX, double boxMaxX, double boxMinZ, double boxMaxZ) {
-+        double minX = this.getMinX() - 1.0E-7;
-+        double maxX = this.getMaxX() + 1.0E-7;
++        double minX = this.getMinX() - MCUtil.COLLISION_EPSILON;
++        double maxX = this.getMaxX() + MCUtil.COLLISION_EPSILON;
 +
-+        double minZ = this.getMinZ() - 1.0E-7;
-+        double maxZ = this.getMaxZ() + 1.0E-7;
++        double minZ = this.getMinZ() - MCUtil.COLLISION_EPSILON;
++        double maxZ = this.getMaxZ() + MCUtil.COLLISION_EPSILON;
 +
 +        return
 +                // First, check if the worldborder is enclosing the specified box.
@@ -6018,7 +6308,7 @@ index f01186988..f52132604 100644
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index efe10b7f5..14318d046 100644
+index efe10b7f5..37c4abec6 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -51,12 +51,13 @@ import org.bukkit.event.server.MapInitializeEvent;
@@ -6158,14 +6448,14 @@ index efe10b7f5..14318d046 100644
 +            }
 +        }
 +
-+        int minBlockX = MathHelper.floor(axisalignedbb.minX - 1.0E-7D) - 1;
-+        int maxBlockX = MathHelper.floor(axisalignedbb.maxX + 1.0E-7D) + 1;
++        int minBlockX = MathHelper.floor(axisalignedbb.minX - MCUtil.COLLISION_EPSILON) - 1;
++        int maxBlockX = MathHelper.floor(axisalignedbb.maxX + MCUtil.COLLISION_EPSILON) + 1;
 +
-+        int minBlockY = MathHelper.floor(axisalignedbb.minY - 1.0E-7D) - 1;
-+        int maxBlockY = MathHelper.floor(axisalignedbb.maxY + 1.0E-7D) + 1;
++        int minBlockY = MathHelper.floor(axisalignedbb.minY - MCUtil.COLLISION_EPSILON) - 1;
++        int maxBlockY = MathHelper.floor(axisalignedbb.maxY + MCUtil.COLLISION_EPSILON) + 1;
 +
-+        int minBlockZ = MathHelper.floor(axisalignedbb.minZ - 1.0E-7D) - 1;
-+        int maxBlockZ = MathHelper.floor(axisalignedbb.maxZ + 1.0E-7D) + 1;
++        int minBlockZ = MathHelper.floor(axisalignedbb.minZ - MCUtil.COLLISION_EPSILON) - 1;
++        int maxBlockZ = MathHelper.floor(axisalignedbb.maxZ + MCUtil.COLLISION_EPSILON) + 1;
 +
 +
 +        BlockPosition.MutableBlockPosition mutablePos = new BlockPosition.MutableBlockPosition();
@@ -6275,7 +6565,7 @@ index efe10b7f5..14318d046 100644
 +        if (axisalignedbb.isEmpty()) {
 +            return false;
 +        }
-+        axisalignedbb = axisalignedbb.grow(1.0E-7D, 1.0E-7D, 1.0E-7D);
++        axisalignedbb = axisalignedbb.grow(MCUtil.COLLISION_EPSILON, MCUtil.COLLISION_EPSILON, MCUtil.COLLISION_EPSILON);
 +        List<Entity> entities = com.tuinity.tuinity.util.CachedLists.getTempGetEntitiesList();
 +        try {
 +            if (entity != null && entity.hardCollides()) {
@@ -6314,14 +6604,14 @@ index efe10b7f5..14318d046 100644
 +            }
 +        }
 +
-+        int minBlockX = MathHelper.floor(axisalignedbb.minX - 1.0E-7D) - 1;
-+        int maxBlockX = MathHelper.floor(axisalignedbb.maxX + 1.0E-7D) + 1;
++        int minBlockX = MathHelper.floor(axisalignedbb.minX - MCUtil.COLLISION_EPSILON) - 1;
++        int maxBlockX = MathHelper.floor(axisalignedbb.maxX + MCUtil.COLLISION_EPSILON) + 1;
 +
-+        int minBlockY = MathHelper.floor(axisalignedbb.minY - 1.0E-7D) - 1;
-+        int maxBlockY = MathHelper.floor(axisalignedbb.maxY + 1.0E-7D) + 1;
++        int minBlockY = MathHelper.floor(axisalignedbb.minY - MCUtil.COLLISION_EPSILON) - 1;
++        int maxBlockY = MathHelper.floor(axisalignedbb.maxY + MCUtil.COLLISION_EPSILON) + 1;
 +
-+        int minBlockZ = MathHelper.floor(axisalignedbb.minZ - 1.0E-7D) - 1;
-+        int maxBlockZ = MathHelper.floor(axisalignedbb.maxZ + 1.0E-7D) + 1;
++        int minBlockZ = MathHelper.floor(axisalignedbb.minZ - MCUtil.COLLISION_EPSILON) - 1;
++        int maxBlockZ = MathHelper.floor(axisalignedbb.maxZ + MCUtil.COLLISION_EPSILON) + 1;
 +
 +
 +        BlockPosition.MutableBlockPosition mutablePos = new BlockPosition.MutableBlockPosition();
@@ -6428,7 +6718,7 @@ index efe10b7f5..14318d046 100644
 +        if (axisalignedbb.isEmpty()) {
 +            return;
 +        }
-+        axisalignedbb = axisalignedbb.grow(1.0E-7D, 1.0E-7D, 1.0E-7D);
++        axisalignedbb = axisalignedbb.grow(MCUtil.COLLISION_EPSILON, MCUtil.COLLISION_EPSILON, MCUtil.COLLISION_EPSILON);
 +        List<Entity> entities = com.tuinity.tuinity.util.CachedLists.getTempGetEntitiesList();
 +        try {
 +            if (entity != null && entity.hardCollides()) {
@@ -7036,10 +7326,10 @@ index bac292e6d..b4e65963e 100644
                          //Thread.sleep(TimeUnit.SECONDS.toMillis(20));
                          // Paper End
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-index 733f2430d..6d1500cf1 100644
+index 3584d20c7..f336f4ecf 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-@@ -210,7 +210,7 @@ public class CraftBlock implements Block {
+@@ -214,7 +214,7 @@ public class CraftBlock implements Block {
  
      @Override
      public Material getType() {
@@ -7062,7 +7352,7 @@ index 0f89e7768..f24d42345 100644
  
      public void setFlag(int flag) {
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/data/CraftBlockData.java b/src/main/java/org/bukkit/craftbukkit/block/data/CraftBlockData.java
-index bbded5671..980890153 100644
+index 7591159c2..e5c3e5765 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/data/CraftBlockData.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/data/CraftBlockData.java
 @@ -44,7 +44,7 @@ public class CraftBlockData implements BlockData {
@@ -7075,7 +7365,7 @@ index bbded5671..980890153 100644
  
      public IBlockData getState() {
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index b1fdc5737..f1710a53f 100644
+index 6ceb2d50c..407c03408 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -501,27 +501,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
