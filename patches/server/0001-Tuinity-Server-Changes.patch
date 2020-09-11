@@ -279,24 +279,18 @@ Simply return.
 
 Do not run vanilla update logic when eigencraft is enabled
 
-Fix missing block property portal crash
-
-Looks like it appears when the portal isn't created (cancelled
-event). So, just use the original direction and call it a day.
-
 diff --git a/pom.xml b/pom.xml
-index d018f900d..4f45b8158 100644
+index 838f199b6..f009b05e4 100644
 --- a/pom.xml
 +++ b/pom.xml
 @@ -1,11 +1,11 @@
--<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-+ <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
      <modelVersion>4.0.0</modelVersion>
 -    <artifactId>paper</artifactId>
 +    <artifactId>tuinity</artifactId>
      <packaging>jar</packaging>
-     <version>1.16.2-R0.1-SNAPSHOT</version>
+     <version>1.16.3-R0.1-SNAPSHOT</version>
 -    <name>Paper</name>
 -    <url>https://papermc.io</url>
 +    <name>Tuinity-Server</name>
@@ -345,7 +339,7 @@ index d018f900d..4f45b8158 100644
                  </configuration>
                  <executions>
 diff --git a/src/main/java/co/aikar/timings/MinecraftTimings.java b/src/main/java/co/aikar/timings/MinecraftTimings.java
-index dd0722397..85b25eace 100644
+index 884b59d47..68ab5ccb2 100644
 --- a/src/main/java/co/aikar/timings/MinecraftTimings.java
 +++ b/src/main/java/co/aikar/timings/MinecraftTimings.java
 @@ -43,6 +43,9 @@ public final class MinecraftTimings {
@@ -489,10 +483,10 @@ index e7624948e..77df68888 100644
  
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java b/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
 new file mode 100644
-index 000000000..f599725e1
+index 000000000..b57006d04
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
-@@ -0,0 +1,329 @@
+@@ -0,0 +1,349 @@
 +package com.tuinity.tuinity.chunk;
 +
 +import co.aikar.timings.MinecraftTimings;
@@ -502,6 +496,7 @@ index 000000000..f599725e1
 +import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 +import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 +import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
++import net.minecraft.server.ChunkCoordIntPair;
 +import net.minecraft.server.MCUtil;
 +import net.minecraft.server.WorldServer;
 +import java.util.ArrayList;
@@ -659,6 +654,7 @@ index 000000000..f599725e1
 +    protected void recalculateRegion(final Region<T> region) {
 +        this.regionRecalculateTimings.startTiming();
 +        try {
++            region.markedForRecalc = false;
 +            // clear unused regions
 +            for (final Iterator<RegionSection<T>> iterator = region.deadSections.iterator(); iterator.hasNext(); ) {
 +                final RegionSection<T> deadRegion = iterator.next();
@@ -745,7 +741,7 @@ index 000000000..f599725e1
 +
 +        protected void markRegionDead(final RegionSection<T> section) {
 +            this.deadSections.add(section);
-+            if (!this.markedForRecalc && this.sections.size() >= this.regionManager.minSectionRecalcCount && this.getDeadSectionPercent() >= this.regionManager.maxDeadRegionPercent) {
++            if (!this.markedForRecalc && (this.sections.size() >= this.regionManager.minSectionRecalcCount || this.sections.size() == this.deadSections.size()) && this.getDeadSectionPercent() >= this.regionManager.maxDeadRegionPercent) {
 +                this.regionManager.addToRecalcQueue(this);
 +                this.markedForRecalc = true;
 +            }
@@ -798,9 +794,16 @@ index 000000000..f599725e1
 +            this.data.put(key, data);
 +        }
 +
++        private static long getChunkIndex(final int chunkX, final int chunkZ) {
++            return 1L << ((chunkX & (REGION_CHUNK_SIZE - 1)) | ((chunkZ & (REGION_CHUNK_SIZE - 1)) << REGION_CHUNK_SIZE_SHIFT));
++        }
++
 +        protected void addChunk(final int chunkX, final int chunkZ) {
 +            final long bitset = this.chunksBitset;
-+            this.chunksBitset = bitset | (1L << ((chunkX & (REGION_CHUNK_SIZE - 1)) | ((chunkZ & (REGION_CHUNK_SIZE - 1)) << REGION_CHUNK_SIZE_SHIFT)));
++            final long after = this.chunksBitset = bitset | getChunkIndex(chunkX, chunkZ);
++            if (after == bitset) {
++                throw new IllegalStateException("Cannot add a chunk to a region which already has the chunk! RegionSection: " + this + ", global chunk: " + new ChunkCoordIntPair(chunkX, chunkZ).toString());
++            }
 +            if (bitset != 0L) {
 +                return;
 +            }
@@ -808,11 +811,22 @@ index 000000000..f599725e1
 +        }
 +
 +        protected void removeChunk(final int chunkX, final int chunkZ) {
-+            final long bitset = this.chunksBitset |= ~(1L << ((chunkX & (REGION_CHUNK_SIZE - 1)) | ((chunkZ & (REGION_CHUNK_SIZE - 1)) << REGION_CHUNK_SIZE_SHIFT)));
++            final long before = this.chunksBitset;
++            final long bitset = this.chunksBitset = before & ~getChunkIndex(chunkX, chunkZ);
++            if (before == bitset) {
++                throw new IllegalStateException("Cannot remove a chunk from a region which does not have that chunk! RegionSection: " + this + ", global chunk: " + new ChunkCoordIntPair(chunkX, chunkZ).toString());
++            }
 +            if (bitset != 0L) {
 +                return;
 +            }
 +            this.region.markRegionDead(this);
++        }
++
++        @Override
++        public String toString() {
++            return "RegionSection{" +
++                    "regionCoordinate=" + new ChunkCoordIntPair(this.regionCoordinate).toString() +
++                    '}';
 +        }
 +    }
 +
@@ -1212,10 +1226,10 @@ index 000000000..08ed24325
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java b/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java
 new file mode 100644
-index 000000000..b0f1e21e6
+index 000000000..67fb1b533
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java
-@@ -0,0 +1,271 @@
+@@ -0,0 +1,274 @@
 +package com.tuinity.tuinity.util.maplist;
 +
 +import it.unimi.dsi.fastutil.objects.Reference2IntLinkedOpenHashMap;
@@ -1314,6 +1328,9 @@ index 000000000..b0f1e21e6
 +                this.firstInvalidIndex = index;
 +            }
 +            this.listElements[index] = null;
++            if (this.iteratorCount == 0 && this.getFragFactor() >= this.maxFragFactor) {
++                this.defrag();
++            }
 +            return true;
 +        } else {
 +            return this.pendingAdditions.remove(element);
@@ -1870,7 +1887,7 @@ index 6b655b744..e811295b4 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/BlockBase.java b/src/main/java/net/minecraft/server/BlockBase.java
-index 8265ed4da..2db488aba 100644
+index 505d40278..9d85ce027 100644
 --- a/src/main/java/net/minecraft/server/BlockBase.java
 +++ b/src/main/java/net/minecraft/server/BlockBase.java
 @@ -182,8 +182,8 @@ public abstract class BlockBase {
@@ -2005,19 +2022,6 @@ index 12a023044..9e5e6de52 100644
  
              if (tileentity instanceof IInventory) {
                  InventoryUtils.dropInventory(world, blockposition, (IInventory) tileentity);
-diff --git a/src/main/java/net/minecraft/server/BlockPortalShape.java b/src/main/java/net/minecraft/server/BlockPortalShape.java
-index 6ef81aeb4..a84844726 100644
---- a/src/main/java/net/minecraft/server/BlockPortalShape.java
-+++ b/src/main/java/net/minecraft/server/BlockPortalShape.java
-@@ -227,7 +227,7 @@ public class BlockPortalShape {
-     public static ShapeDetectorShape a(WorldServer worldserver, BlockUtil.Rectangle blockutil_rectangle, EnumDirection.EnumAxis enumdirection_enumaxis, Vec3D vec3d, EntitySize entitysize, Vec3D vec3d1, float f, float f1, CraftPortalEvent portalEventInfo) { // CraftBukkit // PAIL rename toDetectorShape
-         BlockPosition blockposition = blockutil_rectangle.origin;
-         IBlockData iblockdata = worldserver.getType(blockposition);
--        EnumDirection.EnumAxis enumdirection_enumaxis1 = (EnumDirection.EnumAxis) iblockdata.get(BlockProperties.E);
-+        EnumDirection.EnumAxis enumdirection_enumaxis1 = !iblockdata.contains(BlockProperties.E) ? enumdirection_enumaxis : (EnumDirection.EnumAxis) iblockdata.get(BlockProperties.E); // Tuinity - use provided direction if the block doesn't have one
-         double d0 = (double) blockutil_rectangle.side1;
-         double d1 = (double) blockutil_rectangle.side2;
-         int i = enumdirection_enumaxis == enumdirection_enumaxis1 ? 0 : 90;
 diff --git a/src/main/java/net/minecraft/server/BlockPosition.java b/src/main/java/net/minecraft/server/BlockPosition.java
 index 2d887af90..2291135ea 100644
 --- a/src/main/java/net/minecraft/server/BlockPosition.java
@@ -2980,7 +2984,7 @@ index 95ef96286..73163b417 100644
          T t0 = this.h.a(this.a.a(i));
  
 diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
-index 1c878265b..5907caa74 100644
+index 0eabd62ad..c4bbe4463 100644
 --- a/src/main/java/net/minecraft/server/DedicatedServer.java
 +++ b/src/main/java/net/minecraft/server/DedicatedServer.java
 @@ -170,6 +170,7 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
@@ -3005,10 +3009,10 @@ index 550232cb3..229c3b0f0 100644
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 1ee01486f..630fb5265 100644
+index cfb14c54d..3c63327ca 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
-@@ -137,7 +137,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -135,7 +135,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      public double D;
      public double E;
      public double F;
@@ -3017,7 +3021,7 @@ index 1ee01486f..630fb5265 100644
      public boolean noclip;
      public float I;
      protected final Random random;
-@@ -208,6 +208,14 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -205,6 +205,14 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
      // CraftBukkit end
  
@@ -3032,7 +3036,7 @@ index 1ee01486f..630fb5265 100644
      // Paper start - optimise entity tracking
      final org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = org.spigotmc.TrackingRange.getTrackingRangeType(this);
  
-@@ -223,6 +231,41 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -220,6 +228,41 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
      // Paper end - optimise entity tracking
  
@@ -3074,7 +3078,7 @@ index 1ee01486f..630fb5265 100644
      public Entity(EntityTypes<?> entitytypes, World world) {
          this.id = Entity.entityCount.incrementAndGet();
          this.passengers = Lists.newArrayList();
-@@ -591,7 +634,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -588,7 +631,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return this.onGround;
      }
  
@@ -3114,7 +3118,7 @@ index 1ee01486f..630fb5265 100644
          if (this.noclip) {
              this.a(this.getBoundingBox().c(vec3d));
              this.recalcPosition();
-@@ -619,7 +694,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -616,7 +691,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              // Paper end
  
              vec3d = this.a(vec3d, enummovetype);
@@ -3123,7 +3127,7 @@ index 1ee01486f..630fb5265 100644
  
              if (vec3d1.g() > 1.0E-7D) {
                  this.a(this.getBoundingBox().c(vec3d1));
-@@ -735,6 +810,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -732,6 +807,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
  
              this.world.getMethodProfiler().exit();
          }
@@ -3137,7 +3141,7 @@ index 1ee01486f..630fb5265 100644
      }
  
      protected BlockPosition ao() {
-@@ -815,6 +897,132 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -812,6 +894,132 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return d0;
      }
  
@@ -3270,7 +3274,7 @@ index 1ee01486f..630fb5265 100644
      private Vec3D g(Vec3D vec3d) {
          AxisAlignedBB axisalignedbb = this.getBoundingBox();
          VoxelShapeCollision voxelshapecollision = VoxelShapeCollision.a(this);
-@@ -850,6 +1058,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -847,6 +1055,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return vec3d1;
      }
  
@@ -3278,7 +3282,7 @@ index 1ee01486f..630fb5265 100644
      public static double c(Vec3D vec3d) {
          return vec3d.x * vec3d.x + vec3d.z * vec3d.z;
      }
-@@ -1934,11 +2143,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1931,11 +2140,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return EnumInteractionResult.PASS;
      }
  
@@ -3294,7 +3298,7 @@ index 1ee01486f..630fb5265 100644
          return false;
      }
  
-@@ -3275,12 +3486,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3273,12 +3484,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return this.locBlock;
      }
  
@@ -3311,7 +3315,7 @@ index 1ee01486f..630fb5265 100644
      }
  
      public void setMot(double d0, double d1, double d2) {
-@@ -3335,7 +3550,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3333,7 +3548,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          }
          // Paper end
          if (this.loc.x != d0 || this.loc.y != d1 || this.loc.z != d2) {
@@ -3335,10 +3339,10 @@ index 314886398..79de11ce2 100644
              this.setPersistent();
          }
 diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
-index c622fb704..ec9174206 100644
+index 76185f042..0e000c718 100644
 --- a/src/main/java/net/minecraft/server/EntityLiving.java
 +++ b/src/main/java/net/minecraft/server/EntityLiving.java
-@@ -2846,7 +2846,11 @@ public abstract class EntityLiving extends Entity {
+@@ -2847,7 +2847,11 @@ public abstract class EntityLiving extends Entity {
              return;
          }
          // Paper - end don't run getEntities if we're not going to use its result
@@ -3351,7 +3355,7 @@ index c622fb704..ec9174206 100644
  
          if (!list.isEmpty()) {
              // Paper - move up
-@@ -2875,6 +2879,9 @@ public abstract class EntityLiving extends Entity {
+@@ -2876,6 +2880,9 @@ public abstract class EntityLiving extends Entity {
                  this.C(entity);
              }
          }
@@ -3362,7 +3366,7 @@ index c622fb704..ec9174206 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityTrackerEntry.java b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
-index 831298e3b..7ab013058 100644
+index 4efc40c01..f322dccd8 100644
 --- a/src/main/java/net/minecraft/server/EntityTrackerEntry.java
 +++ b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
 @@ -74,6 +74,7 @@ public class EntityTrackerEntry {
@@ -3636,7 +3640,7 @@ index ff74be145..653ba0f1d 100644
          0, 2, 60L, TimeUnit.SECONDS,
          new LinkedBlockingQueue<Runnable>(),
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 65e8dc340..106661fae 100644
+index 883c17f00..64f7e448c 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -985,7 +985,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
@@ -3829,7 +3833,7 @@ index 65e8dc340..106661fae 100644
  
      public CrashReport b(CrashReport crashreport) {
 diff --git a/src/main/java/net/minecraft/server/NavigationAbstract.java b/src/main/java/net/minecraft/server/NavigationAbstract.java
-index a85154aa2..94533e416 100644
+index 921b60469..b494d9c4c 100644
 --- a/src/main/java/net/minecraft/server/NavigationAbstract.java
 +++ b/src/main/java/net/minecraft/server/NavigationAbstract.java
 @@ -21,7 +21,7 @@ public abstract class NavigationAbstract {
@@ -3841,9 +3845,9 @@ index a85154aa2..94533e416 100644
      protected long n;
      protected PathfinderAbstract o;
      private BlockPosition p;
-@@ -29,6 +29,13 @@ public abstract class NavigationAbstract {
-     private float r;
+@@ -30,6 +30,13 @@ public abstract class NavigationAbstract {
      private final Pathfinder s; public Pathfinder getPathfinder() { return this.s; } // Paper - OBFHELPER
+     private boolean t;
  
 +    // Tuinity start
 +    public boolean isViableForPathRecalculationChecking() {
@@ -3853,9 +3857,9 @@ index a85154aa2..94533e416 100644
 +    // Tuinity end
 +
      public NavigationAbstract(EntityInsentient entityinsentient, World world) {
-         this.g = Vec3D.a;
+         this.g = Vec3D.ORIGIN;
          this.h = BaseBlockPosition.ZERO;
-@@ -384,7 +391,7 @@ public abstract class NavigationAbstract {
+@@ -393,7 +400,7 @@ public abstract class NavigationAbstract {
      }
  
      public void b(BlockPosition blockposition) {
@@ -4271,7 +4275,7 @@ index fc6197dd5..d4fd01cd2 100644
                  if (chunk != null) {
                      playerchunkmap.callbackExecutor.execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index fcd3388d8..1887b93e5 100644
+index fcd3388d8..6016a7bc5 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -121,31 +121,28 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -4415,15 +4419,26 @@ index fcd3388d8..1887b93e5 100644
              asyncSaveData, chunk);
  
          chunk.setLastSaved(this.world.getTime());
-@@ -1043,6 +1071,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
-                     this.lightEngine.a(ichunkaccess.getPos());
+@@ -1020,7 +1048,9 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+             if (completablefuture1 != completablefuture) {
+                 this.a(i, playerchunk);
+             } else {
+-                if (this.pendingUnload.remove(i, playerchunk) && ichunkaccess != null) {
++                // Tuinity start
++                boolean removed;
++                if ((removed = this.pendingUnload.remove(i, playerchunk)) && ichunkaccess != null) { // Tuinity end
+                     if (ichunkaccess instanceof Chunk) {
+                         ((Chunk) ichunkaccess).setLoaded(false);
+                     }
+@@ -1044,6 +1074,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                      this.lightEngine.queueUpdate();
                      this.worldLoadListener.a(ichunkaccess.getPos(), (ChunkStatus) null);
-+                    this.dataRegionManager.removeChunk(playerchunk.location.x, playerchunk.location.z); // Tuinity
                  }
++                if (removed) this.dataRegionManager.removeChunk(playerchunk.location.x, playerchunk.location.z); // Tuinity
  
              }
-@@ -1059,6 +1088,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+         };
+@@ -1059,6 +1090,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
  
      protected boolean b() {
@@ -4431,7 +4446,7 @@ index fcd3388d8..1887b93e5 100644
          if (!this.updatingChunksModified) {
              return false;
          } else {
-@@ -1246,7 +1276,10 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1246,7 +1278,10 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
              }
              // Paper end
              this.mailboxWorldGen.a(ChunkTaskQueueSorter.a(playerchunk, runnable));
@@ -4443,7 +4458,7 @@ index fcd3388d8..1887b93e5 100644
      }
  
      protected void c(ChunkCoordIntPair chunkcoordintpair) {
-@@ -1498,6 +1531,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1498,6 +1533,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
  
      public void setViewDistance(int i) { // Paper - public
@@ -4451,7 +4466,7 @@ index fcd3388d8..1887b93e5 100644
          int j = MathHelper.clamp(i + 1, 3, 33); // Paper - diff on change, these make the lower view distance limit 2 and the upper 32
  
          if (j != this.viewDistance) {
-@@ -1511,6 +1545,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1511,6 +1547,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      // Paper start - no-tick view distance
      public final void setNoTickViewDistance(int viewDistance) {
@@ -4459,7 +4474,7 @@ index fcd3388d8..1887b93e5 100644
          viewDistance = viewDistance == -1 ? -1 : MathHelper.clamp(viewDistance, 2, 32);
  
          this.noTickViewDistance = viewDistance;
-@@ -2037,23 +2072,20 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -2037,23 +2074,20 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      private final void processTrackQueue() {
          this.world.timings.tracker1.startTiming();
          try {
@@ -5804,15 +5819,15 @@ index 2484293b1..1496c43fc 100644
  
      private static JsonElement a(UserCache.UserCacheEntry usercache_usercacheentry, DateFormat dateformat) {
 diff --git a/src/main/java/net/minecraft/server/Vec3D.java b/src/main/java/net/minecraft/server/Vec3D.java
-index 3048ba008..84858ba39 100644
+index 7f05587d4..5af554870 100644
 --- a/src/main/java/net/minecraft/server/Vec3D.java
 +++ b/src/main/java/net/minecraft/server/Vec3D.java
 @@ -4,7 +4,7 @@ import java.util.EnumSet;
  
  public class Vec3D implements IPosition {
  
--    public static final Vec3D a = new Vec3D(0.0D, 0.0D, 0.0D);
-+    public static final Vec3D a = new Vec3D(0.0D, 0.0D, 0.0D); public static Vec3D getZeroVector() { return Vec3D.a; } // Tuinity - OBFHELPER
+-    public static final Vec3D ORIGIN = new Vec3D(0.0D, 0.0D, 0.0D);
++    public static final Vec3D ORIGIN = new Vec3D(0.0D, 0.0D, 0.0D); public static Vec3D getZeroVector() { return Vec3D.ORIGIN; } // Tuinity - OBFHELPER
      public final double x;
      public final double y;
      public final double z;
@@ -6137,7 +6152,7 @@ index e21c747b6..4bdadffee 100644
          return voxelshape != b() && voxelshape1 != b() ? (voxelshape.isEmpty() && voxelshape1.isEmpty() ? false : !c(b(), b(voxelshape, voxelshape1, OperatorBoolean.OR), OperatorBoolean.ONLY_FIRST)) : true;
      }
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index 724aec660..699dc4343 100644
+index eaa285393..a490662e0 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
 @@ -75,7 +75,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
@@ -6308,7 +6323,7 @@ index f01186988..26a8c4ffe 100644
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index efe10b7f5..37c4abec6 100644
+index 25cdd7b0f..2eff22ed5 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -51,12 +51,13 @@ import org.bukkit.event.server.MapInitializeEvent;
@@ -6880,8 +6895,8 @@ index efe10b7f5..37c4abec6 100644
          if (!(entity instanceof EntityHuman) && !this.getChunkProvider().a(entity)) {
              this.chunkCheck(entity);
          } else {
-@@ -851,6 +1299,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
-             } // Paper - timings
+@@ -858,6 +1306,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+             //} finally { timer.stopTiming(); } // Paper - timings - move up
  
          }
 +        // Tuinity start - log detailed entity tick information
@@ -6892,7 +6907,7 @@ index efe10b7f5..37c4abec6 100644
      }
  
      public void a(Entity entity, Entity entity1) {
-@@ -894,6 +1347,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -915,6 +1368,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              int i = MathHelper.floor(entity.locX() / 16.0D);
              int j =  Math.min(15, Math.max(0, MathHelper.floor(entity.locY() / 16.0D))); // Paper - stay consistent with chunk add/remove behavior
              int k = MathHelper.floor(entity.locZ() / 16.0D);
@@ -6905,7 +6920,7 @@ index efe10b7f5..37c4abec6 100644
  
              if (!entity.inChunk || entity.chunkX != i || entity.chunkY != j || entity.chunkZ != k) {
                  // Paper start - remove entity if its in a chunk more correctly.
-@@ -903,6 +1362,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -924,6 +1383,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  }
                  // Paper end
  
@@ -6918,7 +6933,7 @@ index efe10b7f5..37c4abec6 100644
                  if (entity.inChunk && this.isChunkLoaded(entity.chunkX, entity.chunkZ)) {
                      this.getChunkAt(entity.chunkX, entity.chunkZ).a(entity, entity.chunkY);
                  }
-@@ -916,6 +1381,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -937,6 +1402,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  } else {
                      this.getChunkAt(i, k).a(entity);
                  }
@@ -6930,7 +6945,7 @@ index efe10b7f5..37c4abec6 100644
              }
  
              this.getMethodProfiler().exit();
-@@ -1267,7 +1737,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1288,7 +1758,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  Entity entity = (Entity) iterator.next();
  
                  if (!(entity instanceof EntityPlayer)) {
@@ -6939,7 +6954,7 @@ index efe10b7f5..37c4abec6 100644
                          throw (IllegalStateException) SystemUtils.c((Throwable) (new IllegalStateException("Removing entity while ticking!")));
                      }
  
-@@ -1295,6 +1765,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1316,6 +1786,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      public void unregisterEntity(Entity entity) {
          org.spigotmc.AsyncCatcher.catchOp("entity unregister"); // Spigot
@@ -6947,7 +6962,7 @@ index efe10b7f5..37c4abec6 100644
          // Paper start - fix entity registration issues
          if (entity instanceof EntityComplexPart) {
              // Usually this is a no-op for complex parts, and ID's should be removed, but go ahead and remove it anyways
-@@ -1361,17 +1832,108 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1382,17 +1853,108 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          this.getScoreboard().a(entity);
          // CraftBukkit start - SPIGOT-5278
          if (entity instanceof EntityDrowned) {
@@ -7059,7 +7074,7 @@ index efe10b7f5..37c4abec6 100644
      private void registerEntity(Entity entity) {
          org.spigotmc.AsyncCatcher.catchOp("entity register"); // Spigot
          // Paper start - don't double enqueue entity registration
-@@ -1382,7 +1944,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1403,7 +1965,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              return;
          }
          // Paper end
@@ -7068,7 +7083,7 @@ index efe10b7f5..37c4abec6 100644
              if (!entity.isQueuedForRegister) { // Paper
                  this.entitiesToAdd.add(entity);
                  entity.isQueuedForRegister = true; // Paper
-@@ -1390,6 +1952,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1411,6 +1973,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          } else {
              entity.isQueuedForRegister = false; // Paper
              this.entitiesById.put(entity.getId(), entity);
@@ -7076,7 +7091,7 @@ index efe10b7f5..37c4abec6 100644
              if (entity instanceof EntityEnderDragon) {
                  EntityComplexPart[] aentitycomplexpart = ((EntityEnderDragon) entity).eJ();
                  int i = aentitycomplexpart.length;
-@@ -1398,6 +1961,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1419,6 +1982,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                      EntityComplexPart entitycomplexpart = aentitycomplexpart[j];
  
                      this.entitiesById.put(entitycomplexpart.getId(), entitycomplexpart);
@@ -7084,7 +7099,7 @@ index efe10b7f5..37c4abec6 100644
                  }
              }
  
-@@ -1422,12 +1986,16 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1443,12 +2007,16 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              // this.getChunkProvider().addEntity(entity); // Paper - moved down below valid=true
              // CraftBukkit start - SPIGOT-5278
              if (entity instanceof EntityDrowned) {
@@ -7104,7 +7119,7 @@ index efe10b7f5..37c4abec6 100644
              }
              entity.valid = true; // CraftBukkit
              this.getChunkProvider().addEntity(entity); // Paper - from above to be below valid=true
-@@ -1443,7 +2011,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1464,7 +2032,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      }
  
      public void removeEntity(Entity entity) {
@@ -7113,7 +7128,7 @@ index efe10b7f5..37c4abec6 100644
              throw (IllegalStateException) SystemUtils.c((Throwable) (new IllegalStateException("Removing entity while ticking!")));
          } else {
              this.removeEntityFromChunk(entity);
-@@ -1544,8 +2112,26 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1565,8 +2133,26 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          VoxelShape voxelshape1 = iblockdata1.getCollisionShape(this, blockposition);
  
          if (VoxelShapes.c(voxelshape, voxelshape1, OperatorBoolean.NOT_SAME)) {
@@ -7141,7 +7156,7 @@ index efe10b7f5..37c4abec6 100644
  
              while (iterator.hasNext()) {
                  NavigationAbstract navigationabstract = (NavigationAbstract) iterator.next();
-@@ -1553,7 +2139,21 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1574,7 +2160,21 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  if (!navigationabstract.i()) {
                      navigationabstract.b(blockposition);
                  }
@@ -7191,7 +7206,7 @@ index ff8ba5457..ecedc167d 100644
  
      @Override
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 5f5b39b3b..2b0e1e698 100644
+index fd649a0d2..77adc7528 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -230,7 +230,7 @@ import javax.annotation.Nullable; // Paper
@@ -7299,7 +7314,7 @@ index 299f57ca2..4de6252f0 100644
          }, MinecraftServer.getServer());
      }
 diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
-index bac292e6d..b4e65963e 100644
+index 9118f0542..a9c96d45c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/Main.java
 +++ b/src/main/java/org/bukkit/craftbukkit/Main.java
 @@ -138,6 +138,13 @@ public class Main {
@@ -7326,7 +7341,7 @@ index bac292e6d..b4e65963e 100644
                          //Thread.sleep(TimeUnit.SECONDS.toMillis(20));
                          // Paper End
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-index 3584d20c7..f336f4ecf 100644
+index 3524b6775..b668b7c03 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
 @@ -214,7 +214,7 @@ public class CraftBlock implements Block {
