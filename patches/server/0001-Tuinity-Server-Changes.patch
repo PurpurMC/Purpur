@@ -279,6 +279,10 @@ Simply return.
 
 Do not run vanilla update logic when eigencraft is enabled
 
+Optimise tab complete
+
+Some of the toLowerCase calls can be expensive.
+
 diff --git a/pom.xml b/pom.xml
 index add3a9c1a..5e25ae55e 100644
 --- a/pom.xml
@@ -481,6 +485,88 @@ index e7624948e..77df68888 100644
          // good thing this is only used in debug reports // TODO check on update
          int ret = 0;
  
+diff --git a/src/main/java/com/mojang/brigadier/CommandDispatcher.java b/src/main/java/com/mojang/brigadier/CommandDispatcher.java
+index 103576715..e8fdbe7b8 100644
+--- a/src/main/java/com/mojang/brigadier/CommandDispatcher.java
++++ b/src/main/java/com/mojang/brigadier/CommandDispatcher.java
+@@ -590,10 +590,11 @@ public class CommandDispatcher<S> {
+         final String truncatedInput = fullInput.substring(0, cursor);
+         @SuppressWarnings("unchecked") final CompletableFuture<Suggestions>[] futures = new CompletableFuture[parent.getChildren().size()];
+         int i = 0;
++        final String remainingLower = truncatedInput.substring(start).toLowerCase(); // Tuinity
+         for (final CommandNode<S> node : parent.getChildren()) {
+             CompletableFuture<Suggestions> future = Suggestions.empty();
+             try {
+-                future = node.listSuggestions(context.build(truncatedInput), new SuggestionsBuilder(truncatedInput, start));
++                future = node.listSuggestions(context.build(truncatedInput), new SuggestionsBuilder(truncatedInput, start, remainingLower)); // Tuinity
+             } catch (final CommandSyntaxException ignored) {
+             }
+             futures[i++] = future;
+diff --git a/src/main/java/com/mojang/brigadier/arguments/BoolArgumentType.java b/src/main/java/com/mojang/brigadier/arguments/BoolArgumentType.java
+index cb993ca10..849686f7b 100644
+--- a/src/main/java/com/mojang/brigadier/arguments/BoolArgumentType.java
++++ b/src/main/java/com/mojang/brigadier/arguments/BoolArgumentType.java
+@@ -34,10 +34,10 @@ public class BoolArgumentType implements ArgumentType<Boolean> {
+ 
+     @Override
+     public <S> CompletableFuture<Suggestions> listSuggestions(final CommandContext<S> context, final SuggestionsBuilder builder) {
+-        if ("true".startsWith(builder.getRemaining().toLowerCase())) {
++        if ("true".startsWith(builder.getRemainingLowercase())) { // Tuinity
+             builder.suggest("true");
+         }
+-        if ("false".startsWith(builder.getRemaining().toLowerCase())) {
++        if ("false".startsWith(builder.getRemainingLowercase())) { // Tuinity
+             builder.suggest("false");
+         }
+         return builder.buildFuture();
+diff --git a/src/main/java/com/mojang/brigadier/suggestion/SuggestionsBuilder.java b/src/main/java/com/mojang/brigadier/suggestion/SuggestionsBuilder.java
+index bc0024adb..0343f6663 100644
+--- a/src/main/java/com/mojang/brigadier/suggestion/SuggestionsBuilder.java
++++ b/src/main/java/com/mojang/brigadier/suggestion/SuggestionsBuilder.java
+@@ -14,9 +14,16 @@ public class SuggestionsBuilder {
+     private final String input;
+     private final int start;
+     private final String remaining;
++    private String remainingLowercase; public final String getRemainingLowercase() { return this.remainingLowercase == null ? this.remainingLowercase = this.remaining.toLowerCase() : this.remainingLowercase; } // Tuinity
+     private final List<Suggestion> result = new ArrayList<>();
+ 
+     public SuggestionsBuilder(final String input, final int start) {
++        // Tuinity start
++        this(input, start, null);
++    }
++    public SuggestionsBuilder(final String input, final int start, final String remainingLowercase) {
++        this.remainingLowercase = remainingLowercase;
++        // Tuinity end
+         this.input = input;
+         this.start = start;
+         this.remaining = input.substring(start);
+diff --git a/src/main/java/com/mojang/brigadier/tree/LiteralCommandNode.java b/src/main/java/com/mojang/brigadier/tree/LiteralCommandNode.java
+index 772057879..e5db29d4c 100644
+--- a/src/main/java/com/mojang/brigadier/tree/LiteralCommandNode.java
++++ b/src/main/java/com/mojang/brigadier/tree/LiteralCommandNode.java
+@@ -20,11 +20,11 @@ import java.util.concurrent.CompletableFuture;
+ import java.util.function.Predicate;
+ 
+ public class LiteralCommandNode<S> extends CommandNode<S> {
+-    private final String literal;
++    private final String literal; private final String literalLower; // Tuinity
+ 
+     public LiteralCommandNode(final String literal, final Command<S> command, final Predicate<S> requirement, final CommandNode<S> redirect, final RedirectModifier<S> modifier, final boolean forks) {
+         super(command, requirement, redirect, modifier, forks);
+-        this.literal = literal;
++        this.literal = literal; this.literalLower = this.literal.toLowerCase(); // Tuinity
+     }
+ 
+     public String getLiteral() {
+@@ -66,7 +66,7 @@ public class LiteralCommandNode<S> extends CommandNode<S> {
+ 
+     @Override
+     public CompletableFuture<Suggestions> listSuggestions(final CommandContext<S> context, final SuggestionsBuilder builder) {
+-        if (literal.toLowerCase().startsWith(builder.getRemaining().toLowerCase())) {
++        if (literalLower.startsWith(builder.getRemainingLowercase())) { // Tuinity
+             return builder.suggest(literal).buildFuture();
+         } else {
+             return Suggestions.empty();
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java b/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
 new file mode 100644
 index 000000000..b57006d04
