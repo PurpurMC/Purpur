@@ -47,7 +47,7 @@ Purpur API maven dependency:
 <dependency>
     <groupId>net.pl3x.purpur</groupId>
     <artifactId>purpur-api</artifactId>
-    <version>1.16.2-R0.1-SNAPSHOT</version>
+    <version>1.16.3-R0.1-SNAPSHOT</version>
     <scope>provided</scope>
 </dependency>
 ```
