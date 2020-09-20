@@ -1,0 +1,65 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: jmp <jasonpenilla2@me.com>
+Date: Mon, 7 Sep 2020 08:52:59 -0700
+Subject: [PATCH] Console Hex Color Band-Aid
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/console/TerminalConsoleCommandSender.java b/src/main/java/com/destroystokyo/paper/console/TerminalConsoleCommandSender.java
+index 685deaa0e5..2e047e6a3a 100644
+--- a/src/main/java/com/destroystokyo/paper/console/TerminalConsoleCommandSender.java
++++ b/src/main/java/com/destroystokyo/paper/console/TerminalConsoleCommandSender.java
+@@ -1,5 +1,15 @@
+ package com.destroystokyo.paper.console;
+ 
++// Purpur start
++import java.awt.Color;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
++import net.minecrell.terminalconsole.MinecraftFormattingConverter;
++import net.minecrell.terminalconsole.TerminalConsoleAppender;
++import org.apache.logging.log4j.util.PropertiesUtil;
++import org.bukkit.ChatColor;
++// Purpur end
++
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ import org.bukkit.craftbukkit.command.CraftConsoleCommandSender;
+@@ -7,11 +17,37 @@ import org.bukkit.craftbukkit.command.CraftConsoleCommandSender;
+ public class TerminalConsoleCommandSender extends CraftConsoleCommandSender {
+ 
+     private static final Logger LOGGER = LogManager.getRootLogger();
++    // Purpur start
++    private static final char ANSI_ESC_CHAR = '\u001B';
++    private static final String RGB_STRING = ANSI_ESC_CHAR + "[38;2;%d;%d;%dm";
++    private static final String ANSI_RESET = ANSI_ESC_CHAR + "[0m";
++    private static final Pattern HEX_PATTERN = Pattern.compile("(?i)(" + ChatColor.COLOR_CHAR + "x(" + ChatColor.COLOR_CHAR + "[0-9a-f]){6})");
++    private static final boolean keepFormatting = PropertiesUtil.getProperties().getBooleanProperty(MinecraftFormattingConverter.KEEP_FORMATTING_PROPERTY);
++    // Purpur end
+ 
+     @Override
+     public void sendRawMessage(String message) {
+         // TerminalConsoleAppender supports color codes directly in log messages
+-        LOGGER.info(message);
++        // Purpur start - However, we need to convert hex colors manually, as those do not get transformed
++        LOGGER.info(stupidBungeeHexToAnsi(message));
++    }
++
++    private static String stupidBungeeHexToAnsi(String input) {
++        if (keepFormatting)
++            return input;
++        if (!TerminalConsoleAppender.isAnsiSupported())
++            return HEX_PATTERN.matcher(input).replaceAll(""); // strip out any hex coloring
++
++        final Matcher matcher = HEX_PATTERN.matcher(input);
++        final StringBuffer buffer = new StringBuffer();
++        while (matcher.find()) {
++            final Color color = Color.decode(matcher.group().replace(String.valueOf(ChatColor.COLOR_CHAR), "").replace('x', '#'));
++            matcher.appendReplacement(buffer, String.format(RGB_STRING, color.getRed(), color.getGreen(), color.getBlue()));
++        }
++
++        matcher.appendTail(buffer);
++        return buffer.toString() + ANSI_RESET; // We add the Ansi reset to the end of each message to prevent the color from carrying over to the next logged message
++        // Purpur end
+     }
+ 
+ }
