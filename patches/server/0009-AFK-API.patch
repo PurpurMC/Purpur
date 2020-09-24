@@ -25,16 +25,25 @@ index ce4ebc96c..eb62555cb 100644
          super(EntityTypes.PLAYER, world);
          this.bL = ItemStack.b;
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
-index 8b1e866b3..237b85135 100644
+index 11fa231ca..815e9b6d6 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/EntityPlayer.java
-@@ -1719,8 +1719,54 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -16,6 +16,8 @@ import java.util.OptionalInt;
+ import java.util.Random;
+ import java.util.UUID;
+ import javax.annotation.Nullable;
++
++import net.pl3x.purpur.PurpurConfig;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
+@@ -1719,7 +1721,63 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
  
      public void resetIdleTimer() {
          this.ca = SystemUtils.getMonotonicMillis();
 +        setAfk(false); // Purpur
-     }
- 
++    }
++
 +    // Purpur start
 +    private boolean isAfk = false;
 +
@@ -46,7 +55,7 @@ index 8b1e866b3..237b85135 100644
 +        
 +        String msg = setAfk ? net.pl3x.purpur.PurpurConfig.afkBroadcastAway : net.pl3x.purpur.PurpurConfig.afkBroadcastBack;
 +
-+        net.pl3x.purpur.event.PlayerAFKEvent event = new net.pl3x.purpur.event.PlayerAFKEvent(getBukkitEntity(), setAfk, world.purpurConfig.idleTimeoutKick, msg, !Bukkit.isPrimaryThread());
++        net.pl3x.purpur.event.PlayerAFKEvent event = new net.pl3x.purpur.event.PlayerAFKEvent(getBukkitEntity(), setAfk, world.purpurConfig.idleTimeoutKick, msg, PurpurConfig.afkBroadcastIsGlobal, !Bukkit.isPrimaryThread());
 +        if (!event.callEvent() || event.shouldKick()) {
 +            return;
 +        }
@@ -59,11 +68,21 @@ index 8b1e866b3..237b85135 100644
 +
 +        msg = event.getBroadcastMsg();
 +        if (msg != null && !msg.isEmpty()) {
-+            server.getPlayerList().sendAll(new PacketPlayOutChat(new ChatMessage(msg, getScoreboardDisplayName()), ChatMessageType.SYSTEM, SystemUtils.getNullUUID()));
++            if (PurpurConfig.afkBroadcastIsGlobal) {
++                server.getPlayerList().sendAll(new PacketPlayOutChat(new ChatMessage(msg, getScoreboardDisplayName()), ChatMessageType.SYSTEM, SystemUtils.getNullUUID()));
++            }
++            else {
++                this.playerConnection.sendPacket(new PacketPlayOutChat(new ChatMessage(msg, getScoreboardDisplayName()), ChatMessageType.SYSTEM, SystemUtils.getNullUUID()));
++            }
 +        }
 +
 +        if (world.purpurConfig.idleTimeoutUpdateTabList) {
-+            getBukkitEntity().setPlayerListName((setAfk ? net.pl3x.purpur.PurpurConfig.afkTabListPrefix : "") + getName());
++            if (PurpurConfig.afkTabListSuffix) {
++                getBukkitEntity().setPlayerListName(getName() + (setAfk ? net.pl3x.purpur.PurpurConfig.afkTabListPrefix : ""));
++            }
++            else {
++                getBukkitEntity().setPlayerListName((setAfk ? net.pl3x.purpur.PurpurConfig.afkTabListPrefix : "") + getName());
++            }
 +        }
 +
 +        ((WorldServer) world).everyoneSleeping();
@@ -77,12 +96,11 @@ index 8b1e866b3..237b85135 100644
 +    @Override
 +    public boolean isCollidable() {
 +        return !isAfk() && super.isCollidable();
-+    }
+     }
 +    // Purpur end
-+
+ 
      public ServerStatisticManager getStatisticManager() {
          return this.serverStatisticManager;
-     }
 diff --git a/src/main/java/net/minecraft/server/IEntityAccess.java b/src/main/java/net/minecraft/server/IEntityAccess.java
 index 882b82d89..90c37e4a8 100644
 --- a/src/main/java/net/minecraft/server/IEntityAccess.java
@@ -154,10 +172,19 @@ index a9b0c78d6..c8e384ab6 100644
      // Paper start
      public static final Predicate<Entity> affectsSpawning = (entity) -> {
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
-index 602ed9aaa..43a88b728 100644
+index e4aab5348..e40c04522 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
-@@ -236,6 +236,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -15,6 +15,8 @@ import java.util.Optional;
+ import java.util.Set;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
++
++import net.pl3x.purpur.PurpurConfig;
+ import org.apache.commons.lang3.StringEscapeUtils;
+ import org.apache.commons.lang3.StringUtils;
+ import org.apache.logging.log4j.LogManager;
+@@ -236,8 +238,19 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
  
          if (this.player.F() > 0L && this.minecraftServer.getIdleTimeout() > 0 && SystemUtils.getMonotonicMillis() - this.player.F() > (long) (this.minecraftServer.getIdleTimeout() * 1000 * 60)) {
@@ -166,11 +193,19 @@ index 602ed9aaa..43a88b728 100644
 +            if (!this.player.world.purpurConfig.idleTimeoutKick) {
 +                return;
 +            }
-+            // Purpur end
              this.player.resetIdleTimer(); // CraftBukkit - SPIGOT-854
-             this.disconnect(new ChatMessage("multiplayer.disconnect.idling"));
+-            this.disconnect(new ChatMessage("multiplayer.disconnect.idling"));
++            if (PurpurConfig.afkKickMessage.equals("")) {
++                this.disconnect(new ChatMessage("multiplayer.disconnect.idling"));
++            }
++            else {
++                this.disconnect(PurpurConfig.afkKickMessage);
++            }
++            // Purpur end
          }
-@@ -459,6 +465,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+ 
+     }
+@@ -459,6 +472,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                      this.lastYaw = to.getYaw();
                      this.lastPitch = to.getPitch();
  
@@ -179,7 +214,7 @@ index 602ed9aaa..43a88b728 100644
                      // Skip the first time we do this
                      if (true) { // Spigot - don't skip any move events
                          Location oldTo = to.clone();
-@@ -1127,7 +1135,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1127,7 +1142,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
  
                              if (!this.player.H() && d11 > org.spigotmc.SpigotConfig.movedWronglyThreshold && !this.player.isSleeping() && !this.player.playerInteractManager.isCreative() && this.player.playerInteractManager.getGameMode() != EnumGamemode.SPECTATOR) { // Spigot
                                  flag1 = true;
@@ -188,7 +223,7 @@ index 602ed9aaa..43a88b728 100644
                              }
  
                              this.player.setLocation(d4, d5, d6, f, f1);
-@@ -1166,6 +1174,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1166,6 +1181,8 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                      this.lastYaw = to.getYaw();
                                      this.lastPitch = to.getPitch();
  
@@ -198,7 +233,7 @@ index 602ed9aaa..43a88b728 100644
                                      if (from.getX() != Double.MAX_VALUE) {
                                          Location oldTo = to.clone();
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index 14318d046..ebf78f2cc 100644
+index 6cc62adb2..715c2b7dd 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -843,7 +843,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
@@ -220,7 +255,7 @@ index 14318d046..ebf78f2cc 100644
                  } else if (entityplayer.isSleeping()) {
                      ++j;
 diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
-index 803a7ff92..d699a9168 100644
+index 803a7ff92..792d76757 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
 @@ -1,6 +1,7 @@
@@ -231,17 +266,23 @@ index 803a7ff92..d699a9168 100644
  import net.minecraft.server.MinecraftServer;
  import net.pl3x.purpur.command.PurpurCommand;
  import org.bukkit.Bukkit;
-@@ -129,6 +130,15 @@ public class PurpurConfig {
+@@ -129,6 +130,21 @@ public class PurpurConfig {
          return config.getString(path, config.getString(path));
      }
  
 +    public static String afkBroadcastAway = "§e§o%s is now AFK";
 +    public static String afkBroadcastBack = "§e§o%s is no longer AFK";
++    public static boolean afkBroadcastIsGlobal = true;
 +    public static String afkTabListPrefix = "[AFK] ";
++    public static boolean afkTabListSuffix = false;
++    public static String afkKickMessage = "";
 +    private static void messages() {
 +        afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
 +        afkBroadcastBack = getString("settings.messages.afk-broadcast-back", afkBroadcastBack);
++        afkBroadcastIsGlobal = getBoolean("settings.messages.afk-broadcast-is-global", afkBroadcastIsGlobal);
 +        afkTabListPrefix = getString("settings.messages.afk-tab-list-prefix", afkTabListPrefix);
++        afkTabListSuffix = getBoolean("settings.messages.afk-tab-list-suffix", afkTabListSuffix);
++        afkKickMessage = getString("settings.messages.afk-kick-message", afkKickMessage);
 +    }
 +
      public static String timingsUrl = "https://timings.pl3x.net";
@@ -294,7 +335,7 @@ index 715d2c5e8..4904cb2ff 100644
 +    // Purpur end
  }
 diff --git a/src/main/java/org/spigotmc/ActivationRange.java b/src/main/java/org/spigotmc/ActivationRange.java
-index 37e930e0c..89dc611cd 100644
+index 0b93635ba..b47d6fa2d 100644
 --- a/src/main/java/org/spigotmc/ActivationRange.java
 +++ b/src/main/java/org/spigotmc/ActivationRange.java
 @@ -207,6 +207,7 @@ public class ActivationRange
