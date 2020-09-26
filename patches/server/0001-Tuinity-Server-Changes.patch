@@ -580,7 +580,7 @@ index 772057879..e5db29d4c 100644
              return Suggestions.empty();
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java b/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
 new file mode 100644
-index 000000000..0f42e5158
+index 000000000..335185168
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
 @@ -0,0 +1,406 @@
@@ -806,7 +806,7 @@ index 000000000..0f42e5158
 +    }
 +
 +    public static final class Region<T extends Enum<T> & SingleThreadChunkRegionManager.RegionDataCreator<T>> {
-+        protected final IteratorSafeOrderedReferenceSet<RegionSection<T>> sections = new IteratorSafeOrderedReferenceSet<>();
++        protected final IteratorSafeOrderedReferenceSet<RegionSection<T>> sections = new IteratorSafeOrderedReferenceSet<>(true);
 +        protected final ReferenceOpenHashSet<RegionSection<T>> deadSections = new ReferenceOpenHashSet<>(16, 0.7f);
 +        protected boolean dead;
 +        protected boolean markedForRecalc;
@@ -1380,14 +1380,15 @@ index 000000000..08ed24325
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java b/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java
 new file mode 100644
-index 000000000..57fede8cd
+index 000000000..b0dc0ab47
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,285 @@
 +package com.tuinity.tuinity.util.maplist;
 +
 +import it.unimi.dsi.fastutil.objects.Reference2IntLinkedOpenHashMap;
 +import it.unimi.dsi.fastutil.objects.Reference2IntMap;
++import org.bukkit.Bukkit;
 +import java.util.Arrays;
 +import java.util.NoSuchElementException;
 +
@@ -1406,15 +1407,31 @@ index 000000000..57fede8cd
 +
 +    protected int iteratorCount;
 +
++    private final boolean threadRestricted;
++
 +    public IteratorSafeOrderedReferenceSet() {
 +        this(16, 0.75f, 16, 0.2);
 +    }
 +
-+    public IteratorSafeOrderedReferenceSet(final int setCapacity, final float setLoadFactor, final int arrayCapacity, final double maxFragFactor) {
++    public IteratorSafeOrderedReferenceSet(final boolean threadRestricted) {
++        this(16, 0.75f, 16, 0.2, threadRestricted);
++    }
++
++    public IteratorSafeOrderedReferenceSet(final int setCapacity, final float setLoadFactor, final int arrayCapacity,
++                                           final double maxFragFactor) {
++        this(setCapacity, setLoadFactor, arrayCapacity, maxFragFactor, false);
++    }
++    public IteratorSafeOrderedReferenceSet(final int setCapacity, final float setLoadFactor, final int arrayCapacity,
++                                           final double maxFragFactor, final boolean threadRestricted) {
 +        this.indexMap = new Reference2IntLinkedOpenHashMap<>(setCapacity, setLoadFactor);
 +        this.indexMap.defaultReturnValue(-1);
 +        this.maxFragFactor = maxFragFactor;
 +        this.listElements = (E[])new Object[arrayCapacity];
++        this.threadRestricted = threadRestricted;
++    }
++
++    protected final boolean allowSafeIteration() {
++        return !this.threadRestricted || Bukkit.isPrimaryThread();
 +    }
 +
 +    protected final double getFragFactor() {
@@ -1422,7 +1439,9 @@ index 000000000..57fede8cd
 +    }
 +
 +    public int createRawIterator() {
-+        ++this.iteratorCount;
++        if (this.allowSafeIteration()) {
++            ++this.iteratorCount;
++        }
 +        if (this.indexMap.isEmpty()) {
 +            return -1;
 +        } else {
@@ -1443,7 +1462,7 @@ index 000000000..57fede8cd
 +    }
 +
 +    public void finishRawIterator() {
-+        if (--this.iteratorCount == 0) {
++        if (this.allowSafeIteration() && --this.iteratorCount == 0) {
 +            if (this.getFragFactor() >= this.maxFragFactor) {
 +                this.defrag();
 +            }
@@ -1457,7 +1476,7 @@ index 000000000..57fede8cd
 +                this.firstInvalidIndex = index;
 +            }
 +            this.listElements[index] = null;
-+            if (this.iteratorCount == 0 && this.getFragFactor() >= this.maxFragFactor) {
++            if (this.allowSafeIteration() && this.iteratorCount == 0 && this.getFragFactor() >= this.maxFragFactor) {
 +                this.defrag();
 +            }
 +            return true;
@@ -1555,7 +1574,9 @@ index 000000000..57fede8cd
 +    }
 +
 +    public IteratorSafeOrderedReferenceSet.Iterator<E> iterator(final int flags) {
-+        ++this.iteratorCount;
++        if (this.allowSafeIteration()) {
++            ++this.iteratorCount;
++        }
 +        return new BaseIterator<>(this, true, (flags & ITERATOR_FLAG_SEE_ADDITIONS) != 0 ? Integer.MAX_VALUE : this.listSize);
 +    }
 +
@@ -1642,7 +1663,9 @@ index 000000000..57fede8cd
 +            }
 +            this.lastReturned = null;
 +            this.finished = true;
-+            this.set.finishRawIterator();
++            if (this.set.allowSafeIteration()) {
++                this.set.finishRawIterator();
++            }
 +        }
 +    }
 +}
@@ -2580,7 +2603,7 @@ index 3c7b225ed..1b750da9e 100644
  
          for (java.util.Iterator<Entry<ArraySetSorted<Ticket<?>>>> iterator = this.tickets.long2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 45c142c22..22aefe768 100644
+index 45c142c22..193af8b51 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -22,6 +22,12 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap; // Paper
@@ -2617,7 +2640,7 @@ index 45c142c22..22aefe768 100644
                      }
                  } catch (Throwable thr) {
                      if (thr instanceof ThreadDeath) {
-@@ -210,6 +216,164 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -210,6 +216,167 @@ public class ChunkProviderServer extends IChunkProvider {
      }
      // Paper end - rewrite ticklistserver
  
@@ -2777,12 +2800,15 @@ index 45c142c22..22aefe768 100644
 +            }
 +        });
 +    }
++
++    final com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<Chunk> tickingChunks = new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>(4096, 0.75f, 4096, 0.15, true);
++    final com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<Chunk> entityTickingChunks = new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>(4096, 0.75f, 4096, 0.15, true);
 +    // Tuinity end
 +
      public ChunkProviderServer(WorldServer worldserver, Convertable.ConversionSession convertable_conversionsession, DataFixer datafixer, DefinedStructureManager definedstructuremanager, Executor executor, ChunkGenerator chunkgenerator, int i, boolean flag, WorldLoadListener worldloadlistener, Supplier<WorldPersistentData> supplier) {
          this.world = worldserver;
          this.serverThreadQueue = new ChunkProviderServer.a(worldserver);
-@@ -545,6 +709,8 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -545,6 +712,8 @@ public class ChunkProviderServer extends IChunkProvider {
          Arrays.fill(this.cacheChunk, (Object) null);
      }
  
@@ -2791,7 +2817,7 @@ index 45c142c22..22aefe768 100644
      private CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> getChunkFutureMainThread(int i, int j, ChunkStatus chunkstatus, boolean flag) {
          // Paper start - add isUrgent - old sig left in place for dirty nms plugins
          return getChunkFutureMainThread(i, j, chunkstatus, flag, false);
-@@ -563,9 +729,12 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -563,9 +732,12 @@ public class ChunkProviderServer extends IChunkProvider {
              PlayerChunk.State currentChunkState = PlayerChunk.getChunkState(playerchunk.getTicketLevel());
              currentlyUnloading = (oldChunkState.isAtLeast(PlayerChunk.State.BORDER) && !currentChunkState.isAtLeast(PlayerChunk.State.BORDER));
          }
@@ -2804,7 +2830,7 @@ index 45c142c22..22aefe768 100644
              if (isUrgent) this.chunkMapDistance.markUrgent(chunkcoordintpair); // Paper
              if (this.a(playerchunk, l)) {
                  GameProfilerFiller gameprofilerfiller = this.world.getMethodProfiler();
-@@ -576,12 +745,20 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -576,12 +748,20 @@ public class ChunkProviderServer extends IChunkProvider {
                  playerchunk = this.getChunk(k);
                  gameprofilerfiller.exit();
                  if (this.a(playerchunk, l)) {
@@ -2826,7 +2852,7 @@ index 45c142c22..22aefe768 100644
          if (isUrgent) {
              future.thenAccept(either -> this.chunkMapDistance.clearUrgent(chunkcoordintpair));
          }
-@@ -600,8 +777,8 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -600,8 +780,8 @@ public class ChunkProviderServer extends IChunkProvider {
          return !this.a(playerchunk, k);
      }
  
@@ -2837,7 +2863,7 @@ index 45c142c22..22aefe768 100644
          long k = ChunkCoordIntPair.pair(i, j);
          PlayerChunk playerchunk = this.getChunk(k);
  
-@@ -638,6 +815,8 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -638,6 +818,8 @@ public class ChunkProviderServer extends IChunkProvider {
  
      public boolean tickDistanceManager() { // Paper - private -> public
          if (chunkMapDistance.delayDistanceManagerTick) return false; // Paper
@@ -2846,7 +2872,7 @@ index 45c142c22..22aefe768 100644
          boolean flag = this.chunkMapDistance.a(this.playerChunkMap);
          boolean flag1 = this.playerChunkMap.b();
  
-@@ -647,6 +826,7 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -647,6 +829,7 @@ public class ChunkProviderServer extends IChunkProvider {
              this.clearCache();
              return true;
          }
@@ -2854,7 +2880,7 @@ index 45c142c22..22aefe768 100644
      }
  
      public final boolean isInEntityTickingChunk(Entity entity) { return this.a(entity); } // Paper - OBFHELPER
-@@ -735,7 +915,7 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -735,7 +918,7 @@ public class ChunkProviderServer extends IChunkProvider {
          this.world.getMethodProfiler().enter("purge");
          this.world.timings.doChunkMap.startTiming(); // Spigot
          this.chunkMapDistance.purgeTickets();
@@ -2863,7 +2889,7 @@ index 45c142c22..22aefe768 100644
          this.tickDistanceManager();
          this.world.timings.doChunkMap.stopTiming(); // Spigot
          this.world.getMethodProfiler().exitEnter("chunks");
-@@ -745,12 +925,22 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -745,7 +928,7 @@ public class ChunkProviderServer extends IChunkProvider {
          this.world.timings.doChunkUnload.startTiming(); // Spigot
          this.world.getMethodProfiler().exitEnter("unload");
          this.playerChunkMap.unloadChunks(booleansupplier);
@@ -2872,22 +2898,7 @@ index 45c142c22..22aefe768 100644
          this.world.timings.doChunkUnload.stopTiming(); // Spigot
          this.world.getMethodProfiler().exit();
          this.clearCache();
-     }
- 
-+    // Tuinity start - optimise chunk tick iteration
-+    // We need this here because since we remove the COW op for chunk map, we also remove
-+    // the iterator safety of the visible map - meaning the only way for us to still
-+    // iterate is to use a copy. Not acceptable at all, so here we hack in an iterable safe
-+    // chunk map that will give the same behaviour as previous - without COW.
-+    final com.destroystokyo.paper.util.maplist.ChunkList entityTickingChunks = new com.destroystokyo.paper.util.maplist.ChunkList();
-+    boolean isTickingChunks;
-+    final Object2BooleanLinkedOpenHashMap<Chunk> pendingEntityTickingChunkChanges = new Object2BooleanLinkedOpenHashMap<>(16, 0.8f);
-+    // Tuinity end - optimise chunk tick iteration
-+
-     private void tickChunks() {
-         long i = this.world.getTime();
-         long j = i - this.lastTickTime;
-@@ -822,19 +1012,21 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -822,19 +1005,23 @@ public class ChunkProviderServer extends IChunkProvider {
              //List<PlayerChunk> list = Lists.newArrayList(this.playerChunkMap.f()); // Paper
              //Collections.shuffle(list); // Paper
              // Paper - moved up
@@ -2896,15 +2907,17 @@ index 45c142c22..22aefe768 100644
 -
 -                if (optional.isPresent()) {
 +            // Tuinity start - optimise chunk tick iteration
-+            this.isTickingChunks = true;
-+            for (Chunk chunk : this.entityTickingChunks) {
++            com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Chunk> iterator = this.entityTickingChunks.iterator();
++            try {
++            while (iterator.hasNext()) {
++                Chunk chunk = iterator.next();
 +                PlayerChunk playerchunk = chunk.playerChunk;
 +                if (playerchunk != null) { // make sure load event has been called along with the load logic we put there
 +                    // Tuinity end - optimise chunk tick iteration
                      this.world.getMethodProfiler().enter("broadcast");
                      this.world.timings.broadcastChunkUpdates.startTiming(); // Paper - timings
 -                    playerchunk.a((Chunk) optional.get());
-+                    playerchunk.a(chunk); // Tuinity
++                        playerchunk.a(chunk); // Tuinity
                      this.world.timings.broadcastChunkUpdates.stopTiming(); // Paper - timings
                      this.world.getMethodProfiler().exit();
 -                    Optional<Chunk> optional1 = ((Either) playerchunk.b().getNow(PlayerChunk.UNLOADED_CHUNK)).left();
@@ -2917,7 +2930,7 @@ index 45c142c22..22aefe768 100644
                          ChunkCoordIntPair chunkcoordintpair = playerchunk.i();
  
                          if (!this.playerChunkMap.isOutsideOfRange(playerchunk, chunkcoordintpair, false)) { // Paper - optimise isOutsideOfRange
-@@ -846,11 +1038,27 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -846,11 +1033,15 @@ public class ChunkProviderServer extends IChunkProvider {
                              this.world.timings.chunkTicks.startTiming(); // Spigot // Paper
                              this.world.a(chunk, k);
                              this.world.timings.chunkTicks.stopTiming(); // Spigot // Paper
@@ -2928,26 +2941,14 @@ index 45c142c22..22aefe768 100644
                  }
 -            });
 +            } // Tuinity start - optimise chunk tick iteration
-+            this.isTickingChunks = false;
-+            if (!this.pendingEntityTickingChunkChanges.isEmpty()) {
-+                // iterate backwards: fastutil maps have better remove times when iterating backwards
-+                // (this is due to the fact that we likely wont shift entries on remove calls)
-+                for (ObjectBidirectionalIterator<Object2BooleanMap.Entry<Chunk>> iterator = this.pendingEntityTickingChunkChanges.object2BooleanEntrySet().fastIterator(this.pendingEntityTickingChunkChanges.object2BooleanEntrySet().last()); iterator.hasPrevious();) {
-+                    Object2BooleanMap.Entry<Chunk> entry = iterator.previous();
-+
-+                    if (entry.getBooleanValue()) {
-+                        this.entityTickingChunks.add(entry.getKey());
-+                    } else {
-+                        this.entityTickingChunks.remove(entry.getKey());
-+                    }
-+                    iterator.remove();
-+                }
++            } finally {
++                iterator.finishedIterating();
 +            }
 +            // Tuinity end - optimise chunk tick iteration
              this.world.getMethodProfiler().enter("customSpawners");
              if (flag1) {
                  try (co.aikar.timings.Timing ignored = this.world.timings.miscMobSpawning.startTiming()) { // Paper - timings
-@@ -862,7 +1070,25 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -862,7 +1053,25 @@ public class ChunkProviderServer extends IChunkProvider {
              this.world.getMethodProfiler().exit();
          }
  
@@ -2973,7 +2974,7 @@ index 45c142c22..22aefe768 100644
      }
  
      private void a(long i, Consumer<Chunk> consumer) {
-@@ -1002,44 +1228,11 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -1002,44 +1211,11 @@ public class ChunkProviderServer extends IChunkProvider {
              ChunkProviderServer.this.world.getMethodProfiler().c("runTask");
              super.executeTask(runnable);
          }
@@ -4286,7 +4287,7 @@ index a0555b132..9caf6598f 100644
                  return fluid.a((Tag) TagsFluid.WATER) ? PathType.WATER : (fluid.a((Tag) TagsFluid.LAVA) ? PathType.LAVA : (a(iblockdata) ? PathType.DAMAGE_FIRE : (BlockDoor.l(iblockdata) && !(Boolean) iblockdata.get(BlockDoor.OPEN) ? PathType.DOOR_WOOD_CLOSED : (block instanceof BlockDoor && material == Material.ORE && !(Boolean) iblockdata.get(BlockDoor.OPEN) ? PathType.DOOR_IRON_CLOSED : (block instanceof BlockDoor && (Boolean) iblockdata.get(BlockDoor.OPEN) ? PathType.DOOR_OPEN : (block instanceof BlockMinecartTrackAbstract ? PathType.RAIL : (block instanceof BlockLeaves ? PathType.LEAVES : (!block.a((Tag) TagsBlock.FENCES) && !block.a((Tag) TagsBlock.WALLS) && (!(block instanceof BlockFenceGate) || (Boolean) iblockdata.get(BlockFenceGate.OPEN)) ? (!iblockdata.a(iblockaccess, blockposition, PathMode.LAND) ? PathType.BLOCKED : PathType.OPEN) : PathType.FENCE))))))));
              }
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 31684667a..f90897955 100644
+index 31684667a..099865a3f 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -361,7 +361,7 @@ public class PlayerChunk {
@@ -4353,7 +4354,30 @@ index 31684667a..f90897955 100644
                  if (either.left().isPresent()) {
                      // note: Here is a very good place to add callbacks to logic waiting on this.
                      Chunk tickingChunk = either.left().get();
-@@ -694,12 +699,20 @@ public class PlayerChunk {
+@@ -673,6 +678,9 @@ public class PlayerChunk {
+                     // Paper start - rewrite ticklistserver
+                     PlayerChunk.this.chunkMap.world.onChunkSetTicking(PlayerChunk.this.location.x, PlayerChunk.this.location.z);
+                     // Paper end - rewrite ticklistserver
++                    // Tuinity start - ticking chunk set
++                    PlayerChunk.this.chunkMap.world.getChunkProvider().tickingChunks.add(tickingChunk);
++                    // Tuinity end - ticking chunk set
+ 
+                 }
+             });
+@@ -683,6 +691,12 @@ public class PlayerChunk {
+         if (flag4 && !flag5) {
+             this.tickingFuture.complete(PlayerChunk.UNLOADED_CHUNK); this.isTickingReady = false; // Paper - cache chunk ticking stage
+             this.tickingFuture = PlayerChunk.UNLOADED_CHUNK_FUTURE;
++            // Tuinity start - ticking chunk set
++            Chunk chunkIfCached = this.getFullChunkIfCached();
++            if (chunkIfCached != null) {
++                this.chunkMap.world.getChunkProvider().tickingChunks.remove(chunkIfCached);
++            }
++            // Tuinity end - ticking chunk set
+         }
+ 
+         boolean flag6 = playerchunk_state.isAtLeast(PlayerChunk.State.ENTITY_TICKING);
+@@ -694,13 +708,16 @@ public class PlayerChunk {
              }
  
              // Paper start - cache ticking ready status
@@ -4364,37 +4388,28 @@ index 31684667a..f90897955 100644
                      // note: Here is a very good place to add callbacks to logic waiting on this.
                      Chunk entityTickingChunk = either.left().get();
                      PlayerChunk.this.isEntityTickingReady = true;
+ 
 -
-+                    // Tuinity start - optimise chunk tick iteration
-+                    ChunkProviderServer chunkProvider = PlayerChunk.this.chunkMap.world.getChunkProvider();
-+                    if (chunkProvider.isTickingChunks) {
-+                        chunkProvider.pendingEntityTickingChunkChanges.put(entityTickingChunk, true);
-+                    } else {
-+                        chunkProvider.entityTickingChunks.add(entityTickingChunk);
-+                    }
-+                    // Tuinity end - optimise chunk tick iteration
++                    // Tuinity start - entity ticking chunk set
++                    PlayerChunk.this.chunkMap.world.getChunkProvider().entityTickingChunks.add(entityTickingChunk);
++                    // Tuinity end - entity ticking chunk set
  
  
- 
-@@ -711,6 +724,17 @@ public class PlayerChunk {
- 
+                 }
+@@ -712,6 +729,12 @@ public class PlayerChunk {
          if (flag6 && !flag7) {
              this.entityTickingFuture.complete(PlayerChunk.UNLOADED_CHUNK); this.isEntityTickingReady = false; // Paper - cache chunk ticking stage
-+            // Tuinity start - optimise chunk tick iteration
-+            ChunkProviderServer chunkProvider = PlayerChunk.this.chunkMap.world.getChunkProvider();
-+            Chunk chunk = this.getFullChunkIfCached();
-+            if (chunk != null) {
-+                if (chunkProvider.isTickingChunks) {
-+                    chunkProvider.pendingEntityTickingChunkChanges.put(chunk, false);
-+                } else {
-+                    chunkProvider.entityTickingChunks.remove(chunk);
-+                }
-+            }
-+            // Tuinity end - optimise chunk tick iteration
              this.entityTickingFuture = PlayerChunk.UNLOADED_CHUNK_FUTURE;
++            // Tuinity start - entity ticking chunk set
++            Chunk chunkIfCached = this.getFullChunkIfCached();
++            if (chunkIfCached != null) {
++                this.chunkMap.world.getChunkProvider().entityTickingChunks.remove(chunkIfCached);
++            }
++            // Tuinity end - entity ticking chunk set
          }
  
-@@ -737,7 +761,8 @@ public class PlayerChunk {
+         // Paper start - raise IO/load priority if priority changes, use our preferred priority
+@@ -737,7 +760,8 @@ public class PlayerChunk {
          // CraftBukkit start
          // ChunkLoadEvent: Called after the chunk is loaded: isChunkLoaded returns true and chunk is ready to be modified by plugins.
          if (!playerchunk_state.isAtLeast(PlayerChunk.State.BORDER) && playerchunk_state1.isAtLeast(PlayerChunk.State.BORDER)) {
@@ -4405,7 +4420,7 @@ index 31684667a..f90897955 100644
                  if (chunk != null) {
                      playerchunkmap.callbackExecutor.execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index fcd3388d8..2507b0c88 100644
+index fcd3388d8..20f59df86 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -121,31 +121,28 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -4486,7 +4501,7 @@ index fcd3388d8..2507b0c88 100644
 +            @Override
 +            public Object createData(com.tuinity.tuinity.chunk.SingleThreadChunkRegionManager.RegionSection<RegionData> section,
 +                    com.tuinity.tuinity.chunk.SingleThreadChunkRegionManager<RegionData> regionManager) {
-+                return new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>();
++                return new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>(true);
 +            }
 +        }
 +        // Tuinity end - optimise notify()
@@ -4622,14 +4637,17 @@ index fcd3388d8..2507b0c88 100644
          viewDistance = viewDistance == -1 ? -1 : MathHelper.clamp(viewDistance, 2, 32);
  
          this.noTickViewDistance = viewDistance;
-@@ -2037,23 +2085,20 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -2037,22 +2085,25 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      private final void processTrackQueue() {
          this.world.timings.tracker1.startTiming();
          try {
 -            for (EntityTracker tracker : this.trackedEntities.values()) {
 -                // update tracker entry
 -                tracker.updatePlayers(tracker.tracker.getPlayersInTrackRange());
-+            for (Chunk chunk : this.world.getChunkProvider().entityTickingChunks) {
++            com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Chunk> iterator = this.world.getChunkProvider().entityTickingChunks.iterator();
++            try {
++            while (iterator.hasNext()) {
++                Chunk chunk = iterator.next();
 +                Entity[] entities = chunk.entities.getRawData();
 +                for (int i = 0, len = chunk.entities.size(); i < len; ++i) {
 +                    Entity entity = entities[i];
@@ -4640,22 +4658,24 @@ index fcd3388d8..2507b0c88 100644
 +                    }
 +                }
              }
-         } finally {
-             this.world.timings.tracker1.stopTiming();
-         }
+-        } finally {
+-            this.world.timings.tracker1.stopTiming();
+-        }
 -
 -
 -        this.world.timings.tracker2.startTiming();
 -        try {
 -            for (EntityTracker tracker : this.trackedEntities.values()) {
 -                tracker.trackerEntry.tick();
--            }
--        } finally {
++            } finally {
++                iterator.finishedIterating();
+             }
+         } finally {
 -            this.world.timings.tracker2.stopTiming();
--        }
++            this.world.timings.tracker1.stopTiming();
+         }
      }
      // Paper end - optimised tracker
- 
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
 index 05b3a7478..e4aab5348 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
@@ -6487,7 +6507,7 @@ index f01186988..26a8c4ffe 100644
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index 95da2a560..6cc62adb2 100644
+index 95da2a560..11b4d62c4 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -51,12 +51,13 @@ import org.bukkit.event.server.MapInitializeEvent;
@@ -6501,7 +6521,7 @@ index 95da2a560..6cc62adb2 100644
      public static final BlockPosition a = new BlockPosition(100, 50, 0);
      private static final Logger LOGGER = LogManager.getLogger();
 -    public final Int2ObjectMap<Entity> entitiesById = new Int2ObjectLinkedOpenHashMap();
-+    public final Int2ObjectMap<Entity> entitiesById = new Int2ObjectLinkedOpenHashMap(); final com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<Entity> entitiesForIteration = new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>(2048, 0.5f, 2048, 0.2); // Tuinity - make removing entities while ticking safe
++    public final Int2ObjectMap<Entity> entitiesById = new Int2ObjectLinkedOpenHashMap(); final com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<Entity> entitiesForIteration = new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>(2048, 0.5f, 2048, 0.2, true); // Tuinity - make removing entities while ticking safe
      private final Map<UUID, Entity> entitiesByUUID = Maps.newHashMap();
      private final Queue<Entity> entitiesToAdd = Queues.newArrayDeque();
      public final List<EntityPlayer> players = Lists.newArrayList(); // Paper - private -> public
@@ -6510,7 +6530,7 @@ index 95da2a560..6cc62adb2 100644
      private final TickListServer<Block> nextTickListBlock;
      private final TickListServer<FluidType> nextTickListFluid;
 -    private final Set<NavigationAbstract> navigators;
-+    private final Set<NavigationAbstract> navigators; final com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<NavigationAbstract> navigatorsForIteration = new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>(2048, 0.5f, 2048, 0.2); // Tuinity - make removing entities while ticking safe
++    private final Set<NavigationAbstract> navigators; final com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<NavigationAbstract> navigatorsForIteration = new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>(2048, 0.5f, 2048, 0.2, true); // Tuinity - make removing entities while ticking safe
      protected final PersistentRaid persistentRaid;
      private final ObjectLinkedOpenHashSet<BlockActionData> L;
      private boolean ticking;
