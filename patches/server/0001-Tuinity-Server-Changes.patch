@@ -143,8 +143,6 @@ This patch relies upon the improve extra packet handling
 patch, as we now use PacketPlayOutMapChunk as an extra packet.
 See its patch notes for further details.
 
-Reduce blockpos allocation from pathfinding
-
 Reduce iterator allocation from chunk gen
 
 Replace via iterating over an array
@@ -166,10 +164,6 @@ Use entity ticking chunk map for entity tracker
 Should bring us back in-line with tracker performance
 before the loaded entity list reversion.
 
-Temporary fix for large move vectors
-
-Check movement distance also based on current position.
-
 Improve paper prevent moving into unloaded chunk check
 
 Check the AABB of the move
@@ -178,10 +172,6 @@ Improve async tp to not load chunks when crossing worlds
 
 Fixes an issue where a getCubes call would load neighbouring chunks.
 Loads less chunks than paper's implementation
-
-Optimise getType calls
-
-Remove the map lookup for converting from Block->Bukkit Material
 
 Revert getChunkAt(Async) retaining chunks for long periods of time
 
@@ -224,8 +214,6 @@ So we can make the tradeoff of raw array access by using a char
 array internally. For every 100,000 chunks, this will add approximately
 80MB overhead (4 heightmaps per full chunk) - which is acceptable.
 
-Improve inlinig for some hot IBlockData methods
-
 Manually inline methods in BlockPosition
 
 Separate lookup locking from state access in UserCache
@@ -241,14 +229,6 @@ Name craft scheduler threads according to the plugin using them
 
 Provides quick access to culprits running far more threads than
 they should be
-
-Retain block place order when capturing blockstates
-
-Fixes twisted vines not connecting properly when grown via
-bonemeal by a player.
-
-In general, look at making this logic more robust (i.e properly handling
-cases where a captured entry is overriden) - but for now this will do.
 
 Fix ghost blocks in ticking view distance
 
@@ -266,8 +246,6 @@ supplied generatoraccess which will always have the chunk available.
 Range check flag dirty calls in PlayerChunk
 
 Simply return.
-
-Do not run vanilla update logic when eigencraft is enabled
 
 Optimise tab complete
 
@@ -2055,7 +2033,7 @@ index 6b655b744d..e811295b4d 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/BlockBase.java b/src/main/java/net/minecraft/server/BlockBase.java
-index 505d40278d..9d85ce027a 100644
+index 5131d2172d..478950e5bf 100644
 --- a/src/main/java/net/minecraft/server/BlockBase.java
 +++ b/src/main/java/net/minecraft/server/BlockBase.java
 @@ -182,8 +182,8 @@ public abstract class BlockBase {
@@ -2087,8 +2065,8 @@ index 505d40278d..9d85ce027a 100644
          private final BlockBase.e l;
          private final BlockBase.e m;
          private final BlockBase.e n;
-@@ -338,10 +338,25 @@ public abstract class BlockBase {
-         }
+@@ -343,12 +343,20 @@ public abstract class BlockBase {
+         protected Fluid fluid;
          // Paper end
  
 +        // Tuinity start - micro the hell out of this call
@@ -2098,14 +2076,9 @@ index 505d40278d..9d85ce027a 100644
 +        }
 +        // Tuinity end
 +
-+        // Tuinity start
-+        protected boolean isTicking;
-+        protected Fluid fluid;
-+        // Tuinity end
-+
          public void a() {
-+            this.fluid = this.getBlock().d(this.p()); // Tuinity - moved from getFluid()
-+            this.isTicking = this.getBlock().isTicking(this.p()); // Tuinity - moved from isTicking()
+             this.fluid = this.getBlock().d(this.p()); // Paper - moved from getFluid()
+             this.isTicking = this.getBlock().isTicking(this.p()); // Paper - moved from isTicking()
              if (!this.getBlock().o()) {
                  this.a = new BlockBase.BlockData.Cache(this.p());
              }
@@ -2113,7 +2086,7 @@ index 505d40278d..9d85ce027a 100644
  
          }
  
-@@ -365,10 +380,12 @@ public abstract class BlockBase {
+@@ -372,10 +380,12 @@ public abstract class BlockBase {
              return this.a != null ? this.a.g : this.getBlock().b(this.p(), iblockaccess, blockposition);
          }
  
@@ -2126,57 +2099,15 @@ index 505d40278d..9d85ce027a 100644
          public VoxelShape a(IBlockAccess iblockaccess, BlockPosition blockposition, EnumDirection enumdirection) {
              return this.a != null && this.a.i != null ? this.a.i[enumdirection.ordinal()] : VoxelShapes.a(this.c(iblockaccess, blockposition), enumdirection);
          }
-@@ -377,19 +394,19 @@ public abstract class BlockBase {
-             return this.getBlock().d(this.p(), iblockaccess, blockposition);
+@@ -385,7 +395,7 @@ public abstract class BlockBase {
          }
  
--        public boolean d() {
+         public final boolean d() { // Paper
 -            return this.a == null || this.a.c;
-+        public final boolean d() { // Tuinity
 +            return this.shapeExceedsCube; // Tuinity - moved into shape cache init
          }
  
--        public boolean e() {
-+        public final boolean e() { // Tuinity
-             return this.e;
-         }
- 
--        public int f() {
-+        public final int f() { // Tuinity
-             return this.b;
-         }
- 
--        public boolean isAir() {
-+        public final boolean isAir() { // Tuinity
-             return this.f;
-         }
- 
-@@ -455,7 +472,7 @@ public abstract class BlockBase {
-             }
-         }
- 
--        public boolean l() {
-+        public final boolean l() { // Tuinity
-             return this.k;
-         }
- 
-@@ -627,12 +644,12 @@ public abstract class BlockBase {
-             return this.getBlock().a(block);
-         }
- 
--        public Fluid getFluid() {
--            return this.getBlock().d(this.p());
-+        public final Fluid getFluid() { // Tuinity
-+            return this.fluid; // Tuinity - moved into init
-         }
- 
--        public boolean isTicking() {
--            return this.getBlock().isTicking(this.p());
-+        public final boolean isTicking() { // Tuinity
-+            return this.isTicking; // Tuinity - moved into init
-         }
- 
-         public SoundEffectType getStepSound() {
+         public final boolean e() { // Paper
 diff --git a/src/main/java/net/minecraft/server/BlockChest.java b/src/main/java/net/minecraft/server/BlockChest.java
 index 12a0230448..9e5e6de52e 100644
 --- a/src/main/java/net/minecraft/server/BlockChest.java
@@ -3144,7 +3075,7 @@ index 550232cb38..229c3b0f0c 100644
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 28e2d3f0a5..e03635d415 100644
+index b845e488e3..86903aaa02 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -136,7 +136,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -3512,32 +3443,6 @@ index 4efc40c01e..f322dccd83 100644
          List<Entity> list = this.tracker.getPassengers();
  
          if (!list.equals(this.p)) {
-diff --git a/src/main/java/net/minecraft/server/Fluid.java b/src/main/java/net/minecraft/server/Fluid.java
-index 05fa52c0b1..8ffc5db509 100644
---- a/src/main/java/net/minecraft/server/Fluid.java
-+++ b/src/main/java/net/minecraft/server/Fluid.java
-@@ -9,8 +9,12 @@ public final class Fluid extends IBlockDataHolder<FluidType, Fluid> {
- 
-     public static final Codec<Fluid> a = a((Codec) IRegistry.FLUID, FluidType::h).stable();
- 
-+    // Tuinity start
-+    protected final boolean isEmpty;
-+    // Tuinity end
-     public Fluid(FluidType fluidtype, ImmutableMap<IBlockState<?>, Comparable<?>> immutablemap, MapCodec<Fluid> mapcodec) {
-         super(fluidtype, immutablemap, mapcodec);
-+        this.isEmpty = fluidtype.b(); // Tuinity - moved from isEmpty()
-     }
- 
-     public FluidType getType() {
-@@ -22,7 +26,7 @@ public final class Fluid extends IBlockDataHolder<FluidType, Fluid> {
-     }
- 
-     public boolean isEmpty() {
--        return this.getType().b();
-+        return this.isEmpty; // Tuinity - moved into constructor
-     }
- 
-     public float getHeight(IBlockAccess iblockaccess, BlockPosition blockposition) {
 diff --git a/src/main/java/net/minecraft/server/HeightMap.java b/src/main/java/net/minecraft/server/HeightMap.java
 index 068b92c5c4..a43c4ca3ea 100644
 --- a/src/main/java/net/minecraft/server/HeightMap.java
@@ -3622,30 +3527,6 @@ index 068b92c5c4..a43c4ca3ea 100644
              this.h = s;
              this.i = heightmap_use;
              this.j = predicate;
-diff --git a/src/main/java/net/minecraft/server/IBlockData.java b/src/main/java/net/minecraft/server/IBlockData.java
-index 10a5901db1..9117504767 100644
---- a/src/main/java/net/minecraft/server/IBlockData.java
-+++ b/src/main/java/net/minecraft/server/IBlockData.java
-@@ -8,6 +8,19 @@ public class IBlockData extends BlockBase.BlockData {
- 
-     public static final Codec<IBlockData> b = a((Codec) IRegistry.BLOCK, Block::getBlockData).stable();
- 
-+
-+    // Tuinity start - optimise getType calls
-+    org.bukkit.Material cachedMaterial;
-+
-+    public final org.bukkit.Material getBukkitMaterial() {
-+        if (this.cachedMaterial == null) {
-+            this.cachedMaterial = org.bukkit.craftbukkit.util.CraftMagicNumbers.getMaterial(this.getBlock());
-+        }
-+
-+        return this.cachedMaterial;
-+    }
-+    // Tuinity end - optimise getType calls
-+
-     public IBlockData(Block block, ImmutableMap<IBlockState<?>, Comparable<?>> immutablemap, MapCodec<IBlockData> mapcodec) {
-         super(block, immutablemap, mapcodec);
-     }
 diff --git a/src/main/java/net/minecraft/server/IChunkLoader.java b/src/main/java/net/minecraft/server/IChunkLoader.java
 index 582a5695ba..5601088cd5 100644
 --- a/src/main/java/net/minecraft/server/IChunkLoader.java
@@ -3762,7 +3643,7 @@ index ff74be1451..653ba0f1d8 100644
          0, 2, 60L, TimeUnit.SECONDS,
          new LinkedBlockingQueue<Runnable>(),
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 883c17f00b..93c4f29e1e 100644
+index 26bbfeba13..c5a8d6d3fb 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -985,7 +985,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
@@ -4219,30 +4100,8 @@ index 5094a5d6fb..72fdbf1534 100644
                  j += chunksection.j();
              }
          }
-diff --git a/src/main/java/net/minecraft/server/PathfinderNormal.java b/src/main/java/net/minecraft/server/PathfinderNormal.java
-index a0555b132d..9caf6598f8 100644
---- a/src/main/java/net/minecraft/server/PathfinderNormal.java
-+++ b/src/main/java/net/minecraft/server/PathfinderNormal.java
-@@ -475,7 +475,7 @@ public class PathfinderNormal extends PathfinderAbstract {
-                             return PathType.DANGER_FIRE;
-                         }
- 
--                        if (iblockaccess.getFluid(blockposition_mutableblockposition).a((Tag) TagsFluid.WATER)) {
-+                        if (iblockdata.getFluid().a((Tag) TagsFluid.WATER)) { // Tuinity - remove another getType call
-                             return PathType.WATER_BORDER;
-                         }
-                         } // Paper
-@@ -505,7 +505,7 @@ public class PathfinderNormal extends PathfinderAbstract {
-             } else if (iblockdata.a(Blocks.COCOA)) {
-                 return PathType.COCOA;
-             } else {
--                Fluid fluid = iblockaccess.getFluid(blockposition);
-+                Fluid fluid = iblockdata.getFluid(); // Tuinity - remove another get type call
- 
-                 return fluid.a((Tag) TagsFluid.WATER) ? PathType.WATER : (fluid.a((Tag) TagsFluid.LAVA) ? PathType.LAVA : (a(iblockdata) ? PathType.DAMAGE_FIRE : (BlockDoor.l(iblockdata) && !(Boolean) iblockdata.get(BlockDoor.OPEN) ? PathType.DOOR_WOOD_CLOSED : (block instanceof BlockDoor && material == Material.ORE && !(Boolean) iblockdata.get(BlockDoor.OPEN) ? PathType.DOOR_IRON_CLOSED : (block instanceof BlockDoor && (Boolean) iblockdata.get(BlockDoor.OPEN) ? PathType.DOOR_OPEN : (block instanceof BlockMinecartTrackAbstract ? PathType.RAIL : (block instanceof BlockLeaves ? PathType.LEAVES : (!block.a((Tag) TagsBlock.FENCES) && !block.a((Tag) TagsBlock.WALLS) && (!(block instanceof BlockFenceGate) || (Boolean) iblockdata.get(BlockFenceGate.OPEN)) ? (!iblockdata.a(iblockaccess, blockposition, PathMode.LAND) ? PathType.BLOCKED : PathType.OPEN) : PathType.FENCE))))))));
-             }
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 6ef71230ef..83179ef379 100644
+index 11a67ca18f..7cc6dfd3d7 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -362,7 +362,7 @@ public class PlayerChunk {
@@ -4375,7 +4234,7 @@ index 6ef71230ef..83179ef379 100644
                  if (chunk != null) {
                      playerchunkmap.callbackExecutor.execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index fcd3388d88..a345699f49 100644
+index 6c399bcea0..087bbad025 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -121,31 +121,28 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -4521,7 +4380,7 @@ index fcd3388d88..a345699f49 100644
      private void a(long i, PlayerChunk playerchunk) {
          CompletableFuture<IChunkAccess> completablefuture = playerchunk.getChunkSave();
          Consumer<IChunkAccess> consumer = (ichunkaccess) -> { // CraftBukkit - decompile error
-@@ -1020,7 +1043,16 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1020,7 +1043,15 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
              if (completablefuture1 != completablefuture) {
                  this.a(i, playerchunk);
              } else {
@@ -4535,11 +4394,10 @@ index fcd3388d88..a345699f49 100644
 +                // Tuinity start
 +                boolean removed;
 +                if ((removed = this.pendingUnload.remove(i, playerchunk)) && ichunkaccess != null) { // Tuinity end
-+                    // Paper start - coment out and move to ChunkUnloadEvent
                      if (ichunkaccess instanceof Chunk) {
                          ((Chunk) ichunkaccess).setLoaded(false);
                      }
-@@ -1044,6 +1076,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1044,6 +1075,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                      this.lightEngine.queueUpdate();
                      this.worldLoadListener.a(ichunkaccess.getPos(), (ChunkStatus) null);
                  }
@@ -4548,7 +4406,7 @@ index fcd3388d88..a345699f49 100644
  
              }
          };
-@@ -1059,6 +1093,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1059,6 +1092,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
  
      protected boolean b() {
@@ -4556,7 +4414,7 @@ index fcd3388d88..a345699f49 100644
          if (!this.updatingChunksModified) {
              return false;
          } else {
-@@ -1246,7 +1281,10 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1246,7 +1280,10 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
              }
              // Paper end
              this.mailboxWorldGen.a(ChunkTaskQueueSorter.a(playerchunk, runnable));
@@ -4568,7 +4426,7 @@ index fcd3388d88..a345699f49 100644
      }
  
      protected void c(ChunkCoordIntPair chunkcoordintpair) {
-@@ -1498,6 +1536,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1498,6 +1535,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
  
      public void setViewDistance(int i) { // Paper - public
@@ -4576,7 +4434,7 @@ index fcd3388d88..a345699f49 100644
          int j = MathHelper.clamp(i + 1, 3, 33); // Paper - diff on change, these make the lower view distance limit 2 and the upper 32
  
          if (j != this.viewDistance) {
-@@ -1511,6 +1550,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1511,6 +1549,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      // Paper start - no-tick view distance
      public final void setNoTickViewDistance(int viewDistance) {
@@ -4584,7 +4442,7 @@ index fcd3388d88..a345699f49 100644
          viewDistance = viewDistance == -1 ? -1 : MathHelper.clamp(viewDistance, 2, 32);
  
          this.noTickViewDistance = viewDistance;
-@@ -2037,22 +2077,25 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -2037,22 +2076,25 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      private final void processTrackQueue() {
          this.world.timings.tracker1.startTiming();
          try {
@@ -4624,42 +4482,10 @@ index fcd3388d88..a345699f49 100644
      }
      // Paper end - optimised tracker
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
-index 05b3a74781..e4aab53484 100644
+index 4b0ff3e1ac..da2039b536 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
-@@ -326,19 +326,24 @@ public class PlayerConnection implements PacketListenerPlayIn {
- 
-             if (entity != this.player && entity.getRidingPassenger() == this.player && entity == this.r) {
-                 WorldServer worldserver = this.player.getWorldServer();
--                double d0 = entity.locX();
--                double d1 = entity.locY();
--                double d2 = entity.locZ();
--                double d3 = packetplayinvehiclemove.getX();
--                double d4 = packetplayinvehiclemove.getY();
--                double d5 = packetplayinvehiclemove.getZ();
-+                double d0 = entity.locX();double fromX = d0; // Tuinity - OBFHELPER
-+                double d1 = entity.locY();double fromY = d1; // Tuinity - OBFHELPER
-+                double d2 = entity.locZ();double fromZ = d2; // Tuinity - OBFHELPER
-+                double d3 = packetplayinvehiclemove.getX();double toX = d3; // Tuinity - OBFHELPER
-+                double d4 = packetplayinvehiclemove.getY();double toY = d4; // Tuinity - OBFHELPER
-+                double d5 = packetplayinvehiclemove.getZ();double toZ = d5; // Tuinity - OBFHELPER
-                 float f = packetplayinvehiclemove.getYaw();
-                 float f1 = packetplayinvehiclemove.getPitch();
-                 double d6 = d3 - this.s;
-                 double d7 = d4 - this.t;
-                 double d8 = d5 - this.u;
-                 double d9 = entity.getMot().g();
--                double d10 = d6 * d6 + d7 * d7 + d8 * d8;
-+                // Tuinity start - fix large move vectors killing the server
-+                double currDeltaX = toX - fromX;
-+                double currDeltaY = toY - fromY;
-+                double currDeltaZ = toZ - fromZ;
-+                double d10 = Math.max(d6 * d6 + d7 * d7 + d8 * d8, (currDeltaX * currDeltaX + currDeltaY * currDeltaY + currDeltaZ * currDeltaZ) - 1);
-+                // Tuinity end - fix large move vectors killing the server
- 
- 
-                 // CraftBukkit start - handle custom speeds and skipped ticks
-@@ -367,7 +372,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -372,7 +372,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  speed *= 2f; // TODO: Get the speed of the vehicle instead of the player
  
                  // Paper start - Prevent moving into unloaded chunks
@@ -4670,7 +4496,7 @@ index 05b3a74781..e4aab53484 100644
                      this.networkManager.sendPacket(new PacketPlayOutVehicleMove(entity));
                      return;
                  }
-@@ -973,7 +980,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -978,7 +980,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  }
  
                  if (this.teleportPos != null) {
@@ -4679,30 +4505,7 @@ index 05b3a74781..e4aab53484 100644
                          this.A = this.e;
                          this.a(this.teleportPos.x, this.teleportPos.y, this.teleportPos.z, this.player.yaw, this.player.pitch);
                      }
-@@ -997,7 +1004,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
-                         double d2 = this.player.locZ();
-                         double d3 = this.player.locY();
-                         double d4 = packetplayinflying.a(this.player.locX());double toX = d4; // Paper - OBFHELPER
--                        double d5 = packetplayinflying.b(this.player.locY());
-+                        double d5 = packetplayinflying.b(this.player.locY());double toY = d5; // Tuinity - OBFHELPER
-                         double d6 = packetplayinflying.c(this.player.locZ());double toZ = d6; // Paper - OBFHELPER
-                         float f = packetplayinflying.a(this.player.yaw);
-                         float f1 = packetplayinflying.b(this.player.pitch);
-@@ -1005,7 +1012,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
-                         double d8 = d5 - this.m;
-                         double d9 = d6 - this.n;
-                         double d10 = this.player.getMot().g();
--                        double d11 = d7 * d7 + d8 * d8 + d9 * d9;
-+                        // Tuinity start - fix large move vectors killing the server
-+                        double currDeltaX = toX - prevX;
-+                        double currDeltaY = toY - prevY;
-+                        double currDeltaZ = toZ - prevZ;
-+                        double d11 = Math.max(d7 * d7 + d8 * d8 + d9 * d9, (currDeltaX * currDeltaX + currDeltaY * currDeltaY + currDeltaZ * currDeltaZ) - 1);
-+                        // Tuinity end - fix large move vectors killing the server
- 
-                         if (this.player.isSleeping()) {
-                             if (d11 > 1.0D) {
-@@ -1038,7 +1050,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1048,7 +1050,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                  speed = player.abilities.walkSpeed * 10f;
                              }
                              // Paper start - Prevent moving into unloaded chunks
@@ -4711,7 +4514,7 @@ index 05b3a74781..e4aab53484 100644
                                  this.internalTeleport(this.player.locX(), this.player.locY(), this.player.locZ(), this.player.yaw, this.player.pitch, Collections.emptySet());
                                  return;
                              }
-@@ -1094,6 +1106,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1104,6 +1106,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              }
  
                              this.player.move(EnumMoveType.PLAYER, new Vec3D(d7, d8, d9));
@@ -4719,7 +4522,7 @@ index 05b3a74781..e4aab53484 100644
                              this.player.setOnGround(packetplayinflying.b()); // CraftBukkit - SPIGOT-5810, SPIGOT-5835: reset by this.player.move
                              // Paper start - prevent position desync
                              if (this.teleportPos != null) {
-@@ -1118,7 +1131,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1128,7 +1131,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              }
  
                              this.player.setLocation(d4, d5, d6, f, f1);
@@ -6267,18 +6070,9 @@ index e21c747b6c..4bdadffee0 100644
          return voxelshape != b() && voxelshape1 != b() ? (voxelshape.isEmpty() && voxelshape1.isEmpty() ? false : !c(b(), b(voxelshape, voxelshape1, OperatorBoolean.OR), OperatorBoolean.ONLY_FIRST)) : true;
      }
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index eec338649e..51cb07b3d5 100644
+index d91124bc85..db90920c8d 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
-@@ -75,7 +75,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
-     public boolean captureBlockStates = false;
-     public boolean captureTreeGeneration = false;
-     public Map<BlockPosition, org.bukkit.craftbukkit.block.CraftBlockState> capturedBlockStates = new java.util.LinkedHashMap<>(); // Paper
--    public Map<BlockPosition, TileEntity> capturedTileEntities = new HashMap<>();
-+    public Map<BlockPosition, TileEntity> capturedTileEntities = new java.util.LinkedHashMap<>(); // Tuinity
-     public List<EntityItem> captureDrops;
-     public long ticksPerAnimalSpawns;
-     public long ticksPerMonsterSpawns;
 @@ -94,6 +94,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
      public final com.destroystokyo.paper.PaperWorldConfig paperConfig; // Paper
      public final ChunkPacketBlockController chunkPacketBlockController; // Paper - Anti-Xray
@@ -7151,19 +6945,6 @@ index 5ccdc0b87b..888dae2d5e 100644
                          Throwable throwable = null;
  
                          try {
-diff --git a/src/main/java/org/bukkit/craftbukkit/CraftChunkSnapshot.java b/src/main/java/org/bukkit/craftbukkit/CraftChunkSnapshot.java
-index ff8ba54574..ecedc167db 100644
---- a/src/main/java/org/bukkit/craftbukkit/CraftChunkSnapshot.java
-+++ b/src/main/java/org/bukkit/craftbukkit/CraftChunkSnapshot.java
-@@ -79,7 +79,7 @@ public class CraftChunkSnapshot implements ChunkSnapshot {
-     public Material getBlockType(int x, int y, int z) {
-         CraftChunk.validateChunkCoordinates(x, y, z);
- 
--        return CraftMagicNumbers.getMaterial(blockids[y >> 4].a(x, y & 0xF, z).getBlock());
-+        return blockids[y >> 4].a(x, y & 0xF, z).getBukkitMaterial(); // Tuinity - optimise getType calls
-     }
- 
-     @Override
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 index d8d29d1455..786ddcee7e 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
@@ -7299,45 +7080,6 @@ index 26c0ced8c2..0f4503940a 100644
                          //System.err.println("*** Server will start in 20 seconds ***");
                          //Thread.sleep(TimeUnit.SECONDS.toMillis(20));
                          // Paper End
-diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-index 3524b67752..b668b7c03d 100644
---- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-+++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-@@ -214,7 +214,7 @@ public class CraftBlock implements Block {
- 
-     @Override
-     public Material getType() {
--        return CraftMagicNumbers.getMaterial(world.getType(position).getBlock());
-+        return world.getType(position).getBukkitMaterial(); // Tuinity - optimise getType calls
-     }
- 
-     @Override
-diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockState.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockState.java
-index 0f89e77681..f24d423456 100644
---- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockState.java
-+++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockState.java
-@@ -135,7 +135,7 @@ public class CraftBlockState implements BlockState {
- 
-     @Override
-     public Material getType() {
--        return CraftMagicNumbers.getMaterial(data.getBlock());
-+        return data.getBukkitMaterial(); // Tuinity - optimise getType calls
-     }
- 
-     public void setFlag(int flag) {
-diff --git a/src/main/java/org/bukkit/craftbukkit/block/data/CraftBlockData.java b/src/main/java/org/bukkit/craftbukkit/block/data/CraftBlockData.java
-index 7591159c25..e5c3e5765c 100644
---- a/src/main/java/org/bukkit/craftbukkit/block/data/CraftBlockData.java
-+++ b/src/main/java/org/bukkit/craftbukkit/block/data/CraftBlockData.java
-@@ -44,7 +44,7 @@ public class CraftBlockData implements BlockData {
- 
-     @Override
-     public Material getMaterial() {
--        return CraftMagicNumbers.getMaterial(state.getBlock());
-+        return state.getBukkitMaterial(); // Tuinity - optimise getType calls
-     }
- 
-     public IBlockData getState() {
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 index 6f59f8d454..704d000001 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
@@ -7409,19 +7151,6 @@ index 6f59f8d454..704d000001 100644
      @Override
      public boolean teleport(org.bukkit.entity.Entity destination) {
          return teleport(destination.getLocation());
-diff --git a/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java b/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
-index 948a59217c..ab43c97e8f 100644
---- a/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
-+++ b/src/main/java/org/bukkit/craftbukkit/generator/CraftChunkData.java
-@@ -73,7 +73,7 @@ public final class CraftChunkData implements ChunkGenerator.ChunkData {
- 
-     @Override
-     public Material getType(int x, int y, int z) {
--        return CraftMagicNumbers.getMaterial(getTypeId(x, y, z).getBlock());
-+        return getTypeId(x, y, z).getBukkitMaterial(); // Tuinity - optimise getType calls
-     }
- 
-     @Override
 diff --git a/src/main/java/org/bukkit/craftbukkit/scheduler/CraftAsyncTask.java b/src/main/java/org/bukkit/craftbukkit/scheduler/CraftAsyncTask.java
 index fd32d1450a..c38e514b00 100644
 --- a/src/main/java/org/bukkit/craftbukkit/scheduler/CraftAsyncTask.java
