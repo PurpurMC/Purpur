@@ -230,11 +230,6 @@ Name craft scheduler threads according to the plugin using them
 Provides quick access to culprits running far more threads than
 they should be
 
-Fix ghost blocks in ticking view distance
-
-Post processing doesn't notify, and my changes to chunk sending
-send chunks before post processing.
-
 Fix swamp hut cat generation deadlock
 
 The worldgen thread will attempt to get structure references
@@ -270,8 +265,30 @@ Temporarily Revert usage of Region Manager
 
 Has some stability issues.
 
+Add packet limiter config
+
+Example config:
+packet-limiter:
+  kick-message: '&cSent too many packets'
+  limits:
+    all:
+      interval: 7.0
+      max-packet-rate: 500.0
+    PacketPlayInAutoRecipe:
+      interval: 4.0
+      max-packet-rate: 5.0
+      action: DROP
+
+all section refers to all incoming packets, the action for all is
+hard coded to KICK.
+
+For specific limits, the section name is the class's name,
+and an action can be defined: DROP or KICK
+
+If interval or rate are less-than 0, the limit is ignored
+
 diff --git a/pom.xml b/pom.xml
-index 9211fac20..e5b74fbf2 100644
+index 9211fac206..e5b74fbf25 100644
 --- a/pom.xml
 +++ b/pom.xml
 @@ -1,11 +1,11 @@
@@ -330,7 +347,7 @@ index 9211fac20..e5b74fbf2 100644
                  </configuration>
                  <executions>
 diff --git a/src/main/java/co/aikar/timings/MinecraftTimings.java b/src/main/java/co/aikar/timings/MinecraftTimings.java
-index 884b59d47..68ab5ccb2 100644
+index 884b59d478..68ab5ccb2f 100644
 --- a/src/main/java/co/aikar/timings/MinecraftTimings.java
 +++ b/src/main/java/co/aikar/timings/MinecraftTimings.java
 @@ -43,6 +43,9 @@ public final class MinecraftTimings {
@@ -344,7 +361,7 @@ index 884b59d47..68ab5ccb2 100644
  
      private MinecraftTimings() {}
 diff --git a/src/main/java/co/aikar/timings/TimingsExport.java b/src/main/java/co/aikar/timings/TimingsExport.java
-index e33e889c2..5dfa06588 100644
+index e33e889c29..5dfa065883 100644
 --- a/src/main/java/co/aikar/timings/TimingsExport.java
 +++ b/src/main/java/co/aikar/timings/TimingsExport.java
 @@ -229,7 +229,8 @@ public class TimingsExport extends Thread {
@@ -358,7 +375,7 @@ index e33e889c2..5dfa06588 100644
  
          new TimingsExport(listeners, parent, history).start();
 diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-index 49a38c660..255bbd6e4 100644
+index 49a38c6608..255bbd6e48 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
 @@ -24,8 +24,8 @@ public class PaperVersionFetcher implements VersionFetcher {
@@ -389,7 +406,7 @@ index 49a38c660..255bbd6e4 100644
          switch (distance) {
              case -1:
 diff --git a/src/main/java/com/destroystokyo/paper/server/ticklist/PaperTickList.java b/src/main/java/com/destroystokyo/paper/server/ticklist/PaperTickList.java
-index e7624948e..77df68888 100644
+index e7624948ea..77df688880 100644
 --- a/src/main/java/com/destroystokyo/paper/server/ticklist/PaperTickList.java
 +++ b/src/main/java/com/destroystokyo/paper/server/ticklist/PaperTickList.java
 @@ -186,6 +186,7 @@ public final class PaperTickList<T> extends TickListServer<T> { // extend to avo
@@ -473,7 +490,7 @@ index e7624948e..77df68888 100644
          int ret = 0;
  
 diff --git a/src/main/java/com/mojang/brigadier/CommandDispatcher.java b/src/main/java/com/mojang/brigadier/CommandDispatcher.java
-index 103576715..e8fdbe7b8 100644
+index 103576715e..e8fdbe7b8d 100644
 --- a/src/main/java/com/mojang/brigadier/CommandDispatcher.java
 +++ b/src/main/java/com/mojang/brigadier/CommandDispatcher.java
 @@ -590,10 +590,11 @@ public class CommandDispatcher<S> {
@@ -490,7 +507,7 @@ index 103576715..e8fdbe7b8 100644
              }
              futures[i++] = future;
 diff --git a/src/main/java/com/mojang/brigadier/arguments/BoolArgumentType.java b/src/main/java/com/mojang/brigadier/arguments/BoolArgumentType.java
-index cb993ca10..849686f7b 100644
+index cb993ca102..849686f7b2 100644
 --- a/src/main/java/com/mojang/brigadier/arguments/BoolArgumentType.java
 +++ b/src/main/java/com/mojang/brigadier/arguments/BoolArgumentType.java
 @@ -34,10 +34,10 @@ public class BoolArgumentType implements ArgumentType<Boolean> {
@@ -507,7 +524,7 @@ index cb993ca10..849686f7b 100644
          }
          return builder.buildFuture();
 diff --git a/src/main/java/com/mojang/brigadier/suggestion/SuggestionsBuilder.java b/src/main/java/com/mojang/brigadier/suggestion/SuggestionsBuilder.java
-index bc0024adb..0343f6663 100644
+index bc0024adb8..0343f6663c 100644
 --- a/src/main/java/com/mojang/brigadier/suggestion/SuggestionsBuilder.java
 +++ b/src/main/java/com/mojang/brigadier/suggestion/SuggestionsBuilder.java
 @@ -14,9 +14,16 @@ public class SuggestionsBuilder {
@@ -528,7 +545,7 @@ index bc0024adb..0343f6663 100644
          this.start = start;
          this.remaining = input.substring(start);
 diff --git a/src/main/java/com/mojang/brigadier/tree/LiteralCommandNode.java b/src/main/java/com/mojang/brigadier/tree/LiteralCommandNode.java
-index 772057879..e5db29d4c 100644
+index 7720578796..e5db29d4ca 100644
 --- a/src/main/java/com/mojang/brigadier/tree/LiteralCommandNode.java
 +++ b/src/main/java/com/mojang/brigadier/tree/LiteralCommandNode.java
 @@ -20,11 +20,11 @@ import java.util.concurrent.CompletableFuture;
@@ -556,7 +573,7 @@ index 772057879..e5db29d4c 100644
              return Suggestions.empty();
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java b/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
 new file mode 100644
-index 000000000..4cb10fe69
+index 0000000000..4cb10fe69c
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
 @@ -0,0 +1,408 @@
@@ -971,13 +988,14 @@ index 000000000..4cb10fe69
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
 new file mode 100644
-index 000000000..996be9b7f
+index 0000000000..991ad4912a
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
-@@ -0,0 +1,273 @@
+@@ -0,0 +1,367 @@
 +package com.tuinity.tuinity.config;
 +
 +import com.destroystokyo.paper.util.SneakyThrow;
++import net.minecraft.server.MinecraftServer;
 +import net.minecraft.server.TicketType;
 +import org.bukkit.Bukkit;
 +import org.bukkit.configuration.ConfigurationSection;
@@ -1082,6 +1100,11 @@ index 000000000..996be9b7f
 +        return TuinityConfig.config.getDouble(path, dfl);
 +    }
 +
++    static String getString(final String path, final String dfl) {
++        TuinityConfig.config.addDefault(path, dfl);
++        return TuinityConfig.config.getString(path, dfl);
++    }
++
 +    public static boolean tickWorldsInParallel;
 +
 +    /**
@@ -1108,6 +1131,89 @@ index 000000000..996be9b7f
 +
 +    private static void lagCompensateBlockBreaking() {
 +        lagCompensateBlockBreaking = TuinityConfig.getBoolean("lag-compensate-block-breaking", true);
++    }
++
++    public static final class PacketLimit {
++        public final double packetLimitInterval;
++        public final double maxPacketRate;
++        public final ViolateAction violateAction;
++
++        public PacketLimit(final double packetLimitInterval, final double maxPacketRate, final ViolateAction violateAction) {
++            this.packetLimitInterval = packetLimitInterval;
++            this.maxPacketRate = maxPacketRate;
++            this.violateAction = violateAction;
++        }
++
++        public static enum ViolateAction {
++            KICK, DROP;
++        }
++    }
++
++    public static String kickMessage;
++    public static PacketLimit allPacketsLimit;
++    public static java.util.Map<Class<? extends net.minecraft.server.Packet<?>>, PacketLimit> packetSpecificLimits = new java.util.HashMap<>();
++
++    private static void packetLimiter() {
++        packetSpecificLimits.clear();
++        kickMessage = org.bukkit.ChatColor.translateAlternateColorCodes('&', TuinityConfig.getString("packet-limiter.kick-message", "&cSent too many packets"));
++        allPacketsLimit = new PacketLimit(
++                TuinityConfig.getDouble("packet-limiter.limits.all.interval", 7.0),
++                TuinityConfig.getDouble("packet-limiter.limits.all.max-packet-rate", 500.0),
++                PacketLimit.ViolateAction.KICK
++        );
++        if (allPacketsLimit.maxPacketRate <= 0.0 || allPacketsLimit.packetLimitInterval <= 0.0) {
++            allPacketsLimit = null;
++        }
++        final ConfigurationSection section = TuinityConfig.config.getConfigurationSection("packet-limiter.limits");
++
++        // add default packets
++
++        // auto recipe limiting
++        TuinityConfig.getDouble("packet-limiter.limits." +
++                net.minecraft.server.PacketPlayInAutoRecipe.class.getSimpleName() + ".interval", 4.0);
++        TuinityConfig.getDouble("packet-limiter.limits." +
++                net.minecraft.server.PacketPlayInAutoRecipe.class.getSimpleName() + ".max-packet-rate", 5.0);
++        TuinityConfig.getString("packet-limiter.limits." +
++                net.minecraft.server.PacketPlayInAutoRecipe.class.getSimpleName() + ".action", PacketLimit.ViolateAction.DROP.name());
++
++        for (final String packetClassName : section.getKeys(false)) {
++            if (packetClassName.equals("all")) {
++                continue;
++            }
++            final Class<?> packetClazz;
++
++            try {
++                packetClazz = Class.forName("net.minecraft.server." + packetClassName);
++            } catch (final ClassNotFoundException ex) {
++                MinecraftServer.LOGGER.warn("Packet '" + packetClassName + "' does not exist, cannot limit it! Please update tuinity.yml");
++                continue;
++            }
++
++            if (!net.minecraft.server.Packet.class.isAssignableFrom(packetClazz)) {
++                MinecraftServer.LOGGER.warn("Packet '" + packetClassName + "' does not exist, cannot limit it! Please update tuinity.yml");
++                continue;
++            }
++
++            if (!(section.get(packetClassName.concat(".interval")) instanceof Number) || !(section.get(packetClassName.concat(".max-packet-rate")) instanceof Number)) {
++                throw new RuntimeException("Packet limit setting " + packetClassName + " is missing interval or max-packet-rate!");
++            }
++
++            final String actionString = section.getString(packetClassName.concat(".action"), "KICK");
++            PacketLimit.ViolateAction action = PacketLimit.ViolateAction.KICK;
++            for (PacketLimit.ViolateAction test : PacketLimit.ViolateAction.values()) {
++                if (actionString.equalsIgnoreCase(test.name())) {
++                    action = test;
++                    break;
++                }
++            }
++
++            final double interval = section.getDouble(packetClassName.concat(".interval"));
++            final double rate = section.getDouble(packetClassName.concat(".max-packet-rate"));
++
++            if (interval > 0.0 && rate > 0.0) {
++                packetSpecificLimits.put((Class)packetClazz, new PacketLimit(interval, rate, action));
++            }
++        }
 +    }
 +
 +    public static final class WorldConfig {
@@ -1220,6 +1326,11 @@ index 000000000..996be9b7f
 +            return this.config.getDouble(path, this.worldDefaults.getDouble(path));
 +        }
 +
++        String getString(final String path, final String dfl) {
++            this.worldDefaults.addDefault(path, dfl);
++            return this.config.getString(path, this.worldDefaults.getString(path));
++        }
++
 +        /** ignored if {@link TuinityConfig#tickWorldsInParallel} == false */
 +        public int threads;
 +
@@ -1251,7 +1362,7 @@ index 000000000..996be9b7f
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/util/CachedLists.java b/src/main/java/com/tuinity/tuinity/util/CachedLists.java
 new file mode 100644
-index 000000000..a54f516ba
+index 0000000000..a54f516ba7
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/util/CachedLists.java
 @@ -0,0 +1,53 @@
@@ -1308,9 +1419,115 @@ index 000000000..a54f516ba
 +        TEMP_GET_ENTITIES_LIST.completeReset();
 +    }
 +}
+diff --git a/src/main/java/com/tuinity/tuinity/util/IntervalledCounter.java b/src/main/java/com/tuinity/tuinity/util/IntervalledCounter.java
+new file mode 100644
+index 0000000000..d2c7d2c792
+--- /dev/null
++++ b/src/main/java/com/tuinity/tuinity/util/IntervalledCounter.java
+@@ -0,0 +1,100 @@
++package com.tuinity.tuinity.util;
++
++public final class IntervalledCounter {
++
++    protected long[] times;
++    protected final long interval;
++    protected long minTime;
++    protected int sum;
++    protected int head; // inclusive
++    protected int tail; // exclusive
++
++    public IntervalledCounter(final long interval) {
++        this.times = new long[8];
++        this.interval = interval;
++    }
++
++    public void updateCurrentTime() {
++        this.updateCurrentTime(System.nanoTime());
++    }
++
++    public void updateCurrentTime(final long currentTime) {
++        int sum = this.sum;
++        int head = this.head;
++        final int tail = this.tail;
++        final long minTime = currentTime - this.interval;
++
++        final int arrayLen = this.times.length;
++
++        // guard against overflow by using subtraction
++        while (head != tail && this.times[head] - minTime < 0) {
++            head = (head + 1) % arrayLen;
++            --sum;
++        }
++
++        this.sum = sum;
++        this.head = head;
++        this.minTime = minTime;
++    }
++
++    public void addTime(final long currTime) {
++        // guard against overflow by using subtraction
++        if (currTime - this.minTime < 0) {
++            return;
++        }
++        int nextTail = (this.tail + 1) % this.times.length;
++        if (nextTail == this.head) {
++            this.resize();
++            nextTail = (this.tail + 1) % this.times.length;
++        }
++
++        this.times[this.tail] = currTime;
++        this.tail = nextTail;
++    }
++
++    public void updateAndAdd(final int count) {
++        final long currTime = System.nanoTime();
++        this.updateCurrentTime(currTime);
++        for (int i = 0; i < count; ++i) {
++            this.addTime(currTime);
++        }
++    }
++
++    public void updateAndAdd(final int count, final long currTime) {
++        this.updateCurrentTime(currTime);
++        for (int i = 0; i < count; ++i) {
++            this.addTime(currTime);
++        }
++    }
++
++    private void resize() {
++        final long[] oldElements = this.times;
++        final long[] newElements = new long[this.times.length * 2];
++        this.times = newElements;
++
++        final int head = this.head;
++        final int tail = this.tail;
++        final int size = tail >= head ? (tail - head) : (tail + (oldElements.length - head));
++        this.head = 0;
++        this.tail = size;
++
++        if (tail >= head) {
++            System.arraycopy(oldElements, head, newElements, 0, size);
++        } else {
++            System.arraycopy(oldElements, head, newElements, 0, oldElements.length - head);
++            System.arraycopy(oldElements, 0, newElements, oldElements.length - head, tail);
++        }
++    }
++
++    // returns in units per second
++    public double getRate() {
++        return this.size() / (this.interval * 1.0e-9);
++    }
++
++    public int size() {
++        final int head = this.head;
++        final int tail = this.tail;
++
++        return tail >= head ? (tail - head) : (tail + (this.times.length - head));
++    }
++}
 diff --git a/src/main/java/com/tuinity/tuinity/util/TickThread.java b/src/main/java/com/tuinity/tuinity/util/TickThread.java
 new file mode 100644
-index 000000000..08ed24325
+index 0000000000..08ed243259
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/util/TickThread.java
 @@ -0,0 +1,41 @@
@@ -1358,7 +1575,7 @@ index 000000000..08ed24325
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java b/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java
 new file mode 100644
-index 000000000..6d2851ffa
+index 0000000000..6d2851ffa3
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/util/maplist/IteratorSafeOrderedReferenceSet.java
 @@ -0,0 +1,288 @@
@@ -1652,7 +1869,7 @@ index 000000000..6d2851ffa
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/voxel/AABBVoxelShape.java b/src/main/java/com/tuinity/tuinity/voxel/AABBVoxelShape.java
 new file mode 100644
-index 000000000..b321ad516
+index 0000000000..b321ad5163
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/voxel/AABBVoxelShape.java
 @@ -0,0 +1,162 @@
@@ -1819,7 +2036,7 @@ index 000000000..b321ad516
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/server/AxisAlignedBB.java b/src/main/java/net/minecraft/server/AxisAlignedBB.java
-index ed9b2f9ad..6aa9f0733 100644
+index ed9b2f9adf..6aa9f07336 100644
 --- a/src/main/java/net/minecraft/server/AxisAlignedBB.java
 +++ b/src/main/java/net/minecraft/server/AxisAlignedBB.java
 @@ -13,6 +13,149 @@ public class AxisAlignedBB {
@@ -1997,7 +2214,7 @@ index ed9b2f9ad..6aa9f0733 100644
          return d0 >= this.minX && d0 < this.maxX && d1 >= this.minY && d1 < this.maxY && d2 >= this.minZ && d2 < this.maxZ;
      }
 diff --git a/src/main/java/net/minecraft/server/BaseBlockPosition.java b/src/main/java/net/minecraft/server/BaseBlockPosition.java
-index 6b655b744..e811295b4 100644
+index 6b655b744d..e811295b4d 100644
 --- a/src/main/java/net/minecraft/server/BaseBlockPosition.java
 +++ b/src/main/java/net/minecraft/server/BaseBlockPosition.java
 @@ -16,9 +16,9 @@ public class BaseBlockPosition implements Comparable<BaseBlockPosition> {
@@ -2033,7 +2250,7 @@ index 6b655b744..e811295b4 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/BlockBase.java b/src/main/java/net/minecraft/server/BlockBase.java
-index 5131d2172..d15c7e979 100644
+index 5131d2172d..2c2fea8e3f 100644
 --- a/src/main/java/net/minecraft/server/BlockBase.java
 +++ b/src/main/java/net/minecraft/server/BlockBase.java
 @@ -182,8 +182,8 @@ public abstract class BlockBase {
@@ -2105,13 +2322,13 @@ index 5131d2172..d15c7e979 100644
  
 -        public final boolean d() { // Paper
 -            return this.a == null || this.a.c;
-+        public boolean d() {
++        public final boolean d() {
 +            return this.shapeExceedsCube; // Tuinity - moved into shape cache init
          }
  
          public final boolean e() { // Paper
 diff --git a/src/main/java/net/minecraft/server/BlockChest.java b/src/main/java/net/minecraft/server/BlockChest.java
-index 12a023044..9e5e6de52 100644
+index 12a0230448..9e5e6de52e 100644
 --- a/src/main/java/net/minecraft/server/BlockChest.java
 +++ b/src/main/java/net/minecraft/server/BlockChest.java
 @@ -195,7 +195,7 @@ public class BlockChest extends BlockChestAbstract<TileEntityChest> implements I
@@ -2124,7 +2341,7 @@ index 12a023044..9e5e6de52 100644
              if (tileentity instanceof IInventory) {
                  InventoryUtils.dropInventory(world, blockposition, (IInventory) tileentity);
 diff --git a/src/main/java/net/minecraft/server/BlockPosition.java b/src/main/java/net/minecraft/server/BlockPosition.java
-index 2d887af90..2291135ea 100644
+index 2d887af902..2291135eae 100644
 --- a/src/main/java/net/minecraft/server/BlockPosition.java
 +++ b/src/main/java/net/minecraft/server/BlockPosition.java
 @@ -449,10 +449,10 @@ public class BlockPosition extends BaseBlockPosition {
@@ -2221,7 +2438,7 @@ index 2d887af90..2291135ea 100644
          @Override
          public BlockPosition immutableCopy() {
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index 083da88c1..018972007 100644
+index dcbae1c451..06e6c140b0 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
 @@ -91,6 +91,56 @@ public class Chunk implements IChunkAccess {
@@ -2348,17 +2565,8 @@ index 083da88c1..018972007 100644
          int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
  
-@@ -1129,7 +1184,7 @@ public class Chunk implements IChunkAccess {
-                     IBlockData iblockdata = this.getType(blockposition);
-                     IBlockData iblockdata1 = Block.b(iblockdata, (GeneratorAccess) this.world, blockposition);
- 
--                    this.world.setTypeAndData(blockposition, iblockdata1, 20);
-+                    this.world.setTypeAndData(blockposition, iblockdata1, 20 | 2); // Tuinity - paper sends chunks before they're ticking ready, so we need to notify here
-                 }
- 
-                 this.n[i].clear();
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
-index 3c7b225ed..43cbb77ca 100644
+index 3c7b225edb..43cbb77caf 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/ChunkMapDistance.java
 @@ -31,7 +31,7 @@ public abstract class ChunkMapDistance {
@@ -2535,7 +2743,7 @@ index 3c7b225ed..43cbb77ca 100644
  
          for (java.util.Iterator<Entry<ArraySetSorted<Ticket<?>>>> iterator = this.tickets.long2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 45c142c22..b74ff6b9f 100644
+index 45c142c227..b74ff6b9f3 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -22,6 +22,12 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap; // Paper
@@ -2954,7 +3162,7 @@ index 45c142c22..b74ff6b9f 100644
          try {
              boolean execChunkTask = com.destroystokyo.paper.io.chunk.ChunkTaskManager.pollChunkWaitQueue() || ChunkProviderServer.this.world.asyncChunkTaskManager.pollNextChunkTask(); // Paper
 diff --git a/src/main/java/net/minecraft/server/ChunkRegionLoader.java b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
-index 8e7da2c5f..5eb14c4cd 100644
+index 8e7da2c5f3..5eb14c4cd8 100644
 --- a/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 +++ b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 @@ -24,6 +24,14 @@ public class ChunkRegionLoader {
@@ -2986,7 +3194,7 @@ index 8e7da2c5f..5eb14c4cd 100644
          nbttagcompound1.setString("Status", ichunkaccess.getChunkStatus().d());
          ChunkConverter chunkconverter = ichunkaccess.p();
 diff --git a/src/main/java/net/minecraft/server/ChunkSection.java b/src/main/java/net/minecraft/server/ChunkSection.java
-index e52df8096..cebd808e2 100644
+index e52df8096e..cebd808e27 100644
 --- a/src/main/java/net/minecraft/server/ChunkSection.java
 +++ b/src/main/java/net/minecraft/server/ChunkSection.java
 @@ -96,6 +96,7 @@ public class ChunkSection {
@@ -2998,7 +3206,7 @@ index e52df8096..cebd808e2 100644
          return this.nonEmptyBlockCount == 0;
      }
 diff --git a/src/main/java/net/minecraft/server/ChunkStatus.java b/src/main/java/net/minecraft/server/ChunkStatus.java
-index f6c9bdbf5..51ea295d6 100644
+index f6c9bdbf52..51ea295d66 100644
 --- a/src/main/java/net/minecraft/server/ChunkStatus.java
 +++ b/src/main/java/net/minecraft/server/ChunkStatus.java
 @@ -109,7 +109,7 @@ public class ChunkStatus {
@@ -3020,7 +3228,7 @@ index f6c9bdbf5..51ea295d6 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/DataBits.java b/src/main/java/net/minecraft/server/DataBits.java
-index 26b48b5ff..353b61aa5 100644
+index 26b48b5ffa..353b61aa57 100644
 --- a/src/main/java/net/minecraft/server/DataBits.java
 +++ b/src/main/java/net/minecraft/server/DataBits.java
 @@ -52,6 +52,7 @@ public class DataBits {
@@ -3048,7 +3256,7 @@ index 26b48b5ff..353b61aa5 100644
          //Validate.inclusiveBetween(0L, (long) (this.e - 1), (long) i); // Paper
          int j = this.b(i);
 diff --git a/src/main/java/net/minecraft/server/DataPaletteBlock.java b/src/main/java/net/minecraft/server/DataPaletteBlock.java
-index 95ef96286..73163b417 100644
+index 95ef962868..73163b417a 100644
 --- a/src/main/java/net/minecraft/server/DataPaletteBlock.java
 +++ b/src/main/java/net/minecraft/server/DataPaletteBlock.java
 @@ -163,6 +163,7 @@ public class DataPaletteBlock<T> implements DataPaletteExpandable<T> {
@@ -3060,7 +3268,7 @@ index 95ef96286..73163b417 100644
          T t0 = this.h.a(this.a.a(i));
  
 diff --git a/src/main/java/net/minecraft/server/DedicatedServer.java b/src/main/java/net/minecraft/server/DedicatedServer.java
-index f55dc28f3..8542f2f4d 100644
+index f55dc28f3e..8542f2f4d2 100644
 --- a/src/main/java/net/minecraft/server/DedicatedServer.java
 +++ b/src/main/java/net/minecraft/server/DedicatedServer.java
 @@ -166,6 +166,7 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
@@ -3072,7 +3280,7 @@ index f55dc28f3..8542f2f4d 100644
          this.setPVP(dedicatedserverproperties.pvp);
          this.setAllowFlight(dedicatedserverproperties.allowFlight);
 diff --git a/src/main/java/net/minecraft/server/EULA.java b/src/main/java/net/minecraft/server/EULA.java
-index 550232cb3..229c3b0f0 100644
+index 550232cb38..229c3b0f0c 100644
 --- a/src/main/java/net/minecraft/server/EULA.java
 +++ b/src/main/java/net/minecraft/server/EULA.java
 @@ -70,7 +70,7 @@ public class EULA {
@@ -3085,7 +3293,7 @@ index 550232cb3..229c3b0f0 100644
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index b845e488e..86903aaa0 100644
+index b845e488e3..86903aaa02 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -136,7 +136,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -3402,7 +3610,7 @@ index b845e488e..86903aaa0 100644
              int j = MathHelper.floor(d1);
              int k = MathHelper.floor(d2);
 diff --git a/src/main/java/net/minecraft/server/EntityCat.java b/src/main/java/net/minecraft/server/EntityCat.java
-index 314886398..79de11ce2 100644
+index 3148863984..79de11ce2f 100644
 --- a/src/main/java/net/minecraft/server/EntityCat.java
 +++ b/src/main/java/net/minecraft/server/EntityCat.java
 @@ -292,7 +292,7 @@ public class EntityCat extends EntityTameableAnimal {
@@ -3415,7 +3623,7 @@ index 314886398..79de11ce2 100644
              this.setPersistent();
          }
 diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
-index 76185f042..0e000c718 100644
+index 76185f042d..0e000c7186 100644
 --- a/src/main/java/net/minecraft/server/EntityLiving.java
 +++ b/src/main/java/net/minecraft/server/EntityLiving.java
 @@ -2847,7 +2847,11 @@ public abstract class EntityLiving extends Entity {
@@ -3442,7 +3650,7 @@ index 76185f042..0e000c718 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/EntityTrackerEntry.java b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
-index 4efc40c01..f322dccd8 100644
+index 4efc40c01e..f322dccd83 100644
 --- a/src/main/java/net/minecraft/server/EntityTrackerEntry.java
 +++ b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
 @@ -74,6 +74,7 @@ public class EntityTrackerEntry {
@@ -3454,7 +3662,7 @@ index 4efc40c01..f322dccd8 100644
  
          if (!list.equals(this.p)) {
 diff --git a/src/main/java/net/minecraft/server/HeightMap.java b/src/main/java/net/minecraft/server/HeightMap.java
-index 068b92c5c..a43c4ca3e 100644
+index 068b92c5c4..a43c4ca3ea 100644
 --- a/src/main/java/net/minecraft/server/HeightMap.java
 +++ b/src/main/java/net/minecraft/server/HeightMap.java
 @@ -19,7 +19,25 @@ public class HeightMap {
@@ -3538,7 +3746,7 @@ index 068b92c5c..a43c4ca3e 100644
              this.i = heightmap_use;
              this.j = predicate;
 diff --git a/src/main/java/net/minecraft/server/IChunkLoader.java b/src/main/java/net/minecraft/server/IChunkLoader.java
-index 582a5695b..5601088cd 100644
+index 582a5695ba..5601088cd5 100644
 --- a/src/main/java/net/minecraft/server/IChunkLoader.java
 +++ b/src/main/java/net/minecraft/server/IChunkLoader.java
 @@ -21,7 +21,7 @@ public class IChunkLoader implements AutoCloseable {
@@ -3551,7 +3759,7 @@ index 582a5695b..5601088cd 100644
          // Paper - nuke IOWorker
      }
 diff --git a/src/main/java/net/minecraft/server/ICollisionAccess.java b/src/main/java/net/minecraft/server/ICollisionAccess.java
-index 25e54a1fa..b66c802d5 100644
+index 25e54a1fad..b66c802d5e 100644
 --- a/src/main/java/net/minecraft/server/ICollisionAccess.java
 +++ b/src/main/java/net/minecraft/server/ICollisionAccess.java
 @@ -46,6 +46,11 @@ public interface ICollisionAccess extends IBlockAccess {
@@ -3567,7 +3775,7 @@ index 25e54a1fa..b66c802d5 100644
          return this.d(entity, axisalignedbb, predicate).allMatch(VoxelShape::isEmpty);
          } finally { if (entity != null) entity.collisionLoadChunks = false; } // Paper
 diff --git a/src/main/java/net/minecraft/server/IEntityAccess.java b/src/main/java/net/minecraft/server/IEntityAccess.java
-index 1cb8ba7cd..882b82d89 100644
+index 1cb8ba7cd2..882b82d895 100644
 --- a/src/main/java/net/minecraft/server/IEntityAccess.java
 +++ b/src/main/java/net/minecraft/server/IEntityAccess.java
 @@ -52,16 +52,26 @@ public interface IEntityAccess {
@@ -3609,7 +3817,7 @@ index 1cb8ba7cd..882b82d89 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/LightEngineStorage.java b/src/main/java/net/minecraft/server/LightEngineStorage.java
-index b98e60772..e0bbfe142 100644
+index b98e60772b..e0bbfe1422 100644
 --- a/src/main/java/net/minecraft/server/LightEngineStorage.java
 +++ b/src/main/java/net/minecraft/server/LightEngineStorage.java
 @@ -23,7 +23,8 @@ public abstract class LightEngineStorage<M extends LightEngineStorageArray<M>> e
@@ -3641,7 +3849,7 @@ index b98e60772..e0bbfe142 100644
              while (objectiterator.hasNext()) {
                  entry = (Entry) objectiterator.next();
 diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
-index ff74be145..653ba0f1d 100644
+index ff74be1451..653ba0f1d8 100644
 --- a/src/main/java/net/minecraft/server/MCUtil.java
 +++ b/src/main/java/net/minecraft/server/MCUtil.java
 @@ -38,6 +38,7 @@ import java.util.function.Consumer;
@@ -3653,7 +3861,7 @@ index ff74be145..653ba0f1d 100644
          0, 2, 60L, TimeUnit.SECONDS,
          new LinkedBlockingQueue<Runnable>(),
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 26bbfeba1..c5a8d6d3f 100644
+index 26bbfeba13..c5a8d6d3fb 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -985,7 +985,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
@@ -3846,7 +4054,7 @@ index 26bbfeba1..c5a8d6d3f 100644
  
      public CrashReport b(CrashReport crashreport) {
 diff --git a/src/main/java/net/minecraft/server/NetworkManager.java b/src/main/java/net/minecraft/server/NetworkManager.java
-index c9b36e604..aa1597c77 100644
+index c9b36e6040..ab6fb2d027 100644
 --- a/src/main/java/net/minecraft/server/NetworkManager.java
 +++ b/src/main/java/net/minecraft/server/NetworkManager.java
 @@ -71,6 +71,39 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
@@ -3889,7 +4097,71 @@ index c9b36e604..aa1597c77 100644
      public NetworkManager(EnumProtocolDirection enumprotocoldirection) {
          this.h = enumprotocoldirection;
      }
-@@ -217,7 +250,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -142,8 +175,63 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
+         if (MinecraftServer.getServer().isDebugging()) throwable.printStackTrace(); // Spigot
+     }
+ 
++    // Tuinity start - packet limiter
++    protected final Object PACKET_LIMIT_LOCK = new Object();
++    protected final com.tuinity.tuinity.util.IntervalledCounter allPacketCounts = com.tuinity.tuinity.config.TuinityConfig.allPacketsLimit != null ? new com.tuinity.tuinity.util.IntervalledCounter(
++            (long)(com.tuinity.tuinity.config.TuinityConfig.allPacketsLimit.packetLimitInterval * 1.0e9)
++    ) : null;
++    protected final java.util.Map<Class<? extends net.minecraft.server.Packet<?>>, com.tuinity.tuinity.util.IntervalledCounter> packetSpecificLimits = new java.util.HashMap<>();
++
++    private boolean stopReadingPackets;
++    private void killForPacketSpam() {
++        this.sendPacket(new PacketPlayOutKickDisconnect(org.bukkit.craftbukkit.util.CraftChatMessage.fromString(com.tuinity.tuinity.config.TuinityConfig.kickMessage, true)[0]), (future) -> {
++            this.close(org.bukkit.craftbukkit.util.CraftChatMessage.fromString(com.tuinity.tuinity.config.TuinityConfig.kickMessage, true)[0]);
++        });
++        this.stopReading();
++        this.stopReadingPackets = true;
++    }
++    // Tuinity end - packet limiter
+     protected void channelRead0(ChannelHandlerContext channelhandlercontext, Packet<?> packet) throws Exception {
+         if (this.channel.isOpen()) {
++            // Tuinity start - packet limiter
++            if (this.stopReadingPackets) {
++                return;
++            }
++            if (this.allPacketCounts != null ||
++                    com.tuinity.tuinity.config.TuinityConfig.packetSpecificLimits.containsKey(packet.getClass())) {
++                long time = System.nanoTime();
++                synchronized (PACKET_LIMIT_LOCK) {
++                    if (this.allPacketCounts != null) {
++                        this.allPacketCounts.updateAndAdd(1, time);
++                        if (this.allPacketCounts.getRate() >= com.tuinity.tuinity.config.TuinityConfig.allPacketsLimit.maxPacketRate) {
++                            this.killForPacketSpam();
++                            return;
++                        }
++                    }
++
++                    for (Class<?> check = packet.getClass(); check != Object.class; check = check.getSuperclass()) {
++                        com.tuinity.tuinity.config.TuinityConfig.PacketLimit packetSpecificLimit =
++                                com.tuinity.tuinity.config.TuinityConfig.packetSpecificLimits.get(check);
++                        if (packetSpecificLimit == null) {
++                            continue;
++                        }
++                        com.tuinity.tuinity.util.IntervalledCounter counter = this.packetSpecificLimits.computeIfAbsent((Class)check, (clazz) -> {
++                            return new com.tuinity.tuinity.util.IntervalledCounter((long)(packetSpecificLimit.packetLimitInterval * 1.0e9));
++                        });
++                        counter.updateAndAdd(1, time);
++                        if (counter.getRate() >= packetSpecificLimit.maxPacketRate) {
++                            switch (packetSpecificLimit.violateAction) {
++                                case DROP:
++                                    return;
++                                case KICK:
++                                    this.killForPacketSpam();
++                                    return;
++                            }
++                        }
++                    }
++                }
++            }
++            // Tuinity end - packet limiter
+             try {
+                 a(packet, this.packetListener);
+             } catch (CancelledPacketHandleException cancelledpackethandleexception) {
+@@ -217,7 +305,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
              MCUtil.isMainThread() && packet.isReady() && this.packetQueue.isEmpty() &&
              (packet.getExtraPackets() == null || packet.getExtraPackets().isEmpty())
          ))) {
@@ -3898,7 +4170,7 @@ index c9b36e604..aa1597c77 100644
              return;
          }
          // write the packets to the queue, then flush - antixray hooks there already
-@@ -243,6 +276,14 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -243,6 +331,14 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
  
      private void dispatchPacket(Packet<?> packet, @Nullable GenericFutureListener<? extends Future<? super Void>> genericFutureListener) { this.b(packet, genericFutureListener); } // Paper - OBFHELPER
      private void b(Packet<?> packet, @Nullable GenericFutureListener<? extends Future<? super Void>> genericfuturelistener) {
@@ -3913,7 +4185,7 @@ index c9b36e604..aa1597c77 100644
          EnumProtocol enumprotocol = EnumProtocol.a(packet);
          EnumProtocol enumprotocol1 = (EnumProtocol) this.channel.attr(NetworkManager.c).get();
  
-@@ -265,7 +306,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -265,7 +361,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
              try {
                  // Paper end
  
@@ -3922,7 +4194,7 @@ index c9b36e604..aa1597c77 100644
  
              if (genericfuturelistener != null) {
                  channelfuture.addListener(genericfuturelistener);
-@@ -297,7 +338,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -297,7 +393,7 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
                  }
                  try {
                      // Paper end
@@ -3931,7 +4203,7 @@ index c9b36e604..aa1597c77 100644
  
  
                  if (genericfuturelistener != null) {
-@@ -340,6 +381,8 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -340,6 +436,8 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
      }
      private boolean processQueue() {
          if (this.packetQueue.isEmpty()) return true;
@@ -3940,7 +4212,7 @@ index c9b36e604..aa1597c77 100644
          // If we are on main, we are safe here in that nothing else should be processing queue off main anymore
          // But if we are not on main due to login/status, the parent is synchronized on packetQueue
          java.util.Iterator<QueuedPacket> iterator = this.packetQueue.iterator();
-@@ -347,16 +390,22 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -347,16 +445,22 @@ public class NetworkManager extends SimpleChannelInboundHandler<Packet<?>> {
              NetworkManager.QueuedPacket queued = iterator.next(); // poll -> peek
  
              // Fix NPE (Spigot bug caused by handleDisconnection())
@@ -3966,7 +4238,7 @@ index c9b36e604..aa1597c77 100644
          }
          return true;
 diff --git a/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java b/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
-index 5094a5d6f..72fdbf153 100644
+index 5094a5d6fb..72fdbf1534 100644
 --- a/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
 +++ b/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
 @@ -19,7 +19,7 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
@@ -4111,7 +4383,7 @@ index 5094a5d6f..72fdbf153 100644
              }
          }
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 11a67ca18..7cc6dfd3d 100644
+index 11a67ca18f..7cc6dfd3d7 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
 @@ -362,7 +362,7 @@ public class PlayerChunk {
@@ -4244,7 +4516,7 @@ index 11a67ca18..7cc6dfd3d 100644
                  if (chunk != null) {
                      playerchunkmap.callbackExecutor.execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 6c399bcea..087bbad02 100644
+index 6c399bcea0..087bbad025 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -121,31 +121,28 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -4492,7 +4764,7 @@ index 6c399bcea..087bbad02 100644
      }
      // Paper end - optimised tracker
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
-index 4b0ff3e1a..da2039b53 100644
+index 4b0ff3e1ac..da2039b536 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
 @@ -372,7 +372,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
@@ -4542,7 +4814,7 @@ index 4b0ff3e1a..da2039b53 100644
                              } else {
                                  // CraftBukkit start - fire PlayerMoveEvent
 diff --git a/src/main/java/net/minecraft/server/PlayerConnectionUtils.java b/src/main/java/net/minecraft/server/PlayerConnectionUtils.java
-index 7ea293f38..e698dd226 100644
+index 7ea293f38d..e698dd2260 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnectionUtils.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnectionUtils.java
 @@ -13,10 +13,30 @@ public class PlayerConnectionUtils {
@@ -4590,7 +4862,7 @@ index 7ea293f38..e698dd226 100644
              });
              throw CancelledPacketHandleException.INSTANCE;
 diff --git a/src/main/java/net/minecraft/server/PlayerInteractManager.java b/src/main/java/net/minecraft/server/PlayerInteractManager.java
-index ac3bee9df..06a1b4b97 100644
+index ac3bee9dfb..06a1b4b977 100644
 --- a/src/main/java/net/minecraft/server/PlayerInteractManager.java
 +++ b/src/main/java/net/minecraft/server/PlayerInteractManager.java
 @@ -21,14 +21,29 @@ public class PlayerInteractManager {
@@ -4725,7 +4997,7 @@ index ac3bee9df..06a1b4b97 100644
              this.player.playerConnection.sendPacket(new PacketPlayOutBlockChange(this.world, blockposition)); // CraftBukkit - SPIGOT-5196
          }
 diff --git a/src/main/java/net/minecraft/server/ProtoChunk.java b/src/main/java/net/minecraft/server/ProtoChunk.java
-index 5b0cd414c..a3ac88350 100644
+index 5b0cd414ca..a3ac883500 100644
 --- a/src/main/java/net/minecraft/server/ProtoChunk.java
 +++ b/src/main/java/net/minecraft/server/ProtoChunk.java
 @@ -179,14 +179,11 @@ public class ProtoChunk implements IChunkAccess {
@@ -4761,7 +5033,7 @@ index 5b0cd414c..a3ac88350 100644
                  }
  
 diff --git a/src/main/java/net/minecraft/server/RegionFile.java b/src/main/java/net/minecraft/server/RegionFile.java
-index 1751fb693..1ffa213a8 100644
+index 1751fb6934..1ffa213a81 100644
 --- a/src/main/java/net/minecraft/server/RegionFile.java
 +++ b/src/main/java/net/minecraft/server/RegionFile.java
 @@ -5,6 +5,7 @@ import java.io.BufferedInputStream;
@@ -5387,7 +5659,7 @@ index 1751fb693..1ffa213a8 100644
          ((java.nio.Buffer) this.g).position(0);
          this.dataFile.write(this.g, 0L);
 diff --git a/src/main/java/net/minecraft/server/RegionFileBitSet.java b/src/main/java/net/minecraft/server/RegionFileBitSet.java
-index 1ebdf73cc..cfa3ecb03 100644
+index 1ebdf73cc9..cfa3ecb031 100644
 --- a/src/main/java/net/minecraft/server/RegionFileBitSet.java
 +++ b/src/main/java/net/minecraft/server/RegionFileBitSet.java
 @@ -4,18 +4,42 @@ import java.util.BitSet;
@@ -5435,7 +5707,7 @@ index 1ebdf73cc..cfa3ecb03 100644
          int j = 0;
  
 diff --git a/src/main/java/net/minecraft/server/RegionFileCache.java b/src/main/java/net/minecraft/server/RegionFileCache.java
-index d64f7ad92..8b341c14e 100644
+index d64f7ad925..8b341c14e7 100644
 --- a/src/main/java/net/minecraft/server/RegionFileCache.java
 +++ b/src/main/java/net/minecraft/server/RegionFileCache.java
 @@ -15,12 +15,43 @@ public class RegionFileCache implements AutoCloseable { // Paper - no final
@@ -5527,7 +5799,7 @@ index d64f7ad92..8b341c14e 100644
              }
  
 diff --git a/src/main/java/net/minecraft/server/RegionFileCompression.java b/src/main/java/net/minecraft/server/RegionFileCompression.java
-index 3382d678e..3b7894256 100644
+index 3382d678e6..3b7894256d 100644
 --- a/src/main/java/net/minecraft/server/RegionFileCompression.java
 +++ b/src/main/java/net/minecraft/server/RegionFileCompression.java
 @@ -13,7 +13,7 @@ import javax.annotation.Nullable;
@@ -5567,7 +5839,7 @@ index 3382d678e..3b7894256 100644
          return (InputStream) this.f.wrap(inputstream);
      }
 diff --git a/src/main/java/net/minecraft/server/StructureManager.java b/src/main/java/net/minecraft/server/StructureManager.java
-index f199368a6..2598ae371 100644
+index f199368a6d..2598ae3710 100644
 --- a/src/main/java/net/minecraft/server/StructureManager.java
 +++ b/src/main/java/net/minecraft/server/StructureManager.java
 @@ -35,8 +35,13 @@ public class StructureManager {
@@ -5600,7 +5872,7 @@ index f199368a6..2598ae371 100644
                  if (!flag) {
                      return structurestart;
 diff --git a/src/main/java/net/minecraft/server/Ticket.java b/src/main/java/net/minecraft/server/Ticket.java
-index e41cb8613..c19ffb925 100644
+index e41cb8613e..c19ffb925a 100644
 --- a/src/main/java/net/minecraft/server/Ticket.java
 +++ b/src/main/java/net/minecraft/server/Ticket.java
 @@ -5,17 +5,17 @@ import java.util.Objects;
@@ -5637,7 +5909,7 @@ index e41cb8613..c19ffb925 100644
          return j != 0L && i - this.d > j;
      }
 diff --git a/src/main/java/net/minecraft/server/TicketType.java b/src/main/java/net/minecraft/server/TicketType.java
-index 5c789b25f..25cff70b4 100644
+index 5c789b25f1..25cff70b45 100644
 --- a/src/main/java/net/minecraft/server/TicketType.java
 +++ b/src/main/java/net/minecraft/server/TicketType.java
 @@ -26,8 +26,19 @@ public class TicketType<T> {
@@ -5662,7 +5934,7 @@ index 5c789b25f..25cff70b4 100644
          return new TicketType<>(s, comparator, 0L);
      }
 diff --git a/src/main/java/net/minecraft/server/UserCache.java b/src/main/java/net/minecraft/server/UserCache.java
-index 2484293b1..1496c43fc 100644
+index 2484293b12..1496c43fc9 100644
 --- a/src/main/java/net/minecraft/server/UserCache.java
 +++ b/src/main/java/net/minecraft/server/UserCache.java
 @@ -49,6 +49,11 @@ public class UserCache {
@@ -5747,7 +6019,7 @@ index 2484293b1..1496c43fc 100644
  
      private static JsonElement a(UserCache.UserCacheEntry usercache_usercacheentry, DateFormat dateformat) {
 diff --git a/src/main/java/net/minecraft/server/Vec3D.java b/src/main/java/net/minecraft/server/Vec3D.java
-index 7f05587d4..5af554870 100644
+index 7f05587d42..5af554870b 100644
 --- a/src/main/java/net/minecraft/server/Vec3D.java
 +++ b/src/main/java/net/minecraft/server/Vec3D.java
 @@ -4,7 +4,7 @@ import java.util.EnumSet;
@@ -5781,7 +6053,7 @@ index 7f05587d4..5af554870 100644
          return this.x * this.x + this.y * this.y + this.z * this.z;
      }
 diff --git a/src/main/java/net/minecraft/server/VillagePlace.java b/src/main/java/net/minecraft/server/VillagePlace.java
-index b926cebd0..adacfce6f 100644
+index b926cebd05..adacfce6f3 100644
 --- a/src/main/java/net/minecraft/server/VillagePlace.java
 +++ b/src/main/java/net/minecraft/server/VillagePlace.java
 @@ -165,7 +165,7 @@ public class VillagePlace extends RegionFileSection<VillagePlaceSection> {
@@ -5794,7 +6066,7 @@ index b926cebd0..adacfce6f 100644
          }
          // Paper end
 diff --git a/src/main/java/net/minecraft/server/VoxelShape.java b/src/main/java/net/minecraft/server/VoxelShape.java
-index eb926b74e..700660dd9 100644
+index eb926b74e1..700660dd93 100644
 --- a/src/main/java/net/minecraft/server/VoxelShape.java
 +++ b/src/main/java/net/minecraft/server/VoxelShape.java
 @@ -8,11 +8,11 @@ import javax.annotation.Nullable;
@@ -5837,7 +6109,7 @@ index eb926b74e..700660dd9 100644
          List<AxisAlignedBB> list = Lists.newArrayList();
  
 diff --git a/src/main/java/net/minecraft/server/VoxelShapeArray.java b/src/main/java/net/minecraft/server/VoxelShapeArray.java
-index 3c29cb145..d318ec207 100644
+index 3c29cb1452..d318ec207c 100644
 --- a/src/main/java/net/minecraft/server/VoxelShapeArray.java
 +++ b/src/main/java/net/minecraft/server/VoxelShapeArray.java
 @@ -3,6 +3,7 @@ package net.minecraft.server;
@@ -5941,7 +6213,7 @@ index 3c29cb145..d318ec207 100644
 +    // Tuinity end - optimise multi-aabb shapes
  }
 diff --git a/src/main/java/net/minecraft/server/VoxelShapeSpliterator.java b/src/main/java/net/minecraft/server/VoxelShapeSpliterator.java
-index e841611bb..259605daa 100644
+index e841611bb7..259605daab 100644
 --- a/src/main/java/net/minecraft/server/VoxelShapeSpliterator.java
 +++ b/src/main/java/net/minecraft/server/VoxelShapeSpliterator.java
 @@ -91,7 +91,7 @@ public class VoxelShapeSpliterator extends AbstractSpliterator<VoxelShape> {
@@ -5954,7 +6226,7 @@ index e841611bb..259605daa 100644
                      }
  
 diff --git a/src/main/java/net/minecraft/server/VoxelShapes.java b/src/main/java/net/minecraft/server/VoxelShapes.java
-index e21c747b6..4bdadffee 100644
+index e21c747b6c..4bdadffee0 100644
 --- a/src/main/java/net/minecraft/server/VoxelShapes.java
 +++ b/src/main/java/net/minecraft/server/VoxelShapes.java
 @@ -17,18 +17,80 @@ public final class VoxelShapes {
@@ -6080,7 +6352,7 @@ index e21c747b6..4bdadffee 100644
          return voxelshape != b() && voxelshape1 != b() ? (voxelshape.isEmpty() && voxelshape1.isEmpty() ? false : !c(b(), b(voxelshape, voxelshape1, OperatorBoolean.OR), OperatorBoolean.ONLY_FIRST)) : true;
      }
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index d91124bc8..db90920c8 100644
+index d91124bc85..db90920c8d 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
 @@ -94,6 +94,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
@@ -6187,7 +6459,7 @@ index d91124bc8..db90920c8 100644
          int j = MathHelper.floor((axisalignedbb.maxX + 2.0D) / 16.0D);
          int k = MathHelper.floor((axisalignedbb.minZ - 2.0D) / 16.0D);
 diff --git a/src/main/java/net/minecraft/server/WorldBorder.java b/src/main/java/net/minecraft/server/WorldBorder.java
-index f01186988..26a8c4ffe 100644
+index f011869880..26a8c4ffe2 100644
 --- a/src/main/java/net/minecraft/server/WorldBorder.java
 +++ b/src/main/java/net/minecraft/server/WorldBorder.java
 @@ -47,11 +47,43 @@ public class WorldBorder {
@@ -6258,7 +6530,7 @@ index f01186988..26a8c4ffe 100644
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index 95da2a560..215789b76 100644
+index 95da2a5602..215789b762 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -51,12 +51,13 @@ import org.bukkit.event.server.MapInitializeEvent;
@@ -6943,7 +7215,7 @@ index 95da2a560..215789b76 100644
              this.tickingEntities = wasTicking; // Paper
          }
 diff --git a/src/main/java/net/minecraft/server/WorldUpgrader.java b/src/main/java/net/minecraft/server/WorldUpgrader.java
-index 5ccdc0b87..888dae2d5 100644
+index 5ccdc0b87b..888dae2d5e 100644
 --- a/src/main/java/net/minecraft/server/WorldUpgrader.java
 +++ b/src/main/java/net/minecraft/server/WorldUpgrader.java
 @@ -218,7 +218,7 @@ public class WorldUpgrader {
@@ -6956,7 +7228,7 @@ index 5ccdc0b87..888dae2d5 100644
  
                          try {
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index d8d29d145..786ddcee7 100644
+index 4e1b4d7cde..9bf854b5a2 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -232,7 +232,7 @@ import javax.annotation.Nullable; // Paper
@@ -6984,7 +7256,7 @@ index d8d29d145..786ddcee7 100644
          }
  
          Plugin[] pluginClone = pluginManager.getPlugins().clone(); // Paper
-@@ -1831,7 +1833,10 @@ public final class CraftServer implements Server {
+@@ -1853,7 +1855,10 @@ public final class CraftServer implements Server {
  
      @Override
      public boolean isPrimaryThread() {
@@ -6996,7 +7268,7 @@ index d8d29d145..786ddcee7 100644
      }
  
      @Override
-@@ -2250,6 +2255,14 @@ public final class CraftServer implements Server {
+@@ -2272,6 +2277,14 @@ public final class CraftServer implements Server {
              return com.destroystokyo.paper.PaperConfig.config;
          }
  
@@ -7012,7 +7284,7 @@ index d8d29d145..786ddcee7 100644
          public void restart() {
              org.spigotmc.RestartCommand.restart();
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 299f57ca2..4de6252f0 100644
+index 299f57ca2a..4de6252f07 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 @@ -341,6 +341,14 @@ public class CraftWorld implements World {
@@ -7064,7 +7336,7 @@ index 299f57ca2..4de6252f0 100644
          }, MinecraftServer.getServer());
      }
 diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
-index 26c0ced8c..0f4503940 100644
+index e8f52003f3..27cfaf6acf 100644
 --- a/src/main/java/org/bukkit/craftbukkit/Main.java
 +++ b/src/main/java/org/bukkit/craftbukkit/Main.java
 @@ -138,6 +138,13 @@ public class Main {
@@ -7091,7 +7363,7 @@ index 26c0ced8c..0f4503940 100644
                          //Thread.sleep(TimeUnit.SECONDS.toMillis(20));
                          // Paper End
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index f7d751348..f4d48753a 100644
+index f7d751348c..f4d48753a7 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -502,27 +502,7 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
@@ -7162,7 +7434,7 @@ index f7d751348..f4d48753a 100644
      public boolean teleport(org.bukkit.entity.Entity destination) {
          return teleport(destination.getLocation());
 diff --git a/src/main/java/org/bukkit/craftbukkit/scheduler/CraftAsyncTask.java b/src/main/java/org/bukkit/craftbukkit/scheduler/CraftAsyncTask.java
-index fd32d1450..c38e514b0 100644
+index fd32d1450a..c38e514b00 100644
 --- a/src/main/java/org/bukkit/craftbukkit/scheduler/CraftAsyncTask.java
 +++ b/src/main/java/org/bukkit/craftbukkit/scheduler/CraftAsyncTask.java
 @@ -25,6 +25,10 @@ class CraftAsyncTask extends CraftTask {
@@ -7185,7 +7457,7 @@ index fd32d1450..c38e514b0 100644
  
      LinkedList<BukkitWorker> getWorkers() {
 diff --git a/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboardManager.java b/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboardManager.java
-index 6fa2e271f..3a9491e94 100644
+index 6fa2e271f7..3a9491e949 100644
 --- a/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboardManager.java
 +++ b/src/main/java/org/bukkit/craftbukkit/scoreboard/CraftScoreboardManager.java
 @@ -113,9 +113,18 @@ public final class CraftScoreboardManager implements ScoreboardManager {
@@ -7208,7 +7480,7 @@ index 6fa2e271f..3a9491e94 100644
      }
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/UnsafeList.java b/src/main/java/org/bukkit/craftbukkit/util/UnsafeList.java
-index f72c13bed..50f855b93 100644
+index f72c13beda..50f855b931 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/UnsafeList.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/UnsafeList.java
 @@ -119,6 +119,32 @@ public class UnsafeList<E> extends AbstractList<E> implements List<E>, RandomAcc
@@ -7245,7 +7517,7 @@ index f72c13bed..50f855b93 100644
      public void clear() {
          // Create new array to reset memory usage to initial capacity
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/Versioning.java b/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
-index 674096cab..001b1e519 100644
+index 674096cab1..001b1e5197 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
 @@ -11,7 +11,7 @@ public final class Versioning {
@@ -7258,7 +7530,7 @@ index 674096cab..001b1e519 100644
  
          if (stream != null) {
 diff --git a/src/main/java/org/spigotmc/AsyncCatcher.java b/src/main/java/org/spigotmc/AsyncCatcher.java
-index 9f7d2ef93..c3ac1a46c 100644
+index 9f7d2ef932..c3ac1a46c3 100644
 --- a/src/main/java/org/spigotmc/AsyncCatcher.java
 +++ b/src/main/java/org/spigotmc/AsyncCatcher.java
 @@ -10,7 +10,7 @@ public class AsyncCatcher
@@ -7271,7 +7543,7 @@ index 9f7d2ef93..c3ac1a46c 100644
              throw new IllegalStateException( "Asynchronous " + reason + "!" );
          }
 diff --git a/src/main/java/org/spigotmc/WatchdogThread.java b/src/main/java/org/spigotmc/WatchdogThread.java
-index 513c1041c..4d3109084 100644
+index 513c1041c3..4d31090848 100644
 --- a/src/main/java/org/spigotmc/WatchdogThread.java
 +++ b/src/main/java/org/spigotmc/WatchdogThread.java
 @@ -61,6 +61,84 @@ public class WatchdogThread extends Thread
