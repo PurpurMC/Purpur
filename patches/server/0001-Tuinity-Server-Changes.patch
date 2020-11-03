@@ -2250,20 +2250,9 @@ index 6b655b744d..e811295b4d 100644
      }
  
 diff --git a/src/main/java/net/minecraft/server/BlockBase.java b/src/main/java/net/minecraft/server/BlockBase.java
-index 1f334d6328..0172e2396b 100644
+index 1f334d6328..85f60b56b5 100644
 --- a/src/main/java/net/minecraft/server/BlockBase.java
 +++ b/src/main/java/net/minecraft/server/BlockBase.java
-@@ -182,8 +182,8 @@ public abstract class BlockBase {
-         return VoxelShapes.a();
-     }
- 
--    @Deprecated
--    public int f(IBlockData iblockdata, IBlockAccess iblockaccess, BlockPosition blockposition) {
-+    @Deprecated public final int getOpacity(IBlockData iblockdata, IBlockAccess iblockaccess, BlockPosition blockposition) { return this.f(iblockdata, iblockaccess, blockposition); } // Tuinity - OBFHELPER
-+    @Deprecated public int f(IBlockData iblockdata, IBlockAccess iblockaccess, BlockPosition blockposition) { // Tuinity - OBFHELPER
-         return iblockdata.i(iblockaccess, blockposition) ? iblockaccess.K() : (iblockdata.a(iblockaccess, blockposition) ? 0 : 1);
-     }
- 
 @@ -295,14 +295,14 @@ public abstract class BlockBase {
  
      public abstract static class BlockData extends IBlockDataHolder<Block, IBlockData> {
@@ -2316,13 +2305,11 @@ index 1f334d6328..0172e2396b 100644
          public VoxelShape a(IBlockAccess iblockaccess, BlockPosition blockposition, EnumDirection enumdirection) {
              return this.a != null && this.a.i != null ? this.a.i[enumdirection.ordinal()] : VoxelShapes.a(this.c(iblockaccess, blockposition), enumdirection);
          }
-@@ -384,8 +394,8 @@ public abstract class BlockBase {
-             return this.getBlock().d(this.p(), iblockaccess, blockposition);
+@@ -385,7 +395,7 @@ public abstract class BlockBase {
          }
  
--        public final boolean d() { // Paper
+         public final boolean d() { // Paper
 -            return this.a == null || this.a.c;
-+        public final boolean d() {
 +            return this.shapeExceedsCube; // Tuinity - moved into shape cache init
          }
  
@@ -2743,7 +2730,7 @@ index 3c7b225edb..43cbb77caf 100644
  
          for (java.util.Iterator<Entry<ArraySetSorted<Ticket<?>>>> iterator = this.tickets.long2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 6acb5f05a0..6e65842172 100644
+index 6acb5f05a0..84429f12d0 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -22,6 +22,12 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap; // Paper
@@ -2780,7 +2767,7 @@ index 6acb5f05a0..6e65842172 100644
                      }
                  } catch (Throwable thr) {
                      if (thr instanceof ThreadDeath) {
-@@ -210,6 +216,167 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -210,6 +216,165 @@ public class ChunkProviderServer extends IChunkProvider {
      }
      // Paper end - rewrite ticklistserver
  
@@ -2887,26 +2874,24 @@ index 6acb5f05a0..6e65842172 100644
 +    public final void getChunkAtAsynchronously(int chunkX, int chunkZ, ChunkStatus status, boolean gen, boolean allowSubTicketLevel, java.util.function.Consumer<IChunkAccess> onLoad) {
 +        // try to fire sync
 +        int chunkStatusTicketLevel = 33 + ChunkStatus.getTicketLevelOffset(status);
-+        IChunkAccess immediate = this.getChunkAtImmediately(chunkX, chunkZ);
-+        if (immediate != null) {
-+            if (allowSubTicketLevel || this.playerChunkMap.getUpdatingChunk(MCUtil.getCoordinateKey(chunkX, chunkZ)).getTicketLevel() <= chunkStatusTicketLevel) {
-+                if (immediate.getChunkStatus().isAtLeastStatus(status)) {
++        PlayerChunk playerChunk = this.playerChunkMap.getUpdatingChunk(MCUtil.getCoordinateKey(chunkX, chunkZ));
++        if (playerChunk != null) {
++            ChunkStatus holderStatus = playerChunk.getChunkHolderStatus();
++            IChunkAccess immediate = playerChunk.getAvailableChunkNow();
++            if (immediate != null) {
++                if (allowSubTicketLevel ? immediate.getChunkStatus().isAtLeastStatus(status) : (playerChunk.getTicketLevel() <= chunkStatusTicketLevel && holderStatus != null && holderStatus.isAtLeastStatus(status))) {
 +                    this.chunkLoadAccept(chunkX, chunkZ, immediate, onLoad);
++                    return;
 +                } else {
-+                    if (gen) {
++                    if (gen || (!allowSubTicketLevel && immediate.getChunkStatus().isAtLeastStatus(status))) {
 +                        this.getChunkAtAsynchronously(chunkX, chunkZ, chunkStatusTicketLevel, onLoad);
++                        return;
 +                    } else {
 +                        this.chunkLoadAccept(chunkX, chunkZ, null, onLoad);
++                        return;
 +                    }
 +                }
-+            } else {
-+                if (gen || immediate.getChunkStatus().isAtLeastStatus(status)) {
-+                    this.getChunkAtAsynchronously(chunkX, chunkZ, chunkStatusTicketLevel, onLoad);
-+                } else {
-+                    this.chunkLoadAccept(chunkX, chunkZ, null, onLoad);
-+                }
 +            }
-+            return;
 +        }
 +
 +        // need to fire async
@@ -2916,7 +2901,7 @@ index 6acb5f05a0..6e65842172 100644
 +            return;
 +        }
 +
-+        this.getChunkAtAsynchronously(chunkX, chunkZ, 33 + ChunkStatus.getTicketLevelOffset(ChunkStatus.EMPTY), (IChunkAccess chunk) -> {
++        this.getChunkAtAsynchronously(chunkX, chunkZ, MCUtil.getTicketLevelFor(ChunkStatus.EMPTY), (IChunkAccess chunk) -> {
 +            if (chunk == null) {
 +                throw new IllegalStateException("Chunk cannot be null");
 +            }
@@ -2948,7 +2933,7 @@ index 6acb5f05a0..6e65842172 100644
      public ChunkProviderServer(WorldServer worldserver, Convertable.ConversionSession convertable_conversionsession, DataFixer datafixer, DefinedStructureManager definedstructuremanager, Executor executor, ChunkGenerator chunkgenerator, int i, boolean flag, WorldLoadListener worldloadlistener, Supplier<WorldPersistentData> supplier) {
          this.world = worldserver;
          this.serverThreadQueue = new ChunkProviderServer.a(worldserver);
-@@ -545,6 +712,8 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -545,6 +710,8 @@ public class ChunkProviderServer extends IChunkProvider {
          Arrays.fill(this.cacheChunk, (Object) null);
      }
  
@@ -2957,7 +2942,7 @@ index 6acb5f05a0..6e65842172 100644
      private CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> getChunkFutureMainThread(int i, int j, ChunkStatus chunkstatus, boolean flag) {
          // Paper start - add isUrgent - old sig left in place for dirty nms plugins
          return getChunkFutureMainThread(i, j, chunkstatus, flag, false);
-@@ -563,9 +732,12 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -563,9 +730,12 @@ public class ChunkProviderServer extends IChunkProvider {
              PlayerChunk.State currentChunkState = PlayerChunk.getChunkState(playerchunk.getTicketLevel());
              currentlyUnloading = (oldChunkState.isAtLeast(PlayerChunk.State.BORDER) && !currentChunkState.isAtLeast(PlayerChunk.State.BORDER));
          }
@@ -2970,7 +2955,7 @@ index 6acb5f05a0..6e65842172 100644
              if (isUrgent) this.chunkMapDistance.markUrgent(chunkcoordintpair); // Paper
              if (this.a(playerchunk, l)) {
                  GameProfilerFiller gameprofilerfiller = this.world.getMethodProfiler();
-@@ -576,12 +748,20 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -576,12 +746,20 @@ public class ChunkProviderServer extends IChunkProvider {
                  playerchunk = this.getChunk(k);
                  gameprofilerfiller.exit();
                  if (this.a(playerchunk, l)) {
@@ -2992,7 +2977,7 @@ index 6acb5f05a0..6e65842172 100644
          if (isUrgent) {
              future.thenAccept(either -> this.chunkMapDistance.clearUrgent(chunkcoordintpair));
          }
-@@ -600,8 +780,8 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -600,8 +778,8 @@ public class ChunkProviderServer extends IChunkProvider {
          return !this.a(playerchunk, k);
      }
  
@@ -3003,7 +2988,7 @@ index 6acb5f05a0..6e65842172 100644
          long k = ChunkCoordIntPair.pair(i, j);
          PlayerChunk playerchunk = this.getChunk(k);
  
-@@ -638,6 +818,8 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -638,6 +816,8 @@ public class ChunkProviderServer extends IChunkProvider {
  
      public boolean tickDistanceManager() { // Paper - private -> public
          if (chunkMapDistance.delayDistanceManagerTick) return false; // Paper
@@ -3012,7 +2997,7 @@ index 6acb5f05a0..6e65842172 100644
          boolean flag = this.chunkMapDistance.a(this.playerChunkMap);
          boolean flag1 = this.playerChunkMap.b();
  
-@@ -647,6 +829,7 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -647,6 +827,7 @@ public class ChunkProviderServer extends IChunkProvider {
              this.clearCache();
              return true;
          }
@@ -3020,7 +3005,7 @@ index 6acb5f05a0..6e65842172 100644
      }
  
      public final boolean isInEntityTickingChunk(Entity entity) { return this.a(entity); } // Paper - OBFHELPER
-@@ -735,7 +918,7 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -735,7 +916,7 @@ public class ChunkProviderServer extends IChunkProvider {
          this.world.getMethodProfiler().enter("purge");
          this.world.timings.doChunkMap.startTiming(); // Spigot
          this.chunkMapDistance.purgeTickets();
@@ -3029,7 +3014,7 @@ index 6acb5f05a0..6e65842172 100644
          this.tickDistanceManager();
          this.world.timings.doChunkMap.stopTiming(); // Spigot
          this.world.getMethodProfiler().exitEnter("chunks");
-@@ -745,7 +928,7 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -745,7 +926,7 @@ public class ChunkProviderServer extends IChunkProvider {
          this.world.timings.doChunkUnload.startTiming(); // Spigot
          this.world.getMethodProfiler().exitEnter("unload");
          this.playerChunkMap.unloadChunks(booleansupplier);
@@ -3038,7 +3023,7 @@ index 6acb5f05a0..6e65842172 100644
          this.world.timings.doChunkUnload.stopTiming(); // Spigot
          this.world.getMethodProfiler().exit();
          this.clearCache();
-@@ -822,19 +1005,23 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -822,19 +1003,23 @@ public class ChunkProviderServer extends IChunkProvider {
              //List<PlayerChunk> list = Lists.newArrayList(this.playerChunkMap.f()); // Paper
              //Collections.shuffle(list); // Paper
              // Paper - moved up
@@ -3070,7 +3055,7 @@ index 6acb5f05a0..6e65842172 100644
                          ChunkCoordIntPair chunkcoordintpair = playerchunk.i();
  
                          if (!this.playerChunkMap.isOutsideOfRange(playerchunk, chunkcoordintpair, false)) { // Paper - optimise isOutsideOfRange
-@@ -846,11 +1033,15 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -846,11 +1031,15 @@ public class ChunkProviderServer extends IChunkProvider {
                              this.world.timings.chunkTicks.startTiming(); // Spigot // Paper
                              this.world.a(chunk, k);
                              this.world.timings.chunkTicks.stopTiming(); // Spigot // Paper
@@ -3088,7 +3073,7 @@ index 6acb5f05a0..6e65842172 100644
              this.world.getMethodProfiler().enter("customSpawners");
              if (flag1) {
                  try (co.aikar.timings.Timing ignored = this.world.timings.miscMobSpawning.startTiming()) { // Paper - timings
-@@ -862,7 +1053,25 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -862,7 +1051,25 @@ public class ChunkProviderServer extends IChunkProvider {
              this.world.getMethodProfiler().exit();
          }
  
@@ -3114,7 +3099,7 @@ index 6acb5f05a0..6e65842172 100644
      }
  
      private void a(long i, Consumer<Chunk> consumer) {
-@@ -1002,44 +1211,11 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -1002,44 +1209,11 @@ public class ChunkProviderServer extends IChunkProvider {
              ChunkProviderServer.this.world.getMethodProfiler().c("runTask");
              super.executeTask(runnable);
          }
@@ -3293,7 +3278,7 @@ index 550232cb38..229c3b0f0c 100644
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index 0c952fea30..8ae9bd4325 100644
+index 0c952fea30..47df09f79b 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -136,7 +136,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -3578,7 +3563,7 @@ index 0c952fea30..8ae9bd4325 100644
  
 -    public boolean aZ() {
 +    public final boolean collisionBoxIsHard() { return this.aZ(); } // Tuinity - OBFHELPER
-+    public boolean aZ() { // Tuinity - diff on change, hard colliding entities override this
++    public boolean aZ() {// Tuinity - diff on change, hard colliding entities override this
          return false;
      }
  
