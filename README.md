@@ -27,7 +27,8 @@ Join us on [Discord](https://discord.gg/mtAAnkk)
 
 Downloads can be obtained from Pl3x's [Jenkins CI Server](https://ci.pl3x.net/job/Purpur/).
 
-* [1.16.3](https://ci.pl3x.net/job/Purpur/lastStableBuild/artifact/final/purpurclip.jar) builds 751+
+* [1.16.4](https://ci.pl3x.net/job/Purpur/lastStableBuild/artifact/final/purpurclip.jar) builds 809+
+* [1.16.3](https://ci.pl3x.net/job/Purpur/808/artifact/final/purpurclip-808.jar) builds 751-808
 * [1.16.2](https://ci.pl3x.net/job/Purpur/750/artifact/final/purpurclip-750.jar) builds 711-750
 * [1.16.1](https://ci.pl3x.net/job/Purpur/710/artifact/final/purpurclip-710.jar) builds 608-710
 * [1.15.2](https://ci.pl3x.net/job/Purpur/606/artifact/final/purpurclip-606.jar) builds 398-606
