@@ -56,7 +56,7 @@ Purpur API maven dependency:
 <dependency>
     <groupId>net.pl3x.purpur</groupId>
     <artifactId>purpur-api</artifactId>
-    <version>1.16.3-R0.1-SNAPSHOT</version>
+    <version>1.16.4-R0.1-SNAPSHOT</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -66,6 +66,18 @@ Purpur API maven dependency:
     <url>https://repo.pl3x.net/</url>
 </repository>
 ```
+
+Purpur API gradle dependency:
+```
+maven {
+    name 'purpur'
+    url 'https://repo.pl3x.net/'
+}
+```
+```
+compileOnly 'net.pl3x.purpur:purpur-api:1.16.4-R0.1-SNAPSHOT'
+```
+
 Yes, this also includes all API provided by Paper, Spigot, and Bukkit.
 
 ## Building and setting up
