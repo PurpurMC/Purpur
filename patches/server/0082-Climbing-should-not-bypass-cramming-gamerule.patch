@@ -1,0 +1,190 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sun, 21 Jul 2019 18:06:20 -0500
+Subject: [PATCH] Climbing should not bypass cramming gamerule
+
+
+diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
+index 4763dca41..6a9318318 100644
+--- a/src/main/java/net/minecraft/server/Entity.java
++++ b/src/main/java/net/minecraft/server/Entity.java
+@@ -1728,6 +1728,12 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+     }
+ 
+     public boolean isCollidable() {
++        // Purpur start
++        return isCollidable(false);
++    }
++
++    public boolean isCollidable(boolean ignoreClimbing) {
++        // Purpur end
+         return false;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityArmorStand.java b/src/main/java/net/minecraft/server/EntityArmorStand.java
+index 5cde0f0d3..0b1985901 100644
+--- a/src/main/java/net/minecraft/server/EntityArmorStand.java
++++ b/src/main/java/net/minecraft/server/EntityArmorStand.java
+@@ -320,7 +320,7 @@ public class EntityArmorStand extends EntityLiving {
+     }
+ 
+     @Override
+-    public boolean isCollidable() {
++    public boolean isCollidable(boolean ignoreClimbing) { // Purpur
+         return false;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityBat.java b/src/main/java/net/minecraft/server/EntityBat.java
+index 38ce35631..85371542e 100644
+--- a/src/main/java/net/minecraft/server/EntityBat.java
++++ b/src/main/java/net/minecraft/server/EntityBat.java
+@@ -50,7 +50,7 @@ public class EntityBat extends EntityAmbient {
+     }
+ 
+     @Override
+-    public boolean isCollidable() {
++    public boolean isCollidable(boolean ignoreClimbing) { // Purpur
+         return false;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityBoat.java b/src/main/java/net/minecraft/server/EntityBoat.java
+index 78428539f..939a5fb88 100644
+--- a/src/main/java/net/minecraft/server/EntityBoat.java
++++ b/src/main/java/net/minecraft/server/EntityBoat.java
+@@ -106,7 +106,7 @@ public class EntityBoat extends Entity {
+     }
+ 
+     @Override
+-    public boolean isCollidable() {
++    public boolean isCollidable(boolean ignoreClimbing) { // Purpur
+         return true;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityHorseAbstract.java b/src/main/java/net/minecraft/server/EntityHorseAbstract.java
+index 345e1df09..573d4a5c7 100644
+--- a/src/main/java/net/minecraft/server/EntityHorseAbstract.java
++++ b/src/main/java/net/minecraft/server/EntityHorseAbstract.java
+@@ -165,7 +165,7 @@ public abstract class EntityHorseAbstract extends EntityAnimal implements IInven
+     }
+ 
+     @Override
+-    public boolean isCollidable() {
++    public boolean isCollidable(boolean ignoreClimbing) { // Purpur
+         return !this.isVehicle();
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
+index b30abd4c9..67543e394 100644
+--- a/src/main/java/net/minecraft/server/EntityLiving.java
++++ b/src/main/java/net/minecraft/server/EntityLiving.java
+@@ -2866,7 +2866,7 @@ public abstract class EntityLiving extends Entity {
+         // Paper - end don't run getEntities if we're not going to use its result
+         // Tuinity start - reduce memory allocation from collideNearby
+         List<Entity> list = com.tuinity.tuinity.util.CachedLists.getTempGetEntitiesList();
+-        this.world.getEntities(this, this.getBoundingBox(), IEntitySelector.a(this), list);
++        this.world.getEntities(this, this.getBoundingBox(), IEntitySelector.pushable(this, world.purpurConfig.fixClimbingBypassingCrammingRule), list);
+         try {
+         // Tuinity end - reduce memory allocation from collideNearby
+ 
+@@ -3011,7 +3011,14 @@ public abstract class EntityLiving extends Entity {
+ 
+     @Override
+     public boolean isCollidable() {
+-        return this.isAlive() && !this.isSpectator() && !this.isClimbing() && this.collides; // CraftBukkit
++        // Purpur start
++        return this.isCollidable(world.purpurConfig.fixClimbingBypassingCrammingRule);
++    }
++
++    @Override
++    public boolean isCollidable(boolean ignoreClimbing) {
++        return this.isAlive() && !this.isSpectator() && (ignoreClimbing || !this.isClimbing()) && this.collides; // CraftBukkit 
++        // Purpur end
+     }
+ 
+     // CraftBukkit start - collidable API
+diff --git a/src/main/java/net/minecraft/server/EntityMinecartAbstract.java b/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
+index 28808712e..b698ca7e4 100644
+--- a/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
++++ b/src/main/java/net/minecraft/server/EntityMinecartAbstract.java
+@@ -107,7 +107,7 @@ public abstract class EntityMinecartAbstract extends Entity {
+     }
+ 
+     @Override
+-    public boolean isCollidable() {
++    public boolean isCollidable(boolean ignoreClimbing) { // Purpur
+         return true;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/server/EntityParrot.java b/src/main/java/net/minecraft/server/EntityParrot.java
+index 1c682a62b..f7b92078e 100644
+--- a/src/main/java/net/minecraft/server/EntityParrot.java
++++ b/src/main/java/net/minecraft/server/EntityParrot.java
+@@ -314,8 +314,8 @@ public class EntityParrot extends EntityPerchable implements EntityBird {
+     }
+ 
+     @Override
+-    public boolean isCollidable() {
+-        return super.isCollidable(); // CraftBukkit - collidable API
++    public boolean isCollidable(boolean ignoreClimbing) { // Purpur
++        return super.isCollidable(ignoreClimbing); // CraftBukkit - collidable API // Purpur
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
+index 7902cc7f1..a761bfea4 100644
+--- a/src/main/java/net/minecraft/server/EntityPlayer.java
++++ b/src/main/java/net/minecraft/server/EntityPlayer.java
+@@ -1776,8 +1776,8 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+     }
+ 
+     @Override
+-    public boolean isCollidable() {
+-        return !isAfk() && super.isCollidable();
++    public boolean isCollidable(boolean ignoreClimbing) { // Purpur
++        return !isAfk() && super.isCollidable(ignoreClimbing);
+     }
+     // Purpur end
+ 
+diff --git a/src/main/java/net/minecraft/server/IEntitySelector.java b/src/main/java/net/minecraft/server/IEntitySelector.java
+index 9f9d9b2de..5a05f2abd 100644
+--- a/src/main/java/net/minecraft/server/IEntitySelector.java
++++ b/src/main/java/net/minecraft/server/IEntitySelector.java
+@@ -45,11 +45,17 @@ public final class IEntitySelector {
+     }
+ 
+     public static Predicate<Entity> a(Entity entity) {
++        // Purpur start
++        return pushable(entity, false);
++    }
++
++    public static Predicate<Entity> pushable(Entity entity, boolean ignoreClimbing) {
++        // Purpur end
+         ScoreboardTeamBase scoreboardteambase = entity.getScoreboardTeam();
+         ScoreboardTeamBase.EnumTeamPush scoreboardteambase_enumteampush = scoreboardteambase == null ? ScoreboardTeamBase.EnumTeamPush.ALWAYS : scoreboardteambase.getCollisionRule();
+ 
+         return (Predicate) (scoreboardteambase_enumteampush == ScoreboardTeamBase.EnumTeamPush.NEVER ? Predicates.alwaysFalse() : IEntitySelector.g.and((entity1) -> {
+-            if (!entity1.canCollideWith(entity) || !entity.canCollideWith(entity1)) { // CraftBukkit - collidable API
++            if (!entity1.isCollidable(ignoreClimbing) || !entity1.canCollideWith(entity) || !entity.canCollideWith(entity1)) { // CraftBukkit - collidable API
+                 return false;
+             } else if (entity.world.isClientSide && (!(entity1 instanceof EntityHuman) || !((EntityHuman) entity1).ez())) {
+                 return false;
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index d795b8fce..521b4d4e1 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -116,6 +116,7 @@ public class PurpurWorldConfig {
+     public boolean boatEjectPlayersOnLand = false;
+     public boolean disableDropsOnCrammingDeath = false;
+     public boolean entitiesPickUpLootBypassMobGriefing = false;
++    public boolean fixClimbingBypassingCrammingRule = false;
+     public boolean milkCuresBadOmen = true;
+     public boolean saveProjectilesToDisk = true;
+     public double tridentLoyaltyVoidReturnHeight = 0.0D;
+@@ -125,6 +126,7 @@ public class PurpurWorldConfig {
+         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
+         disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);
+         entitiesPickUpLootBypassMobGriefing = getBoolean("gameplay-mechanics.entities-pick-up-loot-bypass-mob-griefing", entitiesPickUpLootBypassMobGriefing);
++        fixClimbingBypassingCrammingRule = getBoolean("gameplay-mechanics.fix-climbing-bypassing-cramming-rule", fixClimbingBypassingCrammingRule);
+         milkCuresBadOmen = getBoolean("gameplay-mechanics.milk-cures-bad-omen", milkCuresBadOmen);
+         saveProjectilesToDisk = getBoolean("gameplay-mechanics.save-projectiles-to-disk", saveProjectilesToDisk);
+         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);

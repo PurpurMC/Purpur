@@ -1,0 +1,142 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: jmp <jasonpenilla2@me.com>
+Date: Sat, 22 Aug 2020 20:47:11 -0700
+Subject: [PATCH] Allow toggling special MobSpawners per world
+
+In vanilla, these are all hardcoded on for world type 0 (overworld) and hardcoded off for every other world type. Default config behaviour matches this.
+
+diff --git a/src/main/java/net/minecraft/server/MobSpawnerTrader.java b/src/main/java/net/minecraft/server/MobSpawnerTrader.java
+index 502cb0ea4..f88c7b548 100644
+--- a/src/main/java/net/minecraft/server/MobSpawnerTrader.java
++++ b/src/main/java/net/minecraft/server/MobSpawnerTrader.java
+@@ -122,7 +122,17 @@ public class MobSpawnerTrader implements MobSpawner {
+             int k = blockposition.getX() + this.a.nextInt(i * 2) - i;
+             int l = blockposition.getZ() + this.a.nextInt(i * 2) - i;
+             int i1 = iworldreader.a(HeightMap.Type.WORLD_SURFACE, k, l);
+-            BlockPosition blockposition2 = new BlockPosition(k, i1, l);
++            // Purpur start - allow traders to spawn below nether roof
++            BlockPosition.MutableBlockPosition blockposition2 = new BlockPosition.MutableBlockPosition(k, i1, l);
++            if (iworldreader.getDimensionManager().hasCeiling()) {
++                do {
++                    blockposition2.c(EnumDirection.DOWN);
++                } while (!iworldreader.getType(blockposition2).isAir());
++                do {
++                    blockposition2.c(EnumDirection.DOWN);
++                } while (iworldreader.getType(blockposition2).isAir() && blockposition2.getY() > 0);
++            }
++            // Purpur end
+ 
+             if (SpawnerCreature.a(EntityPositionTypes.Surface.ON_GROUND, iworldreader, blockposition2, EntityTypes.WANDERING_TRADER)) {
+                 blockposition1 = blockposition2;
+diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
+index 64824e708..20ebdf727 100644
+--- a/src/main/java/net/minecraft/server/World.java
++++ b/src/main/java/net/minecraft/server/World.java
+@@ -156,7 +156,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+         this.spigotConfig = new org.spigotmc.SpigotWorldConfig(((WorldDataServer) worlddatamutable).getName()); // Spigot
+         this.paperConfig = new com.destroystokyo.paper.PaperWorldConfig((((WorldDataServer)worlddatamutable).getName()), this.spigotConfig); // Paper
+         this.tuinityConfig = new com.tuinity.tuinity.config.TuinityConfig.WorldConfig(((WorldDataServer)worlddatamutable).getName()); // Tuinity - Server Config
+-        this.purpurConfig = new net.pl3x.purpur.PurpurWorldConfig((((WorldDataServer)worlddatamutable).getName())); // Purpur
++        this.purpurConfig = new net.pl3x.purpur.PurpurWorldConfig(((WorldDataServer) worlddatamutable).getName(), env); // Purpur
+         this.chunkPacketBlockController = this.paperConfig.antiXray ? new ChunkPacketBlockControllerAntiXray(this, executor) : ChunkPacketBlockController.NO_OPERATION_INSTANCE; // Paper - Anti-Xray
+         this.generator = gen;
+         this.world = new CraftWorld((WorldServer) this, gen, env);
+diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
+index 51a25349c..32d085474 100644
+--- a/src/main/java/net/minecraft/server/WorldServer.java
++++ b/src/main/java/net/minecraft/server/WorldServer.java
+@@ -330,7 +330,24 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+         this.L = new ObjectLinkedOpenHashSet();
+         this.Q = flag1;
+         this.server = minecraftserver;
+-        this.mobSpawners = list;
++        // Purpur start - enable/disable MobSpawners per world
++        this.mobSpawners = new java.util.ArrayList<>();
++        if (purpurConfig.phantomSpawning) {
++            mobSpawners.add(new MobSpawnerPhantom());
++        }
++        if (purpurConfig.patrolSpawning) {
++            mobSpawners.add(new MobSpawnerPatrol());
++        }
++        if (purpurConfig.catSpawning) {
++            mobSpawners.add(new MobSpawnerCat());
++        }
++        if (purpurConfig.villageSiegeSpawning) {
++            mobSpawners.add(new VillageSiege());
++        }
++        if (purpurConfig.villagerTraderSpawning) {
++            mobSpawners.add(new MobSpawnerTrader(iworlddataserver));
++        }
++        // Purpur end
+         // CraftBukkit start
+         this.worldDataServer = (WorldDataServer) iworlddataserver;
+         worldDataServer.world = this;
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 0d4d9ce34..3c91ab0a5 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -7,6 +7,8 @@ import net.minecraft.server.IRegistry;
+ import net.minecraft.server.Item;
+ import net.minecraft.server.Items;
+ import net.minecraft.server.MinecraftKey;
++import org.apache.commons.lang.BooleanUtils;
++import org.bukkit.World.Environment;
+ import org.bukkit.configuration.ConfigurationSection;
+ 
+ import java.util.ArrayList;
+@@ -15,6 +17,7 @@ import java.util.HashSet;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Set;
++import java.util.function.Predicate;
+ import java.util.logging.Level;
+ 
+ import static net.pl3x.purpur.PurpurConfig.log;
+@@ -22,9 +25,11 @@ import static net.pl3x.purpur.PurpurConfig.log;
+ public class PurpurWorldConfig {
+ 
+     private final String worldName;
++    private final Environment environment;
+ 
+-    public PurpurWorldConfig(String worldName) {
++    public PurpurWorldConfig(String worldName, Environment environment) {
+         this.worldName = worldName;
++        this.environment = environment;
+         init();
+     }
+ 
+@@ -52,6 +57,12 @@ public class PurpurWorldConfig {
+         return PurpurConfig.config.getBoolean("world-settings." + worldName + "." + path, PurpurConfig.config.getBoolean("world-settings.default." + path));
+     }
+ 
++    private boolean getBoolean(String path, Predicate<Boolean> predicate) {
++        String val = getString(path, "default").toLowerCase();
++        Boolean bool = BooleanUtils.toBooleanObject(val, "true", "false", "default");
++        return predicate.test(bool);
++    }
++
+     private double getDouble(String path, double def) {
+         PurpurConfig.config.addDefault("world-settings.default." + path, def);
+         return PurpurConfig.config.getDouble("world-settings." + worldName + "." + path, PurpurConfig.config.getDouble("world-settings.default." + path));
+@@ -159,6 +170,21 @@ public class PurpurWorldConfig {
+         voidDamageHeight = getDouble("gameplay-mechanics.void-damage-height", voidDamageHeight);
+     }
+ 
++    public boolean catSpawning;
++    public boolean patrolSpawning;
++    public boolean phantomSpawning;
++    public boolean villagerTraderSpawning;
++    public boolean villageSiegeSpawning;
++    private void mobSpawnerSettings() {
++        // values of "default" or null will default to true only if the world environment is normal (aka overworld)
++        Predicate<Boolean> predicate = (bool) -> (bool != null && bool) || (bool == null && environment == Environment.NORMAL);
++        catSpawning = getBoolean("gameplay-mechanics.mob-spawning.village-cats", predicate);
++        patrolSpawning = getBoolean("gameplay-mechanics.mob-spawning.raid-patrols", predicate);
++        phantomSpawning = getBoolean("gameplay-mechanics.mob-spawning.phantoms", predicate);
++        villagerTraderSpawning = getBoolean("gameplay-mechanics.mob-spawning.wandering-traders", predicate);
++        villageSiegeSpawning = getBoolean("gameplay-mechanics.mob-spawning.village-sieges", predicate);
++    }
++
+     public int elytraDamagePerSecond = 1;
+     public double elytraDamageMultiplyBySpeed = 0;
+     public boolean elytraIgnoreUnbreaking = false;
