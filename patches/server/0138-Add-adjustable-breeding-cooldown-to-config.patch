@@ -1,0 +1,127 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: montlikadani <montlikada@gmail.com>
+Date: Fri, 13 Nov 2020 17:52:40 +0100
+Subject: [PATCH] Add adjustable breeding cooldown to config
+
+
+diff --git a/src/main/java/net/minecraft/server/EntityAnimal.java b/src/main/java/net/minecraft/server/EntityAnimal.java
+index bba343542..d9f9e2235 100644
+--- a/src/main/java/net/minecraft/server/EntityAnimal.java
++++ b/src/main/java/net/minecraft/server/EntityAnimal.java
+@@ -120,7 +120,7 @@ public abstract class EntityAnimal extends EntityAgeable {
+         if (this.k(itemstack)) {
+             int i = this.getAge();
+ 
+-            if (!this.world.isClientSide && i == 0 && this.eP()) {
++            if (!this.world.isClientSide && i == 0 && this.eP() && (this.world.purpurConfig.animalBreedingCooldownSeconds <= 0 || !this.world.hasBreedingCooldown(entityhuman.getUniqueID(), this.getClass()))) { // Purpur
+                 this.a(entityhuman, itemstack);
+                 this.g(entityhuman);
+                 return EnumInteractionResult.SUCCESS;
+@@ -212,6 +212,14 @@ public abstract class EntityAnimal extends EntityAgeable {
+             if (entityplayer == null && entityanimal.getBreedCause() != null) {
+                 entityplayer = entityanimal.getBreedCause();
+             }
++            // Purpur start
++            if (entityplayer != null && worldserver.purpurConfig.animalBreedingCooldownSeconds > 0) {
++                if (worldserver.hasBreedingCooldown(entityplayer.getUniqueID(), this.getClass())) {
++                    return;
++                }
++                worldserver.addBreedingCooldown(entityplayer.getUniqueID(), this.getClass());
++            }
++            // Purpur end
+             // CraftBukkit start - call EntityBreedEvent
+             int experience = this.getRandom().nextInt(7) + 1;
+             org.bukkit.event.entity.EntityBreedEvent entityBreedEvent = org.bukkit.craftbukkit.event.CraftEventFactory.callEntityBreedEvent(entityageable, this, entityanimal, entityplayer, this.breedItem, experience);
+diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
+index ab97d076c..b4ba9b56a 100644
+--- a/src/main/java/net/minecraft/server/World.java
++++ b/src/main/java/net/minecraft/server/World.java
+@@ -104,6 +104,48 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+     private int tileTickPosition;
+     public final Map<Explosion.CacheKey, Float> explosionDensityCache = new HashMap<>(); // Paper - Optimize explosions
+     public java.util.ArrayDeque<BlockRedstoneTorch.RedstoneUpdateInfo> redstoneUpdateInfos; // Paper - Move from Map in BlockRedstoneTorch to here
++    // Purpur start
++    private com.google.common.cache.Cache<BreedingCooldownPair, Object> playerBreedingCooldowns;
++
++    private com.google.common.cache.Cache<BreedingCooldownPair, Object> getNewBreedingCooldownCache() {
++        return com.google.common.cache.CacheBuilder.newBuilder().expireAfterWrite(this.purpurConfig.animalBreedingCooldownSeconds, java.util.concurrent.TimeUnit.SECONDS).build();
++    }
++
++    public void resetBreedingCooldowns() {
++        this.playerBreedingCooldowns = this.getNewBreedingCooldownCache();
++    }
++
++    boolean hasBreedingCooldown(java.util.UUID player, Class<? extends EntityAnimal> animalType) {
++        return this.playerBreedingCooldowns.getIfPresent(new BreedingCooldownPair(player, animalType)) != null;
++    }
++
++    void addBreedingCooldown(java.util.UUID player, Class<? extends EntityAnimal> animalType) {
++        this.playerBreedingCooldowns.put(new BreedingCooldownPair(player, animalType), new Object());
++    }
++
++    private static final class BreedingCooldownPair {
++        private final java.util.UUID playerUUID;
++        private final Class<? extends EntityAnimal> animalType;
++
++        public BreedingCooldownPair(java.util.UUID playerUUID, Class<? extends EntityAnimal> animalType) {
++            this.playerUUID = playerUUID;
++            this.animalType = animalType;
++        }
++
++        @Override
++        public boolean equals(Object o) {
++            if (this == o) return true;
++            if (o == null || getClass() != o.getClass()) return false;
++            BreedingCooldownPair that = (BreedingCooldownPair) o;
++            return playerUUID.equals(that.playerUUID) && animalType.equals(that.animalType);
++        }
++
++        @Override
++        public int hashCode() {
++            return java.util.Objects.hash(playerUUID, animalType);
++        }
++    }
++    // Purpur end
+ 
+     public CraftWorld getWorld() {
+         return this.world;
+@@ -157,6 +199,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+         this.paperConfig = new com.destroystokyo.paper.PaperWorldConfig(((WorldDataServer) worlddatamutable).getName(), this.spigotConfig); // Paper
+         this.tuinityConfig = new com.tuinity.tuinity.config.TuinityConfig.WorldConfig(((WorldDataServer)worlddatamutable).getName()); // Tuinity - Server Config
+         this.purpurConfig = new net.pl3x.purpur.PurpurWorldConfig(((WorldDataServer) worlddatamutable).getName(), env); // Purpur
++        this.playerBreedingCooldowns = this.getNewBreedingCooldownCache(); // Purpur
+         this.chunkPacketBlockController = this.paperConfig.antiXray ? new ChunkPacketBlockControllerAntiXray(this, executor) : ChunkPacketBlockController.NO_OPERATION_INSTANCE; // Paper - Anti-Xray
+         this.generator = gen;
+         this.world = new CraftWorld((WorldServer) this, gen, env);
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 1ef3a2c5e..43fb54b3e 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -204,6 +204,7 @@ public class PurpurWorldConfig {
+     public double tridentLoyaltyVoidReturnHeight = 0.0D;
+     public double voidDamageHeight = -64.0D;
+     public int raidCooldownSeconds = 0;
++    public int animalBreedingCooldownSeconds = 0;
+     private void miscGameplayMechanicsSettings() {
+         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
+         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
+@@ -217,6 +218,7 @@ public class PurpurWorldConfig {
+         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
+         voidDamageHeight = getDouble("gameplay-mechanics.void-damage-height", voidDamageHeight);
+         raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
++        animalBreedingCooldownSeconds = getInt("gameplay-mechanics.animal-breeding-cooldown-seconds", animalBreedingCooldownSeconds);
+     }
+ 
+     public boolean catSpawning;
+diff --git a/src/main/java/net/pl3x/purpur/command/PurpurCommand.java b/src/main/java/net/pl3x/purpur/command/PurpurCommand.java
+index 4904be939..860d07cd6 100644
+--- a/src/main/java/net/pl3x/purpur/command/PurpurCommand.java
++++ b/src/main/java/net/pl3x/purpur/command/PurpurCommand.java
+@@ -49,6 +49,7 @@ public class PurpurCommand extends Command {
+             PurpurConfig.init((File) console.options.valueOf("purpur-settings"));
+             for (WorldServer world : console.getWorlds()) {
+                 world.purpurConfig.init();
++                world.resetBreedingCooldowns();
+             }
+             console.server.reloadCount++;
+ 

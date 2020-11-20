@@ -1,0 +1,93 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Sat, 10 Oct 2020 14:29:55 -0500
+Subject: [PATCH] Configurable daylight cycle
+
+
+diff --git a/src/main/java/net/minecraft/server/PacketPlayOutUpdateTime.java b/src/main/java/net/minecraft/server/PacketPlayOutUpdateTime.java
+index 88c3d7efa..fed1ce950 100644
+--- a/src/main/java/net/minecraft/server/PacketPlayOutUpdateTime.java
++++ b/src/main/java/net/minecraft/server/PacketPlayOutUpdateTime.java
+@@ -5,7 +5,7 @@ import java.io.IOException;
+ public class PacketPlayOutUpdateTime implements Packet<PacketListenerPlayOut> {
+ 
+     private long a;
+-    private long b;
++    private long b; public void setPlayerTime(long time) { this.b = time; } // Purpur
+ 
+     public PacketPlayOutUpdateTime() {}
+ 
+diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
+index 9327911df..8733dc21b 100644
+--- a/src/main/java/net/minecraft/server/WorldServer.java
++++ b/src/main/java/net/minecraft/server/WorldServer.java
+@@ -94,6 +94,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+     private final EnderDragonBattle dragonBattle;
+     private final StructureManager structureManager;
+     private final boolean Q;
++    private double fakeTime; // Purpur
+ 
+ 
+     // CraftBukkit start
+@@ -379,6 +380,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+         this.getServer().addWorld(this.getWorld()); // CraftBukkit
+ 
+         this.asyncChunkTaskManager = new com.destroystokyo.paper.io.chunk.ChunkTaskManager(this); // Paper
++        this.fakeTime = this.worldDataServer.getDayTime(); // Purpur
+     }
+ 
+     // Tuinity start - optimise collision
+@@ -1015,7 +1017,21 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+             this.nextTickListBlock.nextTick(); // Paper
+             this.nextTickListFluid.nextTick(); // Paper
+             this.worldDataServer.u().a(this.server, i);
+-            if (this.worldData.q().getBoolean(GameRules.DO_DAYLIGHT_CYCLE)) {
++            // Purpur start
++            WorldServer world = this.worldDataServer.world;
++            if (world.getGameRules().getBoolean(GameRules.DO_DAYLIGHT_CYCLE)) {
++                double incrementTimeBy = 12000.0D / (double) (world.isDay() ? world.purpurConfig.daytimeTicks : world.purpurConfig.nighttimeTicks);
++                if (incrementTimeBy != 1.0D) {
++                    this.fakeTime += incrementTimeBy;
++                    this.setDayTime(this.fakeTime);
++                    PacketPlayOutUpdateTime packet = new PacketPlayOutUpdateTime(world.getTime(), world.getDayTime(), true);
++                    for (EntityHuman entityhuman : world.players) {
++                        EntityPlayer player = (EntityPlayer) entityhuman;
++                        packet.setPlayerTime(player.getPlayerTime());
++                        player.playerConnection.sendPacket(packet);
++                    }
++                } else
++                // Purpur end
+                 this.setDayTime(this.worldData.getDayTime() + 1L);
+             }
+ 
+@@ -1024,6 +1040,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+ 
+     public void setDayTime(long i) {
+         this.worldDataServer.setDayTime(i);
++        // Purpur start
++        this.fakeTime = i;
++    }
++    public void setDayTime(double i) {
++        this.worldDataServer.setDayTime((long) i);
++        // Purpur end
+     }
+ 
+     public void doMobSpawning(boolean flag, boolean flag1) {
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 8e97eb92d..013f1cfb4 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -116,6 +116,13 @@ public class PurpurWorldConfig {
+         }
+     }
+ 
++    public int daytimeTicks = 12000;
++    public int nighttimeTicks = 12000;
++    private void daytimeCycleSettings() {
++        daytimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.daytime", daytimeTicks);
++        nighttimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.nighttime", nighttimeTicks);
++    }
++
+     public int entityLifeSpan = 0;
+     private void entitySettings() {
+         entityLifeSpan = getInt("gameplay-mechanics.entity-lifespan", entityLifeSpan);
