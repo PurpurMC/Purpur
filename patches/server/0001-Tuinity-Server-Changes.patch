@@ -1611,29 +1611,43 @@ index 000000000..e7df9dc4b
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/SWMRNibbleArray.java b/src/main/java/com/tuinity/tuinity/chunk/light/SWMRNibbleArray.java
 new file mode 100644
-index 000000000..6a63699ae
+index 000000000..6cae16cc3
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/SWMRNibbleArray.java
-@@ -0,0 +1,189 @@
+@@ -0,0 +1,196 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import net.minecraft.server.NibbleArray;
-+
++import java.util.ArrayDeque;
 +import java.util.Arrays;
 +
 +// SWMR -> Single Writer Multi Reader Nibble Array
 +public final class SWMRNibbleArray {
 +
-+    public static final int SIZE = 16 * 16 * 16 / (8/4); // blocks / bytes per block
-+    protected static final byte[] FULL_LIT = new byte[SIZE];
++    public static final int ARRAY_SIZE = 16 * 16 * 16 / (8/4); // blocks / bytes per block
++    protected static final byte[] FULL_LIT = new byte[ARRAY_SIZE];
 +    static {
 +        Arrays.fill(FULL_LIT, (byte)-1);
 +    }
++    // this allows us to maintain only 1 byte array when we're not updating
++    static final ThreadLocal<ArrayDeque<byte[]>> WORKING_BYTES_POOL = ThreadLocal.withInitial(ArrayDeque::new);
 +
-+    protected byte[] updatingBytes;
++    private static byte[] allocateBytes() {
++        final byte[] inPool = WORKING_BYTES_POOL.get().pollFirst();
++        if (inPool != null) {
++            return inPool;
++        }
++
++        return new byte[ARRAY_SIZE];
++    }
++
++    private static void freeBytes(final byte[] bytes) {
++        WORKING_BYTES_POOL.get().addFirst(bytes);
++    }
++
++    protected byte[] workingBytes;
 +    protected byte[] visibleBytes;
 +    protected final int defaultNullValue;
-+    private boolean dirty;
 +    private boolean isNullNibble;
 +
 +    public SWMRNibbleArray(final boolean isNullNibble, final int defaultNullValue) {
@@ -1650,16 +1664,96 @@ index 000000000..6a63699ae
 +    }
 +
 +    protected SWMRNibbleArray(final byte[] bytes, final int defaultNullValue) {
-+        if (bytes != null && bytes.length != SIZE) {
++        if (bytes != null && bytes.length != ARRAY_SIZE) {
 +            throw new IllegalArgumentException();
 +        }
 +        this.defaultNullValue = defaultNullValue;
-+        this.updatingBytes = bytes;
 +        this.visibleBytes = bytes != null ? bytes.clone() : null;
 +    }
 +
 +    public boolean isDirty() {
-+        return this.dirty;
++        return this.workingBytes != null;
++    }
++
++    public boolean isNullNibbleUpdating() {
++        return this.workingBytes == null && this.isNullNibble;
++    }
++
++    public boolean isNullNibbleVisible() {
++        synchronized (this) {
++            return this.isNullNibble;
++        }
++    }
++
++    public void markNonNull() {
++        synchronized (this) {
++            this.isNullNibble = false;
++        }
++    }
++
++    public boolean isInitialisedUpdating() {
++        return this.workingBytes != null || this.visibleBytes != null;
++    }
++
++    public boolean isInitialisedVisible() {
++        synchronized (this) {
++            return this.visibleBytes != null;
++        }
++    }
++
++    public void initialiseWorking() {
++        if (this.workingBytes != null) {
++            return;
++        }
++        final byte[] working = allocateBytes();
++        this.copyIntoImpl(working, 0);
++        this.workingBytes = working;
++    }
++
++    public void copyFrom(final byte[] src, final int off) {
++        if (this.workingBytes == null) {
++            this.workingBytes = allocateBytes();
++        }
++        System.arraycopy(src, off, this.workingBytes, 0, ARRAY_SIZE);
++    }
++
++    public boolean updateVisible() {
++        if (this.workingBytes == null) {
++            return false;
++
++        }
++        final byte[] oldVisible = this.visibleBytes;
++
++        synchronized (this) {
++            this.isNullNibble = false;
++
++            this.visibleBytes = this.workingBytes;
++            this.workingBytes = null;
++        }
++
++        if (oldVisible != null) {
++            freeBytes(oldVisible);
++        }
++
++        return true;
++    }
++
++    public void copyInto(final byte[] bytes, final int off) {
++        synchronized (this) {
++            this.copyIntoImpl(bytes, off);
++        }
++    }
++
++    protected void copyIntoImpl(final byte[] bytes, final int off) {
++        if (this.visibleBytes != null) {
++            System.arraycopy(this.visibleBytes, 0, bytes, off, ARRAY_SIZE);
++        } else {
++            if (this.isNullNibble && this.defaultNullValue != 0) {
++                Arrays.fill(bytes, off, off + ARRAY_SIZE, (byte)(this.defaultNullValue | (this.defaultNullValue << 4)));
++            } else {
++                Arrays.fill(bytes, off, off + ARRAY_SIZE, (byte)0);
++            }
++        }
 +    }
 +
 +    public NibbleArray asNibble() {
@@ -1668,148 +1762,61 @@ index 000000000..6a63699ae
 +        }
 +    }
 +
-+    public boolean isInitialisedUpdating() {
-+        return this.updatingBytes != null;
++    public int getUpdating(final int x, final int y, final int z) {
++        return this.getUpdating((x & 15) | ((z & 15) << 4) | ((y & 15) << 8));
 +    }
 +
-+    public boolean isInitialised() {
-+        synchronized (this) {
-+            return this.visibleBytes != null;
++    public int getUpdating(final int index) {
++        // indices range from 0 -> 4096
++        byte[] bytes = this.workingBytes == null ? this.visibleBytes : this.workingBytes;
++        if (bytes == null) {
++            return this.isNullNibble ? this.defaultNullValue : 0;
 +        }
++        final byte value = bytes[index >>> 1];
++
++        // if we are an even index, we want lower 4 bits
++        // if we are an odd index, we want upper 4 bits
++        return ((value >>> ((index & 1) << 2)) & 0xF);
 +    }
 +
-+    public boolean isNullNibble() {
-+        synchronized (this) {
-+            return this.isNullNibble;
-+        }
-+    }
-+
-+    public void markNonNull() {
-+        this.isNullNibble = false;
-+    }
-+
-+    public void zero() {
-+        if (this.updatingBytes == null) {
-+            this.updatingBytes = new byte[SIZE];
-+        } else {
-+            Arrays.fill(this.updatingBytes, (byte)0);
-+        }
-+        this.dirty = true;
-+    }
-+
-+    public void initialise() {
-+        if (this.updatingBytes != null) {
-+            return;
-+        }
-+        if (this.isNullNibble && this.defaultNullValue != 0) {
-+            if (this.defaultNullValue == 15) {
-+                this.updatingBytes = FULL_LIT.clone();
-+            } else {
-+                this.updatingBytes = new byte[SIZE];
-+                Arrays.fill(this.updatingBytes, (byte)(this.defaultNullValue | (this.defaultNullValue << 4)));
-+            }
-+            this.dirty = true;
-+        } else {
-+            this.zero();
-+        }
-+    }
-+
-+    public void copyFrom(final byte[] src) {
-+        if (src.length != SIZE) {
-+            throw new IllegalStateException("Arg length should be " + SIZE + ", not " + src.length);
-+        }
-+        if (this.updatingBytes == null) {
-+            this.updatingBytes = src.clone();
-+        } else {
-+            System.arraycopy(src, 0, this.updatingBytes, 0, SIZE);
-+        }
-+        this.dirty = true;
-+    }
-+
-+    public boolean updateVisible() {
-+        if (!this.dirty) {
-+            return false;
-+        }
-+        this.dirty = false;
-+        synchronized (this) {
-+            this.isNullNibble = false;
-+            if (this.visibleBytes == null) {
-+                this.visibleBytes = this.updatingBytes.clone();
-+            } else {
-+                System.arraycopy(this.updatingBytes, 0, this.visibleBytes, 0, SIZE);
-+            }
-+        }
-+        return true;
-+    }
-+
-+    public final int getVisible(final int x, final int y, final int z) {
++    public int getVisible(final int x, final int y, final int z) {
 +        return this.getVisible((x & 15) | ((z & 15) << 4) | ((y & 15) << 8));
 +    }
 +
-+    public synchronized final int getVisible(final int index) {
-+        // indices range from 0 -> 4096
-+        if (this.visibleBytes == null) {
-+            return this.isNullNibble ? this.defaultNullValue : 0;
-+        }
-+        final byte value = this.visibleBytes[index >>> 1];
++    public int getVisible(final int index) {
++        synchronized (this) {
++            // indices range from 0 -> 4096
++            if (this.visibleBytes == null) {
++                return this.isNullNibble ? this.defaultNullValue : 0;
++            }
++            final byte value = this.visibleBytes[index >>> 1];
 +
-+        // if we are an even index, we want lower 4 bits
-+        // if we are an odd index, we want upper 4 bits
-+        return ((value >>> ((index & 1) << 2)) & 0xF);
++            // if we are an even index, we want lower 4 bits
++            // if we are an odd index, we want upper 4 bits
++            return ((value >>> ((index & 1) << 2)) & 0xF);
++        }
 +    }
 +
-+    // all axis from [0, 15]
-+    // index = x | (z << 4) | (y << 8)
-+
-+    public final int get(final int index) {
-+        // indices range from 0 -> 4096
-+        if (this.updatingBytes == null) {
-+            return this.isNullNibble ? this.defaultNullValue : 0;
-+        }
-+        final byte value = this.updatingBytes[index >>> 1];
-+
-+        // if we are an even index, we want lower 4 bits
-+        // if we are an odd index, we want upper 4 bits
-+        return ((value >>> ((index & 1) << 2)) & 0xF);
++    public void set(final int x, final int y, final int z, final int value) {
++        this.set((x & 15) | ((z & 15) << 4) | ((y & 15) << 8), value);
 +    }
 +
-+    public final void set(final int index, final int value) {
-+        if (this.updatingBytes == null) {
-+            this.initialise();
++    public void set(final int index, final int value) {
++        if (this.workingBytes == null) {
++            this.initialiseWorking();
 +        }
 +        final int shift = (index & 1) << 2;
 +        final int i = index >>> 1;
 +
-+        this.updatingBytes[i] = (byte)((this.updatingBytes[i] & (0xF0 >>> shift)) | (value << shift));
-+        this.dirty = true;
-+    }
-+
-+    public byte[] getClone() {
-+        synchronized (this) {
-+            if (this.visibleBytes != null) {
-+                return this.visibleBytes.clone();
-+            }
-+        }
-+        return new byte[SIZE];
-+    }
-+
-+    public void copyInto(final byte[] dst, final int off) {
-+        synchronized (this) {
-+            if (this.visibleBytes != null) {
-+                System.arraycopy(this.visibleBytes, 0, dst, off, SIZE);
-+                return;
-+            }
-+        }
-+
-+        Arrays.fill(dst, off, SIZE, (byte)0);
++        this.workingBytes[i] = (byte)((this.workingBytes[i] & (0xF0 >>> shift)) | (value << shift));
 +    }
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
 new file mode 100644
-index 000000000..954d9ac31
+index 000000000..e780ae852
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
-@@ -0,0 +1,359 @@
+@@ -0,0 +1,357 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import net.minecraft.server.BlockPosition;
@@ -1933,9 +1940,7 @@ index 000000000..954d9ac31
 +        // we need to initialise nibbles up to the highest section (we don't save null nibbles)
 +        for (int y = -1; y <= Math.min(16, (highestBlockY >> 4)); ++y) {
 +            final SWMRNibbleArray nibble = this.getNibbleFromCache(chunkX, y, chunkZ);
-+            if (nibble.isNullNibble()) {
-+                nibble.initialise();
-+            }
++            nibble.markNonNull();
 +        }
 +
 +        for (final BlockPosition pos : positions) {
@@ -1967,8 +1972,8 @@ index 000000000..954d9ac31
 +                    if (nibble != null && !nibble.isDirty() && nibble.isInitialisedUpdating()) {
 +                        for (int dy = -1; dy <= 1; ++dy) {
 +                            SWMRNibbleArray ours = this.getNibbleFromCache(chunkX, dy + y, chunkZ);
-+                            if (ours != null && !ours.isInitialisedUpdating() && !ours.isDirty()) {
-+                                ours.initialise();
++                            if (ours != null && !ours.isDirty() && ours.isNullNibbleUpdating()) {
++                                ours.initialiseWorking();
 +                                ours.updateVisible();
 +                            }
 +                        }
@@ -2001,7 +2006,7 @@ index 000000000..954d9ac31
 +                    // unloaded neighbour
 +                    continue;
 +                }
-+                if (neighbourNibble.isNullNibble()) {
++                if (neighbourNibble.isNullNibbleUpdating()) {
 +                    // most of the time we fall here
 +                    // no point of propagating full light into full light
 +                    continue;
@@ -2171,10 +2176,10 @@ index 000000000..954d9ac31
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
 new file mode 100644
-index 000000000..1a1784814
+index 000000000..7fcbfa5c2
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
-@@ -0,0 +1,1024 @@
+@@ -0,0 +1,1014 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.destroystokyo.paper.util.math.IntegerUtil;
@@ -2395,8 +2400,8 @@ index 000000000..1a1784814
 +                        for (int dz = -1; dz <= 1; ++dz) {
 +                            for (int dx = -1; dx <= 1; ++dx) {
 +                                SWMRNibbleArray neighbour = this.getNibbleFromCache(chunkX + dx, chunkY + dy, chunkZ + dz);
-+                                if (neighbour != null && !neighbour.isDirty() && !neighbour.isInitialisedUpdating()) {
-+                                    neighbour.initialise();
++                                if (neighbour != null && !neighbour.isDirty() && neighbour.isNullNibbleUpdating()) {
++                                    neighbour.initialiseWorking();
 +                                    neighbour.updateVisible();
 +                                    lightAccess.markLightSectionDirty(this.skylightPropagator ? EnumSkyBlock.SKY : EnumSkyBlock.BLOCK,
 +                                            new SectionPosition(chunkX + dx, chunkY + dy, chunkZ + dz));
@@ -2438,13 +2443,13 @@ index 000000000..1a1784814
 +    protected final int getLightLevel(final int worldX, final int worldY, final int worldZ) {
 +        final SWMRNibbleArray nibble = this.nibbleCache[(worldX >> 4) + 5 * (worldZ >> 4) + (5 * 5) * (worldY >> 4) + this.chunkSectionIndexOffset];
 +
-+        return nibble == null ? 0 : nibble.get((worldX & 15) | ((worldZ & 15) << 4) | ((worldY & 15) << 8));
++        return nibble == null ? 0 : nibble.getUpdating((worldX & 15) | ((worldZ & 15) << 4) | ((worldY & 15) << 8));
 +    }
 +
 +    protected final int getLightLevel(final int sectionIndex, final int localIndex) {
 +        final SWMRNibbleArray nibble = this.nibbleCache[sectionIndex];
 +
-+        return nibble == null ? 0 : nibble.get(localIndex);
++        return nibble == null ? 0 : nibble.getUpdating(localIndex);
 +    }
 +
 +    protected final void setLightLevel(final int worldX, final int worldY, final int worldZ, final int level) {
@@ -2523,7 +2528,7 @@ index 000000000..1a1784814
 +
 +                if (!currNibble.isInitialisedUpdating() && !neighbourNibble.isInitialisedUpdating()) {
 +                    if (this.skylightPropagator) {
-+                        if (currNibble.isNullNibble() == neighbourNibble.isNullNibble()) {
++                        if (currNibble.isNullNibbleUpdating() == neighbourNibble.isNullNibbleUpdating()) {
 +                            continue;
 +                        } // else fall through to edge checks
 +                    } else {
@@ -2567,11 +2572,11 @@ index 000000000..1a1784814
 +                        final int neighbourX = currX + neighbourOffX;
 +                        final int neighbourZ = currZ + neighbourOffZ;
 +
-+                        final int currentLevel = currNibble.get((currX & 15) |
++                        final int currentLevel = currNibble.getUpdating((currX & 15) |
 +                                ((currZ & 15)) << 4 |
 +                                ((currY & 15) << 8)
 +                        );
-+                        final int neighbourLevel = neighbourNibble.get((neighbourX & 15) |
++                        final int neighbourLevel = neighbourNibble.getUpdating((neighbourX & 15) |
 +                                ((neighbourZ & 15)) << 4 |
 +                                ((currY & 15) << 8)
 +                        );
@@ -2625,7 +2630,7 @@ index 000000000..1a1784814
 +
 +                if (!neighbourNibble.isInitialisedUpdating()) {
 +                    if (this.skylightPropagator) {
-+                        if (currNibble.isNullNibble() == neighbourNibble.isNullNibble() || !neighbourNibble.isNullNibble()) {
++                        if (currNibble.isNullNibbleUpdating() == neighbourNibble.isNullNibbleUpdating() || !neighbourNibble.isNullNibbleUpdating()) {
 +                            continue;
 +                        } // else fall through to edge checks
 +                    } else {
@@ -2669,7 +2674,7 @@ index 000000000..1a1784814
 +
 +                for (int currY = currSectionY << 4, maxY = currY | 15; currY <= maxY; ++currY) {
 +                    for (int i = 0, currX = startX, currZ = startZ; i < 16; ++i, currX += incX, currZ += incZ) {
-+                        final int level = neighbourNibble.get(
++                        final int level = neighbourNibble.getUpdating(
 +                                (currX & 15) |
 +                                (currZ & 15) << 4 |
 +                                (currY & 15) << 8
@@ -2714,18 +2719,8 @@ index 000000000..1a1784814
 +        this.setBlocksForChunkInCache(chunkX, chunkZ, chunk.getSections());
 +        this.setNibblesForChunkInCache(chunkX, chunkZ, this.getNibblesOnChunk(chunk));
 +
-+        // do we need to check edges?
-+        boolean checkEdges = false;
-+
-+        for (final IChunkAccess chunkInCache : this.chunkCache) {
-+            if (chunkInCache != null && chunkInCache.wasLoadedFromDisk()) {
-+                checkEdges = true;
-+                break;
-+            }
-+        }
-+
 +        try {
-+            this.lightChunk(lightAccess, chunk, checkEdges);
++            this.lightChunk(lightAccess, chunk, false);
 +            this.updateVisible(lightAccess);
 +        } finally {
 +            this.destroyCaches();
@@ -6490,10 +6485,10 @@ index 2d887af90..2291135ea 100644
          @Override
          public BlockPosition immutableCopy() {
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index dcbae1c45..9d749dea1 100644
+index dcbae1c45..96bdb9580 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
-@@ -91,6 +91,186 @@ public class Chunk implements IChunkAccess {
+@@ -91,6 +91,175 @@ public class Chunk implements IChunkAccess {
      private final int[] inventoryEntityCounts = new int[16];
      // Paper end
  
@@ -6549,7 +6544,6 @@ index dcbae1c45..9d749dea1 100644
 +    // Tuinity start - rewrite light engine
 +    private volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] blockNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight(false);
 +    private volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] skyNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight(true);
-+    private volatile boolean wasLoadedFromDisk;
 +
 +    @Override
 +    public com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] getBlockNibbles() {
@@ -6569,16 +6563,6 @@ index dcbae1c45..9d749dea1 100644
 +    @Override
 +    public void setSkyNibbles(com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] nibbles) {
 +        this.skyNibbles = nibbles;
-+    }
-+
-+    @Override
-+    public void setWasLoadedFromDisk(boolean wasLoadedFromDisk) {
-+        this.wasLoadedFromDisk = wasLoadedFromDisk;
-+    }
-+
-+    @Override
-+    public boolean wasLoadedFromDisk() {
-+        return this.wasLoadedFromDisk;
 +    }
 +    // Tuinity end - rewrite light engine
 +
@@ -6680,19 +6664,18 @@ index dcbae1c45..9d749dea1 100644
      public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage, ChunkConverter chunkconverter, TickList<Block> ticklist, TickList<FluidType> ticklist1, long i, @Nullable ChunkSection[] achunksection, @Nullable Consumer<Chunk> consumer) {
          this.sections = new ChunkSection[16];
          this.e = Maps.newHashMap();
-@@ -297,6 +477,11 @@ public class Chunk implements IChunkAccess {
+@@ -297,6 +466,10 @@ public class Chunk implements IChunkAccess {
  
      public Chunk(World world, ProtoChunk protochunk) {
          this(world, protochunk.getPos(), protochunk.getBiomeIndex(), protochunk.p(), protochunk.n(), protochunk.o(), protochunk.getInhabitedTime(), protochunk.getSections(), (Consumer) null);
 +        // Tuinity start - copy over protochunk light
 +        this.blockNibbles = protochunk.getBlockNibbles();
 +        this.skyNibbles = protochunk.getSkyNibbles();
-+        this.wasLoadedFromDisk = protochunk.wasLoadedFromDisk();
 +        // Tuinity end - copy over protochunk light
          Iterator iterator = protochunk.y().iterator();
  
          while (iterator.hasNext()) {
-@@ -330,7 +515,7 @@ public class Chunk implements IChunkAccess {
+@@ -330,7 +503,7 @@ public class Chunk implements IChunkAccess {
              Entry<HeightMap.Type, HeightMap> entry = (Entry) iterator.next();
  
              if (ChunkStatus.FULL.h().contains(entry.getKey())) {
@@ -6701,7 +6684,7 @@ index dcbae1c45..9d749dea1 100644
              }
          }
  
-@@ -547,6 +732,7 @@ public class Chunk implements IChunkAccess {
+@@ -547,6 +720,7 @@ public class Chunk implements IChunkAccess {
  
      @Override
      public void a(Entity entity) {
@@ -6709,7 +6692,7 @@ index dcbae1c45..9d749dea1 100644
          this.q = true;
          int i = MathHelper.floor(entity.locX() / 16.0D);
          int j = MathHelper.floor(entity.locZ() / 16.0D);
-@@ -592,8 +778,8 @@ public class Chunk implements IChunkAccess {
+@@ -592,8 +766,8 @@ public class Chunk implements IChunkAccess {
          entity.chunkX = this.loc.x;
          entity.chunkY = k;
          entity.chunkZ = this.loc.z;
@@ -6720,7 +6703,7 @@ index dcbae1c45..9d749dea1 100644
          // Paper start
          if (entity instanceof EntityItem) {
              itemCounts[k]++;
-@@ -616,6 +802,7 @@ public class Chunk implements IChunkAccess {
+@@ -616,6 +790,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public void a(Entity entity, int i) {
@@ -6728,7 +6711,7 @@ index dcbae1c45..9d749dea1 100644
          if (i < 0) {
              i = 0;
          }
-@@ -630,7 +817,7 @@ public class Chunk implements IChunkAccess {
+@@ -630,7 +805,7 @@ public class Chunk implements IChunkAccess {
              entity.entitySlice = null;
              entity.inChunk = false;
          }
@@ -6737,7 +6720,7 @@ index dcbae1c45..9d749dea1 100644
              return;
          }
          if (entity instanceof EntityItem) {
-@@ -873,6 +1060,7 @@ public class Chunk implements IChunkAccess {
+@@ -873,6 +1048,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public void a(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> list, @Nullable Predicate<? super Entity> predicate) {
@@ -6745,7 +6728,7 @@ index dcbae1c45..9d749dea1 100644
          int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
  
-@@ -912,6 +1100,7 @@ public class Chunk implements IChunkAccess {
+@@ -912,6 +1088,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public <T extends Entity> void a(@Nullable EntityTypes<?> entitytypes, AxisAlignedBB axisalignedbb, List<? super T> list, Predicate<? super T> predicate) {
@@ -6753,7 +6736,7 @@ index dcbae1c45..9d749dea1 100644
          int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
  
-@@ -941,7 +1130,9 @@ public class Chunk implements IChunkAccess {
+@@ -941,7 +1118,9 @@ public class Chunk implements IChunkAccess {
  
      }
  
@@ -7592,7 +7575,7 @@ index 6acb5f05a..84429f12d 100644
          try {
              boolean execChunkTask = com.destroystokyo.paper.io.chunk.ChunkTaskManager.pollChunkWaitQueue() || ChunkProviderServer.this.world.asyncChunkTaskManager.pollNextChunkTask(); // Paper
 diff --git a/src/main/java/net/minecraft/server/ChunkRegionLoader.java b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
-index 8e7da2c5f..83761ddf0 100644
+index 8e7da2c5f..64dd95292 100644
 --- a/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 +++ b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 @@ -24,6 +24,14 @@ public class ChunkRegionLoader {
@@ -7615,7 +7598,7 @@ index 8e7da2c5f..83761ddf0 100644
              return fluidtype == null || fluidtype == FluidTypes.EMPTY;
          }, chunkcoordintpair, nbttagcompound1.getList("LiquidsToBeTicked", 9));
 -        boolean flag = nbttagcompound1.getBoolean("isLightOn");
-+        boolean flag = nbttagcompound1.getBoolean("isLightOn"); boolean canUseSkyLight = flag && getStatus(nbttagcompound).isAtLeastStatus(ChunkStatus.LIGHT); boolean canUseBlockLight = canUseSkyLight; // Tuinity
++        boolean flag = (!com.tuinity.tuinity.config.TuinityConfig.useNewLightEngine || nbttagcompound1.getBoolean("starlight.lit")) && nbttagcompound1.getBoolean("isLightOn"); boolean canUseSkyLight = flag && getStatus(nbttagcompound).isAtLeastStatus(ChunkStatus.LIGHT); boolean canUseBlockLight = canUseSkyLight; // Tuinity
          NBTTagList nbttaglist = nbttagcompound1.getList("Sections", 10);
          boolean flag1 = true;
          ChunkSection[] achunksection = new ChunkSection[16];
@@ -7648,14 +7631,14 @@ index 8e7da2c5f..83761ddf0 100644
          }
  
 +        // Tuinity start - correctly set nullable status for light data
-+        boolean nullbleSky = true;
++        boolean nullableSky = true;
 +        for (int y = 16; y >= -1; --y) {
 +            com.tuinity.tuinity.chunk.light.SWMRNibbleArray nibble = skyNibbles[y + 1];
-+            if (nibble.isInitialised()) {
-+                nullbleSky = false;
++            if (nibble.isInitialisedUpdating()) {
++                nullableSky = false;
 +                continue;
 +            }
-+            if (!nullbleSky) {
++            if (!nullableSky) {
 +                nibble.markNonNull();
 +            }
 +        }
@@ -7664,22 +7647,20 @@ index 8e7da2c5f..83761ddf0 100644
          long j = nbttagcompound1.getLong("InhabitedTime");
          ChunkStatus.Type chunkstatus_type = a(nbttagcompound);
          Object object;
-@@ -173,8 +199,14 @@ public class ChunkRegionLoader {
+@@ -173,8 +199,12 @@ public class ChunkRegionLoader {
              object = new Chunk(worldserver.getMinecraftWorld(), chunkcoordintpair, biomestorage, chunkconverter, (TickList) object1, (TickList) object2, j, achunksection, // Paper start - fix massive nbt memory leak due to lambda. move lambda into a container method to not leak scope. Only clone needed NBT keys.
                  createLoadEntitiesConsumer(new SafeNBTCopy(nbttagcompound1, "TileEntities", "Entities", "ChunkBukkitValues")) // Paper - move CB Chunk PDC into here
              );// Paper end
 +            ((Chunk)object).setBlockNibbles(blockNibbles); // Tuinity - replace light impl
 +            ((Chunk)object).setSkyNibbles(skyNibbles); // Tuinity - replace light impl
-+            ((Chunk)object).setWasLoadedFromDisk(true); // Tuinity - replace light impl
          } else {
              ProtoChunk protochunk = new ProtoChunk(chunkcoordintpair, chunkconverter, achunksection, protochunkticklist, protochunkticklist1, worldserver); // Paper - Anti-Xray - Add parameter
 +            protochunk.setBlockNibbles(blockNibbles); // Tuinity - replace light impl
 +            protochunk.setSkyNibbles(skyNibbles); // Tuinity - replace light impl
-+            protochunk.setWasLoadedFromDisk(true); // Tuinity - replace light impl
  
              protochunk.a(biomestorage);
              object = protochunk;
-@@ -354,14 +386,14 @@ public class ChunkRegionLoader {
+@@ -354,14 +384,14 @@ public class ChunkRegionLoader {
          NibbleArray[] skyLight = new NibbleArray[17 - (-1)];
  
          for (int i = -1; i < 17; ++i) {
@@ -7698,7 +7679,7 @@ index 8e7da2c5f..83761ddf0 100644
                  skyArray = skyArray.copy();
              }
  
-@@ -401,10 +433,10 @@ public class ChunkRegionLoader {
+@@ -401,10 +431,10 @@ public class ChunkRegionLoader {
          NBTTagCompound nbttagcompound1 = new NBTTagCompound();
  
          nbttagcompound.setInt("DataVersion", SharedConstants.getGameVersion().getWorldVersion());
@@ -7711,7 +7692,7 @@ index 8e7da2c5f..83761ddf0 100644
          nbttagcompound1.setLong("InhabitedTime", ichunkaccess.getInhabitedTime());
          nbttagcompound1.setString("Status", ichunkaccess.getChunkStatus().d());
          ChunkConverter chunkconverter = ichunkaccess.p();
-@@ -429,8 +461,8 @@ public class ChunkRegionLoader {
+@@ -429,8 +459,8 @@ public class ChunkRegionLoader {
              NibbleArray nibblearray; // block light
              NibbleArray nibblearray1; // sky light
              if (asyncsavedata == null) {
@@ -7722,7 +7703,7 @@ index 8e7da2c5f..83761ddf0 100644
              } else {
                  nibblearray = asyncsavedata.blockLight[i + 1]; // +1 to offset the -1 starting index
                  nibblearray1 = asyncsavedata.skyLight[i + 1]; // +1 to offset the -1 starting index
-@@ -444,11 +476,11 @@ public class ChunkRegionLoader {
+@@ -444,11 +474,11 @@ public class ChunkRegionLoader {
                  }
  
                  if (nibblearray != null && !nibblearray.c()) {
@@ -7736,6 +7717,15 @@ index 8e7da2c5f..83761ddf0 100644
                  }
  
                  nbttaglist.add(nbttagcompound2);
+@@ -457,7 +487,7 @@ public class ChunkRegionLoader {
+ 
+         nbttagcompound1.set("Sections", nbttaglist);
+         if (flag) {
+-            nbttagcompound1.setBoolean("isLightOn", true);
++            nbttagcompound1.setBoolean("isLightOn", true); if (com.tuinity.tuinity.config.TuinityConfig.useNewLightEngine) nbttagcompound1.setBoolean("starlight.lit", true); // Tuinity
+         }
+ 
+         BiomeStorage biomestorage = ichunkaccess.getBiomeIndex();
 diff --git a/src/main/java/net/minecraft/server/ChunkSection.java b/src/main/java/net/minecraft/server/ChunkSection.java
 index e52df8096..ea943e44a 100644
 --- a/src/main/java/net/minecraft/server/ChunkSection.java
@@ -8687,10 +8677,10 @@ index c4a83448e..5c3eb4fc7 100644
              Vec3D vec3d1 = raytrace1.a();
              VoxelShape voxelshape = raytrace1.a(iblockdata, this, blockposition);
 diff --git a/src/main/java/net/minecraft/server/IChunkAccess.java b/src/main/java/net/minecraft/server/IChunkAccess.java
-index 180b6b58d..752d9402e 100644
+index 180b6b58d..46f9ca664 100644
 --- a/src/main/java/net/minecraft/server/IChunkAccess.java
 +++ b/src/main/java/net/minecraft/server/IChunkAccess.java
-@@ -24,6 +24,30 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
+@@ -24,6 +24,22 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
      }
      // Paper end
  
@@ -8708,20 +8698,12 @@ index 180b6b58d..752d9402e 100644
 +    default void setSkyNibbles(com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] nibbles) {
 +        throw new UnsupportedOperationException(this.getClass().getName());
 +    }
-+
-+    default boolean wasLoadedFromDisk() {
-+        throw new UnsupportedOperationException(this.getClass().getName());
-+    }
-+
-+    default void setWasLoadedFromDisk(boolean value) {
-+        throw new UnsupportedOperationException(this.getClass().getName());
-+    }
 +    // Tuinity end
 +
      IBlockData getType(final int x, final int y, final int z); // Paper
      @Nullable
      IBlockData setType(BlockPosition blockposition, IBlockData iblockdata, boolean flag);
-@@ -122,6 +146,7 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
+@@ -122,6 +138,7 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
      @Nullable
      NBTTagCompound j(BlockPosition blockposition);
  
@@ -8729,7 +8711,7 @@ index 180b6b58d..752d9402e 100644
      Stream<BlockPosition> m();
  
      TickList<Block> n();
-@@ -142,6 +167,7 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
+@@ -142,6 +159,7 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
          return ashortlist[i];
      }
  
@@ -8900,7 +8882,7 @@ index b98e60772..e0bbfe142 100644
              while (objectiterator.hasNext()) {
                  entry = (Entry) objectiterator.next();
 diff --git a/src/main/java/net/minecraft/server/LightEngineThreaded.java b/src/main/java/net/minecraft/server/LightEngineThreaded.java
-index 2f9c97dd4..ed728e401 100644
+index 2f9c97dd4..d4902ed0d 100644
 --- a/src/main/java/net/minecraft/server/LightEngineThreaded.java
 +++ b/src/main/java/net/minecraft/server/LightEngineThreaded.java
 @@ -2,6 +2,11 @@ package net.minecraft.server;
@@ -8915,7 +8897,7 @@ index 2f9c97dd4..ed728e401 100644
  import it.unimi.dsi.fastutil.objects.ObjectArrayList;
  import it.unimi.dsi.fastutil.objects.ObjectList;
  import it.unimi.dsi.fastutil.objects.ObjectListIterator;
-@@ -156,13 +161,245 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -156,12 +161,244 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      private volatile int f = 5;
      private final AtomicBoolean g = new AtomicBoolean();
  
@@ -9029,8 +9011,8 @@ index 2f9c97dd4..ed728e401 100644
 +        } else {
 +            this.holdingChunks.put(coordinate, current + 1);
 +        }
-     }
- 
++    }
++
 +    protected final void releaseLightWorkChunk(int chunkX, int chunkZ) {
 +        final long coordinate = MCUtil.getCoordinateKey(chunkX, chunkZ);
 +        final int current = this.holdingChunks.get(coordinate);
@@ -9155,12 +9137,11 @@ index 2f9c97dd4..ed728e401 100644
 +        int var2 = this.skyReader.b(var0) - var1;
 +        int var3 = this.blockReader.b(var0);
 +        return Math.max(var3, var2);
-+    }
+     }
 +    // Tuinity end - replace light engine impl
-+
+ 
      public void close() {}
  
-     @Override
 @@ -179,6 +416,15 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      public void a(BlockPosition blockposition) {
          BlockPosition blockposition1 = blockposition.immutableCopy();
@@ -9245,7 +9226,21 @@ index 2f9c97dd4..ed728e401 100644
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -277,6 +549,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -264,6 +536,13 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+     public CompletableFuture<IChunkAccess> a(IChunkAccess ichunkaccess, boolean flag) {
+         ChunkCoordIntPair chunkcoordintpair = ichunkaccess.getPos();
+ 
++        // Tuinity start - rewrite light engine
++        if (flag && this.theLightEngine != null) {
++            this.d.c(chunkcoordintpair);
++            return CompletableFuture.completedFuture(ichunkaccess);
++        }
++        // Tuinity end - rewrite light engine
++
+         // Paper start
+         //ichunkaccess.b(false); // Don't need to disable this
+         long pair = chunkcoordintpair.pair();
+@@ -277,6 +556,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
                  return;
              }
              // Paper end
@@ -9253,22 +9248,21 @@ index 2f9c97dd4..ed728e401 100644
              ChunkSection[] achunksection = ichunkaccess.getSections();
  
              for (int i = 0; i < 16; ++i) {
-@@ -293,6 +566,13 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -293,16 +573,19 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
                      super.a(blockposition, ichunkaccess.g(blockposition));
                  });
              }
 +            } else { // Tuinity start - replace light engine impl
-+                if (flag) {
-+                    this.theLightEngine.checkChunkEdges(chunkcoordintpair.x, chunkcoordintpair.z);
-+                } else {
-+                    this.theLightEngine.lightChunk(chunkcoordintpair.x, chunkcoordintpair.z);
-+                }
++                this.theLightEngine.lightChunk(chunkcoordintpair.x, chunkcoordintpair.z);
 +            } // Tuinity end - replace light engine impl
  
              // this.d.c(chunkcoordintpair); // Paper - move into post task below
          }, () -> {
-@@ -302,7 +582,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
-             this.d.c(chunkcoordintpair); // Paper - release light tickets as post task to ensure they stay loaded until fully done
+             return "lightChunk " + chunkcoordintpair + " " + flag;
+             // Paper start  - merge the 2 together
+         }), () -> {
+-            this.d.c(chunkcoordintpair); // Paper - release light tickets as post task to ensure they stay loaded until fully done
++            this.d.c(chunkcoordintpair); // Paper - release light tickets as post task to ensure they stay loaded until fully done // Tuinity - diff on change, copied to top of method for early return if the chunk is already lit
              if (skippedPre[0]) return; // Paper - future's already complete
              ichunkaccess.b(true);
 -            super.b(chunkcoordintpair, false);
@@ -9276,7 +9270,7 @@ index 2f9c97dd4..ed728e401 100644
              // Paper start
              future.complete(ichunkaccess);
          });
-@@ -311,7 +591,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -311,7 +594,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      }
  
      public void queueUpdate() {
@@ -9285,7 +9279,7 @@ index 2f9c97dd4..ed728e401 100644
              this.b.a((() -> { // Paper - decompile error
                  this.b();
                  this.g.set(false);
-@@ -325,17 +605,36 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -325,17 +608,36 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      private final java.util.List<Runnable> pre = new java.util.ArrayList<>();
      private final java.util.List<Runnable> post = new java.util.ArrayList<>();
      private void b() {
@@ -10635,10 +10629,10 @@ index 253377c62..3ebe3d0dc 100644
          if (entityliving == entityliving1) {
              return false;
 diff --git a/src/main/java/net/minecraft/server/PlayerChunk.java b/src/main/java/net/minecraft/server/PlayerChunk.java
-index 11a67ca18..35a569f61 100644
+index 11a67ca18..783b49973 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunk.java
-@@ -56,6 +56,12 @@ public class PlayerChunk {
+@@ -56,12 +56,18 @@ public class PlayerChunk {
          long key = net.minecraft.server.MCUtil.getCoordinateKey(this.location);
          this.playersInMobSpawnRange = this.chunkMap.playerMobSpawnMap.getObjectsInRange(key);
          this.playersInChunkTickRange = this.chunkMap.playerChunkTickRangeMap.getObjectsInRange(key);
@@ -10651,6 +10645,13 @@ index 11a67ca18..35a569f61 100644
      }
      // Paper end - optimise isOutsideOfRange
      // Paper start - optimize chunk status progression without jumping through thread pool
+     public boolean canAdvanceStatus() {
+         ChunkStatus status = getChunkHolderStatus();
+-        IChunkAccess chunk = getAvailableChunkNow();
++            IChunkAccess chunk = getAvailableChunkNow();
+         return chunk != null && (status == null || chunk.getChunkStatus().isAtLeastStatus(getNextStatus(status)));
+     }
+     // Paper end
 @@ -362,7 +368,7 @@ public class PlayerChunk {
          if (!blockposition.isValidLocation()) return; // Paper - SPIGOT-6086 for all invalid locations; avoid acquiring locks
          Chunk chunk = this.getSendingChunk(); // Paper - no-tick view distance
@@ -11380,17 +11381,16 @@ index 485b609bb..614cfacb1 100644
              this.player.playerConnection.sendPacket(new PacketPlayOutBlockChange(this.world, blockposition)); // CraftBukkit - SPIGOT-5196
          }
 diff --git a/src/main/java/net/minecraft/server/ProtoChunk.java b/src/main/java/net/minecraft/server/ProtoChunk.java
-index 5b0cd414c..2c78cbffb 100644
+index 5b0cd414c..e2500821d 100644
 --- a/src/main/java/net/minecraft/server/ProtoChunk.java
 +++ b/src/main/java/net/minecraft/server/ProtoChunk.java
-@@ -48,6 +48,42 @@ public class ProtoChunk implements IChunkAccess {
+@@ -48,6 +48,31 @@ public class ProtoChunk implements IChunkAccess {
      private volatile boolean u;
      final World world; // Paper - Anti-Xray - Add world // Paper - private -> default
  
 +    // Tuinity start - rewrite light engine
 +    private volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] blockNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight(false);
 +    private volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] skyNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight(true);
-+    private volatile boolean wasLoadedFromDisk;
 +
 +    @Override
 +    public com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] getBlockNibbles() {
@@ -11411,22 +11411,12 @@ index 5b0cd414c..2c78cbffb 100644
 +    public void setSkyNibbles(com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] nibbles) {
 +        this.skyNibbles = nibbles;
 +    }
-+
-+    @Override
-+    public void setWasLoadedFromDisk(boolean wasLoadedFromDisk) {
-+        this.wasLoadedFromDisk = wasLoadedFromDisk;
-+    }
-+
-+    @Override
-+    public boolean wasLoadedFromDisk() {
-+        return this.wasLoadedFromDisk;
-+    }
 +    // Tuinity end - rewrite light engine
 +
      // Paper start - Anti-Xray - Add world
      @Deprecated public ProtoChunk(ChunkCoordIntPair chunkcoordintpair, ChunkConverter chunkconverter) { this(chunkcoordintpair, chunkconverter, null); } // Notice for updates: Please make sure this constructor isn't used anywhere
      public ProtoChunk(ChunkCoordIntPair chunkcoordintpair, ChunkConverter chunkconverter, World world) {
-@@ -173,20 +209,17 @@ public class ProtoChunk implements IChunkAccess {
+@@ -173,20 +198,17 @@ public class ProtoChunk implements IChunkAccess {
                  ChunkSection chunksection = this.a(j >> 4);
                  IBlockData iblockdata1 = chunksection.setType(i & 15, j & 15, k & 15, iblockdata);
  
@@ -11441,17 +11431,17 @@ index 5b0cd414c..2c78cbffb 100644
 +                HeightMap.Type[] enumset = this.getChunkStatus().heightMaps; // Tuinity - reduce iterator creation
                  EnumSet<HeightMap.Type> enumset1 = null;
 -                Iterator iterator = enumset.iterator();
+-
+-                HeightMap.Type heightmap_type;
 +                // Tuinity - reduce iterator creation
  
--                HeightMap.Type heightmap_type;
--
 -                while (iterator.hasNext()) {
 -                    heightmap_type = (HeightMap.Type) iterator.next();
 +                for (HeightMap.Type heightmap_type : enumset) { // Tuinity - reduce iterator creation
                      HeightMap heightmap = (HeightMap) this.f.get(heightmap_type);
  
                      if (heightmap == null) {
-@@ -202,10 +235,9 @@ public class ProtoChunk implements IChunkAccess {
+@@ -202,10 +224,9 @@ public class ProtoChunk implements IChunkAccess {
                      HeightMap.a(this, enumset1);
                  }
  
@@ -11466,10 +11456,10 @@ index 5b0cd414c..2c78cbffb 100644
                  }
  
 diff --git a/src/main/java/net/minecraft/server/ProtoChunkExtension.java b/src/main/java/net/minecraft/server/ProtoChunkExtension.java
-index 300cbb8b0..211d9fa90 100644
+index 300cbb8b0..60c57a2b5 100644
 --- a/src/main/java/net/minecraft/server/ProtoChunkExtension.java
 +++ b/src/main/java/net/minecraft/server/ProtoChunkExtension.java
-@@ -8,7 +8,39 @@ import javax.annotation.Nullable;
+@@ -8,7 +8,29 @@ import javax.annotation.Nullable;
  
  public class ProtoChunkExtension extends ProtoChunk {
  
@@ -11495,16 +11485,6 @@ index 300cbb8b0..211d9fa90 100644
 +    @Override
 +    public void setSkyNibbles(com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] nibbles) {
 +        this.getWrappedChunk().setSkyNibbles(nibbles);
-+    }
-+
-+    @Override
-+    public boolean wasLoadedFromDisk() {
-+        return this.getWrappedChunk().wasLoadedFromDisk();
-+    }
-+
-+    @Override
-+    public void setWasLoadedFromDisk(boolean wasLoadedFromDisk) {
-+        this.getWrappedChunk().setWasLoadedFromDisk(wasLoadedFromDisk);
 +    }
 +    // Tuinity end - rewrite light engine
  
