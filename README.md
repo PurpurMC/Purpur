@@ -52,7 +52,7 @@ for the license of material used/modified by this project.
 ## API
 
 Purpur API maven dependency:
-```
+```xml
 <dependency>
     <groupId>net.pl3x.purpur</groupId>
     <artifactId>purpur-api</artifactId>
@@ -60,7 +60,7 @@ Purpur API maven dependency:
     <scope>provided</scope>
 </dependency>
 ```
-```
+```xml
 <repository>
     <id>purpur</id>
     <url>https://repo.pl3x.net/</url>
@@ -68,13 +68,13 @@ Purpur API maven dependency:
 ```
 
 Purpur API gradle dependency:
-```
+```groovy
 maven {
     name 'purpur'
     url 'https://repo.pl3x.net/'
 }
 ```
-```
+```groovy
 compileOnly 'net.pl3x.purpur:purpur-api:1.16.4-R0.1-SNAPSHOT'
 ```
 
