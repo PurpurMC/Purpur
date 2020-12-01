@@ -1,5 +1,5 @@
 <div align="center">
-<img src="https://cdn.discordapp.com/attachments/741046875192426648/762426843633942528/rsz_1rsz_1rsz_1rsz_purpur2.png" alt="Purpur-by-DrBot">
+<img src="https://repository-images.githubusercontent.com/184300222/14b11480-3303-11eb-8ca4-ea5711d942fb" alt="Purpur">
 
 ## Purpur
 
