@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mykyta Komarnytskyy <nkomarn@hotmail.com>
+Date: Sat, 24 Oct 2020 21:03:53 -0500
+Subject: [PATCH] (Yatopia) Smarter statistics ticking
+
+In vanilla, statistics that count time spent for an action (i.e. time played or sneak time) are incremented every tick. This is retarded. With this patch and a configured interval of 20, the statistics are only ticked every 20th tick and are incremented by 20 ticks at a time. This means a lot less ticking with the same accurate counting.
+
+With an interval of 20, this patch saves roughly 3ms per tick on a server w/ 80 players online.
+
+diff --git a/src/main/java/net/minecraft/server/EntityHuman.java b/src/main/java/net/minecraft/server/EntityHuman.java
+index 84e500fa7..d342b0478 100644
+--- a/src/main/java/net/minecraft/server/EntityHuman.java
++++ b/src/main/java/net/minecraft/server/EntityHuman.java
+@@ -174,18 +174,25 @@ public abstract class EntityHuman extends EntityLiving {
+         this.p();
+         if (!this.world.isClientSide) {
+             this.foodData.a(this);
+-            this.a(StatisticList.PLAY_ONE_MINUTE);
+-            if (this.isAlive()) {
+-                this.a(StatisticList.TIME_SINCE_DEATH);
+-            }
++            // Purpur start - Implement smarter statistics tracking from Yatopia
++            // this.a(StatisticList.PLAY_ONE_MINUTE);
++            int interval = net.pl3x.purpur.PurpurConfig.playerTimeStatisticsInterval;
++            if (ticksLived % interval == 0) {
++                this.a(StatisticList.PLAY_ONE_MINUTE, interval);
++            
++                if (this.isAlive()) {
++                    this.a(StatisticList.TIME_SINCE_DEATH, interval);
++                }
+ 
+-            if (this.bx()) {
+-                this.a(StatisticList.SNEAK_TIME);
+-            }
++                if (this.bx()) {
++                    this.a(StatisticList.SNEAK_TIME, interval);
++                }
+ 
+-            if (!this.isSleeping()) {
+-                this.a(StatisticList.TIME_SINCE_REST);
++                if (!this.isSleeping()) {
++                    this.a(StatisticList.TIME_SINCE_REST, interval);
++                }
+             }
++            // Purpur end
+         }
+ 
+         int i = 29999999;
+diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+index 674d06bfb..3b55704ac 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+@@ -260,6 +260,11 @@ public class PurpurConfig {
+     private static void disableMushroomBlockUpdates() {
+         disableMushroomBlockUpdates= getBoolean("settings.blocks.disable-mushroom-updates", disableMushroomBlockUpdates);
+     }
++    
++    public static int playerTimeStatisticsInterval = 1;
++    private static void intervals() {
++        playerTimeStatisticsInterval = getInt("settings.intervals.player-time-statistics", playerTimeStatisticsInterval);
++    }
+ 
+     public static boolean loggerSuppressInitLegacyMaterialError = false;
+     public static boolean loggerSuppressIgnoredAdvancementWarnings = false;
