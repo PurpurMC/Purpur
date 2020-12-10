@@ -1,0 +1,132 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Encode42 <me@encode42.dev>
+Date: Tue, 8 Dec 2020 17:15:15 -0500
+Subject: [PATCH] Wolf naturally spawn rabid
+
+Configurable chance to spawn a wolf that is rabid.
+Rabid wolves attack all players, mobs, and animals.
+
+diff --git a/src/main/java/net/minecraft/server/EntityWolf.java b/src/main/java/net/minecraft/server/EntityWolf.java
+index 6c25f667ee..7149b10e4a 100644
+--- a/src/main/java/net/minecraft/server/EntityWolf.java
++++ b/src/main/java/net/minecraft/server/EntityWolf.java
+@@ -14,11 +14,17 @@ public class EntityWolf extends EntityTameableAnimal implements IEntityAngerable
+     private static final DataWatcherObject<Boolean> br = DataWatcher.a(EntityWolf.class, DataWatcherRegistry.i);
+     private static final DataWatcherObject<Integer> bs = DataWatcher.a(EntityWolf.class, DataWatcherRegistry.b);
+     private static final DataWatcherObject<Integer> bt = DataWatcher.a(EntityWolf.class, DataWatcherRegistry.b);
+-    public static final Predicate<EntityLiving> bq = (entityliving) -> {
++    public static Predicate<EntityLiving> vanillaPredicate() { return bq; } public static final Predicate<EntityLiving> bq = (entityliving) -> { // Purpur - OBFHELPER
+         EntityTypes<?> entitytypes = entityliving.getEntityType();
+ 
+         return entitytypes == EntityTypes.SHEEP || entitytypes == EntityTypes.RABBIT || entitytypes == EntityTypes.FOX;
+     };
++    // Purpur start - rabid wolf spawn chance
++    private boolean isRabid = false;
++    private static final Predicate<EntityLiving> RABID_PREDICATE = e -> e instanceof EntityPlayer || e instanceof EntityInsentient;
++    private final PathfinderGoal PATHFINDER_VANILLA = new PathfinderGoalRandomTargetNonTamed<>(this, EntityAnimal.class, false, vanillaPredicate());
++    private final PathfinderGoal PATHFINDER_RABID = new PathfinderGoalRandomTargetNonTamed<>(this, EntityLiving.class, false, RABID_PREDICATE);
++    // Purpur end
+     private float bu;
+     private float bv;
+     private boolean bw;
+@@ -53,6 +59,33 @@ public class EntityWolf extends EntityTameableAnimal implements IEntityAngerable
+     int getPurpurBreedTime() {
+         return this.world.purpurConfig.wolfBreedingTicks;
+     }
++
++    public boolean isRabid() {
++        return this.isRabid;
++    }
++
++    public void setRabid(boolean isRabid) {
++        this.isRabid = isRabid;
++        updatePathfinders();
++    }
++
++    public void updatePathfinders() {
++        this.targetSelector.removeGoal(PATHFINDER_VANILLA);
++        this.targetSelector.removeGoal(PATHFINDER_RABID);
++        if (this.isRabid) {
++            setTamed(false);
++            setOwnerUUID(null);
++            this.targetSelector.addGoal(5, PATHFINDER_RABID);
++        } else {
++            this.targetSelector.addGoal(5, PATHFINDER_VANILLA);
++        }
++    }
++
++    @Override
++    public GroupDataEntity prepare(WorldAccess worldaccess, DifficultyDamageScaler difficultydamagescaler, EnumMobSpawn enummobspawn, @Nullable GroupDataEntity groupdataentity, @Nullable NBTTagCompound nbttagcompound) {
++        setRabid(world.purpurConfig.wolfNaturalRabid > 0.0D && random.nextDouble() <= world.purpurConfig.wolfNaturalRabid);
++        return super.prepare(worldaccess, difficultydamagescaler, enummobspawn, groupdataentity, nbttagcompound);
++    }
+     // Purpur end
+ 
+     @Override
+@@ -74,7 +107,7 @@ public class EntityWolf extends EntityTameableAnimal implements IEntityAngerable
+         this.targetSelector.a(2, new PathfinderGoalOwnerHurtTarget(this));
+         this.targetSelector.a(3, (new PathfinderGoalHurtByTarget(this, new Class[0])).a(new Class[0])); // CraftBukkit - decompile error
+         this.targetSelector.a(4, new PathfinderGoalNearestAttackableTarget<>(this, EntityHuman.class, 10, true, false, this::a_));
+-        this.targetSelector.a(5, new PathfinderGoalRandomTargetNonTamed<>(this, EntityAnimal.class, false, EntityWolf.bq));
++        //this.targetSelector.a(5, new PathfinderGoalRandomTargetNonTamed<>(this, EntityAnimal.class, false, EntityWolf.bq)); // Purpur - moved to updatePathfinders()
+         this.targetSelector.a(6, new PathfinderGoalRandomTargetNonTamed<>(this, EntityTurtle.class, false, EntityTurtle.bo));
+         this.targetSelector.a(7, new PathfinderGoalNearestAttackableTarget<>(this, EntitySkeletonAbstract.class, false));
+         this.targetSelector.a(8, new PathfinderGoalUniversalAngerReset<>(this, true));
+@@ -119,6 +152,7 @@ public class EntityWolf extends EntityTameableAnimal implements IEntityAngerable
+     public void saveData(NBTTagCompound nbttagcompound) {
+         super.saveData(nbttagcompound);
+         nbttagcompound.setByte("CollarColor", (byte) this.getCollarColor().getColorIndex());
++        nbttagcompound.setBoolean("Purpur.IsRabid", this.isRabid); // Purpur
+         this.c(nbttagcompound);
+     }
+ 
+@@ -128,6 +162,11 @@ public class EntityWolf extends EntityTameableAnimal implements IEntityAngerable
+         if (nbttagcompound.hasKeyOfType("CollarColor", 99)) {
+             this.setCollarColor(EnumColor.fromColorIndex(nbttagcompound.getInt("CollarColor")));
+         }
++        // Purpur start - rabid wolf spawn chance
++        if (nbttagcompound.hasKeyOfType("Purpur.IsRabid", 99)) {
++            setRabid(nbttagcompound.getBoolean("Purpur.IsRabid"));
++        }
++        // Purpur end
+ 
+         this.a((WorldServer) this.world, nbttagcompound);
+     }
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index fa98eef4f8..88db847d7b 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -1128,10 +1128,12 @@ public class PurpurWorldConfig {
+ 
+     public boolean wolfRidable = false;
+     public boolean wolfRidableInWater = false;
++    public double wolfNaturalRabid = 0.0D;
+     public int wolfBreedingTicks = 6000;
+     private void wolfSettings() {
+         wolfRidable = getBoolean("mobs.wolf.ridable", wolfRidable);
+         wolfRidableInWater = getBoolean("mobs.wolf.ridable-in-water", wolfRidableInWater);
++        wolfNaturalRabid = getDouble("mobs.wolf.spawn-rabid-chance", wolfNaturalRabid);
+         wolfBreedingTicks = getInt("mobs.wolf.breeding-delay-ticks", wolfBreedingTicks);
+     }
+ 
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
+index 5f3314febb..507857ba24 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
+@@ -45,4 +45,16 @@ public class CraftWolf extends CraftTameableAnimal implements Wolf {
+     public void setCollarColor(DyeColor color) {
+         getHandle().setCollarColor(EnumColor.fromColorIndex(color.getWoolData()));
+     }
++
++    // Purpur start
++    @Override
++    public boolean isRabid() {
++        return getHandle().isRabid();
++    }
++
++    @Override
++    public void setRabid(boolean isRabid) {
++        getHandle().setRabid(isRabid);
++    }
++    // Purpur end
+ }
