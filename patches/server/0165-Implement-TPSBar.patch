@@ -1,0 +1,196 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <blake.galbreath@gmail.com>
+Date: Sat, 12 Dec 2020 21:19:05 -0600
+Subject: [PATCH] Implement TPSBar
+
+
+diff --git a/src/main/java/net/minecraft/server/CommandDispatcher.java b/src/main/java/net/minecraft/server/CommandDispatcher.java
+index ccd0be059f4d7b95d4ec58c0d4fc744a94fec3fd..e31f13b80aef9b410c508030c0d965ec999505e4 100644
+--- a/src/main/java/net/minecraft/server/CommandDispatcher.java
++++ b/src/main/java/net/minecraft/server/CommandDispatcher.java
+@@ -109,6 +109,7 @@ public class CommandDispatcher {
+             CommandWhitelist.a(this.b);
+             net.pl3x.purpur.command.DemoCommand.register(getDispatcher()); // Purpur
+             net.pl3x.purpur.command.PingCommand.register(getDispatcher()); // Purpur
++            net.pl3x.purpur.command.TPSBarCommand.register(getDispatcher()); // Purpur
+         }
+ 
+         if (commanddispatcher_servertype.d) {
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 6c9a8d92e70106635699e55367eed60ac95c3290..d39b04e2a3d87be04625d85f42f3ab8263e91747 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -473,6 +473,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+         this.serverConnection.acceptConnections();
+         // CraftBukkit end
+ 
++        net.pl3x.purpur.task.TPSBarTask.start(); // Purpur
+     }
+ 
+     protected void updateWorldSettings() {}
+@@ -862,6 +863,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+         this.safeShutdown(flag, false);
+     }
+     public void safeShutdown(boolean flag, boolean isRestarting) {
++        net.pl3x.purpur.task.TPSBarTask.stop(); // Purpur
+         this.isRunning = false;
+         this.isRestarting = isRestarting;
+         if (flag) {
+diff --git a/src/main/java/net/minecraft/server/PlayerList.java b/src/main/java/net/minecraft/server/PlayerList.java
+index 881db63d6f2776956429b969e59db2534f8d96af..628771e6b450f8053eaca6499f1bbecac7337071 100644
+--- a/src/main/java/net/minecraft/server/PlayerList.java
++++ b/src/main/java/net/minecraft/server/PlayerList.java
+@@ -513,6 +513,8 @@ public abstract class PlayerList {
+         if (entityplayer.didPlayerJoinEvent) cserver.getPluginManager().callEvent(playerQuitEvent); // Paper - if we disconnected before join ever fired, don't fire quit
+         entityplayer.getBukkitEntity().disconnect(playerQuitEvent.getQuitMessage());
+ 
++        net.pl3x.purpur.task.TPSBarTask.removePlayer(cserver.getPlayer(entityplayer)); // Purpur
++
+         if (server.isMainThread()) entityplayer.playerTick(); // SPIGOT-924 // Paper - don't tick during emergency shutdowns (Watchdog)
+         // CraftBukkit end
+ 
+diff --git a/src/main/java/net/pl3x/purpur/command/TPSBarCommand.java b/src/main/java/net/pl3x/purpur/command/TPSBarCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..508575963816ba4f21371bf9e37033373e454c9f
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/command/TPSBarCommand.java
+@@ -0,0 +1,27 @@
++package net.pl3x.purpur.command;
++
++import net.minecraft.server.CommandDispatcher;
++import net.minecraft.server.CommandListenerWrapper;
++import net.minecraft.server.EntityPlayer;
++import net.pl3x.purpur.task.TPSBarTask;
++
++public class TPSBarCommand {
++    public static void register(com.mojang.brigadier.CommandDispatcher<CommandListenerWrapper> dispatcher) {
++        dispatcher.register(CommandDispatcher.literal("tpsbar")
++                .requires((listener) -> {
++                    return listener.hasPermission(2);
++                })
++                .executes((context) -> {
++                    return execute(context.getSource(), context.getSource().getPlayerOrException());
++                })
++        ).setPermission("bukkit.command.tpsbar");
++    }
++
++    private static int execute(CommandListenerWrapper sender, EntityPlayer player) {
++        if (player != null) {
++            TPSBarTask.togglePlayer(player.getBukkitEntity());
++            return 1;
++        }
++        return 0;
++    }
++}
+diff --git a/src/main/java/net/pl3x/purpur/task/TPSBarTask.java b/src/main/java/net/pl3x/purpur/task/TPSBarTask.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..362c586aeecc8a2b1a4a736f01a9fb9f833b14e9
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/task/TPSBarTask.java
+@@ -0,0 +1,106 @@
++package net.pl3x.purpur.task;
++
++import org.bukkit.Bukkit;
++import org.bukkit.ChatColor;
++import org.bukkit.NamespacedKey;
++import org.bukkit.boss.BarColor;
++import org.bukkit.boss.BarStyle;
++import org.bukkit.boss.BossBar;
++import org.bukkit.craftbukkit.scheduler.MinecraftInternalPlugin;
++import org.bukkit.entity.Player;
++import org.bukkit.scheduler.BukkitRunnable;
++
++public class TPSBarTask extends BukkitRunnable {
++    private final NamespacedKey key;
++    private final BossBar bossbar;
++    private static TPSBarTask instance;
++
++    public TPSBarTask() {
++        instance = this;
++
++        this.key = new NamespacedKey("purpur", "tpsbar");
++
++        BossBar bossbar = Bukkit.getBossBar(key);
++        if (bossbar == null) {
++            bossbar = Bukkit.createBossBar(key, "TPS: 20.0", BarColor.RED, BarStyle.SEGMENTED_20);
++        }
++        bossbar.setVisible(true);
++        bossbar.setProgress(1.0D);
++
++        this.bossbar = bossbar;
++    }
++
++    @Override
++    public void run() {
++        if (bossbar.getPlayers().isEmpty()) {
++            return;
++        }
++
++        double tps = Bukkit.getTPS()[0];
++        if (tps > 20.0D) {
++            tps = 20.0D;
++        } else if (tps < 0.0D) {
++            tps = 0.0D;
++        }
++
++        bossbar.setVisible(true);
++        bossbar.setProgress(Math.max(Math.min(tps / 20.0D, 1.0D), 0.0D));
++
++        String tpsColor;
++        if (tps >= 18) {
++            tpsColor = "&2";
++            bossbar.setColor(BarColor.GREEN);
++        } else if (tps >= 15) {
++            tpsColor = "&e";
++            bossbar.setColor(BarColor.YELLOW);
++        } else {
++            tpsColor = "&4";
++            bossbar.setColor(BarColor.RED);
++        }
++
++        double mspt = Bukkit.getAverageTickTime();
++        String msptColor;
++        if (mspt < 40) {
++            msptColor = "&2";
++        } else if (mspt < 50) {
++            msptColor = "&e";
++        } else {
++            msptColor = "&4";
++        }
++
++        bossbar.setTitle(ChatColor.translateAlternateColorCodes('&', "&eTPS&3: " + tpsColor + String.format("%.2f", tps) + " &eMSPT&3: " + msptColor + String.format("%.3f", mspt)));
++    }
++
++    @Override
++    public void cancel() {
++        super.cancel();
++        bossbar.setVisible(false);
++        bossbar.removeAll();
++        Bukkit.removeBossBar(key);
++    }
++
++    public static void removePlayer(Player player) {
++        instance.bossbar.removePlayer(player);
++    }
++
++    public static void togglePlayer(Player player) {
++        if (instance.bossbar.getPlayers().contains(player)) {
++            instance.bossbar.removePlayer(player);
++        } else {
++            instance.bossbar.addPlayer(player);
++            instance.run();
++        }
++    }
++
++    public static void start() {
++        if (instance != null) {
++            instance.cancel();
++        }
++        instance = new TPSBarTask();
++        instance.runTaskTimerAsynchronously(new MinecraftInternalPlugin(), 20L, 20L);
++    }
++
++    public static void stop() {
++        instance.cancel();
++    }
++}
