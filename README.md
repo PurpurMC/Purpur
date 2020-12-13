@@ -49,7 +49,7 @@ Downloads API endpoints:
 
 Everything is licensed under the MIT license, and is free to be used in your own fork.
 
-See [starlis/empirecraft](https://github.com/starlis/empirecraft) and [electronicboy/byof](https://github.com/electronicboy/byof) 
+See [starlis/empirecraft](https://github.com/starlis/empirecraft), [electronicboy/byof](https://github.com/electronicboy/byof), and [mikroskeemsrealm/Toothpick](https://github.com/mikroskeemsrealm/Toothpick)
 for the license of material used/modified by this project.
 
 ## bStats
@@ -76,14 +76,15 @@ Purpur API maven dependency:
 ```
 
 Purpur API gradle dependency:
-```groovy
-maven {
-    name 'purpur'
-    url 'https://repo.pl3x.net/'
+```kotlin
+repositories {
+    maven("https://repo.pl3x.net/")
 }
 ```
-```groovy
-compileOnly 'net.pl3x.purpur:purpur-api:1.16.4-R0.1-SNAPSHOT'
+```kotlin
+dependencies {
+    compileOnly("net.pl3x.purpur", "purpur-api", "1.16.4-R0.1-SNAPSHOT")
+}
 ```
 
 Yes, this also includes all API provided by Paper, Spigot, and Bukkit.
@@ -94,14 +95,12 @@ Yes, this also includes all API provided by Paper, Spigot, and Bukkit.
 Run the following commands in the root directory:
 
 ```
-git submodule update --init
-./purpur up
-./purpur patch
+./gradlew applyPatches
 ```
 
 #### Creating a patch
 Patches are effectively just commits in either `Purpur-API` or `Purpur-Server`. 
-To create one, just add a commit to either repo and run `./purpur rb`, and a 
+To create one, just add a commit to either repo and run `./gradlew rebuildPatches`, and a 
 patch will be placed in the patches folder. Modifying commits will also modify its 
 corresponding patch file.
 
@@ -110,7 +109,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for more detailed information.
 
 #### Compiling
 
-Use the command `./purpur build` to build the api and server. Compiled jars
-will be placed under `Purpur-API/target` and `Purpur-Server/target`.
+Use the command `./gradlew build` to build the api and server. Compiled jars
+will be placed under `Purpur-API/build/libs` and `Purpur-Server/build/libs`.
 
-To get a purpurclip jar, run `./purpur jar`.
+To get a purpurclip jar, run `./gradlew paperclip`.
