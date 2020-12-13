@@ -30,10 +30,9 @@ function savePatches() {
     rm "$basedir"/patches/"$2"/*.patch
   fi
 
-  git format-patch --no-signature --zero-commit --no-stat -N -o "$basedir"/patches/"$2" upstream/upstream
+  git format-patch --no-signature --no-stat --full-index -N -o "$basedir/patches/$2" upstream/upstream
   cd "$basedir" || exit
   git add -A "$basedir"/patches/"$2"
-  cleanupPatches "$basedir"/patches/"$2"/
   echo "  Patches saved for $what to patches/$2"
 }
 
