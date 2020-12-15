@@ -18,9 +18,6 @@ fun RepositoryHandler.loadRepositories(project: Project) {
         val url = repositoryElem.search("url").firstOrNull()?.textContent ?: return@forEach
         maven(url)
     }
-    maven("https://libraries.minecraft.net")
-    maven("https://repo.aikar.co/content/groups/aikar/")
-    maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
 }
 
 fun DependencyHandlerScope.loadDependencies(project: Project) {

@@ -32,8 +32,11 @@ subprojects {
     apply<MavenPublishPlugin>()
 
     repositories {
-        mavenLocal()
         mavenCentral()
+        maven("https://repo.aikar.co/content/groups/aikar/")
+        maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
+        maven("https://libraries.minecraft.net")
+        mavenLocal()
     }
 
     java {
