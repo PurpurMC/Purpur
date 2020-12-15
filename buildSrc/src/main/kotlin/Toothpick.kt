@@ -43,7 +43,7 @@ class Toothpick : Plugin<Project> {
             dependsOn(initGitSubmodules)
             doLast {
                 val paperDir = rootProject.projectDir.resolve("Paper")
-                val result = cmd("./paper", "patch", dir = paperDir, printOut = true)
+                val result = cmd("bash", "-c", "./paper", "patch", dir = paperDir, printOut = true)
                 if (result.exitCode != 0) {
                     error("Failed to apply Paper patches: script exited with code ${result.exitCode}")
                 }
