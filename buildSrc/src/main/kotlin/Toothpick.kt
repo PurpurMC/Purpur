@@ -167,13 +167,8 @@ class Toothpick : Plugin<Project> {
         val applyPatches by tasks.registering {
             group = taskGroup
             // If Paper has not been setup yet or if we modified the submodule (i.e. upstream update), patch
-            if (!projectDir.resolve("Paper/.git").exists() || cmd(
-                    "git",
-                    "diff-index",
-                    "--quiet",
-                    "HEAD",
-                    "Paper"
-                ).exitCode != 0
+            if (!projectDir.resolve("Paper/.git").exists()
+                || cmd("git", "diff-index", "--quiet", "HEAD", "Paper").exitCode != 0
             ) {
                 dependsOn(setupPaper)
             }

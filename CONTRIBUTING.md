@@ -8,14 +8,15 @@ Patches to Purpur are very simple, but center around the directories 'Purpur-API
 Assuming you already have forked the repository:
 
 1. Pull the latest changes from the main repository
-2. Type `./purpur patch` in git bash to apply the changes from upstream
-3. cd into `Purpur-Server` for server changes, and `Purpur-API` for API changes
+2. Update the Paper submodule if necessary: `git submodule update --init --recursive` and `./gradlew setupPaper`
+3. Type `./gradlew applyPatches` to apply the latest Purpur patches
+4. cd into `Purpur-Server` for server changes, and `Purpur-API` for API changes
 
 These directories aren't git repositories in the traditional sense:
 
 - Every single commit in Purpur-Server/API is a patch. 
 - 'origin/master' points to a directory similar to Purpur-Server/API but for Paper
-- Typing `git status` should show that we are 10 or 11 commits ahead of master, meaning we have 10 or 11 patches that Purpur doesn't
+- Typing `git status` should show that we are 10 or 11 commits ahead of master, meaning we have 10 or 11 patches that Paper doesn't
   - If it says something like `212 commits ahead, 207 commits behind`, then type `git fetch` to update purpur
 
 ## Adding Patches
@@ -26,7 +27,7 @@ Adding patches to Purpur is very simple:
 3. Type `git add .` to add your changes
 4. Run `git commit` with the desired patch message
 5. `cd ../` to get back to the project root
-6. Run `./purpur rebuild` in the main directory to convert your commit into a new patch
+6. Run `./gradlew rebuildPatches` in the main directory to convert your commit into a new patch
 7. PR your patches back to this repository
 
 Your commit will be converted into a patch that you can then PR into Purpur
@@ -39,18 +40,17 @@ just need to add it to our import script to be ran during the patch process.
 1. Save (rebuild) any patches you are in the middle of working on!
 2. Identify the names of the files you want to import.
    - A complete list of all possible file names can be found at ```./Paper/work/Minecraft/$MCVER/net/minecraft/server```
-3. Open the file at `./scripts/importmcdev.sh` and add the name of your file to the script near the end.
-4. Update the project to rebuild with the new imports `./purpur up`
-5. Re-patch the server `./purpur patch`
-6. Edit away!
+3. Open the file at `./buildSrc/src/main/kotlin/MCDevImports.kt` and add the name of your file to the `nmsImports` set.
+4. Re-patch the server to make the imports take effect `./gradlew applyPatches`
+5. Edit away!
 
-This change is temporary! DO NOT COMMIT CHANGES TO THE `importmcdev.sh` FILE!
-Once you have made your changes to the new file, and rebuilt patches, you may undo your changes to `importmcdev.sh`
+This change is temporary! DO NOT COMMIT CHANGES TO THE `MCDevImports.kt` FILE!
+Once you have made your changes to the new file, and rebuilt patches, you may undo your changes to `MCDevImports.kt`
 
 Any file modified in a patch file gets automatically imported, so you only need this temporarily
 to import it to create the first patch.
 
-To undo your changes to the file, type `git checkout scripts/importmcdev.sh`, or just remove the import lines you added previously.
+To undo your changes to the file, type `git checkout buildSrc/src/main/kotlin/MCDevImports.kt`, or just remove the import lines you added previously.
 
 ## Modifying Patches
 Modifying previous patches is a bit more complex:
@@ -62,7 +62,7 @@ However, while in the middle of an edit, unless you also reset your API to a rel
 
 1. If you have changes you are working on type `git stash` to store them for later.
    - Later you can type `git stash pop` to get them back.
-2. Type `git rebase -i upstream/upstream`
+2. Type `git rebase -i origin/master`
    - It should show something like [this](https://gist.github.com/zachbr/21e92993cb99f62ffd7905d7b02f3159).
 3. Replace `pick` with `edit` for the commit/patch you want to modify, and "save" the changes.
    - Only do this for one commit at a time.
@@ -72,7 +72,7 @@ However, while in the middle of an edit, unless you also reset your API to a rel
    - **MAKE SURE TO ADD `--amend`** or else a new patch will be created.
    - You can also modify the commit message here.
 7. Type `git rebase --continue` to finish rebasing.
-8. Type `./purpur rebuild` in the main directory.
+8. Type `./gradlew rebuildPatches` in the main directory.
    - This will modify the appropriate patches based on your commits.
 9. PR your modifications back to this project.
 
@@ -83,9 +83,9 @@ This method has the benefit of being able to compile to test your change without
 
 1. Make your change while at HEAD
 2. Make a temporary commit. You don't need to make a message for this.
-3. Type `git rebase -i upstream/upstream`, move (cut) your temporary commit and move it under the line of the patch you wish to modify.
+3. Type `git rebase -i origin/master`, move (cut) your temporary commit and move it under the line of the patch you wish to modify.
 4. Change the `pick` with `f` (fixup) or `s` (squash) if you need to edit the commit message 
-5. Type `./purpur rebuild` in the main directory
+5. Type `./gradlew rebuildPatches` in the main directory
    - This will modify the appropriate patches based on your commits
 6. PR your modifications back to this project.
 
