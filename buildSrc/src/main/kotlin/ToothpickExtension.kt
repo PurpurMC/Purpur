@@ -13,8 +13,8 @@ open class ToothpickExtension(objects: ObjectFactory) {
     lateinit var serverProject: ToothpickSubproject
     lateinit var apiProject: ToothpickSubproject
     val subprojects: Map<String, ToothpickSubproject>
-        get() = mapOf(
+        get() = if (::forkName.isInitialized) mapOf(
             "$forkName-API" to apiProject,
             "$forkName-Server" to serverProject
-        )
+        ) else emptyMap()
 }

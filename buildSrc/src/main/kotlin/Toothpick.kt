@@ -1,10 +1,7 @@
-import org.gradle.api.DefaultTask
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.publish.maven.tasks.PublishToMavenLocal
 import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.getValue
-import org.gradle.kotlin.dsl.getting
 import org.gradle.kotlin.dsl.provideDelegate
 import org.gradle.kotlin.dsl.registering
 import java.nio.file.Files
@@ -14,17 +11,19 @@ import java.nio.file.StandardCopyOption
 class Toothpick : Plugin<Project> {
     override fun apply(project: Project) {
         project.extensions.create<ToothpickExtension>("toothpick", project.objects)
+        project.configureSubprojects()
         project.initToothpickTasks()
     }
 
     private fun Project.initToothpickTasks() {
-        tasks.getting(DefaultTask::class) {
-            if (!projectDir.resolve("Paper/.git").exists()
-                || toothpick.subprojects.values.any { !it.projectDir.exists() }
-            ) {
-                error("Workspace has not been setup. Try running `./gradlew applyPatches` first")
+        tasks.getByName("build") {
+            doFirst {
+                if (!rootProject.projectDir.resolve("Paper/.git").exists()
+                    || toothpick.subprojects.values.any { !it.projectDir.exists() }
+                ) {
+                    error("Workspace has not been setup. Try running `./gradlew applyPatches` first")
+                }
             }
-            finalizedBy(tasks.getting(PublishToMavenLocal::class))
         }
 
         val initGitSubmodules by tasks.registering {

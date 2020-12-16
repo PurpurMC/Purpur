@@ -1,8 +1,6 @@
 plugins {
     `java-library`
-    `maven-publish`
     toothpick
-    id("com.github.johnrengelman.shadow") version "6.1.0" apply false
 }
 
 toothpick {
@@ -28,9 +26,6 @@ toothpick {
 }
 
 subprojects {
-    apply<JavaLibraryPlugin>()
-    apply<MavenPublishPlugin>()
-
     repositories {
         mavenCentral()
         maven("https://repo.aikar.co/content/groups/aikar/")
@@ -43,20 +38,5 @@ subprojects {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
         withSourcesJar()
-    }
-
-    publishing {
-        publications {
-            create<MavenPublication>("mavenJava") {
-                artifactId = project.name
-                groupId = rootProject.group as String
-                version = rootProject.version as String
-                from(components["java"])
-                pom {
-                    name.set(project.name)
-                    url.set("https://github.com/pl3xgaming/Purpur")
-                }
-            }
-        }
     }
 }
