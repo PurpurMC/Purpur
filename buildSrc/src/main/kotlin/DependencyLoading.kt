@@ -55,7 +55,7 @@ fun DependencyHandlerScope.loadDependencies(project: Project) {
             "compile", null -> add("api", dependencyString)
             "provided" -> {
                 add("compileOnly", dependencyString)
-                add("testImplementation", dependencyString) // TODO: Bukkit quirk? or Maven scope mapping? No clue
+                add("testImplementation", dependencyString)
             }
             "runtime" -> add("runtimeOnly", dependencyString)
             "test" -> add("testImplementation", dependencyString)

@@ -111,24 +111,12 @@ class Toothpick : Plugin<Project> {
                     .map { it.toFile().nameWithoutExtension }
                     .forEach(::importNMS)
 
+                // Imports from MCDevImports.kt
                 nmsImports.forEach(::importNMS)
                 libraryImports.forEach(::importLibrary)
 
-                Files.list(paperServer).filter { file -> file.toFile().name == "nms-patches" }.forEach { path ->
-                    Files.deleteIfExists(path) // todo: why do we need this?
-                }
-                ensureSuccess(
-                    cmd(
-                        "git", "add", ".", "-A",
-                        dir = paperServer.toFile()
-                    )
-                )
-                ensureSuccess(
-                    cmd(
-                        "git", "commit", "-m", importLog.joinToString("\n"),
-                        dir = paperServer.toFile()
-                    )
-                )
+                ensureSuccess(cmd("git", "add", ".", "-A", dir = paperServer.toFile()))
+                ensureSuccess(cmd("git", "commit", "-m", importLog.joinToString("\n"), dir = paperServer.toFile()))
                 logger.lifecycle(">>> Done importing mc-dev")
             }
         }

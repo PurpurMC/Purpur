@@ -20,7 +20,8 @@ val generatePomFileForMavenJavaPublication by tasks.getting(GenerateMavenPom::cl
 }
 
 val test by tasks.getting(Test::class) {
-    exclude("org/bukkit/craftbukkit/inventory/ItemStack*Test.class") // todo: idk why these fail. paper excludes them in paperweight as well though
+    // didn't bother to look into why these fail. paper excludes them in paperweight as well though
+    exclude("org/bukkit/craftbukkit/inventory/ItemStack*Test.class")
 }
 
 val shadowJar by tasks.getting(ShadowJar::class) {
@@ -39,7 +40,8 @@ val shadowJar by tasks.getting(ShadowJar::class) {
         )
     }
     from(project.buildDir.resolve("tmp/pom.xml")) {
-        into("META-INF/maven/io.papermc.paper/paper") // dirty hack to make "java -Dpaperclip.install=true -jar paperclip.jar" work without forking paperclip
+        // dirty hack to make "java -Dpaperclip.install=true -jar paperclip.jar" work without forking paperclip
+        into("META-INF/maven/io.papermc.paper/paper")
     }
 
     // Don't like to do this but sadly have to do this for compatibility reasons
