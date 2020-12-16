@@ -42,3 +42,5 @@ fun String.applyReplacements(replacements: Map<String, String>): String {
     }
     return result
 }
+
+val jenkins = System.getenv("JOB_NAME") != null

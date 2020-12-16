@@ -147,15 +147,14 @@ class Toothpick : Plugin<Project> {
                     "build/libs/${toothpick.forkNameLowercase}-server-$version-all.jar"
                 ).absolutePath
                 logger.lifecycle(">>> Building paperclip")
-                ensureSuccess(
-                    cmd(
-                        "mvn", "clean", "package",
-                        "-Dmcver=${toothpick.minecraftVersion}",
-                        "-Dpaperjar=$patchedJarPath",
-                        "-Dvanillajar=$vanillaJarPath",
-                        dir = paperclipDir.toFile(), printOut = true
-                    )
+                val paperclipCmd = arrayListOf(
+                    "mvn", "clean", "package",
+                    "-Dmcver=${toothpick.minecraftVersion}",
+                    "-Dpaperjar=$patchedJarPath",
+                    "-Dvanillajar=$vanillaJarPath"
                 )
+                if (jenkins) paperclipCmd.add("-Dstyle.color=never")
+                ensureSuccess(cmd(*paperclipCmd.toTypedArray(), dir = paperclipDir.toFile(), printOut = true))
                 val paperClip = paperclipDir.resolve("assembly/target/paperclip-${toothpick.minecraftVersion}.jar")
                 val destination =
                     rootProject.projectPath.resolve("${toothpick.forkNameLowercase}-paperclip.jar")
