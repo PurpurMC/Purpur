@@ -174,15 +174,23 @@ class Toothpick : Plugin<Project> {
                     logger.lifecycle(">>> Done resetting subproject $name")
 
                     // Apply patches
-                    val patches = patchesDir.listFiles()
-                        ?.sortedArray()
-                        ?.filter { it.name.endsWith(".patch") }
-                        ?.takeIf { it.isNotEmpty() } ?: continue
+                    val patchPaths = Files.newDirectoryStream(subproject.patchesPath)
+                        .map { it.toFile() }
+                        .filter { it.name.endsWith(".patch") }
+                        .sorted()
+                        .takeIf { it.isNotEmpty() } ?: continue
+                    val patches = patchPaths.map { it.absolutePath }.toTypedArray()
+
+                    val wasGitSigningEnabled = temporarilyDisableGitSigning(projectDir)
 
                     logger.lifecycle(">>> Applying patches to $name")
-                    val gitCommand = arrayListOf("git", "am", "--3way", "--ignore-whitespace")
-                    gitCommand.addAll(patches.map { it.absolutePath })
-                    ensureSuccess(cmd(*gitCommand.toTypedArray(), dir = projectDir, printOut = true))
+
+                    val gitCommand = arrayListOf("git", "am", "--3way", "--ignore-whitespace", *patches)
+                    ensureSuccess(cmd(*gitCommand.toTypedArray(), dir = projectDir, printOut = true)) {
+                        if (wasGitSigningEnabled) reEnableGitSigning(projectDir)
+                    }
+
+                    if (wasGitSigningEnabled) reEnableGitSigning(projectDir)
                     logger.lifecycle(">>> Done applying patches to $name")
                 }
             }

@@ -5,7 +5,11 @@ import kotlin.streams.asSequence
 
 data class CmdResult(val exitCode: Int, val output: String?)
 
-fun Project.cmd(vararg args: String, dir: File = rootProject.projectDir, printOut: Boolean = false): CmdResult {
+fun Project.cmd(
+    vararg args: String,
+    dir: File = rootProject.projectDir,
+    printOut: Boolean = false
+): CmdResult {
     val process = ProcessBuilder()
         .command(*args)
         .redirectErrorStream(true)
@@ -27,20 +31,39 @@ fun Project.cmd(vararg args: String, dir: File = rootProject.projectDir, printOu
     return CmdResult(exit, output)
 }
 
-fun ensureSuccess(cmd: CmdResult): String? {
+fun ensureSuccess(
+    cmd: CmdResult,
+    errorHandler: CmdResult.() -> Unit = {}
+): String? {
     val (exit, output) = cmd
     if (exit != 0) {
+        errorHandler(cmd)
         error("Failed to run command, exit code is $exit")
     }
     return output
 }
 
-fun String.applyReplacements(replacements: Map<String, String>): String {
+internal fun String.applyReplacements(replacements: Map<String, String>): String {
     var result = this
     for ((key, value) in replacements) {
         result = result.replace("\${$key}", value)
     }
     return result
+}
+
+private fun Project.gitSigningEnabled(repo: File): Boolean =
+    cmd("git", "config", "commit.gpgsign", dir = repo).output?.toBoolean() == true
+
+internal fun Project.temporarilyDisableGitSigning(repo: File): Boolean {
+    val isCurrentlyEnabled = gitSigningEnabled(repo)
+    if (isCurrentlyEnabled) {
+        cmd("git", "config", "commit.gpgsign", "false", dir = repo)
+    }
+    return isCurrentlyEnabled
+}
+
+internal fun Project.reEnableGitSigning(repo: File) {
+    cmd("git", "config", "commit.gpgsign", "true", dir = repo)
 }
 
 val jenkins = System.getenv("JOB_NAME") != null

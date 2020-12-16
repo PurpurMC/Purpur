@@ -45,7 +45,6 @@ internal fun Project.configureSubprojects() {
     }
 }
 
-@Suppress("UNUSED_VARIABLE")
 private fun Project.configureServerProject() {
     apply<ShadowPlugin>()
 
