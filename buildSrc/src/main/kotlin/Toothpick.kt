@@ -16,6 +16,16 @@ class Toothpick : Plugin<Project> {
     }
 
     private fun Project.initToothpickTasks() {
+        if (project.hasProperty("fast")) {
+            gradle.taskGraph.whenReady {
+                gradle.taskGraph.allTasks.filter {
+                    it.name == "test" || it.name.contains("javadoc", ignoreCase = true)
+                }.forEach {
+                    it.onlyIf { false }
+                }
+            }
+        }
+
         tasks.getByName("build") {
             doFirst {
                 if (!rootProject.projectDir.resolve("Paper/.git").exists()
@@ -30,7 +40,7 @@ class Toothpick : Plugin<Project> {
             group = taskGroup
             onlyIf { !projectDir.resolve("Paper/.git").exists() }
             doLast {
-                val exit = cmd("git", "submodule", "update", "--init", "--recursive", printOut = true).exitCode
+                val exit = gitCmd("submodule", "update", "--init", "--recursive", printOut = true).exitCode
                 if (exit != 0) {
                     error("Failed to checkout git submodules: git exited with code $exit")
                 }
@@ -42,10 +52,11 @@ class Toothpick : Plugin<Project> {
             dependsOn(initGitSubmodules)
             doLast {
                 val paperDir = rootProject.projectDir.resolve("Paper")
-                val result = cmd("bash", "-c", "./paper patch", dir = paperDir, printOut = true)
+                val result = bashCmd("./paper patch", dir = paperDir, printOut = true)
                 if (result.exitCode != 0) {
                     error("Failed to apply Paper patches: script exited with code ${result.exitCode}")
                 }
+                rootProject.projectDir.resolve("last-paper").writeText(gitHash(paperDir))
             }
         }
 
@@ -81,14 +92,14 @@ class Toothpick : Plugin<Project> {
 
             doLast {
                 logger.lifecycle(">>> Importing mc-dev")
-                if (cmd(
-                        "git", "log", "-1", "--oneline",
+                if (gitCmd(
+                        "log", "-1", "--oneline",
                         dir = paperServer.toFile()
                     ).output?.contains("Extra mc-dev imports") == true
                 ) {
                     ensureSuccess(
-                        cmd(
-                            "git", "reset", "--hard", "origin/master",
+                        gitCmd(
+                            "reset", "--hard", "origin/master",
                             dir = paperServer.toFile(),
                             printOut = true
                         )
@@ -114,8 +125,8 @@ class Toothpick : Plugin<Project> {
                 nmsImports.forEach(::importNMS)
                 libraryImports.forEach(::importLibrary)
 
-                ensureSuccess(cmd("git", "add", ".", "-A", dir = paperServer.toFile()))
-                ensureSuccess(cmd("git", "commit", "-m", importLog.joinToString("\n"), dir = paperServer.toFile()))
+                ensureSuccess(gitCmd("add", ".", "-A", dir = paperServer.toFile()))
+                ensureSuccess(gitCmd("commit", "-m", importLog.joinToString("\n"), dir = paperServer.toFile()))
                 logger.lifecycle(">>> Done importing mc-dev")
             }
         }
@@ -153,9 +164,9 @@ class Toothpick : Plugin<Project> {
         val applyPatches by tasks.registering {
             group = taskGroup
             // If Paper has not been setup yet or if we modified the submodule (i.e. upstream update), patch
-            if (!projectDir.resolve("Paper/.git").exists()
-                || cmd("git", "diff-index", "--quiet", "HEAD", "Paper").exitCode != 0
-            ) {
+            val paperDir = projectDir.resolve("Paper")
+            val lastPaper = projectDir.resolve("last-paper")
+            if (!lastPaper.exists() || lastPaper.readText() != gitHash(paperDir)) {
                 dependsOn(setupPaper)
             }
             mustRunAfter(setupPaper)
@@ -167,9 +178,9 @@ class Toothpick : Plugin<Project> {
                     // Reset or initialize subproject
                     logger.lifecycle(">>> Resetting subproject $name")
                     if (projectDir.exists()) {
-                        ensureSuccess(cmd("git", "reset", "--hard", "origin/master", dir = projectDir))
+                        ensureSuccess(gitCmd("reset", "--hard", "origin/master", dir = projectDir))
                     } else {
-                        ensureSuccess(cmd("git", "clone", sourceRepo.absolutePath, projectDir.absolutePath))
+                        ensureSuccess(gitCmd("clone", sourceRepo.absolutePath, projectDir.absolutePath))
                     }
                     logger.lifecycle(">>> Done resetting subproject $name")
 
@@ -185,8 +196,8 @@ class Toothpick : Plugin<Project> {
 
                     logger.lifecycle(">>> Applying patches to $name")
 
-                    val gitCommand = arrayListOf("git", "am", "--3way", "--ignore-whitespace", *patches)
-                    ensureSuccess(cmd(*gitCommand.toTypedArray(), dir = projectDir, printOut = true)) {
+                    val gitCommand = arrayListOf("am", "--3way", "--ignore-whitespace", *patches)
+                    ensureSuccess(gitCmd(*gitCommand.toTypedArray(), dir = projectDir, printOut = true)) {
                         if (wasGitSigningEnabled) reEnableGitSigning(projectDir)
                     }
 
@@ -215,8 +226,8 @@ class Toothpick : Plugin<Project> {
 
                     // And generate new
                     ensureSuccess(
-                        cmd(
-                            "git", "format-patch",
+                        gitCmd(
+                            "format-patch",
                             "--no-stat", "--zero-commit", "--full-index", "--no-signature", "-N",
                             "-o", patchesDir.absolutePath, "origin/master",
                             dir = projectDir,
@@ -233,9 +244,9 @@ class Toothpick : Plugin<Project> {
             group = taskGroup
             doLast {
                 val paperDir = rootProject.projectDir.resolve("Paper")
-                ensureSuccess(cmd("git", "fetch", dir = paperDir, printOut = true))
-                ensureSuccess(cmd("git", "reset", "--hard", "origin/master", dir = paperDir, printOut = true))
-                ensureSuccess(cmd("git", "add", "Paper", dir = rootProject.projectDir, printOut = true))
+                ensureSuccess(gitCmd("fetch", dir = paperDir, printOut = true))
+                ensureSuccess(gitCmd("reset", "--hard", "origin/master", dir = paperDir, printOut = true))
+                ensureSuccess(gitCmd("add", "Paper", dir = rootProject.projectDir, printOut = true))
             }
             finalizedBy(setupPaper)
         }

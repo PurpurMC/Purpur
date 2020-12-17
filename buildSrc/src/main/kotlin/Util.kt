@@ -43,6 +43,20 @@ fun ensureSuccess(
     return output
 }
 
+fun Project.gitCmd(
+    vararg args: String,
+    dir: File = rootProject.projectDir,
+    printOut: Boolean = false
+): CmdResult =
+    cmd("git", *args, dir = dir, printOut = printOut)
+
+fun Project.bashCmd(
+    vararg args: String,
+    dir: File = rootProject.projectDir,
+    printOut: Boolean = false
+): CmdResult =
+    cmd("bash", "-c", *args, dir = dir, printOut = printOut)
+
 internal fun String.applyReplacements(replacements: Map<String, String>): String {
     var result = this
     for ((key, value) in replacements) {
@@ -52,18 +66,21 @@ internal fun String.applyReplacements(replacements: Map<String, String>): String
 }
 
 private fun Project.gitSigningEnabled(repo: File): Boolean =
-    cmd("git", "config", "commit.gpgsign", dir = repo).output?.toBoolean() == true
+    gitCmd("config", "commit.gpgsign", dir = repo).output?.toBoolean() == true
 
 internal fun Project.temporarilyDisableGitSigning(repo: File): Boolean {
     val isCurrentlyEnabled = gitSigningEnabled(repo)
     if (isCurrentlyEnabled) {
-        cmd("git", "config", "commit.gpgsign", "false", dir = repo)
+        gitCmd("config", "commit.gpgsign", "false", dir = repo)
     }
     return isCurrentlyEnabled
 }
 
 internal fun Project.reEnableGitSigning(repo: File) {
-    cmd("git", "config", "commit.gpgsign", "true", dir = repo)
+    gitCmd("config", "commit.gpgsign", "true", dir = repo)
 }
+
+fun Project.gitHash(repo: File): String =
+    ensureSuccess(gitCmd("rev-parse", "HEAD")) ?: error("No git repo in '$repo'?")
 
 val jenkins = System.getenv("JOB_NAME") != null
