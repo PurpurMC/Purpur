@@ -81,6 +81,6 @@ internal fun Project.reEnableGitSigning(repo: File) {
 }
 
 fun Project.gitHash(repo: File): String =
-    ensureSuccess(gitCmd("rev-parse", "HEAD")) ?: error("No git repo in '$repo'?")
+    ensureSuccess(gitCmd("rev-parse", "HEAD", dir = repo)) ?: error("No git repo in '$repo'?")
 
 val jenkins = System.getenv("JOB_NAME") != null
