@@ -44,7 +44,9 @@ fun DependencyHandlerScope.loadDependencies(project: Project) {
         project.logger.debug("Read dependency '{}' from '{}'", dependencyString, pomFile.absolutePath)
 
         // Special case API
-        if (groupId == project.toothpick.groupId && artifactId == "${project.toothpick.forkNameLowercase}-api") {
+        if (artifactId == "${project.toothpick.forkNameLowercase}-api"
+            || artifactId == "${project.toothpick.upstreamLowercase}-api"
+        ) {
             if (project.name.endsWith("-server")) {
                 add("api", project(":${project.toothpick.forkNameLowercase}-api"))
             }

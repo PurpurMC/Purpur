@@ -5,7 +5,6 @@ import org.gradle.kotlin.dsl.getValue
 import org.gradle.kotlin.dsl.provideDelegate
 import org.gradle.kotlin.dsl.registering
 import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 
 @Suppress("UNUSED_VARIABLE")
 class Toothpick : Plugin<Project> {
@@ -28,9 +27,10 @@ class Toothpick : Plugin<Project> {
 
         tasks.getByName("build") {
             doFirst {
-                if (!rootProject.projectDir.resolve("Paper/.git").exists()
-                    || toothpick.subprojects.values.any { !it.projectDir.exists() }
-                ) {
+                val readyToBuild =
+                    upstreamDir.resolve(".git").exists()
+                            && toothpick.subprojects.values.all { it.projectDir.exists() && it.baseDir.exists() }
+                if (!readyToBuild) {
                     error("Workspace has not been setup. Try running `./gradlew applyPatches` first")
                 }
             }
@@ -38,7 +38,7 @@ class Toothpick : Plugin<Project> {
 
         val initGitSubmodules by tasks.registering {
             group = taskGroup
-            onlyIf { !projectDir.resolve("Paper/.git").exists() }
+            onlyIf { !upstreamDir.resolve(".git").exists() }
             doLast {
                 val exit = gitCmd("submodule", "update", "--init", "--recursive", printOut = true).exitCode
                 if (exit != 0) {
@@ -47,60 +47,61 @@ class Toothpick : Plugin<Project> {
             }
         }
 
-        val setupPaper by tasks.registering {
+        val setupUpstream by tasks.registering {
             group = taskGroup
             dependsOn(initGitSubmodules)
             doLast {
-                val paperDir = rootProject.projectDir.resolve("Paper")
-                val result = bashCmd("./paper patch", dir = paperDir, printOut = true)
+                // this whole thing assumes we're forking either paper or a byof project atm
+                val result = bashCmd(
+                    "./${toothpick.upstreamLowercase} patch",
+                    dir = upstreamDir,
+                    printOut = true
+                )
                 if (result.exitCode != 0) {
-                    error("Failed to apply Paper patches: script exited with code ${result.exitCode}")
+                    error("Failed to apply upstream patches: script exited with code ${result.exitCode}")
                 }
-                rootProject.projectDir.resolve("last-paper").writeText(gitHash(paperDir))
+                lastUpstream.writeText(gitHash(upstreamDir))
             }
         }
 
         val importMCDev by tasks.registering {
             group = internalTaskGroup
-            mustRunAfter(setupPaper)
-            val paperDir = rootProject.projectPath.resolve("Paper")
-            val paperServer = paperDir.resolve("Paper-Server")
+            mustRunAfter(setupUpstream)
+            val upstreamServer = toothpick.serverProject.baseDir
             val importLog = arrayListOf("Extra mc-dev imports")
 
             fun importNMS(className: String) {
                 logger.lifecycle("Importing n.m.s.$className")
                 importLog.add("Imported n.m.s.$className")
-                val source =
-                    paperDir.resolve("work/Minecraft/${toothpick.minecraftVersion}/spigot/net/minecraft/server/$className.java")
-                if (!Files.exists(source)) error("Missing NMS: $className")
-                val target = paperServer.resolve("src/main/java/net/minecraft/server/$className.java")
-                Files.copy(source, target)
+                val source = toothpick.paperWorkDir.resolve("spigot/net/minecraft/server/$className.java")
+                if (!source.exists()) error("Missing NMS: $className")
+                val target = upstreamServer.resolve("src/main/java/net/minecraft/server/$className.java")
+                source.copyTo(target)
             }
 
             fun importLibrary(import: LibraryImport) {
                 val (group, lib, prefix, file) = import
                 logger.lifecycle("Importing $group.$lib $prefix/$file")
                 importLog.add("Imported $group.$lib $prefix/$file")
-                val source =
-                    paperDir.resolve("work/Minecraft/${toothpick.minecraftVersion}/libraries/$group/$lib/$prefix/$file.java")
-                if (!Files.exists(source)) error("Missing Base: $lib $prefix/$file")
-                val targetDir = paperServer.resolve("src/main/java/$prefix")
+                val source = toothpick.paperWorkDir.resolve("libraries/$group/$lib/$prefix/$file.java")
+                if (!source.exists()) error("Missing Base: $lib $prefix/$file")
+                val targetDir = upstreamServer.resolve("src/main/java/$prefix")
                 val target = targetDir.resolve("$file.java")
-                Files.createDirectories(targetDir)
-                Files.copy(source, target)
+                targetDir.mkdirs()
+                source.copyTo(target)
             }
 
             doLast {
                 logger.lifecycle(">>> Importing mc-dev")
-                if (gitCmd(
-                        "log", "-1", "--oneline",
-                        dir = paperServer.toFile()
-                    ).output?.contains("Extra mc-dev imports") == true
-                ) {
+                val lastCommitIsMCDev = gitCmd(
+                    "log", "-1", "--oneline",
+                    dir = upstreamServer
+                ).output?.contains("Extra mc-dev imports") == true
+                if (lastCommitIsMCDev) {
                     ensureSuccess(
                         gitCmd(
                             "reset", "--hard", "origin/master",
-                            dir = paperServer.toFile(),
+                            dir = upstreamServer,
                             printOut = true
                         )
                     )
@@ -111,22 +112,25 @@ class Toothpick : Plugin<Project> {
                     .filter { it.startsWith("+++ b/src/main/java/net/minecraft/server/") }
                     .distinct()
                     .map { it.substringAfter("/server/").substringBefore(".java") }
-                    .filter { !Files.exists(paperServer.resolve("src/main/java/net/minecraft/server/$it.java")) }
-                    .map { paperDir.resolve("work/Minecraft/${toothpick.minecraftVersion}/spigot/net/minecraft/server/$it.java") }
+                    .filter { !upstreamServer.resolve("src/main/java/net/minecraft/server/$it.java").exists() }
+                    .map { toothpick.paperWorkDir.resolve("spigot/net/minecraft/server/$it.java") }
                     .filter {
-                        val exists = Files.exists(it)
-                        if (!exists) logger.lifecycle("NMS ${it.toFile().nameWithoutExtension} is either missing, or is a new file added through a patch")
+                        val exists = it.exists()
+                        if (!it.exists()) logger.lifecycle("NMS ${it.nameWithoutExtension} is either missing, or is a new file added through a patch")
                         exists
                     }
-                    .map { it.toFile().nameWithoutExtension }
+                    .map { it.nameWithoutExtension }
                     .forEach(::importNMS)
 
                 // Imports from MCDevImports.kt
                 nmsImports.forEach(::importNMS)
                 libraryImports.forEach(::importLibrary)
 
-                ensureSuccess(gitCmd("add", ".", "-A", dir = paperServer.toFile()))
-                ensureSuccess(gitCmd("commit", "-m", importLog.joinToString("\n"), dir = paperServer.toFile()))
+                val add = gitCmd("add", ".", "-A", dir = upstreamServer).exitCode == 0
+                val commit = gitCmd("commit", "-m", importLog.joinToString("\n"), dir = upstreamServer).exitCode == 0
+                if (!add || !commit) {
+                    logger.lifecycle(">>> Didn't import any extra files")
+                }
                 logger.lifecycle(">>> Done importing mc-dev")
             }
         }
@@ -136,11 +140,10 @@ class Toothpick : Plugin<Project> {
             dependsOn(tasks.getByName("build"))
             dependsOn(subprojects.map { it.tasks.getByName("build") })
             doLast {
-                val workDir = rootProject.projectPath.resolve("Paper/work")
+                val workDir = toothpick.paperDir.resolve("work")
                 val paperclipDir = workDir.resolve("Paperclip")
                 val vanillaJarPath =
-                    workDir.resolve("Minecraft/${toothpick.minecraftVersion}/${toothpick.minecraftVersion}.jar")
-                        .toFile().absolutePath
+                    workDir.resolve("Minecraft/${toothpick.minecraftVersion}/${toothpick.minecraftVersion}.jar").absolutePath
                 val patchedJarPath = toothpick.serverProject.projectDir.resolve(
                     "build/libs/${toothpick.forkNameLowercase}-server-$version-all.jar"
                 ).absolutePath
@@ -152,11 +155,10 @@ class Toothpick : Plugin<Project> {
                     "-Dvanillajar=$vanillaJarPath"
                 )
                 if (jenkins) paperclipCmd.add("-Dstyle.color=never")
-                ensureSuccess(cmd(*paperclipCmd.toTypedArray(), dir = paperclipDir.toFile(), printOut = true))
+                ensureSuccess(cmd(*paperclipCmd.toTypedArray(), dir = paperclipDir, printOut = true))
                 val paperClip = paperclipDir.resolve("assembly/target/paperclip-${toothpick.minecraftVersion}.jar")
-                val destination =
-                    rootProject.projectPath.resolve("${toothpick.forkNameLowercase}-paperclip.jar")
-                Files.copy(paperClip, destination, StandardCopyOption.REPLACE_EXISTING)
+                val destination = rootProjectDir.resolve("${toothpick.forkNameLowercase}-paperclip.jar")
+                paperClip.copyTo(destination, overwrite = true)
                 logger.lifecycle(">>> ${toothpick.forkNameLowercase}-paperclip.jar saved to root project directory")
             }
         }
@@ -164,15 +166,13 @@ class Toothpick : Plugin<Project> {
         val applyPatches by tasks.registering {
             group = taskGroup
             // If Paper has not been setup yet or if we modified the submodule (i.e. upstream update), patch
-            val paperDir = projectDir.resolve("Paper")
-            val lastPaper = projectDir.resolve("last-paper")
-            if (!lastPaper.exists()
-                || !paperDir.resolve(".git").exists()
-                || lastPaper.readText() != gitHash(paperDir)
+            if (!lastUpstream.exists()
+                || !upstreamDir.resolve(".git").exists()
+                || lastUpstream.readText() != gitHash(upstreamDir)
             ) {
-                dependsOn(setupPaper)
+                dependsOn(setupUpstream)
             }
-            mustRunAfter(setupPaper)
+            mustRunAfter(setupUpstream)
             dependsOn(importMCDev)
             doLast {
                 for ((name, subproject) in toothpick.subprojects) {
@@ -188,7 +188,7 @@ class Toothpick : Plugin<Project> {
                     logger.lifecycle(">>> Done resetting subproject $name")
 
                     // Apply patches
-                    val patchPaths = Files.newDirectoryStream(subproject.patchesPath)
+                    val patchPaths = Files.newDirectoryStream(patchesDir.toPath())
                         .map { it.toFile() }
                         .filter { it.name.endsWith(".patch") }
                         .sorted()
@@ -246,12 +246,12 @@ class Toothpick : Plugin<Project> {
         val updateUpstream by tasks.registering {
             group = taskGroup
             doLast {
-                val paperDir = rootProject.projectDir.resolve("Paper")
-                ensureSuccess(gitCmd("fetch", dir = paperDir, printOut = true))
-                ensureSuccess(gitCmd("reset", "--hard", "origin/master", dir = paperDir, printOut = true))
-                ensureSuccess(gitCmd("add", "Paper", dir = rootProject.projectDir, printOut = true))
+                ensureSuccess(gitCmd("fetch", dir = upstreamDir, printOut = true))
+                ensureSuccess(gitCmd("reset", "--hard", "origin/master", dir = upstreamDir, printOut = true))
+                ensureSuccess(gitCmd("add", toothpick.upstream, dir = rootProjectDir, printOut = true))
+                ensureSuccess(gitCmd("submodule", "update", "--recursive", dir = upstreamDir, printOut = true))
             }
-            finalizedBy(setupPaper)
+            finalizedBy(setupUpstream)
         }
     }
 }

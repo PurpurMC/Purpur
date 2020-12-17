@@ -6,23 +6,22 @@ plugins {
 toothpick {
     forkName = "Purpur"
     groupId = "net.pl3x.purpur"
-
-    minecraftVersion = "1.16.4"
-    nmsRevision = "R0.1-SNAPSHOT"
     val versionTag = System.getenv("BUILD_NUMBER")
         ?: "\"${gitCmd("rev-parse", "--short", "HEAD").output}\""
     forkVersion = "git-$forkName-$versionTag"
+    
+    minecraftVersion = "1.16.4"
+    nmsRevision = "R0.1-SNAPSHOT"
 
-    serverProject = ToothpickSubproject(
-        rootProject.projectDir.resolve("Paper/Paper-Server"),
-        project(":$forkNameLowercase-server").projectDir,
-        rootProject.projectDir.resolve("patches/server")
-    )
-    apiProject = ToothpickSubproject(
-        rootProject.projectDir.resolve("Paper/Paper-API"),
-        project(":$forkNameLowercase-api").projectDir,
-        rootProject.projectDir.resolve("patches/api")
-    )
+    upstream = "Paper"
+    server {
+        project = project(":$forkNameLowercase-server")
+        patchesDir = rootProject.projectDir.resolve("patches/server")
+    }
+    api {
+        project = project(":$forkNameLowercase-api")
+        patchesDir = rootProject.projectDir.resolve("patches/api")
+    }
 }
 
 subprojects {
