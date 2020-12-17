@@ -166,7 +166,10 @@ class Toothpick : Plugin<Project> {
             // If Paper has not been setup yet or if we modified the submodule (i.e. upstream update), patch
             val paperDir = projectDir.resolve("Paper")
             val lastPaper = projectDir.resolve("last-paper")
-            if (!lastPaper.exists() || lastPaper.readText() != gitHash(paperDir)) {
+            if (!lastPaper.exists()
+                || !paperDir.resolve(".git").exists()
+                || lastPaper.readText() != gitHash(paperDir)
+            ) {
                 dependsOn(setupPaper)
             }
             mustRunAfter(setupPaper)
