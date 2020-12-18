@@ -8,7 +8,7 @@ Patches to Purpur are very simple, but center around the directories 'Purpur-API
 Assuming you already have forked the repository:
 
 1. Pull the latest changes from the main repository
-2. Update the Paper submodule if necessary: `git submodule update --init --recursive` and `./gradlew setupPaper`
+2. Update the Paper submodule if necessary: `git submodule update --init --recursive` and `./gradlew setupUpstream`
 3. Type `./gradlew applyPatches` to apply the latest Purpur patches
 4. cd into `Purpur-Server` for server changes, and `Purpur-API` for API changes
 
