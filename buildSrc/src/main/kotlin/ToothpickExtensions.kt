@@ -13,6 +13,8 @@ fun Project.toothpick(receiver: ToothpickExtension.() -> Unit) {
         group = toothpick.groupId
         version = "${toothpick.minecraftVersion}-${toothpick.nmsRevision}"
     }
+    configureSubprojects()
+    initToothpickTasks()
 }
 
 val Project.lastUpstream: File

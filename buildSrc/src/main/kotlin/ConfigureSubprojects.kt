@@ -21,26 +21,24 @@ internal fun Project.configureSubprojects() {
         apply<JavaLibraryPlugin>()
         apply<MavenPublishPlugin>()
 
-        afterEvaluate {
-            extensions.configure(PublishingExtension::class.java) {
-                publications {
-                    create<MavenPublication>("mavenJava") {
-                        artifactId = if (project.name.endsWith("server")) rootProject.name else project.name
-                        groupId = rootProject.group as String
-                        version = rootProject.version as String
-                        from(components["java"])
-                        pom {
-                            name.set(project.name)
-                            url.set("https://github.com/pl3xgaming/Purpur")
-                        }
+        extensions.configure(PublishingExtension::class.java) {
+            publications {
+                create<MavenPublication>("mavenJava") {
+                    artifactId = if (project.name.endsWith("server")) rootProject.name else project.name
+                    groupId = rootProject.group as String
+                    version = rootProject.version as String
+                    from(components["java"])
+                    pom {
+                        name.set(project.name)
+                        url.set("https://github.com/pl3xgaming/Purpur")
                     }
                 }
             }
+        }
 
-            when {
-                project.name.endsWith("server") -> configureServerProject()
-                project.name.endsWith("api") -> configureApiProject()
-            }
+        when {
+            project.name.endsWith("server") -> configureServerProject()
+            project.name.endsWith("api") -> configureApiProject()
         }
     }
 }

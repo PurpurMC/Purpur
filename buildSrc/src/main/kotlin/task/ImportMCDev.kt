@@ -9,14 +9,13 @@ import nmsImports
 import org.gradle.api.Project
 import org.gradle.api.Task
 import toothpick
-import java.io.File
 
 internal fun Project.createImportMCDevTask(
     receiver: Task.() -> Unit = {}
 ): Task = tasks.create("importMCDev") {
     receiver(this)
     group = internalTaskGroup
-    val upstreamServer: File by lazy { toothpick.serverProject.baseDir }
+    val upstreamServer = toothpick.serverProject.baseDir
     val importLog = arrayListOf("Extra mc-dev imports")
 
     fun importNMS(className: String) {
