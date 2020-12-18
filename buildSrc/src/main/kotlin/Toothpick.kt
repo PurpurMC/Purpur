@@ -257,7 +257,7 @@ class Toothpick : Plugin<Project> {
         val upstreamCommit by tasks.registering {
             group = taskGroup
             doLast {
-                val oldRev = ensureSuccess(gitCmd("ls-tree", "HEAD", toothpick.upstream, printOut = true))
+                val oldRev = ensureSuccess(gitCmd("ls-tree", "HEAD", toothpick.upstream))
                     ?.substringAfter("commit ")?.substringBefore("\t")
                 val gitChangelog =
                     ensureSuccess(gitCmd("log", "--oneline", "$oldRev...HEAD", printOut = true, dir = upstreamDir)) {
