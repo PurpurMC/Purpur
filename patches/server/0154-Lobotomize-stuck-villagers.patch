@@ -18,14 +18,23 @@ index 28c502b5721bd150d9b9d2d84cb07c55af8373f1..98e8f8d7751ca7489c7cb4d41e4f628d
      public float yaw;
      public float pitch;
 diff --git a/src/main/java/net/minecraft/server/EntityVillager.java b/src/main/java/net/minecraft/server/EntityVillager.java
-index 166a8f9a7fe9320f54276445fbfb04059ce18b8c..96cfc0c5c36c6080758b52286afd834257fc5bd7 100644
+index 166a8f9a7fe9320f54276445fbfb04059ce18b8c..70d9cd5c251402bdbfb70b2c90dfe24151d3149a 100644
 --- a/src/main/java/net/minecraft/server/EntityVillager.java
 +++ b/src/main/java/net/minecraft/server/EntityVillager.java
-@@ -187,15 +187,28 @@ public class EntityVillager extends EntityVillagerAbstract implements Reputation
+@@ -187,15 +187,37 @@ public class EntityVillager extends EntityVillagerAbstract implements Reputation
      }
      // Spigot End
  
 +    // Purpur start
++    boolean lobotomized = false;
++
++    private boolean isLobotomized() {
++        if ((world.getTime() + brainTickOffset) % world.purpurConfig.villagerLobotomizeCheck == 0) {
++            this.lobotomized = !canTravelFrom(getBlockLocation().up());
++        }
++        return this.lobotomized;
++    }
++
 +    private boolean canTravelFrom(BlockPosition pos) {
 +        return canTravelTo(pos.east()) || canTravelTo(pos.west()) || canTravelTo(pos.north()) || canTravelTo(pos.south());
 +    }
@@ -41,20 +50,28 @@ index 166a8f9a7fe9320f54276445fbfb04059ce18b8c..96cfc0c5c36c6080758b52286afd8342
      protected void mobTick(boolean inactive) {
          this.world.getMethodProfiler().enter("villagerBrain");
          // Purpur start
-+        if (world.purpurConfig.villagerLobotomize1x1) inactive = inactive || !canTravelFrom(getBlockLocation().up());
++        if (world.purpurConfig.villagerLobotomizeEnabled) inactive = inactive || isLobotomized();
          boolean tick = (world.getTime() + brainTickOffset) % world.purpurConfig.villagerBrainTicks == 0;
          if (((WorldServer) world).getMinecraftServer().lagging ? tick : world.purpurConfig.villagerUseBrainTicksOnlyWhenLagging || tick)
          // Purpur end
          if (!inactive) this.getBehaviorController().a((WorldServer) this.world, this); // CraftBukkit - decompile error // Paper
-+        else checkRestock(); // Purpur
++        else if (shouldRestock()) doRestock(); // Purpur
          this.world.getMethodProfiler().exit();
          if (this.bF) {
              this.bF = false;
-@@ -361,6 +374,7 @@ public class EntityVillager extends EntityVillagerAbstract implements Reputation
+@@ -327,6 +349,7 @@ public class EntityVillager extends EntityVillagerAbstract implements Reputation
+         return true;
+     }
+ 
++    public void doRestock() { fb(); } // Purpur - OBFHELPER
+     public void fb() {
+         this.fp();
+         Iterator iterator = this.getOffers().iterator();
+@@ -361,6 +384,7 @@ public class EntityVillager extends EntityVillagerAbstract implements Reputation
          return this.bD == 0 || this.bD < 2 && this.world.getTime() > this.bC + 2400L;
      }
  
-+    public boolean checkRestock() { return fc(); } // Purpur - OBFHELPER
++    public boolean shouldRestock() { return fc(); } // Purpur - OBFHELPER
      public boolean fc() {
          long i = this.bC + 12000L;
          long j = this.world.getTime();
@@ -71,22 +88,29 @@ index b92ca4a6de01f3f86367fb8dfe3591b08a3e9218..1208464fba96daf276c9cc0c1c9b18db
          // Paper start - add target parameter
          return this.a(blockposition, null, i);
 diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-index f57d0e48fbf8ff54f1a033ccb2302c29038c3a09..bd7123842ac52e4bf185b12c03226ed50751f2d2 100644
+index f57d0e48fbf8ff54f1a033ccb2302c29038c3a09..71ce16f714ed903ae7a466f815d59dcb1757ea86 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-@@ -1064,6 +1064,7 @@ public class PurpurWorldConfig {
+@@ -1064,6 +1064,8 @@ public class PurpurWorldConfig {
      public int villagerSpawnIronGolemRadius = 0;
      public int villagerSpawnIronGolemLimit = 0;
      public boolean villagerCanBreed = true;
-+    public boolean villagerLobotomize1x1 = false;
++    public boolean villagerLobotomizeEnabled = false;
++    public int villagerLobotomizeCheck = 60;
      private void villagerSettings() {
          villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
          villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
-@@ -1075,6 +1076,7 @@ public class PurpurWorldConfig {
+@@ -1075,6 +1077,13 @@ public class PurpurWorldConfig {
          villagerSpawnIronGolemRadius = getInt("mobs.villager.spawn-iron-golem.radius", villagerSpawnIronGolemRadius);
          villagerSpawnIronGolemLimit = getInt("mobs.villager.spawn-iron-golem.limit", villagerSpawnIronGolemLimit);
          villagerCanBreed = getBoolean("mobs.villager.can-breed", villagerCanBreed);
-+        villagerLobotomize1x1 = getBoolean("mobs.villager.lobotomize-1x1", villagerLobotomize1x1);
++        if (PurpurConfig.version < 9) {
++            boolean oldValue = getBoolean("mobs.villager.lobotomize-1x1", villagerLobotomizeEnabled);
++            set("mobs.villager.lobotomize.enabled", oldValue);
++            set("mobs.villager.lobotomize-1x1", null);
++        }
++        villagerLobotomizeEnabled = getBoolean("mobs.villager.lobotomize.enabled", villagerLobotomizeEnabled);
++        villagerLobotomizeCheck = getInt("mobs.villager.lobotomize.check-interval", villagerLobotomizeCheck);
      }
  
      public boolean villagerTraderRidable = false;
