@@ -9,7 +9,7 @@ toothpick {
     val versionTag = System.getenv("BUILD_NUMBER")
         ?: "\"${gitCmd("rev-parse", "--short", "HEAD").output}\""
     forkVersion = "git-$forkName-$versionTag"
-    
+
     minecraftVersion = "1.16.4"
     nmsRevision = "R0.1-SNAPSHOT"
 

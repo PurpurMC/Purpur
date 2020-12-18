@@ -21,7 +21,7 @@ internal fun Project.configureSubprojects() {
         apply<JavaLibraryPlugin>()
         apply<MavenPublishPlugin>()
 
-        project.afterEvaluate {
+        afterEvaluate {
             extensions.configure(PublishingExtension::class.java) {
                 publications {
                     create<MavenPublication>("mavenJava") {
