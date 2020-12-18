@@ -249,9 +249,30 @@ class Toothpick : Plugin<Project> {
                 ensureSuccess(gitCmd("fetch", dir = upstreamDir, printOut = true))
                 ensureSuccess(gitCmd("reset", "--hard", "origin/master", dir = upstreamDir, printOut = true))
                 ensureSuccess(gitCmd("add", toothpick.upstream, dir = rootProjectDir, printOut = true))
-                ensureSuccess(gitCmd("submodule", "update", "--recursive", dir = upstreamDir, printOut = true))
+                ensureSuccess(gitCmd("submodule", "update", "--init", "--recursive", dir = upstreamDir, printOut = true))
             }
             finalizedBy(setupUpstream)
+        }
+
+        val upstreamCommit by tasks.registering {
+            group = taskGroup
+            doLast {
+                val oldRev = ensureSuccess(gitCmd("ls-tree", "HEAD", toothpick.upstream, printOut = true))
+                    ?.substringAfter("commit ")?.substringBefore("\t")
+                val gitChangelog =
+                    ensureSuccess(gitCmd("log", "--oneline", "$oldRev...HEAD", printOut = true, dir = upstreamDir)) {
+                        logger.lifecycle("No upstream changes to commit?")
+                    }
+                val commitMessage = """
+                    |Updated Upstream (${toothpick.upstream})
+                    |
+                    |Upstream has released updates that appear to apply and compile correctly
+                    |
+                    |${toothpick.upstream} Changes:
+                    |$gitChangelog
+                """.trimMargin()
+                ensureSuccess(gitCmd("commit", "-m", commitMessage, printOut = true))
+            }
         }
     }
 }
