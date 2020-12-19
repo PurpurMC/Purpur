@@ -1,6 +1,9 @@
 import com.github.jengelman.gradle.plugins.shadow.ShadowPlugin
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer
+import kotlinx.dom.elements
+import kotlinx.dom.parseXml
+import kotlinx.dom.search
 import org.gradle.api.Project
 import org.gradle.api.plugins.JavaLibraryPlugin
 import org.gradle.api.publish.PublishingExtension
@@ -81,6 +84,30 @@ private fun Project.configureServerProject() {
             exclude("org.bukkit.craftbukkit.Main*")
         }
         relocate("net.minecraft.server", "net.minecraft.server.v${toothpick.nmsPackage}")
+
+        // Make sure we relocate deps the same as Paper et al.
+        val pomFile = project.projectDir.resolve("pom.xml")
+        if (!pomFile.exists()) return@getting
+        val dom = parseXml(pomFile)
+        val buildSection = dom.search("build").first()
+        val plugins = buildSection.search("plugins").first()
+        plugins.elements("plugin").filter {
+            val artifactId = it.search("artifactId").first().textContent
+            artifactId == "maven-shade-plugin"
+        }.forEach {
+            it.search("executions").first()
+                .search("execution").first()
+                .search("configuration").first()
+                .search("relocations").first()
+                .elements("relocation").forEach { relocation ->
+                    val pattern = relocation.search("pattern").first().textContent
+                    val shadedPattern = relocation.search("shadedPattern").first().textContent
+                    if (pattern != "org.bukkit.craftbukkit" && pattern != "net.minecraft.server") { // We handle these ourselves above
+                        logger.debug("Imported relocation to server project shadowJar from ${pomFile.absolutePath}: $pattern to $shadedPattern")
+                        relocate(pattern, shadedPattern)
+                    }
+                }
+        }
     }
     tasks.getByName("build") {
         dependsOn(shadowJar)
