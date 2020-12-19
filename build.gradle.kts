@@ -11,6 +11,7 @@ toothpick {
     forkVersion = "git-$forkName-$versionTag"
 
     minecraftVersion = "1.16.4"
+    nmsPackage = "1_16_R3"
     nmsRevision = "R0.1-SNAPSHOT"
 
     upstream = "Paper"

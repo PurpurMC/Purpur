@@ -13,6 +13,7 @@ open class ToothpickExtension(objects: ObjectFactory) {
     lateinit var groupId: String
     lateinit var minecraftVersion: String
     lateinit var nmsRevision: String
+    lateinit var nmsPackage: String
 
     lateinit var upstream: String
     val upstreamLowercase

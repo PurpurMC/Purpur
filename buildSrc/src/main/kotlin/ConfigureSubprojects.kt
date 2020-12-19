@@ -77,11 +77,10 @@ private fun Project.configureServerProject() {
         }
 
         // Don't like to do this but sadly have to do this for compatibility reasons
-        val relocVersion = toothpick.minecraftVersion.replace(".", "_")
-        relocate("org.bukkit.craftbukkit", "org.bukkit.craftbukkit.v$relocVersion") {
+        relocate("org.bukkit.craftbukkit", "org.bukkit.craftbukkit.v${toothpick.nmsPackage}") {
             exclude("org.bukkit.craftbukkit.Main*")
         }
-        relocate("net.minecraft.server", "net.minecraft.server.v$relocVersion")
+        relocate("net.minecraft.server", "net.minecraft.server.v${toothpick.nmsPackage}")
     }
     tasks.getByName("build") {
         dependsOn(shadowJar)
