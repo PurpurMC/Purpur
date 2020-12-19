@@ -13,7 +13,7 @@ internal fun Project.initToothpickTasks() {
     if (project.hasProperty("fast")) {
         gradle.taskGraph.whenReady {
             gradle.taskGraph.allTasks.filter {
-                it.name == "test" || it.name.contains("javadoc", ignoreCase = true)
+                it.name.contains("test", ignoreCase = true) || it.name.contains("javadoc", ignoreCase = true)
             }.forEach {
                 it.onlyIf { false }
             }
