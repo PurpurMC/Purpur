@@ -22,6 +22,7 @@ internal fun Project.createApplyPatchesTask(
             // Reset or initialize subproject
             logger.lifecycle(">>> Resetting subproject $name")
             if (projectDir.exists()) {
+                ensureSuccess(gitCmd("fetch", "origin", dir = projectDir))
                 ensureSuccess(gitCmd("reset", "--hard", "origin/master", dir = projectDir))
             } else {
                 ensureSuccess(gitCmd("clone", sourceRepo.absolutePath, projectDir.absolutePath))

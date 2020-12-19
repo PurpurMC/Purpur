@@ -48,7 +48,7 @@ internal fun Project.createImportMCDevTask(
         if (lastCommitIsMCDev) {
             ensureSuccess(
                 gitCmd(
-                    "reset", "--hard", "origin/master",
+                    "reset", "--hard", "HEAD~1",
                     dir = upstreamServer,
                     printOut = true
                 )
