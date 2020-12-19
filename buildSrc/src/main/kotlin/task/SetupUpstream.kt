@@ -15,12 +15,18 @@ internal fun Project.createSetupUpstreamTask(
     receiver(this)
     group = taskGroup
     doLast {
-        // this whole thing assumes we're forking either paper or a byof project atm
-        val result = bashCmd(
-            "./${toothpick.upstreamLowercase} patch",
-            dir = upstreamDir,
-            printOut = true
-        )
+        val setupUpstreamCommand = if (upstreamDir.resolve(toothpick.upstreamLowercase).exists()) {
+            "./${toothpick.upstreamLowercase} patch"
+        } else if (
+            upstreamDir.resolve("build.gradle.kts").exists()
+            && upstreamDir.resolve("subprojects/server.gradle.kts").exists()
+            && upstreamDir.resolve("subprojects/api.gradle.kts").exists()
+        ) {
+            "./gradlew applyPatches"
+        } else {
+            error("Don't know how to setup upstream!")
+        }
+        val result = bashCmd(setupUpstreamCommand, dir = upstreamDir, printOut = true)
         if (result.exitCode != 0) {
             error("Failed to apply upstream patches: script exited with code ${result.exitCode}")
         }
