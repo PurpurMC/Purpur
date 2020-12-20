@@ -57,7 +57,9 @@ fun Project.bashCmd(
 ): CmdResult =
     cmd("bash", "-c", *args, dir = dir, printOut = printOut)
 
-internal fun String.applyReplacements(replacements: Map<String, String>): String {
+internal fun String.applyReplacements(
+    vararg replacements: Pair<String, String>
+): String {
     var result = this
     for ((key, value) in replacements) {
         result = result.replace("\${$key}", value)

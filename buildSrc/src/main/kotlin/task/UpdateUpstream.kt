@@ -16,7 +16,7 @@ internal fun Project.createUpdateUpstreamTask(
     group = taskGroup
     doLast {
         ensureSuccess(gitCmd("fetch", dir = upstreamDir, printOut = true))
-        ensureSuccess(gitCmd("reset", "--hard", "origin/master", dir = upstreamDir, printOut = true))
+        ensureSuccess(gitCmd("reset", "--hard", toothpick.upstreamBranch, dir = upstreamDir, printOut = true))
         ensureSuccess(gitCmd("add", toothpick.upstream, dir = rootProjectDir, printOut = true))
         ensureSuccess(gitCmd("submodule", "update", "--init", "--recursive", dir = upstreamDir, printOut = true))
     }

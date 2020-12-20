@@ -9,6 +9,7 @@ open class ToothpickExtension(objects: ObjectFactory) {
     lateinit var forkName: String
     val forkNameLowercase
         get() = forkName.toLowerCase(Locale.ENGLISH)
+    lateinit var forkUrl: String
     lateinit var forkVersion: String
     lateinit var groupId: String
     lateinit var minecraftVersion: String
@@ -18,6 +19,12 @@ open class ToothpickExtension(objects: ObjectFactory) {
     lateinit var upstream: String
     val upstreamLowercase
         get() = upstream.toLowerCase(Locale.ENGLISH)
+    lateinit var upstreamBranch: String
+
+    var paperclipName: String = ""
+        get(): String = if (field.isEmpty()) {
+            "$forkNameLowercase-paperclip.jar"
+        } else "$field.jar"
 
     lateinit var serverProject: ToothpickSubproject
     fun server(receiver: ToothpickSubproject.() -> Unit) {

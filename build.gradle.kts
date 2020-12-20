@@ -1,11 +1,13 @@
 plugins {
     `java-library`
+    `maven-publish`
     toothpick
 }
 
 toothpick {
     forkName = "Purpur"
     groupId = "net.pl3x.purpur"
+    forkUrl = "https://github.com/pl3xgaming/Purpur"
     val versionTag = System.getenv("BUILD_NUMBER")
         ?: "\"${gitCmd("rev-parse", "--short", "HEAD").output}\""
     forkVersion = "git-$forkName-$versionTag"
@@ -15,6 +17,8 @@ toothpick {
     nmsRevision = "R0.1-SNAPSHOT"
 
     upstream = "Paper"
+    upstreamBranch = "origin/master"
+
     server {
         project = project(":$forkNameLowercase-server")
         patchesDir = rootProject.projectDir.resolve("patches/server")
@@ -38,5 +42,10 @@ subprojects {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
         withSourcesJar()
+    }
+
+    publishing.repositories.maven {
+        url = uri("https://repo.pl3x.net/snapshots")
+        credentials(PasswordCredentials::class)
     }
 }

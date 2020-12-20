@@ -32,8 +32,8 @@ internal fun Project.createPaperclipTask(
         if (jenkins) paperclipCmd.add("-Dstyle.color=never")
         ensureSuccess(cmd(*paperclipCmd.toTypedArray(), dir = paperclipDir, printOut = true))
         val paperClip = paperclipDir.resolve("assembly/target/paperclip-${toothpick.minecraftVersion}.jar")
-        val destination = rootProjectDir.resolve("${toothpick.forkNameLowercase}-paperclip.jar")
+        val destination = rootProjectDir.resolve(toothpick.paperclipName)
         paperClip.copyTo(destination, overwrite = true)
-        logger.lifecycle(">>> ${toothpick.forkNameLowercase}-paperclip.jar saved to root project directory")
+        logger.lifecycle(">>> ${toothpick.paperclipName} saved to root project directory")
     }
 }

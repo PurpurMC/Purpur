@@ -18,6 +18,8 @@ import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.get
 import org.gradle.kotlin.dsl.getValue
 import org.gradle.kotlin.dsl.getting
+import java.text.SimpleDateFormat
+import java.util.Date
 
 internal fun Project.configureSubprojects() {
     subprojects {
@@ -33,7 +35,7 @@ internal fun Project.configureSubprojects() {
                     from(components["java"])
                     pom {
                         name.set(project.name)
-                        url.set("https://github.com/pl3xgaming/Purpur")
+                        url.set(toothpick.forkUrl)
                     }
                 }
             }
@@ -67,8 +69,7 @@ private fun Project.configureServerProject() {
                 "Main-Class" to "org.bukkit.craftbukkit.Main",
                 "Implementation-Title" to "CraftBukkit",
                 "Implementation-Version" to toothpick.forkVersion,
-                "Implementation-Vendor" to java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
-                    .format(java.util.Date()),
+                "Implementation-Vendor" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(Date()),
                 "Specification-Title" to "Bukkit",
                 "Specification-Version" to "${project.version}",
                 "Specification-Vendor" to "Bukkit Team"
