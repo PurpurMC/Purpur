@@ -1,5 +1,6 @@
 import com.github.jengelman.gradle.plugins.shadow.ShadowPlugin
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer
 import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer
 import kotlinx.dom.elements
 import kotlinx.dom.parseXml
@@ -64,6 +65,9 @@ private fun Project.configureServerProject() {
     val shadowJar by tasks.getting(ShadowJar::class) {
         dependsOn(generatePomFileForMavenJavaPublication)
         transform(Log4j2PluginsCacheFileTransformer::class.java)
+        transform(AppendingTransformer::class.java) {
+            resource = "META-INF/services/java.sql.Driver"
+        }
         manifest {
             attributes(
                 "Main-Class" to "org.bukkit.craftbukkit.Main",
