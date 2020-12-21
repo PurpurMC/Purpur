@@ -65,9 +65,7 @@ private fun Project.configureServerProject() {
     val shadowJar by tasks.getting(ShadowJar::class) {
         dependsOn(generatePomFileForMavenJavaPublication)
         transform(Log4j2PluginsCacheFileTransformer::class.java)
-        transform(AppendingTransformer::class.java) {
-            resource = "META-INF/services/java.sql.Driver"
-        }
+        mergeServiceFiles()
         manifest {
             attributes(
                 "Main-Class" to "org.bukkit.craftbukkit.Main",
