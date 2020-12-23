@@ -1,6 +1,5 @@
 import com.github.jengelman.gradle.plugins.shadow.ShadowPlugin
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer
 import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer
 import kotlinx.dom.elements
 import kotlinx.dom.parseXml
@@ -12,6 +11,8 @@ import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.publish.maven.tasks.GenerateMavenPom
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.testing.Test
 import org.gradle.kotlin.dsl.apply
 import org.gradle.kotlin.dsl.attributes
@@ -19,6 +20,7 @@ import org.gradle.kotlin.dsl.create
 import org.gradle.kotlin.dsl.get
 import org.gradle.kotlin.dsl.getValue
 import org.gradle.kotlin.dsl.getting
+import java.nio.charset.StandardCharsets.UTF_8
 import java.text.SimpleDateFormat
 import java.util.Date
 
@@ -26,6 +28,13 @@ internal fun Project.configureSubprojects() {
     subprojects {
         apply<JavaLibraryPlugin>()
         apply<MavenPublishPlugin>()
+
+        tasks.getting(JavaCompile::class) {
+            options.encoding = UTF_8.name()
+        }
+        tasks.getting(Javadoc::class) {
+            options.encoding = UTF_8.name()
+        }
 
         extensions.configure(PublishingExtension::class.java) {
             publications {
@@ -112,6 +121,7 @@ private fun Project.configureServerProject() {
                 }
         }
     }
+
     tasks.getByName("build") {
         dependsOn(shadowJar)
     }
