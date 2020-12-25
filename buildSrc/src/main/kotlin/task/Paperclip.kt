@@ -20,7 +20,7 @@ internal fun Project.createPaperclipTask(
         val vanillaJarPath =
             workDir.resolve("Minecraft/${toothpick.minecraftVersion}/${toothpick.minecraftVersion}.jar").absolutePath
         val patchedJarPath = toothpick.serverProject.projectDir.resolve(
-            "build/libs/${toothpick.forkNameLowercase}-server-$version-all.jar"
+            "build/libs/${toothpick.forkNameLowercase}-server-$version.jar"
         ).absolutePath
         logger.lifecycle(">>> Building paperclip")
         val paperclipCmd = arrayListOf(

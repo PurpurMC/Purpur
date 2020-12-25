@@ -1,7 +1,6 @@
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.findByType
 import java.io.File
-import java.nio.file.Path
 
 val Project.toothpick: ToothpickExtension
     get() = rootProject.extensions.findByType(ToothpickExtension::class)!!
@@ -25,6 +24,3 @@ val Project.rootProjectDir: File
 
 val Project.upstreamDir: File
     get() = rootProject.projectDir.resolve(toothpick.upstream)
-
-val Project.projectPath: Path
-    get() = projectDir.toPath()
