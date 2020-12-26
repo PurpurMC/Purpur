@@ -42,8 +42,9 @@ internal fun Project.initToothpickTasks() {
     }
 
     val paperclip = createPaperclipTask {
-        dependsOn(tasks.getByName("build"))
-        dependsOn(subprojects.map { it.tasks.getByName("build") })
+        val shadowJar = toothpick.serverProject.project.tasks.getByName("shadowJar")
+        dependsOn(shadowJar)
+        inputs.file(shadowJar.outputs.files.singleFile)
     }
 
     val applyPatches = createApplyPatchesTask {
