@@ -5,9 +5,9 @@ plugins {
 }
 
 toothpick {
-    forkName = "Purpur"
-    groupId = "net.pl3x.purpur"
-    forkUrl = "https://github.com/pl3xgaming/Purpur"
+    forkName = "IdeaJar"
+    groupId = "net.tobfos2611.ideajar"
+    forkUrl = "https://github.com/tobfos2611/IdeaJar"
     val versionTag = System.getenv("BUILD_NUMBER")
         ?: "\"${gitCmd("rev-parse", "--short", "HEAD").output}\""
     forkVersion = "git-$forkName-$versionTag"
@@ -42,10 +42,6 @@ subprojects {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
         withSourcesJar()
-    }
-
-    publishing.repositories.maven {
-        url = uri("https://repo.pl3x.net/snapshots")
-        credentials(PasswordCredentials::class)
+    
     }
 }
