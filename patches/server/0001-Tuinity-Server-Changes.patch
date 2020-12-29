@@ -2791,10 +2791,10 @@ index 0000000000000000000000000000000000000000..41d9234a6b265f5500269cef537ad0b6
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..38b84cee50a5e97ba12dcfba472c607064d4eec2
+index 0000000000000000000000000000000000000000..cafa498c6a743e05757c0845576288760842bfbd
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
-@@ -0,0 +1,1223 @@
+@@ -0,0 +1,1245 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.tuinity.tuinity.util.IntegerUtil;
@@ -3524,11 +3524,14 @@ index 0000000000000000000000000000000000000000..38b84cee50a5e97ba12dcfba472c6070
 +        this.setupEncodeOffset(chunkPos.x * 16 + 7, 128, chunkPos.z * 16 + 7);
 +
 +        try {
-+            final SWMRNibbleArray[] chunkNibbles = getFilledEmptyLight();
++            final SWMRNibbleArray[][] chunkNibbles = new SWMRNibbleArray[(2 * 1 + 1) * (2 * 1 + 1)][];
++            for (int i = 0; i < chunkNibbles.length; ++i) {
++                chunkNibbles[i] = getFilledEmptyLight();
++            }
 +
 +            this.setChunkInCache(chunkPos.x, chunkPos.z, chunk);
 +            this.setBlocksForChunkInCache(chunkPos.x, chunkPos.z, chunk.getSections());
-+            this.setNibblesForChunkInCache(chunkPos.x, chunkPos.z, chunkNibbles);
++            this.setNibblesForChunkInCache(chunkPos.x, chunkPos.z, chunkNibbles[IChunkAccess.getEmptinessMapIndex(0, 0)]);
 +            this.setEmptinessMapCache(chunkPos.x, chunkPos.z, new boolean[9][]);
 +
 +            this.handleEmptySectionChanges(lightAccess, chunk, getEmptySectionsForChunk(chunk), true);
@@ -3548,9 +3551,21 @@ index 0000000000000000000000000000000000000000..38b84cee50a5e97ba12dcfba472c6070
 +                        continue;
 +                    }
 +
++                    for (int dz2 = -1; dz2 <= 1; ++dz2) {
++                        for (int dx2 = -1; dx2 <= 1; ++dx2) {
++                            final IChunkAccess neighbour = this.getChunkInCache(dx2 + chunkPos.x, dz2 + chunkPos.z);
++                            if (neighbour == null) {
++                                continue;
++                            }
++
++                            // re-insert nibbles for chunk, they might have been removed due to the emptiness map
++                            this.setNibblesForChunkInCache(dx2 + chunkPos.x, dz2 + chunkPos.z, chunkNibbles[IChunkAccess.getEmptinessMapIndex(dx2, dz2)]);
++                        }
++                    }
++
 +                    this.setChunkInCache(cx, cz, neighbourChunk);
 +                    this.setBlocksForChunkInCache(cx, cz, neighbourChunk.getSections());
-+                    this.setNibblesForChunkInCache(cx, cz, getFilledEmptyLight());
++                    this.setNibblesForChunkInCache(cx, cz, chunkNibbles[IChunkAccess.getEmptinessMapIndex(dx, dz)]);
 +                    this.setEmptinessMapCache(cx, cz, new boolean[9][]);
 +
 +                    this.handleEmptySectionChanges(lightAccess, neighbourChunk, getEmptySectionsForChunk(neighbourChunk), true);
@@ -3558,8 +3573,15 @@ index 0000000000000000000000000000000000000000..38b84cee50a5e97ba12dcfba472c6070
 +                }
 +            }
 +
-+            this.setNibbles(chunk, chunkNibbles);
-+            this.updateVisible(lightAccess);
++            for (final SWMRNibbleArray nibble : chunkNibbles[IChunkAccess.getEmptinessMapIndex(0, 0)]) {
++                nibble.updateVisible();
++            }
++
++            this.setNibbles(chunk, chunkNibbles[IChunkAccess.getEmptinessMapIndex(0, 0)]);
++
++            for (int y = -1; y <= 16; ++y) {
++                lightAccess.markLightSectionDirty(this.skylightPropagator ? EnumSkyBlock.SKY : EnumSkyBlock.BLOCK, new SectionPosition(chunkPos.x, y, chunkPos.z));
++            }
 +        } finally {
 +            this.destroyCaches();
 +        }
