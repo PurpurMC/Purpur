@@ -585,39 +585,92 @@ index dee00aac05f1acf050f05d4db557a08dd0f301c8..52c0ab1ce46e1f3233ef746d9bc69935
                  metrics.addCustomChart(new Metrics.DrilldownPie("java_version", () -> {
                      Map<String, Map<String, Integer>> map = new HashMap<>();
 diff --git a/src/main/java/com/destroystokyo/paper/PaperCommand.java b/src/main/java/com/destroystokyo/paper/PaperCommand.java
-index ad6b15f401ce7493a2a247e2a2af23f73ade02ca..c9e3a0c8742caeef85c429861cf4b7f2b470ed51 100644
+index ad6b15f401ce7493a2a247e2a2af23f73ade02ca..ead20b6b95780859b628f917e29e390970228178 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperCommand.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperCommand.java
-@@ -225,8 +225,20 @@ public class PaperCommand extends Command {
-                 updateLight(sender, world, lightengine, queue);
-                 return;
-             }
--            lightengine.a(world.paperConfig.lightQueueSize + 16 * 256); // ensure full chunk can fit into queue
-+            if (!com.tuinity.tuinity.config.TuinityConfig.useNewLightEngine) lightengine.a(world.paperConfig.lightQueueSize + 16 * 256); // ensure full chunk can fit into queue // Tuinity - no longer needed
-             sender.sendMessage("Updating Light " + coord);
-+            if (com.tuinity.tuinity.config.TuinityConfig.useNewLightEngine) { // Tuinity start - replace impl: faster, and it actually works
-+                lightengine.relight(coord.x, coord.z, () -> {
-+                    MinecraftServer.getServer().scheduleOnMain(() -> {
-+                        PlayerChunk visibleChunk = world.getChunkProvider().playerChunkMap.getVisibleChunk(chunk.coordinateKey);
-+                        if (visibleChunk != null) {
-+                            visibleChunk.sendPacketToTrackedPlayers(new PacketPlayOutLightUpdate(chunk.getPos(), lightengine, true), false);
-+                        }
-+                        updateLight(sender, world, lightengine, queue);
-+                    });
-+                });
-+                lightengine.queueUpdate();
-+            } else { // Tuinity end - replace impl: faster, and it actually works
-             int cx = chunk.getPos().x << 4;
-             int cz = chunk.getPos().z << 4;
-             for (int y = 0; y < world.getHeight(); y++) {
-@@ -250,6 +262,7 @@ public class PaperCommand extends Command {
-                 updateLight(sender, world, lightengine, queue);
-             }
-             lightengine.a(world.paperConfig.lightQueueSize);
-+            } // Tuinity - replace impl: faster, and it actually works
-         }, MinecraftServer.getServer());
+@@ -182,6 +182,68 @@ public class PaperCommand extends Command {
+         }
      }
  
++    private long relightCounter;
++
++    private void starlightFixLight(EntityPlayer sender, WorldServer world, LightEngineThreaded lightengine, int radius) {
++        long start = System.nanoTime();
++        LinkedHashSet<ChunkCoordIntPair> chunks = new LinkedHashSet<>(MCUtil.getSpiralOutChunks(sender.getChunkCoordinates(), radius)); // getChunkCoordinates is actually just bad mappings, this function rets position as blockpos
++
++        // add tickets
++        Map<ChunkCoordIntPair, Long> ticketIds = new HashMap<>();
++        int[] totalChunks = new int[1];
++        for (Iterator<ChunkCoordIntPair> iterator = chunks.iterator(); iterator.hasNext();) {
++            final ChunkCoordIntPair chunkPos = iterator.next();
++
++            final IChunkAccess chunk = world.getChunkProvider().getChunkAtImmediately(chunkPos.x, chunkPos.z);
++            if (chunk == null || !chunk.isLit() || !chunk.getChunkStatus().isAtLeastStatus(ChunkStatus.LIGHT)) {
++                // cannot relight this chunk
++                iterator.remove();
++                continue;
++            }
++
++            final Long id = Long.valueOf(this.relightCounter++);
++
++            world.getChunkProvider().addTicketAtLevel(TicketType.CHUNK_RELIGHT, chunkPos, MCUtil.getTicketLevelFor(ChunkStatus.LIGHT), id);
++            ticketIds.put(chunkPos, id);
++
++            ++totalChunks[0];
++        }
++
++        sender.getBukkitEntity().sendMessage(ChatColor.BLUE + "Relighting " + ChatColor.DARK_AQUA + totalChunks[0] + ChatColor.BLUE + " chunks");
++
++        int[] relitChunks = new int[1];
++
++        Set<ChunkCoordIntPair> blockLightDone = new HashSet<>();
++
++        final java.util.function.Consumer<ChunkCoordIntPair> callback = (ChunkCoordIntPair chunkPos) -> {
++            if (blockLightDone.add(chunkPos)) {
++                return;
++            }
++            ++relitChunks[0];
++            sender.getBukkitEntity().sendMessage(
++                    ChatColor.BLUE + "Relit chunk " + ChatColor.DARK_AQUA + chunkPos + ChatColor.BLUE +
++                    ", progress: " + ChatColor.DARK_AQUA + (int)(Math.round(100.0 * (double)(relitChunks[0])/(double)totalChunks[0])) + "%"
++            );
++
++            ((java.util.concurrent.Executor)world.getChunkProvider().serverThreadQueue).execute(() -> {
++                world.getChunkProvider().playerChunkMap.getUpdatingChunk(chunkPos.pair()).sendPacketToTrackedPlayers(new PacketPlayOutLightUpdate(chunkPos, lightengine, true), false);
++                world.getChunkProvider().removeTicketAtLevel(TicketType.CHUNK_RELIGHT, chunkPos, MCUtil.getTicketLevelFor(ChunkStatus.LIGHT), ticketIds.get(chunkPos));
++            });
++
++            if (relitChunks[0] == totalChunks[0]) {
++                final long end = System.nanoTime();
++                final long diff = Math.round(1.0e-6*(end - start));
++                sender.getBukkitEntity().sendMessage(
++                        ChatColor.BLUE + "Relit " + ChatColor.DARK_AQUA + totalChunks[0] + ChatColor.BLUE + " chunks. Took " +
++                        ChatColor.DARK_AQUA + diff + "ms"
++                );
++            }
++        };
++
++        lightengine.relight(chunks, callback);
++        lightengine.queueUpdate();
++    }
++
+     private void doFixLight(CommandSender sender, String[] args) {
+         if (!(sender instanceof Player)) {
+             sender.sendMessage("Only players can use this command");
+@@ -203,6 +265,13 @@ public class PaperCommand extends Command {
+         net.minecraft.server.WorldServer world = (WorldServer) handle.world;
+         LightEngineThreaded lightengine = world.getChunkProvider().getLightEngine();
+ 
++        // Tuinity start - rewrite light engine
++        if (com.tuinity.tuinity.config.TuinityConfig.useNewLightEngine) {
++            this.starlightFixLight(handle, world, lightengine, radius);
++            return;
++        }
++        // Tuinity end - rewrite light engine
++
+         BlockPosition center = MCUtil.toBlockPosition(player.getLocation());
+         Deque<ChunkCoordIntPair> queue = new ArrayDeque<>(MCUtil.getSpiralOutChunks(center, radius));
+         updateLight(sender, world, lightengine, queue);
 diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
 index 49a38c6608b652ff48ef4eaca0dd3ccb1ba570e3..255bbd6e48b95c70fad02ba692c64c7579496827 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
@@ -1507,10 +1560,10 @@ index 0000000000000000000000000000000000000000..cae06962d80cdd00962236891472ba81
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..d7fa3eb57af562d02e821f107387d470e1de4f73
+index 0000000000000000000000000000000000000000..80773f755b16c755bdf9f8f804011c8e8d9b6221
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,176 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import net.minecraft.server.BlockPosition;
@@ -1522,7 +1575,9 @@ index 0000000000000000000000000000000000000000..d7fa3eb57af562d02e821f107387d470
 +import net.minecraft.server.IChunkAccess;
 +import net.minecraft.server.ILightAccess;
 +import net.minecraft.server.ProtoChunkExtension;
++import net.minecraft.server.WorldServer;
 +import java.util.ArrayList;
++import java.util.HashSet;
 +import java.util.Iterator;
 +import java.util.List;
 +import java.util.Set;
@@ -1558,7 +1613,7 @@ index 0000000000000000000000000000000000000000..d7fa3eb57af562d02e821f107387d470
 +                                             final Boolean[] emptinessChanges, final boolean unlit) {}
 +
 +    @Override
-+    protected final void checkBlock(final int worldX, final int worldY, final int worldZ) {
++    protected final void checkBlock(final ILightAccess lightAccess, final int worldX, final int worldY, final int worldZ) {
 +        // blocks can change opacity
 +        // blocks can change emitted light
 +        // blocks can change direction of propagation
@@ -1566,9 +1621,10 @@ index 0000000000000000000000000000000000000000..d7fa3eb57af562d02e821f107387d470
 +        final int encodeOffset = this.coordinateOffset;
 +        final int emittedMask = this.emittedLightMask;
 +
++        final VariableBlockLightHandler customBlockHandler = ((WorldServer)lightAccess.getWorld()).customBlockLightHandlers;
 +        final int currentLevel = this.getLightLevel(worldX, worldY, worldZ);
 +        final IBlockData blockState = this.getBlockState(worldX, worldY, worldZ);
-+        final int emittedLevel = blockState.getEmittedLight() & emittedMask;
++        final int emittedLevel = (customBlockHandler != null ? this.getCustomLightLevel(customBlockHandler, worldX, worldY, worldZ, blockState.getEmittedLight()) : blockState.getEmittedLight()) & emittedMask;
 +
 +        this.setLightLevel(worldX, worldY, worldZ, emittedLevel);
 +        // this accounts for change in emitted light that would cause an increase
@@ -1596,13 +1652,13 @@ index 0000000000000000000000000000000000000000..d7fa3eb57af562d02e821f107387d470
 +    @Override
 +    protected void propagateBlockChanges(final ILightAccess lightAccess, final IChunkAccess atChunk, final Set<BlockPosition> positions) {
 +        for (final BlockPosition pos : positions) {
-+            this.checkBlock(pos.getX(), pos.getY(), pos.getZ());
++            this.checkBlock(lightAccess, pos.getX(), pos.getY(), pos.getZ());
 +        }
 +
 +        this.performLightDecrease(lightAccess);
 +    }
 +
-+    protected Iterator<BlockPosition> getSources(final IChunkAccess chunk) {
++    protected Iterator<BlockPosition> getSources(final ILightAccess lightAccess, final IChunkAccess chunk) {
 +        if (chunk instanceof ProtoChunkExtension || chunk instanceof Chunk) {
 +            // implementation on Chunk is pretty awful, so write our own here. The big optimisation is
 +            // skipping empty sections, and the far more optimised reading of types.
@@ -1631,7 +1687,15 @@ index 0000000000000000000000000000000000000000..d7fa3eb57af562d02e821f107387d470
 +                }
 +            }
 +
-+            return sources.iterator();
++            final VariableBlockLightHandler customBlockHandler = ((WorldServer)lightAccess.getWorld()).customBlockLightHandlers;
++            if (customBlockHandler == null) {
++                return sources.iterator();
++            }
++
++            final Set<BlockPosition> ret = new HashSet<>(sources);
++            ret.addAll(customBlockHandler.getCustomLightPositions(chunk.getPos().x, chunk.getPos().z));
++
++            return ret.iterator();
 +        } else {
 +            return chunk.getLightSources().iterator();
 +        }
@@ -1641,10 +1705,11 @@ index 0000000000000000000000000000000000000000..d7fa3eb57af562d02e821f107387d470
 +    public void lightChunk(final ILightAccess lightAccess, final IChunkAccess chunk, final boolean needsEdgeChecks) {
 +        // setup sources
 +        final int emittedMask = this.emittedLightMask;
-+        for (final Iterator<BlockPosition> positions = this.getSources(chunk); positions.hasNext();) {
++        final VariableBlockLightHandler customBlockHandler = ((WorldServer)lightAccess.getWorld()).customBlockLightHandlers;
++        for (final Iterator<BlockPosition> positions = this.getSources(lightAccess, chunk); positions.hasNext();) {
 +            final BlockPosition pos = positions.next();
 +            final IBlockData blockState = this.getBlockState(pos.getX(), pos.getY(), pos.getZ());
-+            final int emittedLight = blockState.getEmittedLight() & emittedMask;
++            final int emittedLight = (customBlockHandler != null ? this.getCustomLightLevel(customBlockHandler, pos.getX(), pos.getY(), pos.getZ(), blockState.getEmittedLight()) : blockState.getEmittedLight()) & emittedMask;
 +
 +            if (emittedLight <= this.getLightLevel(pos.getX(), pos.getY(), pos.getZ())) {
 +                // some other source is brighter
@@ -2000,7 +2065,7 @@ index 0000000000000000000000000000000000000000..9910dc9f1a087f5baf404a5b8ebb5a9f
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..41d9234a6b265f5500269cef537ad0b68323b025
+index 0000000000000000000000000000000000000000..d84da5fefe3f4efd25aef01102c5965af4665aee
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
 @@ -0,0 +1,785 @@
@@ -2395,7 +2460,7 @@ index 0000000000000000000000000000000000000000..41d9234a6b265f5500269cef537ad0b6
 +    }
 +
 +    @Override
-+    protected void checkBlock(final int worldX, final int worldY, final int worldZ) {
++    protected void checkBlock(final ILightAccess lightAccess, final int worldX, final int worldY, final int worldZ) {
 +        // blocks can change opacity
 +        // blocks can change direction of propagation
 +
@@ -2516,7 +2581,7 @@ index 0000000000000000000000000000000000000000..41d9234a6b265f5500269cef537ad0b6
 +        this.processDelayedDecreases();
 +
 +        for (final BlockPosition pos : positions) {
-+            this.checkBlock(pos.getX(), pos.getY(), pos.getZ());
++            this.checkBlock(lightAccess, pos.getX(), pos.getY(), pos.getZ());
 +        }
 +
 +        this.performLightDecrease(lightAccess);
@@ -2791,13 +2856,15 @@ index 0000000000000000000000000000000000000000..41d9234a6b265f5500269cef537ad0b6
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..cafa498c6a743e05757c0845576288760842bfbd
+index 0000000000000000000000000000000000000000..5fcb8535e5319d74520e741dea9b9d9f5f0ca00e
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
-@@ -0,0 +1,1245 @@
+@@ -0,0 +1,1376 @@
 +package com.tuinity.tuinity.chunk.light;
 +
++import com.tuinity.tuinity.util.CoordinateUtils;
 +import com.tuinity.tuinity.util.IntegerUtil;
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 +import it.unimi.dsi.fastutil.shorts.ShortCollection;
 +import it.unimi.dsi.fastutil.shorts.ShortIterator;
 +import net.minecraft.server.BlockPosition;
@@ -2813,10 +2880,12 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +import net.minecraft.server.SectionPosition;
 +import net.minecraft.server.VoxelShape;
 +import net.minecraft.server.VoxelShapes;
++import net.minecraft.server.WorldServer;
 +import java.util.ArrayList;
 +import java.util.Arrays;
 +import java.util.List;
 +import java.util.Set;
++import java.util.function.Consumer;
 +
 +public abstract class StarLightEngine {
 +
@@ -3158,6 +3227,12 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +        this.emptinessMapCache[chunkX + 5*chunkZ + this.chunkIndexOffset] = emptinessMap;
 +    }
 +
++    protected final int getCustomLightLevel(final VariableBlockLightHandler customBlockHandler, final int worldX, final int worldY,
++                                            final int worldZ, final int dfl) {
++        final int ret = customBlockHandler.getLightLevel(worldX, worldY, worldZ);
++        return ret == -1 ? dfl : ret;
++    }
++
 +    public static SWMRNibbleArray[] getFilledEmptyLight() {
 +        final SWMRNibbleArray[] ret = getEmptyLightArray();
 +
@@ -3204,7 +3279,7 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +    // subclasses should not invoke updateVisible, as this will always be done by the super call
 +    protected abstract void propagateBlockChanges(final ILightAccess lightAccess, final IChunkAccess atChunk, final Set<BlockPosition> positions);
 +
-+    protected abstract void checkBlock(final int worldX, final int worldY, final int worldZ);
++    protected abstract void checkBlock(final ILightAccess lightAccess, final int worldX, final int worldY, final int worldZ);
 +
 +    protected void checkChunkEdge(final ILightAccess lightAccess, final IChunkAccess chunk,
 +                                  final int chunkX, final int chunkY, final int chunkZ) {
@@ -3293,8 +3368,8 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +                    }
 +
 +                    // setup queue, it looks like something could be inconsistent
-+                    this.checkBlock(currX, currY, currZ);
-+                    this.checkBlock(neighbourX, currY, neighbourZ);
++                    this.checkBlock(lightAccess, currX, currY, currZ);
++                    this.checkBlock(lightAccess, neighbourX, currY, neighbourZ);
 +                }
 +            }
 +        }
@@ -3521,6 +3596,10 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +
 +    protected final void relightChunk(final ILightAccess lightAccess, final IChunkAccess chunk) {
 +        final ChunkCoordIntPair chunkPos = chunk.getPos();
++
++        // ensure the emptiness map will be correct for the chunk
++        this.handleEmptySectionChanges(lightAccess, chunkPos.x, chunkPos.z, getEmptySectionsForChunk(chunk));
++
 +        this.setupEncodeOffset(chunkPos.x * 16 + 7, 128, chunkPos.z * 16 + 7);
 +
 +        try {
@@ -3584,6 +3663,122 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +            }
 +        } finally {
 +            this.destroyCaches();
++        }
++    }
++
++    public final void relightChunks(final ILightAccess lightAccess, final Set<ChunkCoordIntPair> chunks,
++                                    final Consumer<ChunkCoordIntPair> chunkLightCallback) {
++        // it's recommended for maximum performance that the set is ordered according to a BFS from the center of
++        // the region of chunks to relight
++        // it's required that tickets are added for each chunk to keep them loaded
++        final Long2ObjectOpenHashMap<SWMRNibbleArray[]> nibblesByChunk = new Long2ObjectOpenHashMap<>();
++        final Long2ObjectOpenHashMap<boolean[][]> emptinessMapByChunk = new Long2ObjectOpenHashMap<>();
++
++        final int[] neighbourLightOrder = new int[] {
++                // d = 0
++                0, 0,
++                // d = 1
++                -1, 0,
++                0, -1,
++                1, 0,
++                0, 1,
++                // d = 2
++                -1, 1,
++                1, 1,
++                -1, -1,
++                1, -1,
++        };
++
++        for (final ChunkCoordIntPair chunkPos : chunks) {
++            final int chunkX = chunkPos.x;
++            final int chunkZ = chunkPos.z;
++            final IChunkAccess chunk = (IChunkAccess)lightAccess.getFeaturesReadyChunk(chunkX, chunkZ);
++            if (chunk == null || !this.canUseChunk(chunk)) {
++                throw new IllegalStateException();
++            }
++
++            // force update emptiness map so we can guarantee it's correct after we're done
++            this.handleEmptySectionChanges(lightAccess, chunkX, chunkZ, getEmptySectionsForChunk(chunk));
++
++            for (int i = 0, len = neighbourLightOrder.length; i < len; i += 2) {
++                final int dx = neighbourLightOrder[i];
++                final int dz = neighbourLightOrder[i + 1];
++                final int neighbourX = dx + chunkX;
++                final int neighbourZ = dz + chunkZ;
++
++                final IChunkAccess neighbour = (IChunkAccess)lightAccess.getFeaturesReadyChunk(neighbourX, neighbourZ);
++                if (neighbour == null || !this.canUseChunk(neighbour)) {
++                    continue;
++                }
++
++                if (nibblesByChunk.get(CoordinateUtils.getChunkKey(neighbourX, neighbourZ)) != null) {
++                    // lit already called for neighbour, no need to light it now
++                    continue;
++                }
++
++                // light neighbour chunk
++                this.setupEncodeOffset(neighbourX * 16 + 7, 128, neighbourZ * 16 + 7);
++                try {
++                    // insert all neighbouring chunks for this neighbour that we have data for
++                    for (int dz2 = -1; dz2 <= 1; ++dz2) {
++                        for (int dx2 = -1; dx2 <= 1; ++dx2) {
++                            final int neighbourX2 = neighbourX + dx2;
++                            final int neighbourZ2 = neighbourZ + dz2;
++                            final long key = CoordinateUtils.getChunkKey(neighbourX2, neighbourZ2);
++                            final IChunkAccess neighbour2 = (IChunkAccess)lightAccess.getFeaturesReadyChunk(neighbourX2, neighbourZ2);
++                            if (neighbour2 == null || !this.canUseChunk(neighbour2)) {
++                                continue;
++                            }
++
++                            final SWMRNibbleArray[] nibbles = nibblesByChunk.get(key);
++                            if (nibbles == null) {
++                                // we haven't lit this chunk
++                                continue;
++                            }
++
++                            this.setChunkInCache(neighbourX2, neighbourZ2, neighbour2);
++                            this.setBlocksForChunkInCache(neighbourX2, neighbourZ2, neighbour2.getSections());
++                            this.setNibblesForChunkInCache(neighbourX2, neighbourZ2, nibbles);
++                            this.setEmptinessMapCache(neighbourX2, neighbourZ2, emptinessMapByChunk.get(key));
++                        }
++                    }
++
++                    final long key = CoordinateUtils.getChunkKey(neighbourX, neighbourZ);
++
++                    // now insert the neighbour chunk and light it
++                    final SWMRNibbleArray[] nibbles = getFilledEmptyLight();
++                    final boolean[][] emptinessMap = new boolean[(2 * 1 + 1) * (2 * 1 + 1)][];
++                    nibblesByChunk.put(key, nibbles);
++                    emptinessMapByChunk.put(key, emptinessMap);
++
++                    this.setChunkInCache(neighbourX, neighbourZ, neighbour);
++                    this.setBlocksForChunkInCache(neighbourX, neighbourZ, neighbour.getSections());
++                    this.setNibblesForChunkInCache(neighbourX, neighbourZ, nibbles);
++                    this.setEmptinessMapCache(neighbourX, neighbourZ, emptinessMap);
++
++                    this.handleEmptySectionChanges(lightAccess, neighbour, getEmptySectionsForChunk(neighbour), true);
++                    this.lightChunk(lightAccess, neighbour, false);
++                } finally {
++                    this.destroyCaches();
++                }
++            }
++
++            // done lighting all neighbours, so the chunk is now fully lit
++
++            // make sure nibbles are fully updated before calling back
++            final SWMRNibbleArray[] nibbles = nibblesByChunk.get(CoordinateUtils.getChunkKey(chunkX, chunkZ));
++            for (final SWMRNibbleArray nibble : nibbles) {
++                nibble.updateVisible();
++            }
++
++            this.setNibbles(chunk, nibbles);
++
++            for (int y = -1; y <= 16; ++y) {
++                lightAccess.markLightSectionDirty(this.skylightPropagator ? EnumSkyBlock.SKY : EnumSkyBlock.BLOCK, new SectionPosition(chunkX, y, chunkX));
++            }
++
++            // now do callback
++            chunkLightCallback.accept(chunkPos);
 +        }
 +    }
 +
@@ -3812,6 +4007,7 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +        final int encodeOffset = this.coordinateOffset;
 +        final int sectionOffset = this.chunkSectionIndexOffset;
 +        final int emittedMask = this.emittedLightMask;
++        final VariableBlockLightHandler customLightHandler = this.skylightPropagator ? null : ((WorldServer)world).customBlockLightHandlers;
 +
 +        while (queueReadIndex < queueLength) {
 +            final long queueValue = queue[queueReadIndex++];
@@ -3856,7 +4052,7 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +                                            | FLAG_RECHECK_LEVEL;
 +                            continue;
 +                        }
-+                        final int emittedLight = blockState.getEmittedLight() & emittedMask;
++                        final int emittedLight = (customLightHandler != null ? this.getCustomLightLevel(customLightHandler, offX, offY, offZ, blockState.getEmittedLight()) : blockState.getEmittedLight()) & emittedMask;
 +                        if (emittedLight != 0) {
 +                            // re-propagate source
 +                            increaseQueue[increaseQueueLength++] =
@@ -3900,7 +4096,7 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +                                            | (FLAG_RECHECK_LEVEL | flags);
 +                            continue;
 +                        }
-+                        final int emittedLight = blockState.getEmittedLight() & emittedMask;
++                        final int emittedLight = (customLightHandler != null ? this.getCustomLightLevel(customLightHandler, offX, offY, offZ, blockState.getEmittedLight()) : blockState.getEmittedLight()) & emittedMask;
 +                        if (emittedLight != 0) {
 +                            // re-propagate source
 +                            increaseQueue[increaseQueueLength++] =
@@ -3965,7 +4161,7 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +                                            | FLAG_RECHECK_LEVEL;
 +                            continue;
 +                        }
-+                        final int emittedLight = blockState.getEmittedLight() & emittedMask;
++                        final int emittedLight = (customLightHandler != null ? this.getCustomLightLevel(customLightHandler, offX, offY, offZ, blockState.getEmittedLight()) : blockState.getEmittedLight()) & emittedMask;
 +                        if (emittedLight != 0) {
 +                            // re-propagate source
 +                            increaseQueue[increaseQueueLength++] =
@@ -4009,7 +4205,7 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +                                            | (FLAG_RECHECK_LEVEL | flags);
 +                            continue;
 +                        }
-+                        final int emittedLight = blockState.getEmittedLight() & emittedMask;
++                        final int emittedLight = (customLightHandler != null ? this.getCustomLightLevel(customLightHandler, offX, offY, offZ, blockState.getEmittedLight()) : blockState.getEmittedLight()) & emittedMask;
 +                        if (emittedLight != 0) {
 +                            // re-propagate source
 +                            increaseQueue[increaseQueueLength++] =
@@ -4042,10 +4238,10 @@ index 0000000000000000000000000000000000000000..cafa498c6a743e05757c084557628876
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..86ea3596a435efd6e8d93a755aea2159dcf96668
+index 0000000000000000000000000000000000000000..5edc4daffa24074a83d67a3ed6e274318db5cd98
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java
-@@ -0,0 +1,446 @@
+@@ -0,0 +1,465 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.tuinity.tuinity.util.CoordinateUtils;
@@ -4053,6 +4249,7 @@ index 0000000000000000000000000000000000000000..86ea3596a435efd6e8d93a755aea2159
 +import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 +import it.unimi.dsi.fastutil.shorts.ShortCollection;
 +import net.minecraft.server.BlockPosition;
++import net.minecraft.server.ChunkCoordIntPair;
 +import net.minecraft.server.ChunkStatus;
 +import net.minecraft.server.IChunkAccess;
 +import net.minecraft.server.ILightAccess;
@@ -4064,6 +4261,7 @@ index 0000000000000000000000000000000000000000..86ea3596a435efd6e8d93a755aea2159
 +import java.util.HashSet;
 +import java.util.Iterator;
 +import java.util.Set;
++import java.util.function.Consumer;
 +
 +public final class StarLightInterface {
 +
@@ -4390,6 +4588,23 @@ index 0000000000000000000000000000000000000000..86ea3596a435efd6e8d93a755aea2159
 +        }
 +    }
 +
++    public void relightChunks(final Set<ChunkCoordIntPair> chunks, final Consumer<ChunkCoordIntPair> chunkLightCallback) {
++        final SkyStarLightEngine skyEngine = this.getSkyLightEngine();
++        final BlockStarLightEngine blockEngine = this.getBlockLightEngine();
++
++        try {
++            if (skyEngine != null) {
++                skyEngine.relightChunks(this.lightAccess, chunks, chunkLightCallback);
++            }
++            if (blockEngine != null) {
++                blockEngine.relightChunks(this.lightAccess, chunks, chunkLightCallback);
++            }
++        } finally {
++            this.releaseSkyLightEngine(skyEngine);
++            this.releaseBlockLightEngine(blockEngine);
++        }
++    }
++
 +    public void checkChunkEdges(final int chunkX, final int chunkZ) {
 +        this.checkSkyEdges(chunkX, chunkZ);
 +        this.checkBlockEdges(chunkX, chunkZ);
@@ -4490,6 +4705,160 @@ index 0000000000000000000000000000000000000000..86ea3596a435efd6e8d93a755aea2159
 +
 +        public Boolean[] changedSectionSet;
 +
++    }
++}
+diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandler.java b/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandler.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..b8a6c59ee3c919e47e4be76fc4e1737d81a5810b
+--- /dev/null
++++ b/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandler.java
+@@ -0,0 +1,30 @@
++package com.tuinity.tuinity.chunk.light;
++
++import net.minecraft.server.BlockPosition;
++import java.util.Collection;
++
++/**
++ * Recommended implementation is {@link VariableBlockLightHandlerImpl}, but you can implement this interface yourself
++ * if you want.
++ */
++public interface VariableBlockLightHandler {
++
++    /**
++     * Returns the custom light level for the specified position. Must return {@code -1} if there is custom level.
++     * @param x Block x world coordinate
++     * @param y Block y world coordinate
++     * @param z Block z world coordinate
++     * @return Custom light level for the specified position
++     */
++    public int getLightLevel(final int x, final int y, final int z);
++
++    /**
++     * Returns a collection of all the custom light positions inside the specified chunk. This must be fast,
++     * as it is used during chunk lighting.
++     * @param chunkX Chunk's x coordinate.
++     * @param chunkZ Chunk's z coordinate.
++     * @return Collection of all the custom light positions in the specified chunk.
++     */
++    public Collection<BlockPosition> getCustomLightPositions(final int chunkX, final int chunkZ);
++
++}
+diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandlerImpl.java b/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandlerImpl.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..125f59826a9b0174039139ed0715a4ed3df3724b
+--- /dev/null
++++ b/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandlerImpl.java
+@@ -0,0 +1,112 @@
++package com.tuinity.tuinity.chunk.light;
++
++import com.tuinity.tuinity.util.CoordinateUtils;
++import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
++import net.minecraft.server.BlockPosition;
++import java.util.Collection;
++import java.util.Collections;
++import java.util.HashSet;
++import java.util.Set;
++import java.util.concurrent.locks.StampedLock;
++
++public class VariableBlockLightHandlerImpl implements VariableBlockLightHandler {
++
++    protected final Long2ObjectOpenHashMap<Set<BlockPosition>> positionsByChunk = new Long2ObjectOpenHashMap<>();
++    protected final Long2IntOpenHashMap lightValuesByPosition = new Long2IntOpenHashMap();
++    protected final StampedLock seqlock = new StampedLock();
++    {
++        this.lightValuesByPosition.defaultReturnValue(-1);
++        this.positionsByChunk.defaultReturnValue(Collections.emptySet());
++    }
++
++    @Override
++    public int getLightLevel(final int x, final int y, final int z) {
++        final long key = CoordinateUtils.getBlockKey(x, y, z);
++        try {
++            final long attempt = this.seqlock.tryOptimisticRead();
++            if (attempt != 0L) {
++                final int ret = this.lightValuesByPosition.get(key);
++
++                if (this.seqlock.validate(attempt)) {
++                    return ret;
++                }
++            }
++        } catch (final Error error) {
++            throw error;
++        } catch (final Throwable thr) {
++            // ignore
++        }
++
++        this.seqlock.readLock();
++        try {
++            return this.lightValuesByPosition.get(key);
++        } finally {
++            this.seqlock.tryUnlockRead();
++        }
++    }
++
++    @Override
++    public Collection<BlockPosition> getCustomLightPositions(final int chunkX, final int chunkZ) {
++        final long key = CoordinateUtils.getChunkKey(chunkX, chunkZ);
++        try {
++            final long attempt = this.seqlock.tryOptimisticRead();
++            if (attempt != 0L) {
++                final Set<BlockPosition> ret = new HashSet<>(this.positionsByChunk.get(key));
++
++                if (this.seqlock.validate(attempt)) {
++                    return ret;
++                }
++            }
++        } catch (final Error error) {
++            throw error;
++        } catch (final Throwable thr) {
++            // ignore
++        }
++
++        this.seqlock.readLock();
++        try {
++            return new HashSet<>(this.positionsByChunk.get(key));
++        } finally {
++            this.seqlock.tryUnlockRead();
++        }
++    }
++
++    public void setSource(final int x, final int y, final int z, final int to) {
++        if (to < 0 || to > 15) {
++            throw new IllegalArgumentException();
++        }
++        this.seqlock.writeLock();
++        try {
++            if (this.lightValuesByPosition.put(CoordinateUtils.getBlockKey(x, y, z), to) == -1) {
++                this.positionsByChunk.computeIfAbsent(CoordinateUtils.getChunkKey(x >> 4, z >> 4), (final long keyInMap) -> {
++                    return new HashSet<>();
++                }).add(new BlockPosition(x, y, z));
++            }
++        } finally {
++            this.seqlock.tryUnlockWrite();
++        }
++    }
++
++    public int removeSource(final int x, final int y, final int z) {
++        this.seqlock.writeLock();
++        try {
++            final int ret = this.lightValuesByPosition.remove(CoordinateUtils.getBlockKey(x, y, z));
++
++            if (ret != -1) {
++                final long chunkKey = CoordinateUtils.getChunkKey(x >> 4, z >> 4);
++
++                final Set<BlockPosition> positions = this.positionsByChunk.get(chunkKey);
++                positions.remove(new BlockPosition(x, y, z));
++
++                if (positions.isEmpty()) {
++                    this.positionsByChunk.remove(chunkKey);
++                }
++            }
++
++            return ret;
++        } finally {
++            this.seqlock.tryUnlockWrite();
++        }
 +    }
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
@@ -10257,7 +10626,7 @@ index b98e60772bad7e06845b50fdc11e98c0ea775d3d..e0bbfe1422cbad811ecb43d7436380d8
              while (objectiterator.hasNext()) {
                  entry = (Entry) objectiterator.next();
 diff --git a/src/main/java/net/minecraft/server/LightEngineThreaded.java b/src/main/java/net/minecraft/server/LightEngineThreaded.java
-index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50e8f299e0 100644
+index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..8f9154942bb7f9f195abb8a218928e4340792312 100644
 --- a/src/main/java/net/minecraft/server/LightEngineThreaded.java
 +++ b/src/main/java/net/minecraft/server/LightEngineThreaded.java
 @@ -2,6 +2,11 @@ package net.minecraft.server;
@@ -10272,7 +10641,16 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
  import it.unimi.dsi.fastutil.objects.ObjectArrayList;
  import it.unimi.dsi.fastutil.objects.ObjectList;
  import it.unimi.dsi.fastutil.objects.ObjectListIterator;
-@@ -156,12 +161,179 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -15,7 +20,7 @@ import org.apache.logging.log4j.Logger;
+ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+ 
+     private static final Logger LOGGER = LogManager.getLogger();
+-    private final ThreadedMailbox<Runnable> b;
++    private final ThreadedMailbox<Runnable> b; private ThreadedMailbox<Runnable> getExecutor() { return this.b; } // Tuinity - OBFHELPER
+     // Paper start
+     private static final int MAX_PRIORITIES = PlayerChunkMap.GOLDEN_TICKET + 2;
+ 
+@@ -156,13 +161,187 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      private volatile int f = 5;
      private final AtomicBoolean g = new AtomicBoolean();
  
@@ -10304,6 +10682,13 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
 +        this.scheduleLightWorkTask(chunkX, chunkZ, LightEngineThreaded.Update.POST_UPDATE, () -> {
 +            this.theLightEngine.relightChunk(chunkX, chunkZ);
 +            whenComplete.run();
++        });
++    }
++
++    public void relight(java.util.Set<ChunkCoordIntPair> chunks,
++                        java.util.function.Consumer<ChunkCoordIntPair> chunkLightCallback) {
++        this.getExecutor().queue(() -> {
++            this.theLightEngine.relightChunks(chunks, chunkLightCallback);
 +        });
 +    }
 +
@@ -10387,8 +10772,8 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
 +        }
 +
 +        return CompletableFuture.completedFuture(playerChunk.getAvailableChunkNow());
-+    }
-+
+     }
+ 
 +    // note: task is discarded if the chunk is not at light status or if the chunk is not lit
 +    protected final void scheduleLightWorkTask(int chunkX, int chunkZ, LightEngineThreaded.Update type, Runnable task) {
 +        if (!org.bukkit.Bukkit.isPrimaryThread()) {
@@ -10447,12 +10832,13 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
 +        int var2 = this.theLightEngine.getSkyReader().b(var0) - var1;
 +        int var3 = this.theLightEngine.getBlockReader().b(var0);
 +        return Math.max(var3, var2);
-     }
++    }
 +    // Tuinity end - replace light engine impl
- 
++
      public void close() {}
  
-@@ -179,6 +351,15 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+     @Override
+@@ -179,6 +358,15 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      public void a(BlockPosition blockposition) {
          BlockPosition blockposition1 = blockposition.immutableCopy();
  
@@ -10468,7 +10854,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
          this.a(blockposition.getX() >> 4, blockposition.getZ() >> 4, LightEngineThreaded.Update.POST_UPDATE, SystemUtils.a(() -> {
              super.a(blockposition1);
          }, () -> {
-@@ -187,6 +368,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -187,6 +375,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      }
  
      protected void a(ChunkCoordIntPair chunkcoordintpair) {
@@ -10480,7 +10866,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -211,6 +397,14 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -211,6 +404,14 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(SectionPosition sectionposition, boolean flag) {
@@ -10495,7 +10881,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
          this.a(sectionposition.a(), sectionposition.c(), () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -222,6 +416,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -222,6 +423,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(ChunkCoordIntPair chunkcoordintpair, boolean flag) {
@@ -10507,7 +10893,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
              super.a(chunkcoordintpair, flag);
          }, () -> {
-@@ -231,6 +430,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -231,6 +437,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(EnumSkyBlock enumskyblock, SectionPosition sectionposition, @Nullable NibbleArray nibblearray, boolean flag) {
@@ -10519,7 +10905,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
          this.a(sectionposition.a(), sectionposition.c(), () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -240,6 +444,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -240,6 +451,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
          }));
      }
  
@@ -10527,7 +10913,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
      private void a(int i, int j, LightEngineThreaded.Update lightenginethreaded_update, Runnable runnable) {
          this.a(i, j, this.d.c(ChunkCoordIntPair.pair(i, j)), lightenginethreaded_update, runnable);
      }
-@@ -252,6 +457,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -252,6 +464,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void b(ChunkCoordIntPair chunkcoordintpair, boolean flag) {
@@ -10539,7 +10925,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -277,6 +487,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -277,6 +494,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
                  return;
              }
              // Paper end
@@ -10547,7 +10933,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
              ChunkSection[] achunksection = ichunkaccess.getSections();
  
              for (int i = 0; i < 16; ++i) {
-@@ -293,16 +504,25 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -293,16 +511,25 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
                      super.a(blockposition, ichunkaccess.g(blockposition));
                  });
              }
@@ -10575,7 +10961,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
              // Paper start
              future.complete(ichunkaccess);
          });
-@@ -311,7 +531,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -311,7 +538,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      }
  
      public void queueUpdate() {
@@ -10584,7 +10970,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..d3f02118f3f7925b64d335802f195d50
              this.b.a((() -> { // Paper - decompile error
                  this.b();
                  this.g.set(false);
-@@ -325,17 +545,36 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -325,17 +552,36 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      private final java.util.List<Runnable> pre = new java.util.ArrayList<>();
      private final java.util.List<Runnable> post = new java.util.ArrayList<>();
      private void b() {
@@ -13963,10 +14349,10 @@ index e41cb8613efc86499dfe3be36c9130ab6dc9b89e..c19ffb925a02d123da8a5c77186e6105
          return j != 0L && i - this.d > j;
      }
 diff --git a/src/main/java/net/minecraft/server/TicketType.java b/src/main/java/net/minecraft/server/TicketType.java
-index 5c789b25f1df2eae8ea8ceb4ba977ba336fe6d5e..3f942c632621e7ac7d3ac596aa408d687c3fa90d 100644
+index 5c789b25f1df2eae8ea8ceb4ba977ba336fe6d5e..3c964f26592fc84bb5fc11c60808d11c65d93b16 100644
 --- a/src/main/java/net/minecraft/server/TicketType.java
 +++ b/src/main/java/net/minecraft/server/TicketType.java
-@@ -26,8 +26,21 @@ public class TicketType<T> {
+@@ -26,8 +26,22 @@ public class TicketType<T> {
      public static final TicketType<Long> ASYNC_LOAD = a("async_load", Long::compareTo); // Paper
      public static final TicketType<ChunkCoordIntPair> PRIORITY = a("priority", Comparator.comparingLong(ChunkCoordIntPair::pair), 300); // Paper
      public static final TicketType<ChunkCoordIntPair> URGENT = a("urgent", Comparator.comparingLong(ChunkCoordIntPair::pair), 300); // Paper
@@ -13974,6 +14360,7 @@ index 5c789b25f1df2eae8ea8ceb4ba977ba336fe6d5e..3f942c632621e7ac7d3ac596aa408d68
 +    public static final TicketType<Long> DELAYED_UNLOAD = a("delayed_unload", Long::compareTo); // Tuinity - delay chunk unloads
 +    public static final TicketType<Long> REQUIRED_LOAD = a("required_load", Long::compareTo); // Tuinity - make sure getChunkAt does not fail
 +    public static final TicketType<ChunkCoordIntPair> LIGHT_UPDATE = a("light_update", Comparator.comparingLong(ChunkCoordIntPair::pair)); // Tuinity - ensure chunks stay loaded for lighting
++    public static final TicketType<Long> CHUNK_RELIGHT = a("chunk_relight", Long::compareTo); // Tuinity - ensure chunk stays loaded for relighting
  
 +    // Tuinity start - delay chunk unloads
 +    boolean delayUnloadViable = true;
@@ -15130,7 +15517,7 @@ index f011869880fedae4b69e505491e8bdbc5f51dfba..0d10d317cd0b60fc0866ae505c7fd71f
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbda60c705b 100644
+index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..ff1d80c7c3271a18fa355430417dd1992b8494a8 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -55,12 +55,13 @@ import org.bukkit.event.server.MapInitializeEvent;
@@ -15157,7 +15544,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
      protected final PersistentRaid persistentRaid;
      private final ObjectLinkedOpenHashSet<BlockActionData> L;
      private boolean ticking;
-@@ -205,6 +206,104 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -205,6 +206,111 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      }
      // Paper end - rewrite ticklistserver
  
@@ -15259,10 +15646,17 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
 +    final List<EntityPlayer> playersAffectingSpawning = new java.util.ArrayList<>();
 +    // Tuinity end - optimise checkDespawn
 +
++    // Tuinity start - rewrite light engine
++    /**
++     * Cannot be modified during light updates.
++     */
++    public com.tuinity.tuinity.chunk.light.VariableBlockLightHandler customBlockLightHandlers;
++    // Tuinity end - rewrite light engine
++
      // Add env and gen to constructor, WorldData -> WorldDataServer
      public WorldServer(MinecraftServer minecraftserver, Executor executor, Convertable.ConversionSession convertable_conversionsession, IWorldDataServer iworlddataserver, ResourceKey<World> resourcekey, DimensionManager dimensionmanager, WorldLoadListener worldloadlistener, ChunkGenerator chunkgenerator, boolean flag, long i, List<MobSpawner> list, boolean flag1, org.bukkit.World.Environment env, org.bukkit.generator.ChunkGenerator gen) {
          super(iworlddataserver, resourcekey, dimensionmanager, minecraftserver::getMethodProfiler, false, flag, i, gen, env, executor); // Paper pass executor
-@@ -265,6 +364,243 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -265,6 +371,243 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          this.asyncChunkTaskManager = new com.destroystokyo.paper.io.chunk.ChunkTaskManager(this); // Paper
      }
  
@@ -15506,7 +15900,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
      // CraftBukkit start
      @Override
      protected TileEntity getTileEntity(BlockPosition pos, boolean validate) {
-@@ -318,6 +654,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -318,6 +661,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      public void doTick(BooleanSupplier booleansupplier) {
          GameProfilerFiller gameprofilerfiller = this.getMethodProfiler();
@@ -15521,7 +15915,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
  
          this.ticking = true;
          gameprofilerfiller.enter("world border");
-@@ -467,7 +811,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -467,7 +818,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          }
          timings.scheduledBlocks.stopTiming(); // Paper
  
@@ -15530,7 +15924,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
          gameprofilerfiller.exitEnter("raid");
          this.timings.raids.startTiming(); // Paper - timings
          this.persistentRaid.a();
-@@ -476,7 +820,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -476,7 +827,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          timings.doSounds.startTiming(); // Spigot
          this.ak();
          timings.doSounds.stopTiming(); // Spigot
@@ -15539,7 +15933,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
          this.ticking = false;
          gameprofilerfiller.exitEnter("entities");
          boolean flag3 = true || !this.players.isEmpty() || !this.getForceLoadedChunks().isEmpty(); // CraftBukkit - this prevents entity cleanup, other issues on servers with no players
-@@ -492,13 +836,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -492,13 +843,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              }
  
              this.tickingEntities = true;
@@ -15555,7 +15949,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
                  Entity entity1 = entity.getVehicle();
  
                  /* CraftBukkit start - We prevent spawning in general, so this butchering is not needed
-@@ -514,6 +857,15 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -514,6 +864,15 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  gameprofilerfiller.enter("checkDespawn");
                  if (!entity.dead) {
                      entity.checkDespawn();
@@ -15571,7 +15965,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
                  }
  
                  gameprofilerfiller.exit();
-@@ -534,14 +886,22 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -534,14 +893,22 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  gameprofilerfiller.enter("remove");
                  if (entity.dead) {
                      this.removeEntityFromChunk(entity);
@@ -15595,7 +15989,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
              this.tickingEntities = false;
              // Paper start
              for (java.lang.Runnable run : this.afterEntityTickingTasks) {
-@@ -553,7 +913,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -553,7 +920,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              }
              this.afterEntityTickingTasks.clear();
              // Paper end
@@ -15604,7 +15998,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
  
              Entity entity2;
  
-@@ -563,7 +923,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -563,7 +930,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              }
  
              timings.tickEntities.stopTiming(); // Spigot
@@ -15613,7 +16007,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
              this.tickBlockEntities();
          }
  
-@@ -809,7 +1169,26 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -809,7 +1176,26 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      }
  
@@ -15640,7 +16034,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
          if (!(entity instanceof EntityHuman) && !this.getChunkProvider().a(entity)) {
              this.chunkCheck(entity);
          } else {
-@@ -862,6 +1241,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -862,6 +1248,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              //} finally { timer.stopTiming(); } // Paper - timings - move up
  
          }
@@ -15652,7 +16046,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
      }
  
      public void a(Entity entity, Entity entity1) {
-@@ -920,6 +1304,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -920,6 +1311,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              int i = MathHelper.floor(entity.locX() / 16.0D);
              int j =  Math.min(15, Math.max(0, MathHelper.floor(entity.locY() / 16.0D))); // Paper - stay consistent with chunk add/remove behavior
              int k = MathHelper.floor(entity.locZ() / 16.0D);
@@ -15665,7 +16059,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
  
              if (!entity.inChunk || entity.chunkX != i || entity.chunkY != j || entity.chunkZ != k) {
                  // Paper start - remove entity if its in a chunk more correctly.
-@@ -929,6 +1319,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -929,6 +1326,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  }
                  // Paper end
  
@@ -15678,7 +16072,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
                  if (entity.inChunk && this.isChunkLoaded(entity.chunkX, entity.chunkZ)) {
                      this.getChunkAt(entity.chunkX, entity.chunkZ).a(entity, entity.chunkY);
                  }
-@@ -942,6 +1338,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -942,6 +1345,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  } else {
                      this.getChunkAt(i, k).a(entity);
                  }
@@ -15690,7 +16084,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
              }
  
              this.getMethodProfiler().exit();
-@@ -1297,7 +1698,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1297,7 +1705,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  Entity entity = (Entity) iterator.next();
  
                  if (!(entity instanceof EntityPlayer)) {
@@ -15699,7 +16093,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
                          throw (IllegalStateException) SystemUtils.c((Throwable) (new IllegalStateException("Removing entity while ticking!")));
                      }
  
-@@ -1325,6 +1726,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1325,6 +1733,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      public void unregisterEntity(Entity entity) {
          org.spigotmc.AsyncCatcher.catchOp("entity unregister"); // Spigot
@@ -15707,7 +16101,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
          // Paper start - fix entity registration issues
          if (entity instanceof EntityComplexPart) {
              // Usually this is a no-op for complex parts, and ID's should be removed, but go ahead and remove it anyways
-@@ -1391,17 +1793,108 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1391,17 +1800,108 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          this.getScoreboard().a(entity);
          // CraftBukkit start - SPIGOT-5278
          if (entity instanceof EntityDrowned) {
@@ -15819,7 +16213,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
      private void registerEntity(Entity entity) {
          org.spigotmc.AsyncCatcher.catchOp("entity register"); // Spigot
          // Paper start - don't double enqueue entity registration
-@@ -1412,7 +1905,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1412,7 +1912,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              return;
          }
          // Paper end
@@ -15828,7 +16222,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
              if (!entity.isQueuedForRegister) { // Paper
                  this.entitiesToAdd.add(entity);
                  entity.isQueuedForRegister = true; // Paper
-@@ -1420,6 +1913,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1420,6 +1920,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          } else {
              entity.isQueuedForRegister = false; // Paper
              this.entitiesById.put(entity.getId(), entity);
@@ -15836,7 +16230,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
              if (entity instanceof EntityEnderDragon) {
                  EntityComplexPart[] aentitycomplexpart = ((EntityEnderDragon) entity).eJ();
                  int i = aentitycomplexpart.length;
-@@ -1428,6 +1922,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1428,6 +1929,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                      EntityComplexPart entitycomplexpart = aentitycomplexpart[j];
  
                      this.entitiesById.put(entitycomplexpart.getId(), entitycomplexpart);
@@ -15844,7 +16238,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
                  }
              }
  
-@@ -1452,12 +1947,16 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1452,12 +1954,16 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              // this.getChunkProvider().addEntity(entity); // Paper - moved down below valid=true
              // CraftBukkit start - SPIGOT-5278
              if (entity instanceof EntityDrowned) {
@@ -15864,7 +16258,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
              }
              entity.valid = true; // CraftBukkit
              this.getChunkProvider().addEntity(entity); // Paper - from above to be below valid=true
-@@ -1473,7 +1972,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1473,7 +1979,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      }
  
      public void removeEntity(Entity entity) {
@@ -15873,7 +16267,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
              throw (IllegalStateException) SystemUtils.c((Throwable) (new IllegalStateException("Removing entity while ticking!")));
          } else {
              this.removeEntityFromChunk(entity);
-@@ -1569,13 +2068,32 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1569,13 +2075,32 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      @Override
      public void notify(BlockPosition blockposition, IBlockData iblockdata, IBlockData iblockdata1, int i) {
@@ -15907,7 +16301,7 @@ index 5b0b6edfa790918e56399ff6c83f3feb6e5aca49..8d8385e3022dd84e2b92daeffa190dbd
  
              while (iterator.hasNext()) {
                  NavigationAbstract navigationabstract = (NavigationAbstract) iterator.next();
-@@ -1583,7 +2101,21 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1583,7 +2108,21 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  if (!navigationabstract.i()) {
                      navigationabstract.b(blockposition);
                  }
