@@ -204,16 +204,6 @@ Optimise collision checking in player move packet handling
 Don't need to do another getCubes call if the move() call
 doesn't find any collisions
 
-Optimise heightmap access
-
-HeightMap uses DataBits for storage to reduce the memory footprint
-of the underlying heightmap. However, this reduction in memory
-footprint comes at the cost of encoding/decoding each access.
-
-So we can make the tradeoff of raw array access by using a char
-array internally. For every 100,000 chunks, this will add approximately
-80MB overhead (4 heightmaps per full chunk) - which is acceptable.
-
 Manually inline methods in BlockPosition
 
 Separate lookup locking from state access in UserCache
@@ -361,17 +351,6 @@ deadlock between the server thread and awt shutdown thread here.
 Copy passenger list in enderTeleportTo
 
 Fixes https://github.com/Spottedleaf/Tuinity/issues/208
-
-Revert MC-4 fix
-
-When messing around with collisions, I ran into problems where
-entity position was off by ULP and that caused clipping problems.
-Now, the collision epsilon is 1.0e-7 to account for those errors.
-
-But this patch is going to cause problems on the order of 1.0e-4.
-
-I do not want to deal with clipping problems. The very fact it works
-shows it's causing the clipping to occur serverside.
 
 Prevent light queue overfill when no players are online
 
@@ -2059,10 +2038,10 @@ index 0000000000000000000000000000000000000000..9910dc9f1a087f5baf404a5b8ebb5a9f
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8df35be7224c3e499c2fd46931e3ad325ec2f1b5
+index 0000000000000000000000000000000000000000..0cd48bd4032092fe1a9f12082e85195a125f0f87
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
-@@ -0,0 +1,748 @@
+@@ -0,0 +1,738 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.tuinity.tuinity.util.WorldUtil;
@@ -2631,17 +2610,7 @@ index 0000000000000000000000000000000000000000..8df35be7224c3e499c2fd46931e3ad32
 +            final int startY = highestNonEmptySection << 4 | 15;
 +            for (int currZ = minZ; currZ <= maxZ; ++currZ) {
 +                for (int currX = minX; currX <= maxX; ++currX) {
-+                    final int end = this.tryPropagateSkylight(world, currX, startY, currZ, false, false);
-+                    if (end == startY) {
-+                        // we need to propagate this one ourselves.
-+                        this.appendToIncreaseQueue(
-+                                ((currX + (currZ << 6) + (startY << (6 + 6)) + this.coordinateOffset) & ((1L << (6 + 6 + 16)) - 1))
-+                                        | (15L << (6 + 6 + 16)) // we know we're at full lit here
-+                                        | (AxisDirection.POSITIVE_Y.everythingButThisDirection << (6 + 6 + 16 + 4)) // no need to check upwards, we know it's 15.
-+                                        // we know this block is air because the section is empty, so it's obviously not sidedly
-+                                        // transparent.
-+                        );
-+                    }
++                    this.tryPropagateSkylight(world, currX, startY + 1, currZ, false, false);
 +                }
 +            }
 +        } // else: apparently the chunk is empty
@@ -8370,7 +8339,7 @@ index 2d887af902a33b0e28d8f0a6ac2e59c815a7856e..2291135eaef64c403183724cb6e413cd
          @Override
          public BlockPosition immutableCopy() {
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index 9c078d30afef20bd1ea5975299c5513334829b19..6ca9e373c402bf252bae6f08b88407bda48d7f0e 100644
+index 9c078d30afef20bd1ea5975299c5513334829b19..0a8173a5bcd7212ebeff204fef5efdf1633aac78 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
 @@ -91,6 +91,186 @@ public class Chunk implements IChunkAccess {
@@ -8572,15 +8541,6 @@ index 9c078d30afef20bd1ea5975299c5513334829b19..6ca9e373c402bf252bae6f08b88407bd
          Iterator iterator = protochunk.y().iterator();
  
          while (iterator.hasNext()) {
-@@ -330,7 +515,7 @@ public class Chunk implements IChunkAccess {
-             Entry<HeightMap.Type, HeightMap> entry = (Entry) iterator.next();
- 
-             if (ChunkStatus.FULL.h().contains(entry.getKey())) {
--                this.a((HeightMap.Type) entry.getKey()).a(((HeightMap) entry.getValue()).a());
-+                this.a((HeightMap.Type) entry.getKey()).copyFrom(((HeightMap) entry.getValue())); // Tuinity
-             }
-         }
- 
 @@ -547,6 +732,7 @@ public class Chunk implements IChunkAccess {
  
      @Override
@@ -9402,7 +9362,7 @@ index 6acb5f05a05c542f8257e205ef70987be2d29194..12d9b73ccc2f4406957932397746cac7
              }
          } finally {
 diff --git a/src/main/java/net/minecraft/server/ChunkRegionLoader.java b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
-index 8e7da2c5f3852920ec5fbcdd2bff4d299e6aa499..13553da7c37d2701854c8d824311dd7bc1a0a423 100644
+index 8e7da2c5f3852920ec5fbcdd2bff4d299e6aa499..cba943682f5ee798517bc8c3a098c100e235320b 100644
 --- a/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 +++ b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 @@ -24,6 +24,14 @@ public class ChunkRegionLoader {
@@ -9425,7 +9385,7 @@ index 8e7da2c5f3852920ec5fbcdd2bff4d299e6aa499..13553da7c37d2701854c8d824311dd7b
      // Paper end
  
 +    // Tuinity start - rewrite light engine
-+    private static final int STARLIGHT_LIGHT_VERSION = 2;
++    private static final int STARLIGHT_LIGHT_VERSION = 3;
 +
 +    private static final String UNINITIALISED_SKYLIGHT_TAG = "starlight.skylight_uninit";
 +    private static final String STARLIGHT_VERSION_TAG = "starlight.light_version";
@@ -9616,34 +9576,6 @@ index f6c9bdbf52d773d7aa601125b887b347163f9328..51ea295d66312c95685b9fe4ee502a02
          this.t = chunkstatus == null ? 0 : chunkstatus.c() + 1;
      }
  
-diff --git a/src/main/java/net/minecraft/server/DataBits.java b/src/main/java/net/minecraft/server/DataBits.java
-index f0c9009fb808ca664a7c3ebaeb8cfa8e2ba7b97e..58f7e30da99afbfae39aedc2d708e144d4dfb128 100644
---- a/src/main/java/net/minecraft/server/DataBits.java
-+++ b/src/main/java/net/minecraft/server/DataBits.java
-@@ -52,6 +52,7 @@ public class DataBits {
-         return (int) ((long) i * this.g_unsigned + this.h_unsigned >> 32 >> this.i); // Paper
-     }
- 
-+    public final int getAndSet(final int index, final int value) { return this.a(index, value); } // Tuinity - OBFHELPER
-     public final int a(int i, int j) { // Paper - make final for inline
-         //Validate.inclusiveBetween(0L, (long) (this.e - 1), (long) i); // Paper
-         //Validate.inclusiveBetween(0L, this.d, (long) j); // Paper
-@@ -64,6 +65,7 @@ public class DataBits {
-         return j1;
-     }
- 
-+    public final void set(final int index, final int value) { this.b(index, value); } // Tuinity - OBFHELPER
-     public final void b(int i, int j) { // Paper - make final for inline
-         //Validate.inclusiveBetween(0L, (long) (this.e - 1), (long) i); // Paper
-         //Validate.inclusiveBetween(0L, this.d, (long) j); // Paper
-@@ -74,6 +76,7 @@ public class DataBits {
-         this.b[k] = l & ~(this.d << i1) | ((long) j & this.d) << i1;
-     }
- 
-+    public final int get(final int index) { return this.a(index); } // Tuinity - OBFHELPER
-     public final int a(int i) { // Paper - make final for inline
-         //Validate.inclusiveBetween(0L, (long) (this.e - 1), (long) i); // Paper
-         int j = this.b(i);
 diff --git a/src/main/java/net/minecraft/server/DataPaletteBlock.java b/src/main/java/net/minecraft/server/DataPaletteBlock.java
 index 95ef96286855624590b72d69514b0fc0e08fddba..73163b417af7e522a4509bf9c1ab56d6499be622 100644
 --- a/src/main/java/net/minecraft/server/DataPaletteBlock.java
@@ -10154,19 +10086,6 @@ index 6d716214e756fe1326cd3d2becea969076f6fd5b..fb1d640d89258477dd1286fff929deec
  
              if (entityhuman != null) {
                  double d0 = entityhuman.h((Entity) this); // CraftBukkit - decompile error
-diff --git a/src/main/java/net/minecraft/server/EntityItem.java b/src/main/java/net/minecraft/server/EntityItem.java
-index f41aaa7623c052b9f4044898d1bdee898c03057a..d99cecc4075338d7b8f154ab94d8ac04190ba371 100644
---- a/src/main/java/net/minecraft/server/EntityItem.java
-+++ b/src/main/java/net/minecraft/server/EntityItem.java
-@@ -526,7 +526,7 @@ public class EntityItem extends Entity {
- 
-     // Paper start - fix MC-4
-     public void setPositionRaw(double x, double y, double z) {
--        if (com.destroystokyo.paper.PaperConfig.fixEntityPositionDesync) {
-+        if (false && com.destroystokyo.paper.PaperConfig.fixEntityPositionDesync) { // Tuinity - revert
-             // encode/decode from PacketPlayOutEntity
-             x = MathHelper.floorLong(x * 4096.0D) * (1 / 4096.0D);
-             y = MathHelper.floorLong(y * 4096.0D) * (1 / 4096.0D);
 diff --git a/src/main/java/net/minecraft/server/EntityLiving.java b/src/main/java/net/minecraft/server/EntityLiving.java
 index c8cdce899b109a7f554fec7aaa8235df4224cd1d..1c396ec56f35d8764e3bf7b67a7984393eb94b3b 100644
 --- a/src/main/java/net/minecraft/server/EntityLiving.java
@@ -10412,37 +10331,10 @@ index 36aafc3b71013bcec0f4d956761fc2710848b3fd..c9963c19892c3e408964b72983bc6e26
      }
  
 diff --git a/src/main/java/net/minecraft/server/HeightMap.java b/src/main/java/net/minecraft/server/HeightMap.java
-index 068b92c5c4ae112771757626ea75694e59f3d255..a43c4ca3ea2e0dbf34a177592daed18c64bb14d3 100644
+index 068b92c5c4ae112771757626ea75694e59f3d255..476da43b9f0ef35b4985f88e4784b1f8c5222af3 100644
 --- a/src/main/java/net/minecraft/server/HeightMap.java
 +++ b/src/main/java/net/minecraft/server/HeightMap.java
-@@ -19,7 +19,25 @@ public class HeightMap {
-     private static final Predicate<IBlockData> b = (iblockdata) -> {
-         return iblockdata.getMaterial().isSolid();
-     };
--    private final DataBits c = new DataBits(9, 256);
-+    // Tuinity start
-+    private final char[] heightmap = new char[16 * 16]; // Tuinity - replace with faster access
-+    public DataBits toDataBits() {
-+        final DataBits ret = new DataBits(9, 256);
-+
-+        for (int i = 0, len = this.heightmap.length; i < len; ++i) {
-+            ret.set(i, this.heightmap[i]);
-+        }
-+
-+        return ret;
-+    }
-+
-+    public void copyFrom(HeightMap other) {
-+        if (other.heightmap.length != this.heightmap.length) {
-+            throw new IllegalStateException("Heightmap lengths must match");
-+        }
-+        System.arraycopy(other.heightmap, 0, this.heightmap, 0, this.heightmap.length);
-+    }
-+    // Tuinity end
-     private final Predicate<IBlockData> d;
-     private final IChunkAccess e;
- 
-@@ -101,24 +119,30 @@ public class HeightMap {
+@@ -101,6 +101,7 @@ public class HeightMap {
          }
      }
  
@@ -10450,34 +10342,7 @@ index 068b92c5c4ae112771757626ea75694e59f3d255..a43c4ca3ea2e0dbf34a177592daed18c
      public int a(int i, int j) {
          return this.a(c(i, j));
      }
- 
-     private int a(int i) {
--        return this.c.a(i);
-+        return this.heightmap[i]; // Tuinity
-     }
- 
-     private void a(int i, int j, int k) {
--        this.c.b(c(i, j), k);
-+        this.heightmap[c(i, j)] = (char)k; // Tuinity
-     }
- 
-     public void a(long[] along) {
--        System.arraycopy(along, 0, this.c.a(), 0, along.length);
-+        // Tuinity start
-+        final DataBits databits = new DataBits(9, 256, along);
-+        for (int i = 0, len = this.heightmap.length; i < len; ++i) {
-+            this.heightmap[i] = (char)databits.get(i);
-+        }
-+        // Tuinity end
-     }
- 
-     public long[] a() {
--        return this.c.a();
-+        return this.toDataBits().a(); // Tuinity
-     }
- 
-     private static int c(int i, int j) {
-@@ -137,7 +161,7 @@ public class HeightMap {
+@@ -137,7 +138,7 @@ public class HeightMap {
          private final String h;
          private final HeightMap.Use i;
          private final Predicate<IBlockData> j;
@@ -10486,7 +10351,7 @@ index 068b92c5c4ae112771757626ea75694e59f3d255..a43c4ca3ea2e0dbf34a177592daed18c
              HeightMap.Type[] aheightmap_type = values();
              int i = aheightmap_type.length;
  
-@@ -149,7 +173,7 @@ public class HeightMap {
+@@ -149,7 +150,7 @@ public class HeightMap {
  
          });
  
@@ -12185,7 +12050,7 @@ index a22f0cccecc85b4e4fe4603bcfa213f15c23db69..6cc4a035c8b1312b59685b20039d5e82
                      this.d &= ~(1 << k);
                      if (nibblearray != null) {
 diff --git a/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java b/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
-index b9276928a58d56ca9aac95d262d8555522946bd7..cf3fbe60722c047487abbbc5c84c9767aa47733b 100644
+index b9276928a58d56ca9aac95d262d8555522946bd7..d5a8036b764699a70a69b7dc3d45ea6d10835c44 100644
 --- a/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
 +++ b/src/main/java/net/minecraft/server/PacketPlayOutMapChunk.java
 @@ -19,7 +19,7 @@ public class PacketPlayOutMapChunk implements Packet<PacketListenerPlayOut> {
@@ -12304,7 +12169,7 @@ index b9276928a58d56ca9aac95d262d8555522946bd7..cf3fbe60722c047487abbbc5c84c9767
 +                chunkSectionBitSetCopy ^= trailingBit; // move on to the next
 +
 +                if (chunk.getSections()[sectionIndex] != null) {
-+                    this.extraPackets.add(new PacketPlayOutMapChunk(chunk, trailingBit, modifyBlocks));
++                    this.extraPackets.add(new PacketPlayOutMapChunk(chunk, trailingBit));
 +                }
 +            }
 +        }
