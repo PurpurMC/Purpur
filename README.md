@@ -59,7 +59,16 @@ for the license of material used/modified by this project.
 
 ## API
 
-Purpur API maven dependency:
+### [Javadoc](https://purpur.pl3x.net/javadoc)
+
+### Dependency Information
+Maven
+```xml
+<repository>
+    <id>purpur</id>
+    <url>https://repo.pl3x.net/</url>
+</repository>
+```
 ```xml
 <dependency>
     <groupId>net.pl3x.purpur</groupId>
@@ -68,14 +77,8 @@ Purpur API maven dependency:
     <scope>provided</scope>
 </dependency>
 ```
-```xml
-<repository>
-    <id>purpur</id>
-    <url>https://repo.pl3x.net/</url>
-</repository>
-```
 
-Purpur API gradle dependency:
+Gradle
 ```kotlin
 repositories {
     maven("https://repo.pl3x.net/")
