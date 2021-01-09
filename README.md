@@ -47,7 +47,7 @@ Downloads API endpoints:
 ## License
 [![MIT License](https://img.shields.io/github/license/pl3xgaming/Purpur?&logo=github)](License)
 
-Everything is licensed under the MIT license, and is free to be used in your own fork.
+All patches are licensed under the MIT license, unless otherwise noted in the patch headers.
 
 See [starlis/empirecraft](https://github.com/starlis/empirecraft), [electronicboy/byof](https://github.com/electronicboy/byof), and [mikroskeemsrealm/Toothpick](https://github.com/mikroskeemsrealm/Toothpick)
 for the license of material used/modified by this project.
