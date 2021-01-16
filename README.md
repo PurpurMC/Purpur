@@ -28,7 +28,8 @@ Join us on [Discord](https://discord.gg/mtAAnkk)
 Downloads can be obtained from the [downloads page](https://purpur.pl3x.net/downloads/), the downloads API, or alternatively, from Pl3x's [Jenkins CI Server](https://ci.pl3x.net/job/Purpur/).
 
 Latest build shortcut links:
-* [1.16.4](https://purpur.pl3x.net/api/v1/purpur/1.16.4/latest/download) builds 809+
+* [1.16.5](https://purpur.pl3x.net/api/v1/purpur/1.16.5/latest/download) builds 957+
+* [1.16.4](https://purpur.pl3x.net/api/v1/purpur/1.16.4/latest/download) builds 809-956
 * [1.16.3](https://purpur.pl3x.net/api/v1/purpur/1.16.3/latest/download) builds 751-808
 * [1.16.2](https://purpur.pl3x.net/api/v1/purpur/1.16.2/latest/download) builds 711-750
 * [1.16.1](https://purpur.pl3x.net/api/v1/purpur/1.16.1/latest/download) builds 608-710
@@ -73,7 +74,7 @@ Maven
 <dependency>
     <groupId>net.pl3x.purpur</groupId>
     <artifactId>purpur-api</artifactId>
-    <version>1.16.4-R0.1-SNAPSHOT</version>
+    <version>1.16.5-R0.1-SNAPSHOT</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -86,7 +87,7 @@ repositories {
 ```
 ```kotlin
 dependencies {
-    compileOnly("net.pl3x.purpur", "purpur-api", "1.16.4-R0.1-SNAPSHOT")
+    compileOnly("net.pl3x.purpur", "purpur-api", "1.16.5-R0.1-SNAPSHOT")
 }
 ```
 

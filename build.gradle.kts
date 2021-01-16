@@ -12,7 +12,7 @@ toothpick {
         ?: "\"${gitCmd("rev-parse", "--short", "HEAD").output}\""
     forkVersion = "git-$forkName-$versionTag"
 
-    minecraftVersion = "1.16.4"
+    minecraftVersion = "1.16.5"
     nmsPackage = "1_16_R3"
     nmsRevision = "R0.1-SNAPSHOT"
 
