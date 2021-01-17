@@ -367,6 +367,11 @@ Prevent light queue overfill when no players are online
 
 block changes don't queue light updates (and they shouldn't)
 
+Do not add passengers of entities that were were above save limit
+
+Given that the root entity isn't added to the world, this is
+pretty unsafe to do.
+
 Rewrite the light engine
 
 The standard vanilla light engine is plagued by
@@ -1535,10 +1540,10 @@ index 0000000000000000000000000000000000000000..cae06962d80cdd00962236891472ba81
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..297ba951a5bdef70312d1dc2f243f0716760d04c
+index 0000000000000000000000000000000000000000..eb330a40d7345336ded670d631a9fd66da19f2e7
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java
-@@ -0,0 +1,185 @@
+@@ -0,0 +1,263 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import net.minecraft.server.BlockPosition;
@@ -1550,6 +1555,8 @@ index 0000000000000000000000000000000000000000..297ba951a5bdef70312d1dc2f243f071
 +import net.minecraft.server.IChunkAccess;
 +import net.minecraft.server.ILightAccess;
 +import net.minecraft.server.ProtoChunkExtension;
++import net.minecraft.server.VoxelShape;
++import net.minecraft.server.VoxelShapes;
 +import net.minecraft.server.World;
 +import net.minecraft.server.WorldServer;
 +import java.util.ArrayList;
@@ -1630,6 +1637,82 @@ index 0000000000000000000000000000000000000000..297ba951a5bdef70312d1dc2f243f071
 +                        // catch that and fix it.
 +        );
 +        // re-propagating neighbours (done by the decrease queue) will also account for opacity changes in this block
++    }
++
++    protected final BlockPosition.MutableBlockPosition recalcCenterPos = new BlockPosition.MutableBlockPosition();
++    protected final BlockPosition.MutableBlockPosition recalcNeighbourPos = new BlockPosition.MutableBlockPosition();
++
++    @Override
++    protected int calculateLightValue(final ILightAccess lightAccess, final int worldX, final int worldY, final int worldZ,
++                                      final int expect, final VariableBlockLightHandler customBlockLight) {
++        final IBlockData centerState = this.getBlockState(worldX, worldY, worldZ);
++        int level = centerState.getEmittedLight() & 0xFF;
++        if (customBlockLight != null) {
++            level = this.getCustomLightLevel(customBlockLight, worldX, worldY, worldZ, level);
++        }
++
++        if (level >= (15 - 1) || level > expect) {
++            return level;
++        }
++
++        final int sectionOffset = this.chunkSectionIndexOffset;
++        final IBlockData conditionallyOpaqueState;
++        int opacity = centerState.getOpacityIfCached();
++
++        if (opacity == -1) {
++            this.recalcCenterPos.setValues(worldX, worldY, worldZ);
++            opacity = centerState.getOpacity(lightAccess.getWorld(), this.recalcCenterPos);
++            if (centerState.isConditionallyFullOpaque()) {
++                conditionallyOpaqueState = centerState;
++            } else {
++                conditionallyOpaqueState = null;
++            }
++        } else if (opacity >= 15) {
++            return level;
++        } else {
++            conditionallyOpaqueState = null;
++        }
++        opacity = Math.max(1, opacity);
++
++        for (final AxisDirection direction : AXIS_DIRECTIONS) {
++            final int offX = worldX + direction.x;
++            final int offY = worldY + direction.y;
++            final int offZ = worldZ + direction.z;
++
++            final int sectionIndex = (offX >> 4) + 5 * (offZ >> 4) + (5 * 5) * (offY >> 4) + sectionOffset;
++
++            final int neighbourLevel = this.getLightLevel(sectionIndex, (offX & 15) | ((offZ & 15) << 4) | ((offY & 15) << 8));
++
++            if ((neighbourLevel - 1) <= level) {
++                // don't need to test transparency, we know it wont affect the result.
++                continue;
++            }
++
++            final IBlockData neighbourState = this.getBlockState(offX, offY ,offZ);
++
++            if (neighbourState.isConditionallyFullOpaque()) {
++                // here the block can be conditionally opaque (i.e light cannot propagate from it), so we need to test that
++                // we don't read the blockstate because most of the time this is false, so using the faster
++                // known transparency lookup results in a net win
++                this.recalcNeighbourPos.setValues(offX, offY, offZ);
++                final VoxelShape neighbourFace = neighbourState.getCullingFace(lightAccess.getWorld(), this.recalcNeighbourPos, direction.opposite.nms);
++                final VoxelShape thisFace = conditionallyOpaqueState == null ? VoxelShapes.empty() : conditionallyOpaqueState.getCullingFace(lightAccess.getWorld(), this.recalcCenterPos, direction.nms);
++                if (VoxelShapes.combinationOccludes(thisFace, neighbourFace)) {
++                    // not allowed to propagate
++                    continue;
++                }
++            }
++
++            // passed transparency,
++
++            final int calculated = neighbourLevel - opacity;
++            level = Math.max(calculated, level);
++            if (level > expect) {
++                return level;
++            }
++        }
++
++        return level;
 +    }
 +
 +    @Override
@@ -1726,10 +1809,10 @@ index 0000000000000000000000000000000000000000..297ba951a5bdef70312d1dc2f243f071
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/SWMRNibbleArray.java b/src/main/java/com/tuinity/tuinity/chunk/light/SWMRNibbleArray.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..9910dc9f1a087f5baf404a5b8ebb5a9f1f97f3f4
+index 0000000000000000000000000000000000000000..051e2db5349b6f20887841efad7fbc183b190f68
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/SWMRNibbleArray.java
-@@ -0,0 +1,317 @@
+@@ -0,0 +1,325 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import net.minecraft.server.NibbleArray;
@@ -1799,13 +1882,21 @@ index 0000000000000000000000000000000000000000..9910dc9f1a087f5baf404a5b8ebb5a9f
 +
 +    // operation type: visible
 +    public boolean isAllZero() {
-+        final byte[] bytes = this.storageVisible;
++        final int state = this.stateVisible;
 +
-+        if (this.storageVisible == null) {
++        if (state == INIT_STATE_NULL) {
++            return false;
++        } else if (state == INIT_STATE_UNINIT) {
 +            return true;
 +        }
 +
 +        synchronized (this) {
++            final byte[] bytes = this.storageVisible;
++
++            if (bytes == null) {
++                return this.stateVisible == INIT_STATE_UNINIT;
++            }
++
 +            for (int i = 0; i < (ARRAY_SIZE >>> 4); ++i) {
 +                byte whole = bytes[i << 4];
 +
@@ -2049,14 +2140,15 @@ index 0000000000000000000000000000000000000000..9910dc9f1a087f5baf404a5b8ebb5a9f
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..0cd48bd4032092fe1a9f12082e85195a125f0f87
+index 0000000000000000000000000000000000000000..64c68f3be9f9f97ec3f9fd5c7fd0221ceb333b1a
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
-@@ -0,0 +1,738 @@
+@@ -0,0 +1,828 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.tuinity.tuinity.util.WorldUtil;
 +import it.unimi.dsi.fastutil.shorts.ShortCollection;
++import it.unimi.dsi.fastutil.shorts.ShortIterator;
 +import net.minecraft.server.BlockPosition;
 +import net.minecraft.server.ChunkCoordIntPair;
 +import net.minecraft.server.ChunkSection;
@@ -2398,14 +2490,102 @@ index 0000000000000000000000000000000000000000..0cd48bd4032092fe1a9f12082e85195a
 +    @Override
 +    protected void checkChunkEdges(final ILightAccess lightAccess, final IChunkAccess chunk, final int fromSection,
 +                                   final int toSection) {
++        Arrays.fill(this.nullPropagationCheckCache, false);
 +        this.rewriteNibbleCacheForSkylight(chunk);
++        final int chunkX = chunk.getPos().x;
++        final int chunkZ = chunk.getPos().z;
++        for (int y = toSection; y >= fromSection; --y) {
++            this.checkNullSection(chunkX, y, chunkZ, true);
++        }
++
 +        super.checkChunkEdges(lightAccess, chunk, fromSection, toSection);
 +    }
 +
 +    @Override
 +    protected void checkChunkEdges(final ILightAccess lightAccess, final IChunkAccess chunk, final ShortCollection sections) {
++        Arrays.fill(this.nullPropagationCheckCache, false);
 +        this.rewriteNibbleCacheForSkylight(chunk);
++        final int chunkX = chunk.getPos().x;
++        final int chunkZ = chunk.getPos().z;
++        for (final ShortIterator iterator = sections.iterator(); iterator.hasNext();) {
++            final int y = (int)iterator.nextShort();
++            this.checkNullSection(chunkX, y, chunkZ, true);
++        }
++
 +        super.checkChunkEdges(lightAccess, chunk, sections);
++    }
++
++
++    protected final BlockPosition.MutableBlockPosition recalcCenterPos = new BlockPosition.MutableBlockPosition();
++    protected final BlockPosition.MutableBlockPosition recalcNeighbourPos = new BlockPosition.MutableBlockPosition();
++
++    @Override
++    protected int calculateLightValue(final ILightAccess lightAccess, final int worldX, final int worldY, final int worldZ,
++                                      final int expect, final VariableBlockLightHandler customBlockLight) {
++        if (expect == 15) {
++            return expect;
++        }
++
++        final int sectionOffset = this.chunkSectionIndexOffset;
++        final IBlockData centerState = this.getBlockState(worldX, worldY, worldZ);
++        int opacity = centerState.getOpacityIfCached();
++
++
++        final IBlockData conditionallyOpaqueState;
++        if (opacity < 0) {
++            this.recalcCenterPos.setValues(worldX, worldY, worldZ);
++            opacity = Math.max(1, centerState.getOpacity(lightAccess.getWorld(), this.recalcCenterPos));
++            if (centerState.isConditionallyFullOpaque()) {
++                conditionallyOpaqueState = centerState;
++            } else {
++                conditionallyOpaqueState = null;
++            }
++        } else {
++            conditionallyOpaqueState = null;
++            opacity = Math.max(1, opacity);
++        }
++
++        int level = 0;
++
++        for (final AxisDirection direction : AXIS_DIRECTIONS) {
++            final int offX = worldX + direction.x;
++            final int offY = worldY + direction.y;
++            final int offZ = worldZ + direction.z;
++
++            final int sectionIndex = (offX >> 4) + 5 * (offZ >> 4) + (5 * 5) * (offY >> 4) + sectionOffset;
++
++            final int neighbourLevel = this.getLightLevel(sectionIndex, (offX & 15) | ((offZ & 15) << 4) | ((offY & 15) << 8));
++
++            if ((neighbourLevel - 1) <= level) {
++                // don't need to test transparency, we know it wont affect the result.
++                continue;
++            }
++
++            final IBlockData neighbourState = this.getBlockState(offX, offY ,offZ);
++
++            if (neighbourState.isConditionallyFullOpaque()) {
++                // here the block can be conditionally opaque (i.e light cannot propagate from it), so we need to test that
++                // we don't read the blockstate because most of the time this is false, so using the faster
++                // known transparency lookup results in a net win
++                this.recalcNeighbourPos.setValues(offX, offY, offZ);
++                final VoxelShape neighbourFace = neighbourState.getCullingFace(lightAccess.getWorld(), this.recalcNeighbourPos, direction.opposite.nms);
++                final VoxelShape thisFace = conditionallyOpaqueState == null ? VoxelShapes.empty() : conditionallyOpaqueState.getCullingFace(lightAccess.getWorld(), this.recalcCenterPos, direction.nms);
++                if (VoxelShapes.combinationOccludes(thisFace, neighbourFace)) {
++                    // not allowed to propagate
++                    continue;
++                }
++            }
++
++            // passed transparency,
++
++            final int calculated = neighbourLevel - opacity;
++            level = Math.max(calculated, level);
++            if (level > expect) {
++                return level;
++            }
++        }
++
++        return level;
 +    }
 +
 +    @Override
@@ -2630,10 +2810,11 @@ index 0000000000000000000000000000000000000000..0cd48bd4032092fe1a9f12082e85195a
 +            // not required to propagate here, but this will reduce the hit of the edge checks
 +            this.performLightIncrease(lightAccess);
 +
-+            for (int y = this.maxLightSection; y >= this.minLightSection; --y) {
++            for (int y = highestNonEmptySection; y >= this.minLightSection; --y) {
 +                this.checkNullSection(chunkX, y, chunkZ, false);
 +            }
-+            this.checkChunkEdges(lightAccess, chunk, this.minLightSection, this.maxLightSection);
++            // no need to rewrite the nibble cache again
++            super.checkChunkEdges(lightAccess, chunk, this.minLightSection, highestNonEmptySection);
 +        } else {
 +            for (int y = highestNonEmptySection; y >= this.minLightSection; --y) {
 +                this.checkNullSection(chunkX, y, chunkZ, false);
@@ -2793,10 +2974,10 @@ index 0000000000000000000000000000000000000000..0cd48bd4032092fe1a9f12082e85195a
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281afeb41d80
+index 0000000000000000000000000000000000000000..f20fd2126a21b9c7c45fc420b67c645af875f929
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
-@@ -0,0 +1,1426 @@
+@@ -0,0 +1,1491 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.tuinity.tuinity.util.CoordinateUtils;
@@ -3191,6 +3372,17 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +        return ret == -1 ? dfl : ret;
 +    }
 +
++    // :(
++
++    protected final long getKnownTransparency(final int worldX, final int worldY, final int worldZ) {
++        throw new UnsupportedOperationException();
++    }
++
++    // warn: localIndex = y | (x << 4) | (z << 8)
++    protected final long getKnownTransparency(final int sectionIndex, final int localIndex) {
++        throw new UnsupportedOperationException();
++    }
++
 +    /**
 +     * @deprecated To be removed in 1.17 due to variable section count
 +     */
@@ -3225,7 +3417,7 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +
 +    public final void blocksChangedInChunk(final ILightAccess lightAccess, final int chunkX, final int chunkZ,
 +                                           final Set<BlockPosition> positions, final Boolean[] changedSections) {
-+        this.setupCaches(lightAccess, chunkX * 16 + 7, 128, chunkZ * 16 + 7, this.isClientSide, true);
++        this.setupCaches(lightAccess, chunkX * 16 + 7, 128, chunkZ * 16 + 7, true, true);
 +        try {
 +            final IChunkAccess chunk = this.getChunkInCache(chunkX, chunkZ);
 +            if (this.isClientSide && chunk == null) {
@@ -3252,6 +3444,15 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +
 +    protected abstract void checkBlock(final ILightAccess lightAccess, final int worldX, final int worldY, final int worldZ);
 +
++    // if ret > expect, then the real value is at least ret (early returns if ret > expect, rather than calculating actual)
++    // if ret == expect, then expect is the correct light value for pos
++    // if ret < expect, then ret is the real light value
++    protected abstract int calculateLightValue(final ILightAccess lightAccess, final int worldX, final int worldY, final int worldZ,
++                                               final int expect, final VariableBlockLightHandler customBlockLight);
++
++    protected final int[] chunkCheckDelayedUpdatesCenter = new int[16 * 16];
++    protected final int[] chunkCheckDelayedUpdatesNeighbour = new int[16 * 16];
++
 +    protected void checkChunkEdge(final ILightAccess lightAccess, final IChunkAccess chunk,
 +                                  final int chunkX, final int chunkY, final int chunkZ) {
 +        final SWMRNibbleArray currNibble = this.getNibbleFromCache(chunkX, chunkY, chunkZ);
@@ -3275,6 +3476,7 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +                continue;
 +            }
 +
++            // this chunk
 +            final int incX;
 +            final int incZ;
 +            final int startX;
@@ -3306,41 +3508,58 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +                startX = chunkX << 4;
 +            }
 +
++            final VariableBlockLightHandler customLightHandler = ((WorldServer)lightAccess.getWorld()).customBlockLightHandlers;
++            int centerDelayedChecks = 0;
++            int neighbourDelayedChecks = 0;
 +            for (int currY = chunkY << 4, maxY = currY | 15; currY <= maxY; ++currY) {
 +                for (int i = 0, currX = startX, currZ = startZ; i < 16; ++i, currX += incX, currZ += incZ) {
 +                    final int neighbourX = currX + neighbourOffX;
 +                    final int neighbourZ = currZ + neighbourOffZ;
 +
-+                    final int currentLevel = currNibble.getUpdating((currX & 15) |
++                    final int currentIndex = (currX & 15) |
 +                            ((currZ & 15)) << 4 |
-+                            ((currY & 15) << 8)
-+                    );
-+                    final int neighbourLevel = neighbourNibble.getUpdating((neighbourX & 15) |
-+                            ((neighbourZ & 15)) << 4 |
-+                            ((currY & 15) << 8)
-+                    );
++                            ((currY & 15) << 8);
++                    final int currentLevel = currNibble.getUpdating(currentIndex);
 +
-+                    if (currentLevel == neighbourLevel && (currentLevel == 0 || currentLevel == 15)) {
-+                        // nothing to check here
-+                        continue;
++                    final int neighbourIndex =
++                            (neighbourX & 15) |
++                                    ((neighbourZ & 15)) << 4 |
++                                    ((currY & 15) << 8);
++                    final int neighbourLevel = neighbourNibble.getUpdating(neighbourIndex);
++
++                    // the checks are delayed because the checkBlock method clobbers light values - which then
++                    // affect later calculate light value operations. While they don't affect it in a behaviourly significant
++                    // way, they do have a negative performance impact due to simply queueing more values
++
++                    if (this.calculateLightValue(lightAccess, currX, currY, currZ, currentLevel, customLightHandler) != currentLevel) {
++                        this.chunkCheckDelayedUpdatesCenter[centerDelayedChecks++] = currentIndex;
 +                    }
 +
-+                    if (Math.abs(currentLevel - neighbourLevel) == 1) {
-+                        final IBlockData currentBlock = this.getBlockState(currX, currY, currZ);
-+                        final IBlockData neighbourBlock = this.getBlockState(neighbourX, currY, neighbourZ);
-+
-+                        final int currentOpacity = currentBlock.getOpacityIfCached();
-+                        final int neighbourOpacity = neighbourBlock.getOpacityIfCached();
-+                        if (currentOpacity == 0 || currentOpacity == 1 ||
-+                                neighbourOpacity == 0 || neighbourOpacity == 1) {
-+                            // looks good
-+                            continue;
-+                        }
++                    if (this.calculateLightValue(lightAccess, neighbourX, currY, neighbourZ, neighbourLevel, customLightHandler) != neighbourLevel) {
++                        this.chunkCheckDelayedUpdatesNeighbour[neighbourDelayedChecks++] = neighbourIndex;
 +                    }
++                }
++            }
 +
-+                    // setup queue, it looks like something could be inconsistent
-+                    this.checkBlock(lightAccess, currX, currY, currZ);
-+                    this.checkBlock(lightAccess, neighbourX, currY, neighbourZ);
++            final int currentChunkOffX = chunkX << 4;
++            final int currentChunkOffZ = chunkZ << 4;
++            final int neighbourChunkOffX = (chunkX + direction.x) << 4;
++            final int neighbourChunkOffZ = (chunkZ + direction.z) << 4;
++            final int chunkOffY = chunkY << 4;
++            for (int i = 0, len = Math.max(centerDelayedChecks, neighbourDelayedChecks); i < len; ++i) {
++                // try to queue neighbouring data together
++                // index = x | (z << 4) | (y << 8)
++                if (i < centerDelayedChecks) {
++                    final int value = this.chunkCheckDelayedUpdatesCenter[i];
++                    this.checkBlock(lightAccess, currentChunkOffX | (value & 15),
++                            chunkOffY | (value >>> 8),
++                            currentChunkOffZ | ((value >>> 4) & 0xF));
++                }
++                if (i < neighbourDelayedChecks) {
++                    final int value = this.chunkCheckDelayedUpdatesNeighbour[i];
++                    this.checkBlock(lightAccess, neighbourChunkOffX | (value & 15),
++                            chunkOffY | (value >>> 8),
++                            neighbourChunkOffZ | ((value >>> 4) & 0xF));
 +                }
 +            }
 +        }
@@ -3398,6 +3617,7 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +                    continue;
 +                }
 +
++                // neighbour chunk
 +                final int incX;
 +                final int incZ;
 +                final int startX;
@@ -3472,22 +3692,44 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +        return ret;
 +    }
 +
-+    public final void handleEmptySectionChanges(final ILightAccess lightAccess, final int chunkX, final int chunkZ,
-+                                                final Boolean[] emptinessChanges) {
-+        this.setupCaches(lightAccess, chunkX * 16 + 7, 128, chunkZ * 16 + 7, this.isClientSide, true);
-+        if (this.isClientSide) {
++    public final void forceHandleEmptySectionChanges(final ILightAccess lightAccess, final IChunkAccess chunk,
++                                                     final Boolean[] emptinessChanges) {
++        final int chunkX = chunk.getPos().x;
++        final int chunkZ = chunk.getPos().z;
++        this.setupCaches(lightAccess, chunkX * 16 + 7, 128, chunkZ * 16 + 7, true, true);
++        try {
 +            // force current chunk into cache
-+            final IChunkAccess chunk =  (IChunkAccess)lightAccess.getFeaturesReadyChunk(chunkX, chunkZ);
-+            if (chunk == null) {
-+                // unloaded this frame (or last), and we were still queued
-+                return;
-+            }
 +            this.setChunkInCache(chunkX, chunkZ, chunk);
 +            this.setBlocksForChunkInCache(chunkX, chunkZ, chunk.getSections());
 +            this.setNibblesForChunkInCache(chunkX, chunkZ, this.getNibblesOnChunk(chunk));
 +            this.setEmptinessMapCache(chunkX, chunkZ, this.getEmptinessMap(chunk));
++
++            final boolean[] ret = this.handleEmptySectionChanges(lightAccess, chunk, emptinessChanges, false);
++            if (ret != null) {
++                this.setEmptinessMap(chunk, ret);
++            }
++            this.updateVisible(lightAccess);
++        } finally {
++            this.destroyCaches();
 +        }
++    }
++
++    public final void handleEmptySectionChanges(final ILightAccess lightAccess, final int chunkX, final int chunkZ,
++                                                final Boolean[] emptinessChanges) {
++        this.setupCaches(lightAccess, chunkX * 16 + 7, 128, chunkZ * 16 + 7, true, true);
 +        try {
++            if (this.isClientSide) {
++                // force current chunk into cache
++                final IChunkAccess chunk =  (IChunkAccess)lightAccess.getFeaturesReadyChunk(chunkX, chunkZ);
++                if (chunk == null) {
++                    // unloaded this frame (or last), and we were still queued
++                    return;
++                }
++                this.setChunkInCache(chunkX, chunkZ, chunk);
++                this.setBlocksForChunkInCache(chunkX, chunkZ, chunk.getSections());
++                this.setNibblesForChunkInCache(chunkX, chunkZ, this.getNibblesOnChunk(chunk));
++                this.setEmptinessMapCache(chunkX, chunkZ, this.getEmptinessMap(chunk));
++            }
 +            final IChunkAccess chunk = this.getChunkInCache(chunkX, chunkZ);
 +            if (chunk == null) {
 +                return;
@@ -3517,7 +3759,7 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +            if (chunk == null) {
 +                return;
 +            }
-+            this.checkChunkEdges(lightAccess, chunk, -1, 16);
++            this.checkChunkEdges(lightAccess, chunk, this.minLightSection, this.maxLightSection);
 +            this.updateVisible(lightAccess);
 +        } finally {
 +            this.destroyCaches();
@@ -3546,21 +3788,25 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +    // does not need to detect empty chunks itself (and it should do no handling for them either!)
 +    protected abstract void lightChunk(final ILightAccess lightAccess, final IChunkAccess chunk, final boolean needsEdgeChecks);
 +
-+    public final void light(final ILightAccess lightAccess, final int chunkX, final int chunkZ, final Boolean[] emptySections) {
-+        this.setupCaches(lightAccess, chunkX * 16 + 7, 128, chunkZ * 16 + 7, false, true);
-+        // force current chunk into cache
-+        final IChunkAccess chunk =  (IChunkAccess)lightAccess.getFeaturesReadyChunk(chunkX, chunkZ);
-+        this.setChunkInCache(chunkX, chunkZ, chunk);
-+        this.setBlocksForChunkInCache(chunkX, chunkZ, chunk.getSections());
-+        this.setNibblesForChunkInCache(chunkX, chunkZ, this.getNibblesOnChunk(chunk));
-+        this.setEmptinessMapCache(chunkX, chunkZ, this.getEmptinessMap(chunk));
++    public final void light(final ILightAccess lightAccess, final IChunkAccess chunk, final Boolean[] emptySections) {
++        final int chunkX = chunk.getPos().x;
++        final int chunkZ = chunk.getPos().z;
++        this.setupCaches(lightAccess, chunkX * 16 + 7, 128, chunkZ * 16 + 7, true, true);
 +
 +        try {
++            final SWMRNibbleArray[] nibbles = getFilledEmptyLight(this.maxLightSection - this.minLightSection + 1);
++            // force current chunk into cache
++            this.setChunkInCache(chunkX, chunkZ, chunk);
++            this.setBlocksForChunkInCache(chunkX, chunkZ, chunk.getSections());
++            this.setNibblesForChunkInCache(chunkX, chunkZ, nibbles);
++            this.setEmptinessMapCache(chunkX, chunkZ, this.getEmptinessMap(chunk));
++
 +            final boolean[] ret = this.handleEmptySectionChanges(lightAccess, chunk, emptySections, true);
 +            if (ret != null) {
 +                this.setEmptinessMap(chunk, ret);
 +            }
-+            this.lightChunk(lightAccess, chunk, false);
++            this.lightChunk(lightAccess, chunk, true); // TODO
++            this.setNibbles(chunk, nibbles);
 +            this.updateVisible(lightAccess);
 +        } finally {
 +            this.destroyCaches();
@@ -4225,10 +4471,10 @@ index 0000000000000000000000000000000000000000..976b1ba5f7d85f7170fa1c714d4d281a
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..eb3662a0084d4f1f62d339ac11d2aaced092e28e
+index 0000000000000000000000000000000000000000..518c21b96947cb87bcc3b5fc3f6210bcb0944e33
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java
-@@ -0,0 +1,473 @@
+@@ -0,0 +1,490 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.tuinity.tuinity.util.CoordinateUtils;
@@ -4547,6 +4793,23 @@ index 0000000000000000000000000000000000000000..eb3662a0084d4f1f62d339ac11d2aace
 +        }
 +    }
 +
++    public void forceLoadInChunk(final IChunkAccess chunk, final Boolean[] emptySections) {
++        final SkyStarLightEngine skyEngine = this.getSkyLightEngine();
++        final BlockStarLightEngine blockEngine = this.getBlockLightEngine();
++
++        try {
++            if (skyEngine != null) {
++                skyEngine.forceHandleEmptySectionChanges(this.lightAccess, chunk, emptySections);
++            }
++            if (blockEngine != null) {
++                blockEngine.forceHandleEmptySectionChanges(this.lightAccess, chunk, emptySections);
++            }
++        } finally {
++            this.releaseSkyLightEngine(skyEngine);
++            this.releaseBlockLightEngine(blockEngine);
++        }
++    }
++
 +    public void loadInChunk(final int chunkX, final int chunkZ, final Boolean[] emptySections) {
 +        final SkyStarLightEngine skyEngine = this.getSkyLightEngine();
 +        final BlockStarLightEngine blockEngine = this.getBlockLightEngine();
@@ -4564,16 +4827,16 @@ index 0000000000000000000000000000000000000000..eb3662a0084d4f1f62d339ac11d2aace
 +        }
 +    }
 +
-+    public void lightChunk(final int chunkX, final int chunkZ, final Boolean[] emptySections) {
++    public void lightChunk(final IChunkAccess chunk, final Boolean[] emptySections) {
 +        final SkyStarLightEngine skyEngine = this.getSkyLightEngine();
 +        final BlockStarLightEngine blockEngine = this.getBlockLightEngine();
 +
 +        try {
 +            if (skyEngine != null) {
-+                skyEngine.light(this.lightAccess, chunkX, chunkZ, emptySections);
++                skyEngine.light(this.lightAccess, chunk, emptySections);
 +            }
 +            if (blockEngine != null) {
-+                blockEngine.light(this.lightAccess, chunkX, chunkZ, emptySections);
++                blockEngine.light(this.lightAccess, chunk, emptySections);
 +            }
 +        } finally {
 +            this.releaseSkyLightEngine(skyEngine);
@@ -9373,7 +9636,7 @@ index 75d25576d68ec95a14372f8530f4916f2bd7c3c5..38ca1c042afd41a1f660f88e398fedde
              }
          } finally {
 diff --git a/src/main/java/net/minecraft/server/ChunkRegionLoader.java b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
-index 060ef42bc8f22688071fa375bd4dbab8dd2c1e9e..090e5eafeb35c60fb470b74863d59ed4a4f66be8 100644
+index f51bf71c8d6eef3c054ac64765709794fcfad5ee..076d6c1e1cc049dd312ecb30518e7b25fc2d7371 100644
 --- a/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 +++ b/src/main/java/net/minecraft/server/ChunkRegionLoader.java
 @@ -24,6 +24,14 @@ public class ChunkRegionLoader {
@@ -9396,7 +9659,7 @@ index 060ef42bc8f22688071fa375bd4dbab8dd2c1e9e..090e5eafeb35c60fb470b74863d59ed4
      // Paper end
  
 +    // Tuinity start - rewrite light engine
-+    private static final int STARLIGHT_LIGHT_VERSION = 3;
++    private static final int STARLIGHT_LIGHT_VERSION = 4;
 +
 +    private static final String UNINITIALISED_SKYLIGHT_TAG = "starlight.skylight_uninit";
 +    private static final String STARLIGHT_VERSION_TAG = "starlight.light_version";
@@ -9634,7 +9897,7 @@ index 550232cb3819138b3bae0fa1c51429485e8bc593..229c3b0f0c650b501f31147adaa17194
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index f9d7419e376268b00db2eb98a3db4116bdb72bd8..a125489d6a3b202d7e2b3d7df26fd72b81f2bd98 100644
+index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc032eccb561 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -136,7 +136,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -10001,7 +10264,7 @@ index f9d7419e376268b00db2eb98a3db4116bdb72bd8..a125489d6a3b202d7e2b3d7df26fd72b
      public double h(Entity entity) {
          return this.e(entity.getPositionVector());
      }
-@@ -1944,9 +2185,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1945,9 +2186,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              float f1 = this.size.width * 0.8F;
              AxisAlignedBB axisalignedbb = AxisAlignedBB.g((double) f1, 0.10000000149011612D, (double) f1).d(this.locX(), this.getHeadY(), this.locZ());
  
@@ -10013,7 +10276,7 @@ index f9d7419e376268b00db2eb98a3db4116bdb72bd8..a125489d6a3b202d7e2b3d7df26fd72b
          }
      }
  
-@@ -1954,11 +2195,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1955,11 +2196,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return EnumInteractionResult.PASS;
      }
  
@@ -10029,7 +10292,7 @@ index f9d7419e376268b00db2eb98a3db4116bdb72bd8..a125489d6a3b202d7e2b3d7df26fd72b
          return false;
      }
  
-@@ -2849,7 +3092,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2850,7 +3093,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              this.recursiveStream().forEach((entity) -> {
                  worldserver.chunkCheck(entity);
                  entity.az = true;
@@ -10038,7 +10301,7 @@ index f9d7419e376268b00db2eb98a3db4116bdb72bd8..a125489d6a3b202d7e2b3d7df26fd72b
  
                  while (iterator.hasNext()) {
                      Entity entity1 = (Entity) iterator.next();
-@@ -3307,12 +3550,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3308,12 +3551,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return this.locBlock;
      }
  
@@ -10055,7 +10318,7 @@ index f9d7419e376268b00db2eb98a3db4116bdb72bd8..a125489d6a3b202d7e2b3d7df26fd72b
      }
  
      public void setMot(double d0, double d1, double d2) {
-@@ -3367,7 +3614,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3368,7 +3615,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          }
          // Paper end
          if (this.loc.x != d0 || this.loc.y != d1 || this.loc.z != d2) {
@@ -10609,7 +10872,7 @@ index b98e60772bad7e06845b50fdc11e98c0ea775d3d..e0bbfe1422cbad811ecb43d7436380d8
              while (objectiterator.hasNext()) {
                  entry = (Entry) objectiterator.next();
 diff --git a/src/main/java/net/minecraft/server/LightEngineThreaded.java b/src/main/java/net/minecraft/server/LightEngineThreaded.java
-index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a98e0d18f 100644
+index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..168fe23177dfaa401396c1e460f56273ee0a59e4 100644
 --- a/src/main/java/net/minecraft/server/LightEngineThreaded.java
 +++ b/src/main/java/net/minecraft/server/LightEngineThreaded.java
 @@ -2,6 +2,11 @@ package net.minecraft.server;
@@ -10624,7 +10887,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
  import it.unimi.dsi.fastutil.objects.ObjectArrayList;
  import it.unimi.dsi.fastutil.objects.ObjectList;
  import it.unimi.dsi.fastutil.objects.ObjectListIterator;
-@@ -15,7 +20,7 @@ import org.apache.logging.log4j.Logger;
+@@ -15,11 +20,12 @@ import org.apache.logging.log4j.Logger;
  public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      private static final Logger LOGGER = LogManager.getLogger();
@@ -10633,7 +10896,12 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
      // Paper start
      private static final int MAX_PRIORITIES = PlayerChunkMap.GOLDEN_TICKET + 2;
  
-@@ -156,13 +161,218 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+     private boolean isChunkLightStatus(long pair) {
++        if (true) return true; // Tuinity - viewing ticket levels async can result in the viewing of transient levels, and LIGHT ticket isn't guaranteed to exist for all loading chunks thanks to really dumb unloading behaviors with the chunk system
+         PlayerChunk playerChunk = playerChunkMap.getVisibleChunk(pair);
+         if (playerChunk == null) {
+             return false;
+@@ -156,13 +162,218 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      private volatile int f = 5;
      private final AtomicBoolean g = new AtomicBoolean();
  
@@ -10852,7 +11120,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
      public void close() {}
  
      @Override
-@@ -179,6 +389,15 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -179,6 +390,15 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      public void a(BlockPosition blockposition) {
          BlockPosition blockposition1 = blockposition.immutableCopy();
  
@@ -10868,7 +11136,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
          this.a(blockposition.getX() >> 4, blockposition.getZ() >> 4, LightEngineThreaded.Update.POST_UPDATE, SystemUtils.a(() -> {
              super.a(blockposition1);
          }, () -> {
-@@ -187,6 +406,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -187,6 +407,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      }
  
      protected void a(ChunkCoordIntPair chunkcoordintpair) {
@@ -10880,7 +11148,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -211,6 +435,14 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -211,6 +436,14 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(SectionPosition sectionposition, boolean flag) {
@@ -10895,7 +11163,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
          this.a(sectionposition.a(), sectionposition.c(), () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -222,6 +454,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -222,6 +455,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(ChunkCoordIntPair chunkcoordintpair, boolean flag) {
@@ -10907,7 +11175,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
              super.a(chunkcoordintpair, flag);
          }, () -> {
-@@ -231,6 +468,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -231,6 +469,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(EnumSkyBlock enumskyblock, SectionPosition sectionposition, @Nullable NibbleArray nibblearray, boolean flag) {
@@ -10919,7 +11187,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
          this.a(sectionposition.a(), sectionposition.c(), () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -240,6 +482,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -240,6 +483,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
          }));
      }
  
@@ -10927,7 +11195,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
      private void a(int i, int j, LightEngineThreaded.Update lightenginethreaded_update, Runnable runnable) {
          this.a(i, j, this.d.c(ChunkCoordIntPair.pair(i, j)), lightenginethreaded_update, runnable);
      }
-@@ -252,6 +495,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -252,6 +496,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void b(ChunkCoordIntPair chunkcoordintpair, boolean flag) {
@@ -10939,7 +11207,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -277,6 +525,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -277,6 +526,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
                  return;
              }
              // Paper end
@@ -10947,16 +11215,20 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
              ChunkSection[] achunksection = ichunkaccess.getSections();
  
              for (int i = 0; i < 16; ++i) {
-@@ -293,16 +542,25 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -293,16 +543,29 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
                      super.a(blockposition, ichunkaccess.g(blockposition));
                  });
              }
 +            } else { // Tuinity start - replace light engine impl
 +                Boolean[] emptySections = com.tuinity.tuinity.chunk.light.StarLightEngine.getEmptySectionsForChunk(ichunkaccess);
-+                if (flag) {
-+                    this.theLightEngine.loadInChunk(chunkcoordintpair.x, chunkcoordintpair.z, emptySections);
++                if (!flag) {
++                    this.theLightEngine.lightChunk(ichunkaccess, emptySections);
 +                } else {
-+                    this.theLightEngine.lightChunk(chunkcoordintpair.x, chunkcoordintpair.z, emptySections);
++                    this.theLightEngine.forceLoadInChunk(ichunkaccess, emptySections);
++                    // can't really force the chunk to be edged checked, as we need neighbouring chunks - but we don't have
++                    // them, so if it's not loaded then i guess we can't do edge checks. later loads of the chunk should
++                    // catch what we miss here.
++                    this.theLightEngine.checkChunkEdges(chunkcoordintpair.x, chunkcoordintpair.z);
 +                }
 +
 +            } // Tuinity end - replace light engine impl
@@ -10975,7 +11247,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
              // Paper start
              future.complete(ichunkaccess);
          });
-@@ -311,7 +569,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -311,7 +574,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      }
  
      public void queueUpdate() {
@@ -10984,7 +11256,7 @@ index 2f9c97dd4e1d705a87772d18c7ab4883a876af08..4d6663b3b4118f1b7f655c7b4a31d89a
              this.b.a((() -> { // Paper - decompile error
                  this.b();
                  this.g.set(false);
-@@ -325,17 +583,36 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -325,17 +588,36 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      private final java.util.List<Runnable> pre = new java.util.ArrayList<>();
      private final java.util.List<Runnable> post = new java.util.ArrayList<>();
      private void b() {
@@ -16515,7 +16787,7 @@ index d86c25593db7cc0a73db1c37af94ae4e41bb4e93..f34e1570052eac83fb3e03b3e361d8d4
          }, MinecraftServer.getServer());
      }
 diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
-index 010f702ea44d2146b0745b2b4d21f948d16cc424..d2ec9f7f105a36a1077ac0df56b1abb4786a565b 100644
+index 22bde395939f97086e411cef190bb2b1e7ede79a..0f6cb508a170360b6479f9c34048412453fbb89d 100644
 --- a/src/main/java/org/bukkit/craftbukkit/Main.java
 +++ b/src/main/java/org/bukkit/craftbukkit/Main.java
 @@ -138,6 +138,13 @@ public class Main {
