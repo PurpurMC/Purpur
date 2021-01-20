@@ -1,5 +1,13 @@
 import java.util.Locale
 
+pluginManagement {
+    repositories {
+        mavenCentral()
+        jcenter()
+        maven("https://repo.jpenilla.xyz/snapshots")
+    }
+}
+
 val forkName = "Purpur"
 val forkNameLowercase = forkName.toLowerCase(Locale.ENGLISH)
 

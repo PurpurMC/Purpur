@@ -1,7 +1,10 @@
+import xyz.jpenilla.toothpick.gitCmd
+import xyz.jpenilla.toothpick.toothpick
+
 plugins {
     `java-library`
     `maven-publish`
-    toothpick
+    id("xyz.jpenilla.toothpick") version "1.0.0-SNAPSHOT"
 }
 
 toothpick {
