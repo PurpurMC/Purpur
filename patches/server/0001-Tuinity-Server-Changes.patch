@@ -194,15 +194,9 @@ Also allows us to run mid tick while ticking entities.
 
 Prevent unload() calls removing tickets for sync loads
 
-Prevent log spam for "Block is water but TE is chest"
-
-Happens when breaking a waterlogged chest.
-Fix is to just not validate the TE while the chest is being removed.
-
 Optimise collision checking in player move packet handling
 
-Don't need to do another getCubes call if the move() call
-doesn't find any collisions
+Move collision logic to just the hasNewCollision call instead of getCubes + hasNewCollision
 
 Manually inline methods in BlockPosition
 
@@ -250,10 +244,6 @@ method was not inlined.
 
 Paper recently reverted this optimisation, so it's been reintroduced
 here.
-
-Temporarily Revert usage of Region Manager
-
-Has some stability issues.
 
 Add packet limiter config
 
@@ -367,10 +357,15 @@ Prevent light queue overfill when no players are online
 
 block changes don't queue light updates (and they shouldn't)
 
-Do not add passengers of entities that were were above save limit
+Don't allow StructureLocateEvent to change worlds
 
-Given that the root entity isn't added to the world, this is
-pretty unsafe to do.
+Callers and even the function itself aren't expecting
+this to happen
+
+Properly handle cancellation of projectile hit event
+
+Subclasses override and run logic. Some of this logic destroys
+the projectile as well, which wouldn't be fitting for cancellation.
 
 Rewrite the light engine
 
@@ -407,19 +402,11 @@ total generation (not lighting itself, but the whole generation process)
 by 2x. According to cpu time, the light engine itself spent 10x less time
 lighting chunks for generation.
 
-fixup! Highly optimise single and multi-AABB VoxelShapes and collisions
-
-Revert Temporarily-Revert-usage-of-Region-Manager
-
 Optimise WorldServer#notify
 
 Iterating over all of the navigators in the world is pretty expensive.
 Instead, only iterate over navigators in the current region that are
 eligible for repathing.
-
-fixup! Util patch
-
-fixup! Util patch
 
 Actually unload POI data
 
@@ -1540,10 +1527,10 @@ index 0000000000000000000000000000000000000000..cae06962d80cdd00962236891472ba81
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..eb330a40d7345336ded670d631a9fd66da19f2e7
+index 0000000000000000000000000000000000000000..43de95779a5472aaf04da11c9f4c5feb7253c6c3
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java
-@@ -0,0 +1,263 @@
+@@ -0,0 +1,277 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import net.minecraft.server.BlockPosition;
@@ -1573,11 +1560,13 @@ index 0000000000000000000000000000000000000000..eb330a40d7345336ded670d631a9fd66
 +
 +    @Override
 +    protected boolean[] getEmptinessMap(final IChunkAccess chunk) {
-+        return null;
++        return chunk.getBlockEmptinessMap();
 +    }
 +
 +    @Override
-+    protected void setEmptinessMap(final IChunkAccess chunk, final boolean[] to) {}
++    protected void setEmptinessMap(final IChunkAccess chunk, final boolean[] to) {
++        chunk.setBlockEmptinessMap(to);
++    }
 +
 +    @Override
 +    protected SWMRNibbleArray[] getNibblesOnChunk(final IChunkAccess chunk) {
@@ -1595,9 +1584,21 @@ index 0000000000000000000000000000000000000000..eb330a40d7345336ded670d631a9fd66
 +    }
 +
 +    @Override
-+    protected boolean[] handleEmptySectionChanges(final ILightAccess lightAccess, final IChunkAccess chunk,
-+                                                  final Boolean[] emptinessChanges, final boolean unlit) {
-+        return null;
++    protected void initNibble(final int chunkX, final int chunkY, final int chunkZ, final boolean extrude, final boolean initRemovedNibbles) {
++        if (chunkY < this.minLightSection || chunkY > this.maxLightSection || this.getChunkInCache(chunkX, chunkZ) == null) {
++            return;
++        }
++
++        SWMRNibbleArray nibble = this.getNibbleFromCache(chunkX, chunkY, chunkZ);
++        if (nibble == null) {
++            if (!initRemovedNibbles) {
++                throw new IllegalStateException();
++            } else {
++                this.setNibbleInCache(chunkX, chunkY, chunkZ, new SWMRNibbleArray());
++            }
++        } else {
++            nibble.setNonNull();
++        }
 +    }
 +
 +    @Override
@@ -2140,10 +2141,10 @@ index 0000000000000000000000000000000000000000..051e2db5349b6f20887841efad7fbc18
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..64c68f3be9f9f97ec3f9fd5c7fd0221ceb333b1a
+index 0000000000000000000000000000000000000000..26534e05ff5aac5a963906ba678411c843b132e3
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/SkyStarLightEngine.java
-@@ -0,0 +1,828 @@
+@@ -0,0 +1,706 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.tuinity.tuinity.util.WorldUtil;
@@ -2202,129 +2203,7 @@ index 0000000000000000000000000000000000000000..64c68f3be9f9f97ec3f9fd5c7fd0221c
 +    }
 +
 +    @Override
-+    protected boolean[] handleEmptySectionChanges(final ILightAccess lightAccess, final IChunkAccess chunk,
-+                                                  final Boolean[] emptinessChanges, final boolean unlit) {
-+        final World world = (World)lightAccess.getWorld();
-+        final int chunkX = chunk.getPos().x;
-+        final int chunkZ = chunk.getPos().z;
-+
-+        boolean[] chunkEmptinessMap = this.getEmptinessMap(chunkX, chunkZ);
-+        boolean[] ret = null;
-+        final boolean needsInit = unlit || chunkEmptinessMap == null;
-+        if (needsInit) {
-+            this.setEmptinessMapCache(chunkX, chunkZ, ret = chunkEmptinessMap = new boolean[WorldUtil.getTotalSections(world)]);
-+        }
-+
-+        // update emptiness map
-+        for (int sectionIndex = (emptinessChanges.length - 1); sectionIndex >= 0; --sectionIndex) {
-+            final Boolean valueBoxed = emptinessChanges[sectionIndex];
-+            if (valueBoxed == null) {
-+                if (needsInit) {
-+                    throw new IllegalStateException("Current chunk has not initialised emptiness map yet supplied emptiness map isn't filled?");
-+                }
-+                continue;
-+            }
-+            chunkEmptinessMap[sectionIndex] = valueBoxed.booleanValue();
-+        }
-+
-+        // now init neighbour nibbles
-+        for (int sectionIndex = (emptinessChanges.length - 1); sectionIndex >= 0; --sectionIndex) {
-+            final Boolean valueBoxed = emptinessChanges[sectionIndex];
-+            final int sectionY = sectionIndex + this.minSection;
-+            if (valueBoxed == null) {
-+                continue;
-+            }
-+
-+            final boolean empty = valueBoxed.booleanValue();
-+
-+            if (empty) {
-+                continue;
-+            }
-+
-+            for (int dz = -1; dz <= 1; ++dz) {
-+                for (int dx = -1; dx <= 1; ++dx) {
-+                    // if we're not empty, we also need to initialise nibbles
-+                    // note: if we're unlit, we absolutely do not want to extrude, as light data isn't set up
-+                    final boolean extrude = (dx | dz) != 0 || !unlit;
-+                    for (int dy = 1; dy >= -1; --dy) {
-+                        this.initNibbleForLitChunk(dx + chunkX, dy + sectionY, dz + chunkZ, extrude, false);
-+                    }
-+                }
-+            }
-+        }
-+
-+        // check for de-init and lazy-init
-+        // lazy init is when chunks are being lit, so at the time they weren't loaded when their neighbours were running
-+        // init checks.
-+        for (int dz = -1; dz <= 1; ++dz) {
-+            for (int dx = -1; dx <= 1; ++dx) {
-+                // does this neighbour have 1 radius loaded?
-+                boolean neighboursLoaded = true;
-+                neighbour_loaded_search:
-+                for (int dz2 = -1; dz2 <= 1; ++dz2) {
-+                    for (int dx2 = -1; dx2 <= 1; ++dx2) {
-+                        if (this.getEmptinessMap(dx + dx2 + chunkX, dz + dz2 + chunkZ) == null) {
-+                            neighboursLoaded = false;
-+                            break neighbour_loaded_search;
-+                        }
-+                    }
-+                }
-+
-+                for (int sectionY = this.maxLightSection; sectionY >= this.minLightSection; --sectionY) {
-+                    final SWMRNibbleArray nibble = this.getNibbleFromCache(dx + chunkX, sectionY, dz + chunkZ);
-+
-+                    // check neighbours to see if we need to de-init this one
-+                    boolean allEmpty = true;
-+                    neighbour_search:
-+                    for (int dy2 = -1; dy2 <= 1; ++dy2) {
-+                        for (int dz2 = -1; dz2 <= 1; ++dz2) {
-+                            for (int dx2 = -1; dx2 <= 1; ++dx2) {
-+                                final int y = sectionY + dy2;
-+                                if (y < this.minSection || y > this.maxSection) {
-+                                    // empty
-+                                    continue;
-+                                }
-+                                final boolean[] emptinessMap = this.getEmptinessMap(dx + dx2 + chunkX, dz + dz2 + chunkZ);
-+                                if (emptinessMap != null) {
-+                                    if (!emptinessMap[y - this.minSection]) {
-+                                        allEmpty = false;
-+                                        break neighbour_search;
-+                                    }
-+                                } else {
-+                                    final ChunkSection section = this.getChunkSection(dx + dx2 + chunkX, y, dz + dz2 + chunkZ);
-+                                    if (section != null && section != EMPTY_CHUNK_SECTION) {
-+                                        allEmpty = false;
-+                                        break neighbour_search;
-+                                    }
-+                                }
-+                            }
-+                        }
-+                    }
-+
-+                    if (allEmpty & neighboursLoaded) {
-+                        // can only de-init when neighbours are loaded
-+                        // de-init is fine to delay, as de-init is just an optimisation - it's not required for lighting
-+                        // to be correct
-+
-+                        // all were empty, so de-init
-+                        if (nibble != null) {
-+                            nibble.setNull();
-+                        }
-+                    } else if (!allEmpty) {
-+                        // must init
-+                        final boolean extrude = (dx | dz) != 0 || !unlit;
-+                        this.initNibbleForLitChunk(dx + chunkX, sectionY, dz + chunkZ, extrude, false);
-+                    }
-+                }
-+            }
-+        }
-+
-+        return ret;
-+    }
-+
-+
-+    protected final void initNibbleForLitChunk(final int chunkX, final int chunkY, final int chunkZ, final boolean extrude,
-+                                               final boolean initRemovedNibbles) {
++    protected void initNibble(final int chunkX, final int chunkY, final int chunkZ, final boolean extrude, final boolean initRemovedNibbles) {
 +        if (chunkY < this.minLightSection || chunkY > this.maxLightSection || this.getChunkInCache(chunkX, chunkZ) == null) {
 +            return;
 +        }
@@ -2336,10 +2215,10 @@ index 0000000000000000000000000000000000000000..64c68f3be9f9f97ec3f9fd5c7fd0221c
 +                this.setNibbleInCache(chunkX, chunkY, chunkZ, nibble = new SWMRNibbleArray(null, true));
 +            }
 +        }
-+        this.initNibbleForLitChunk(nibble, chunkX, chunkY, chunkZ, extrude);
++        this.initNibble(nibble, chunkX, chunkY, chunkZ, extrude);
 +    }
 +
-+    protected final void initNibbleForLitChunk(final SWMRNibbleArray currNibble, final int chunkX, final int chunkY, final int chunkZ, final boolean extrude) {
++    protected final void initNibble(final SWMRNibbleArray currNibble, final int chunkX, final int chunkY, final int chunkZ, final boolean extrude) {
 +        if (!currNibble.isNullNibbleUpdating()) {
 +            // already initialised
 +            return;
@@ -2430,7 +2309,7 @@ index 0000000000000000000000000000000000000000..64c68f3be9f9f97ec3f9fd5c7fd0221c
 +        if (needInitNeighbours) {
 +            for (int dz = -1; dz <= 1; ++dz) {
 +                for (int dx = -1; dx <= 1; ++dx) {
-+                    this.initNibbleForLitChunk(dx + chunkX, chunkY, dz + chunkZ, (dx | dz) == 0 ? extrudeInitialised : true, true);
++                    this.initNibble(dx + chunkX, chunkY, dz + chunkZ, (dx | dz) == 0 ? extrudeInitialised : true, true);
 +                }
 +            }
 +        }
@@ -2463,12 +2342,12 @@ index 0000000000000000000000000000000000000000..64c68f3be9f9f97ec3f9fd5c7fd0221c
 +
 +    @Override
 +    protected boolean[] getEmptinessMap(final IChunkAccess chunk) {
-+        return chunk.getEmptinessMap();
++        return chunk.getSkyEmptinessMap();
 +    }
 +
 +    @Override
 +    protected void setEmptinessMap(final IChunkAccess chunk, final boolean[] to) {
-+        chunk.setEmptinessMap(to);
++        chunk.setSkyEmptinessMap(to);
 +    }
 +
 +    @Override
@@ -2974,10 +2853,10 @@ index 0000000000000000000000000000000000000000..64c68f3be9f9f97ec3f9fd5c7fd0221c
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..f20fd2126a21b9c7c45fc420b67c645af875f929
+index 0000000000000000000000000000000000000000..d1aff9117e74d8cd7c3ca9334edfaf174a240956
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightEngine.java
-@@ -0,0 +1,1491 @@
+@@ -0,0 +1,1610 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import com.tuinity.tuinity.util.CoordinateUtils;
@@ -3744,13 +3623,132 @@ index 0000000000000000000000000000000000000000..f20fd2126a21b9c7c45fc420b67c645a
 +        }
 +    }
 +
++    protected abstract void initNibble(final int chunkX, final int chunkY, final int chunkZ, final boolean extrude, final boolean initRemovedNibbles);
++
 +    // subclasses should not initialise caches, as this will always be done by the super call
 +    // subclasses should not invoke updateVisible, as this will always be done by the super call
 +    // subclasses are guaranteed that this is always called before a changed block set
 +    // newChunk specifies whether the changes describe a "first load" of a chunk or changes to existing, already loaded chunks
 +    // rets non-null when the emptiness map changed and needs to be updated
-+    protected abstract boolean[] handleEmptySectionChanges(final ILightAccess lightAccess, final IChunkAccess chunk,
-+                                                           final Boolean[] emptinessChanges, final boolean unlit);
++    protected final boolean[] handleEmptySectionChanges(final ILightAccess lightAccess, final IChunkAccess chunk,
++                                                        final Boolean[] emptinessChanges, final boolean unlit) {
++        final World world = (World)lightAccess.getWorld();
++        final int chunkX = chunk.getPos().x;
++        final int chunkZ = chunk.getPos().z;
++
++        boolean[] chunkEmptinessMap = this.getEmptinessMap(chunkX, chunkZ);
++        boolean[] ret = null;
++        final boolean needsInit = unlit || chunkEmptinessMap == null;
++        if (needsInit) {
++            this.setEmptinessMapCache(chunkX, chunkZ, ret = chunkEmptinessMap = new boolean[WorldUtil.getTotalSections(world)]);
++        }
++
++        // update emptiness map
++        for (int sectionIndex = (emptinessChanges.length - 1); sectionIndex >= 0; --sectionIndex) {
++            final Boolean valueBoxed = emptinessChanges[sectionIndex];
++            if (valueBoxed == null) {
++                if (needsInit) {
++                    throw new IllegalStateException("Current chunk has not initialised emptiness map yet supplied emptiness map isn't filled?");
++                }
++                continue;
++            }
++            chunkEmptinessMap[sectionIndex] = valueBoxed.booleanValue();
++        }
++
++        // now init neighbour nibbles
++        for (int sectionIndex = (emptinessChanges.length - 1); sectionIndex >= 0; --sectionIndex) {
++            final Boolean valueBoxed = emptinessChanges[sectionIndex];
++            final int sectionY = sectionIndex + this.minSection;
++            if (valueBoxed == null) {
++                continue;
++            }
++
++            final boolean empty = valueBoxed.booleanValue();
++
++            if (empty) {
++                continue;
++            }
++
++            for (int dz = -1; dz <= 1; ++dz) {
++                for (int dx = -1; dx <= 1; ++dx) {
++                    // if we're not empty, we also need to initialise nibbles
++                    // note: if we're unlit, we absolutely do not want to extrude, as light data isn't set up
++                    final boolean extrude = (dx | dz) != 0 || !unlit;
++                    for (int dy = 1; dy >= -1; --dy) {
++                        this.initNibble(dx + chunkX, dy + sectionY, dz + chunkZ, extrude, false);
++                    }
++                }
++            }
++        }
++
++        // check for de-init and lazy-init
++        // lazy init is when chunks are being lit, so at the time they weren't loaded when their neighbours were running
++        // init checks.
++        for (int dz = -1; dz <= 1; ++dz) {
++            for (int dx = -1; dx <= 1; ++dx) {
++                // does this neighbour have 1 radius loaded?
++                boolean neighboursLoaded = true;
++                neighbour_loaded_search:
++                for (int dz2 = -1; dz2 <= 1; ++dz2) {
++                    for (int dx2 = -1; dx2 <= 1; ++dx2) {
++                        if (this.getEmptinessMap(dx + dx2 + chunkX, dz + dz2 + chunkZ) == null) {
++                            neighboursLoaded = false;
++                            break neighbour_loaded_search;
++                        }
++                    }
++                }
++
++                for (int sectionY = this.maxLightSection; sectionY >= this.minLightSection; --sectionY) {
++                    final SWMRNibbleArray nibble = this.getNibbleFromCache(dx + chunkX, sectionY, dz + chunkZ);
++
++                    // check neighbours to see if we need to de-init this one
++                    boolean allEmpty = true;
++                    neighbour_search:
++                    for (int dy2 = -1; dy2 <= 1; ++dy2) {
++                        for (int dz2 = -1; dz2 <= 1; ++dz2) {
++                            for (int dx2 = -1; dx2 <= 1; ++dx2) {
++                                final int y = sectionY + dy2;
++                                if (y < this.minSection || y > this.maxSection) {
++                                    // empty
++                                    continue;
++                                }
++                                final boolean[] emptinessMap = this.getEmptinessMap(dx + dx2 + chunkX, dz + dz2 + chunkZ);
++                                if (emptinessMap != null) {
++                                    if (!emptinessMap[y - this.minSection]) {
++                                        allEmpty = false;
++                                        break neighbour_search;
++                                    }
++                                } else {
++                                    final ChunkSection section = this.getChunkSection(dx + dx2 + chunkX, y, dz + dz2 + chunkZ);
++                                    if (section != null && section != EMPTY_CHUNK_SECTION) {
++                                        allEmpty = false;
++                                        break neighbour_search;
++                                    }
++                                }
++                            }
++                        }
++                    }
++
++                    if (allEmpty & neighboursLoaded) {
++                        // can only de-init when neighbours are loaded
++                        // de-init is fine to delay, as de-init is just an optimisation - it's not required for lighting
++                        // to be correct
++
++                        // all were empty, so de-init
++                        if (nibble != null) {
++                            nibble.setNull();
++                        }
++                    } else if (!allEmpty) {
++                        // must init
++                        final boolean extrude = (dx | dz) != 0 || !unlit;
++                        this.initNibble(dx + chunkX, sectionY, dz + chunkZ, extrude, false);
++                    }
++                }
++            }
++        }
++
++        return ret;
++    }
 +
 +    public final void checkChunkEdges(final ILightAccess lightAccess, final int chunkX, final int chunkZ) {
 +        this.setupCaches(lightAccess, chunkX * 16 + 7, 128, chunkZ * 16 + 7, true, false);
@@ -4471,7 +4469,7 @@ index 0000000000000000000000000000000000000000..f20fd2126a21b9c7c45fc420b67c645a
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..518c21b96947cb87bcc3b5fc3f6210bcb0944e33
+index 0000000000000000000000000000000000000000..0fddb331bfcee762da38efea3a36dc6394718519
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/StarLightInterface.java
 @@ -0,0 +1,490 @@
@@ -4551,7 +4549,7 @@ index 0000000000000000000000000000000000000000..518c21b96947cb87bcc3b5fc3f6210bc
 +                    return null;
 +                }
 +
-+                if (chunk.getEmptinessMap() == null) {
++                if (chunk.getSkyEmptinessMap() == null) {
 +                    return null;
 +                }
 +
@@ -4593,7 +4591,7 @@ index 0000000000000000000000000000000000000000..518c21b96947cb87bcc3b5fc3f6210bc
 +                    }
 +                }
 +
-+                final boolean[] emptinessMap = chunk.getEmptinessMap();
++                final boolean[] emptinessMap = chunk.getSkyEmptinessMap();
 +
 +                if (emptinessMap == null) {
 +                    return 15;
@@ -7694,7 +7692,7 @@ index 0000000000000000000000000000000000000000..002abb3cbf0f742e685f2f043d2600de
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/server/AxisAlignedBB.java b/src/main/java/net/minecraft/server/AxisAlignedBB.java
-index ed9b2f9adfecdc6d1b9925579ec510657adde11f..fd3bb6dfa6cc060e9785c22a9e61a4325c348e36 100644
+index ed9b2f9adfecdc6d1b9925579ec510657adde11f..5c3d5b22b833d9f835e17803295b87893fd05e62 100644
 --- a/src/main/java/net/minecraft/server/AxisAlignedBB.java
 +++ b/src/main/java/net/minecraft/server/AxisAlignedBB.java
 @@ -13,6 +13,157 @@ public class AxisAlignedBB {
@@ -7742,7 +7740,7 @@ index ed9b2f9adfecdc6d1b9925579ec510657adde11f..fd3bb6dfa6cc060e9785c22a9e61a432
 +    }
 +
 +    public static double collideX(AxisAlignedBB target, AxisAlignedBB source, double source_move) {
-+        if (Math.abs(source_move) < MCUtil.COLLISION_EPSILON) {
++        if (source_move == 0.0) {
 +            return 0.0;
 +        }
 +
@@ -7767,7 +7765,7 @@ index ed9b2f9adfecdc6d1b9925579ec510657adde11f..fd3bb6dfa6cc060e9785c22a9e61a432
 +    }
 +
 +    public static double collideY(AxisAlignedBB target, AxisAlignedBB source, double source_move) {
-+        if (Math.abs(source_move) < MCUtil.COLLISION_EPSILON) {
++        if (source_move == 0.0) {
 +            return 0.0;
 +        }
 +
@@ -7791,7 +7789,7 @@ index ed9b2f9adfecdc6d1b9925579ec510657adde11f..fd3bb6dfa6cc060e9785c22a9e61a432
 +    }
 +
 +    public static double collideZ(AxisAlignedBB target, AxisAlignedBB source, double source_move) {
-+        if (Math.abs(source_move) < MCUtil.COLLISION_EPSILON) {
++        if (source_move == 0.0) {
 +            return 0.0;
 +        }
 +
@@ -8502,19 +8500,6 @@ index 1f334d63282bd5c23dc3b275a220f09e60c34537..829d4a7508e1656dbdc912096b7eafcf
              protected final VoxelShape b;
              protected final boolean c;
              private final boolean[] j;
-diff --git a/src/main/java/net/minecraft/server/BlockChest.java b/src/main/java/net/minecraft/server/BlockChest.java
-index 12a0230448dd8d56f6dc20e23cacaf0b8a9433d1..9e5e6de52efabe9126f6c47acb35fa1dc461ff4f 100644
---- a/src/main/java/net/minecraft/server/BlockChest.java
-+++ b/src/main/java/net/minecraft/server/BlockChest.java
-@@ -195,7 +195,7 @@ public class BlockChest extends BlockChestAbstract<TileEntityChest> implements I
-     @Override
-     public void remove(IBlockData iblockdata, World world, BlockPosition blockposition, IBlockData iblockdata1, boolean flag) {
-         if (!iblockdata.a(iblockdata1.getBlock())) {
--            TileEntity tileentity = world.getTileEntity(blockposition);
-+            TileEntity tileentity = world.getTileEntity(blockposition, false); // Tuinity - block has since changed.
- 
-             if (tileentity instanceof IInventory) {
-                 InventoryUtils.dropInventory(world, blockposition, (IInventory) tileentity);
 diff --git a/src/main/java/net/minecraft/server/BlockPosition.java b/src/main/java/net/minecraft/server/BlockPosition.java
 index 2d887af902a33b0e28d8f0a6ac2e59c815a7856e..2291135eaef64c403183724cb6e413cd7e472672 100644
 --- a/src/main/java/net/minecraft/server/BlockPosition.java
@@ -8613,10 +8598,10 @@ index 2d887af902a33b0e28d8f0a6ac2e59c815a7856e..2291135eaef64c403183724cb6e413cd
          @Override
          public BlockPosition immutableCopy() {
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..7842e65115cf6c37322c83ebff954a06408680b5 100644
+index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..ae07ea2a34f5cd82ce2eae523359cb7540065335 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
-@@ -91,6 +91,186 @@ public class Chunk implements IChunkAccess {
+@@ -91,6 +91,197 @@ public class Chunk implements IChunkAccess {
      private final int[] inventoryEntityCounts = new int[16];
      // Paper end
  
@@ -8670,9 +8655,10 @@ index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..7842e65115cf6c37322c83ebff954a06
 +    }
 +    // Tuinity end - optimise hard collision handling
 +    // Tuinity start - rewrite light engine
-+    private volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] blockNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight();
-+    private volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] skyNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight();
-+    private volatile boolean[] emptinessMap;
++    protected volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] blockNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight();
++    protected volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] skyNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight();
++    protected volatile boolean[] skyEmptinessMap;
++    protected volatile boolean[] blockEmptinessMap;
 +
 +    @Override
 +    public com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] getBlockNibbles() {
@@ -8695,13 +8681,23 @@ index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..7842e65115cf6c37322c83ebff954a06
 +    }
 +
 +    @Override
-+    public boolean[] getEmptinessMap() {
-+        return this.emptinessMap;
++    public boolean[] getSkyEmptinessMap() {
++        return this.skyEmptinessMap;
 +    }
 +
 +    @Override
-+    public void setEmptinessMap(boolean[] emptinessMap) {
-+        this.emptinessMap = emptinessMap;
++    public void setSkyEmptinessMap(boolean[] emptinessMap) {
++        this.skyEmptinessMap = emptinessMap;
++    }
++
++    @Override
++    public boolean[] getBlockEmptinessMap() {
++        return this.blockEmptinessMap;
++    }
++
++    @Override
++    public void setBlockEmptinessMap(boolean[] emptinessMap) {
++        this.blockEmptinessMap = emptinessMap;
 +    }
 +    // Tuinity end - rewrite light engine
 +
@@ -8803,19 +8799,20 @@ index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..7842e65115cf6c37322c83ebff954a06
      public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage, ChunkConverter chunkconverter, TickList<Block> ticklist, TickList<FluidType> ticklist1, long i, @Nullable ChunkSection[] achunksection, @Nullable Consumer<Chunk> consumer) {
          this.sections = new ChunkSection[16];
          this.e = Maps.newHashMap();
-@@ -298,6 +478,11 @@ public class Chunk implements IChunkAccess {
+@@ -298,6 +489,12 @@ public class Chunk implements IChunkAccess {
  
      public Chunk(World world, ProtoChunk protochunk) {
          this(world, protochunk.getPos(), protochunk.getBiomeIndex(), protochunk.p(), protochunk.n(), protochunk.o(), protochunk.getInhabitedTime(), protochunk.getSections(), (Consumer) null);
 +        // Tuinity start - copy over protochunk light
-+        this.blockNibbles = protochunk.getBlockNibbles();
-+        this.skyNibbles = protochunk.getSkyNibbles();
-+        this.emptinessMap = protochunk.getEmptinessMap();
++        this.setBlockNibbles(protochunk.getBlockNibbles());
++        this.setSkyNibbles(protochunk.getSkyNibbles());
++        this.setSkyEmptinessMap(protochunk.getSkyEmptinessMap());
++        this.setBlockEmptinessMap(protochunk.getBlockEmptinessMap());
 +        // Tuinity end - copy over protochunk light
          Iterator iterator = protochunk.y().iterator();
  
          while (iterator.hasNext()) {
-@@ -548,6 +733,7 @@ public class Chunk implements IChunkAccess {
+@@ -548,6 +745,7 @@ public class Chunk implements IChunkAccess {
  
      @Override
      public void a(Entity entity) {
@@ -8823,7 +8820,7 @@ index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..7842e65115cf6c37322c83ebff954a06
          this.q = true;
          int i = MathHelper.floor(entity.locX() / 16.0D);
          int j = MathHelper.floor(entity.locZ() / 16.0D);
-@@ -593,8 +779,8 @@ public class Chunk implements IChunkAccess {
+@@ -593,8 +791,8 @@ public class Chunk implements IChunkAccess {
          entity.chunkX = this.loc.x;
          entity.chunkY = k;
          entity.chunkZ = this.loc.z;
@@ -8834,7 +8831,7 @@ index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..7842e65115cf6c37322c83ebff954a06
          // Paper start
          if (entity instanceof EntityItem) {
              itemCounts[k]++;
-@@ -617,6 +803,7 @@ public class Chunk implements IChunkAccess {
+@@ -617,6 +815,7 @@ public class Chunk implements IChunkAccess {
      }
  
      public void a(Entity entity, int i) {
@@ -8842,7 +8839,7 @@ index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..7842e65115cf6c37322c83ebff954a06
          if (i < 0) {
              i = 0;
          }
-@@ -631,7 +818,7 @@ public class Chunk implements IChunkAccess {
+@@ -631,7 +830,7 @@ public class Chunk implements IChunkAccess {
              entity.entitySlice = null;
              entity.inChunk = false;
          }
@@ -8851,7 +8848,7 @@ index af9d54ef057d5f6977cf77c57cde25b6b0d1f39d..7842e65115cf6c37322c83ebff954a06
              return;
          }
          if (entity instanceof EntityItem) {
-@@ -944,6 +1131,7 @@ public class Chunk implements IChunkAccess {
+@@ -944,6 +1143,7 @@ public class Chunk implements IChunkAccess {
  
      }
  
@@ -9027,6 +9024,19 @@ index 8eecdcde510661ec3a13a25a04ba394f6b6dc012..ab1085091fefea3a3fa15f7028bec050
      public ChunkCache(World world, BlockPosition blockposition, BlockPosition blockposition1) {
          this.e = world;
          this.a = blockposition.getX() >> 4;
+diff --git a/src/main/java/net/minecraft/server/ChunkGenerator.java b/src/main/java/net/minecraft/server/ChunkGenerator.java
+index 097cb9896c525a605c50e83548f828e0c71ab3d5..17cf00dfe8b24adf2fb66eca4710ab7888a894e3 100644
+--- a/src/main/java/net/minecraft/server/ChunkGenerator.java
++++ b/src/main/java/net/minecraft/server/ChunkGenerator.java
+@@ -135,7 +135,7 @@ public abstract class ChunkGenerator {
+         // Get origin location (re)defined by event call.
+         blockposition = new BlockPosition(event.getOrigin().getBlockX(), event.getOrigin().getBlockY(), event.getOrigin().getBlockZ());
+         // Get world (re)defined by event call.
+-        worldserver = ((org.bukkit.craftbukkit.CraftWorld) event.getOrigin().getWorld()).getHandle();
++        //worldserver = ((org.bukkit.craftbukkit.CraftWorld) event.getOrigin().getWorld()).getHandle(); // Tuinity - callers and this function don't expect this to change
+         // Get radius and whether to find unexplored structures (re)defined by event call.
+         i = event.getRadius();
+         flag = event.shouldFindUnexplored();
 diff --git a/src/main/java/net/minecraft/server/ChunkMapDistance.java b/src/main/java/net/minecraft/server/ChunkMapDistance.java
 index 3c7b225edbe23dc1959002293a6f8b816287b5a8..f1c686810fb4e9c05df45d664c93af73d17f0624 100644
 --- a/src/main/java/net/minecraft/server/ChunkMapDistance.java
@@ -9897,7 +9907,7 @@ index 550232cb3819138b3bae0fa1c51429485e8bc593..229c3b0f0c650b501f31147adaa17194
                      throwable = throwable1;
                      throw throwable1;
 diff --git a/src/main/java/net/minecraft/server/Entity.java b/src/main/java/net/minecraft/server/Entity.java
-index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc032eccb561 100644
+index f307a6361144c7e315b2e0ea45df27527cdb26ca..013c44f80f74376e8bbb37afb5de07aa5d8fb1bc 100644
 --- a/src/main/java/net/minecraft/server/Entity.java
 +++ b/src/main/java/net/minecraft/server/Entity.java
 @@ -136,7 +136,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
@@ -10051,16 +10061,13 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
      }
  
      protected BlockPosition ap() {
-@@ -815,6 +893,146 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -815,6 +893,137 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return d0;
      }
  
 +    // Tuinity start - optimise entity movement
 +    private static double performCollisionsX(AxisAlignedBB currentBoundingBox, double value, List<AxisAlignedBB> potentialCollisions) {
 +        for (int i = 0, len = potentialCollisions.size(); i < len; ++i) {
-+            if (Math.abs(value) < MCUtil.COLLISION_EPSILON) {
-+                return 0.0;
-+            }
 +            AxisAlignedBB target = potentialCollisions.get(i);
 +            value = AxisAlignedBB.collideX(target, currentBoundingBox, value);
 +        }
@@ -10070,9 +10077,6 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
 +
 +    private static double performCollisionsY(AxisAlignedBB currentBoundingBox, double value, List<AxisAlignedBB> potentialCollisions) {
 +        for (int i = 0, len = potentialCollisions.size(); i < len; ++i) {
-+            if (Math.abs(value) < MCUtil.COLLISION_EPSILON) {
-+                return 0.0;
-+            }
 +            AxisAlignedBB target = potentialCollisions.get(i);
 +            value = AxisAlignedBB.collideY(target, currentBoundingBox, value);
 +        }
@@ -10082,9 +10086,6 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
 +
 +    private static double performCollisionsZ(AxisAlignedBB currentBoundingBox, double value, List<AxisAlignedBB> potentialCollisions) {
 +        for (int i = 0, len = potentialCollisions.size(); i < len; ++i) {
-+            if (Math.abs(value) < MCUtil.COLLISION_EPSILON) {
-+                return 0.0;
-+            }
 +            AxisAlignedBB target = potentialCollisions.get(i);
 +            value = AxisAlignedBB.collideZ(target, currentBoundingBox, value);
 +        }
@@ -10198,7 +10199,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
      private Vec3D g(Vec3D vec3d) {
          AxisAlignedBB axisalignedbb = this.getBoundingBox();
          VoxelShapeCollision voxelshapecollision = VoxelShapeCollision.a(this);
-@@ -850,6 +1068,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -850,6 +1059,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return vec3d1;
      }
  
@@ -10206,7 +10207,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
      public static double c(Vec3D vec3d) {
          return vec3d.x * vec3d.x + vec3d.z * vec3d.z;
      }
-@@ -962,18 +1181,34 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -962,18 +1172,34 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
      }
  
      protected void checkBlockCollisions() {
@@ -10244,7 +10245,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
                          try {
                              iblockdata.a(this.world, blockposition_mutableblockposition, this);
                              this.a(iblockdata);
-@@ -987,6 +1222,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -987,6 +1213,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
                      }
                  }
              }
@@ -10256,7 +10257,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
          }
  
      }
-@@ -1358,6 +1598,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1358,6 +1589,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return d3 * d3 + d4 * d4 + d5 * d5;
      }
  
@@ -10264,7 +10265,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
      public double h(Entity entity) {
          return this.e(entity.getPositionVector());
      }
-@@ -1945,9 +2186,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1945,9 +2177,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              float f1 = this.size.width * 0.8F;
              AxisAlignedBB axisalignedbb = AxisAlignedBB.g((double) f1, 0.10000000149011612D, (double) f1).d(this.locX(), this.getHeadY(), this.locZ());
  
@@ -10276,7 +10277,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
          }
      }
  
-@@ -1955,11 +2196,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -1955,11 +2187,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return EnumInteractionResult.PASS;
      }
  
@@ -10292,7 +10293,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
          return false;
      }
  
-@@ -2850,7 +3093,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -2850,7 +3084,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
              this.recursiveStream().forEach((entity) -> {
                  worldserver.chunkCheck(entity);
                  entity.az = true;
@@ -10301,7 +10302,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
  
                  while (iterator.hasNext()) {
                      Entity entity1 = (Entity) iterator.next();
-@@ -3308,12 +3551,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3308,12 +3542,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          return this.locBlock;
      }
  
@@ -10318,7 +10319,7 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
      }
  
      public void setMot(double d0, double d1, double d2) {
-@@ -3368,7 +3615,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
+@@ -3368,7 +3606,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, Ke
          }
          // Paper end
          if (this.loc.x != d0 || this.loc.y != d1 || this.loc.z != d2) {
@@ -10328,8 +10329,23 @@ index f307a6361144c7e315b2e0ea45df27527cdb26ca..f292e15746a947c580aa93e0a23dbc03
              int i = MathHelper.floor(d0);
              int j = MathHelper.floor(d1);
              int k = MathHelper.floor(d2);
+diff --git a/src/main/java/net/minecraft/server/EntityArrow.java b/src/main/java/net/minecraft/server/EntityArrow.java
+index 1e7f5957d879d1ba8cf2b29cf9397b8e204e4381..f983516b89cdf7ce7fdea8f5a5b1a29dd01ae597 100644
+--- a/src/main/java/net/minecraft/server/EntityArrow.java
++++ b/src/main/java/net/minecraft/server/EntityArrow.java
+@@ -173,8 +173,10 @@ public abstract class EntityArrow extends IProjectile {
+                 // Paper end
+ 
+                 if (object != null && !flag) {
++                    if (org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, (MovingObjectPosition) object)) { // CraftBukkit - Call event // Paper - make cancellable // Tuinity - implement cancellation properly
+                     this.a((MovingObjectPosition) object);
+                     this.impulse = true;
++                    } // Tuinity - implement cancellation properly
+                 }
+ 
+                 if (movingobjectpositionentity == null || this.getPierceLevel() <= 0) {
 diff --git a/src/main/java/net/minecraft/server/EntityCat.java b/src/main/java/net/minecraft/server/EntityCat.java
-index 957a351c3f6c4f66d7af6657ab0c3cbeed94662f..57166a543a9af9e10e38c983487fac7ea9d42d52 100644
+index e80ec303198abade19645267e24cd5a4a8b75d70..35f511c398795a0edeb5fe6d802f2a2bf754bf3a 100644
 --- a/src/main/java/net/minecraft/server/EntityCat.java
 +++ b/src/main/java/net/minecraft/server/EntityCat.java
 @@ -292,7 +292,7 @@ public class EntityCat extends EntityTameableAnimal {
@@ -10341,6 +10357,49 @@ index 957a351c3f6c4f66d7af6657ab0c3cbeed94662f..57166a543a9af9e10e38c983487fac7e
              this.setCatType(10);
              this.setPersistent();
          }
+diff --git a/src/main/java/net/minecraft/server/EntityFireball.java b/src/main/java/net/minecraft/server/EntityFireball.java
+index 0840fdf3585407ec317f0326359619220c64db78..6b9b64539d2272070b523ed6b927de02d2b00af5 100644
+--- a/src/main/java/net/minecraft/server/EntityFireball.java
++++ b/src/main/java/net/minecraft/server/EntityFireball.java
+@@ -67,7 +67,9 @@ public abstract class EntityFireball extends IProjectile {
+             // Paper end
+ 
+             if (movingobjectposition != null && movingobjectposition.getType() != MovingObjectPosition.EnumMovingObjectType.MISS) { // Paper - add null check in case cancelled
++                if (org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, movingobjectposition)) { // CraftBukkit - Call event // Paper - make cancellable // Tuinity - implement cancellation properly
+                 this.a(movingobjectposition);
++                } // Tuinity - implement cancellation properly
+ 
+                 // CraftBukkit start - Fire ProjectileHitEvent
+                 if (this.dead) {
+diff --git a/src/main/java/net/minecraft/server/EntityFireworks.java b/src/main/java/net/minecraft/server/EntityFireworks.java
+index a646dc9f030ad1f76ba2b7bb1bc7897cd34b648c..dd18eabd7104995f0e6a8ecb279a3872b46773de 100644
+--- a/src/main/java/net/minecraft/server/EntityFireworks.java
++++ b/src/main/java/net/minecraft/server/EntityFireworks.java
+@@ -124,8 +124,10 @@ public class EntityFireworks extends IProjectile {
+         MovingObjectPosition movingobjectposition = ProjectileHelper.a((Entity) this, this::a);
+ 
+         if (!this.noclip) {
++            if (org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, movingobjectposition)) { // CraftBukkit - Call event // Paper - make cancellable // Tuinity - implement cancellation properly
+             this.a(movingobjectposition);
+             this.impulse = true;
++            } // Tuinity - implement cancellation properly
+         }
+ 
+         this.x();
+diff --git a/src/main/java/net/minecraft/server/EntityFishingHook.java b/src/main/java/net/minecraft/server/EntityFishingHook.java
+index e97c7794e86c0518bcec0a0370bffbeab20e2623..0816ab54bc99bcf29356b56516e83759a3f2988f 100644
+--- a/src/main/java/net/minecraft/server/EntityFishingHook.java
++++ b/src/main/java/net/minecraft/server/EntityFishingHook.java
+@@ -226,7 +226,9 @@ public class EntityFishingHook extends IProjectile {
+     private void m() {
+         MovingObjectPosition movingobjectposition = ProjectileHelper.a((Entity) this, this::a);
+ 
++        if (org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, movingobjectposition)) { // CraftBukkit - Call event // Paper - make cancellable // Tuinity - implement cancellation properly
+         this.a(movingobjectposition);
++        } // Tuinity - implement cancellation properly
+     }
+ 
+     @Override
 diff --git a/src/main/java/net/minecraft/server/EntityInsentient.java b/src/main/java/net/minecraft/server/EntityInsentient.java
 index eb5c3a1f0d9ff665631caf5bf579e83d1ed25e4f..7582a3a0955db2bc79daeced8e9c869f4276815a 100644
 --- a/src/main/java/net/minecraft/server/EntityInsentient.java
@@ -10400,6 +10459,20 @@ index d417878a1584c9e5ec33b94fc65b29f84fb3a5e9..4fe5a8d0201d662c68dd58eeb8cf1d30
  
      }
  
+diff --git a/src/main/java/net/minecraft/server/EntityLlamaSpit.java b/src/main/java/net/minecraft/server/EntityLlamaSpit.java
+index 7636a51a7ef0aa05b5b2aaa9d17e7b551dedac96..480a02a8f6ec7110f9af8f2037fdc09a7a54ef01 100644
+--- a/src/main/java/net/minecraft/server/EntityLlamaSpit.java
++++ b/src/main/java/net/minecraft/server/EntityLlamaSpit.java
+@@ -19,7 +19,9 @@ public class EntityLlamaSpit extends IProjectile {
+         MovingObjectPosition movingobjectposition = ProjectileHelper.a((Entity) this, this::a);
+ 
+         if (movingobjectposition != null) {
++            if (org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, movingobjectposition)) { // CraftBukkit - Call event // Paper - make cancellable // Tuinity - implement cancellation properly
+             this.a(movingobjectposition);
++            } // Tuinity - implement cancellation properly
+         }
+ 
+         double d0 = this.locX() + vec3d.x;
 diff --git a/src/main/java/net/minecraft/server/EntityPlayer.java b/src/main/java/net/minecraft/server/EntityPlayer.java
 index 04d505c7a19775d0353c10424a84a1ce8885dc2c..9f5b7243ccbe0729a061345c25033d9145b91b3f 100644
 --- a/src/main/java/net/minecraft/server/EntityPlayer.java
@@ -10590,6 +10663,32 @@ index 04d505c7a19775d0353c10424a84a1ce8885dc2c..9f5b7243ccbe0729a061345c25033d91
              if (this.getHealth() != this.lastHealthSent || this.lastFoodSent != this.foodData.getFoodLevel() || this.foodData.getSaturationLevel() == 0.0F != this.lastSentSaturationZero) {
                  this.playerConnection.sendPacket(new PacketPlayOutUpdateHealth(this.getBukkitEntity().getScaledHealth(), this.foodData.getFoodLevel(), this.foodData.getSaturationLevel())); // CraftBukkit
                  this.lastHealthSent = this.getHealth();
+diff --git a/src/main/java/net/minecraft/server/EntityProjectile.java b/src/main/java/net/minecraft/server/EntityProjectile.java
+index 53a8ea7d1eff84abe6c49464d556aa2788a6abcb..d85a19905efab7189e461a61becb6ca2b8c50803 100644
+--- a/src/main/java/net/minecraft/server/EntityProjectile.java
++++ b/src/main/java/net/minecraft/server/EntityProjectile.java
+@@ -48,7 +48,7 @@ public abstract class EntityProjectile extends IProjectile {
+                     movingobjectposition = null;
+                 }
+             }
+-            if (movingobjectposition != null) {
++            if (movingobjectposition != null && org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, movingobjectposition)) { // Tuinity - implement cancellation properly
+             // Paper end
+             this.a(movingobjectposition);
+             } // Paper
+diff --git a/src/main/java/net/minecraft/server/EntityShulkerBullet.java b/src/main/java/net/minecraft/server/EntityShulkerBullet.java
+index 23017b5486530bcf76b3934cfa8621e8b4772b27..a4d94385ede0303417d676155c2c0b226681cc59 100644
+--- a/src/main/java/net/minecraft/server/EntityShulkerBullet.java
++++ b/src/main/java/net/minecraft/server/EntityShulkerBullet.java
+@@ -206,7 +206,7 @@ public class EntityShulkerBullet extends IProjectile {
+ 
+             MovingObjectPosition movingobjectposition = ProjectileHelper.a((Entity) this, this::a);
+ 
+-            if (movingobjectposition.getType() != MovingObjectPosition.EnumMovingObjectType.MISS) {
++            if (movingobjectposition.getType() != MovingObjectPosition.EnumMovingObjectType.MISS && org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, movingobjectposition)) { // Tuinity - implement cancellation properly
+                 this.a(movingobjectposition);
+             }
+         }
 diff --git a/src/main/java/net/minecraft/server/EntityTrackerEntry.java b/src/main/java/net/minecraft/server/EntityTrackerEntry.java
 index 4efc40c01ec12b80bd7cf9d35cf0ea0df973baf7..f322dccd834ff56b99f8796309709b5b6ac01456 100644
 --- a/src/main/java/net/minecraft/server/EntityTrackerEntry.java
@@ -10661,10 +10760,10 @@ index c4a83448ed4513f6e4ab179d1d43e5bb0cb13641..5c3eb4fc7e5aec2ad8d0050673fc8f4d
              Vec3D vec3d1 = raytrace1.a();
              VoxelShape voxelshape = raytrace1.a(iblockdata, this, blockposition);
 diff --git a/src/main/java/net/minecraft/server/IChunkAccess.java b/src/main/java/net/minecraft/server/IChunkAccess.java
-index 180b6b58dc5663158db84b6f1257591439b48c31..62a648a78481b4f3f35882c689e137e733f7f152 100644
+index 180b6b58dc5663158db84b6f1257591439b48c31..564703d87c47eab34a23cb5d159cc66cdbfc00a3 100644
 --- a/src/main/java/net/minecraft/server/IChunkAccess.java
 +++ b/src/main/java/net/minecraft/server/IChunkAccess.java
-@@ -24,6 +24,28 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
+@@ -24,6 +24,36 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
      }
      // Paper end
  
@@ -10682,10 +10781,18 @@ index 180b6b58dc5663158db84b6f1257591439b48c31..62a648a78481b4f3f35882c689e137e7
 +    default void setSkyNibbles(com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] nibbles) {
 +        throw new UnsupportedOperationException(this.getClass().getName());
 +    }
-+    public default boolean[] getEmptinessMap() {
++    public default boolean[] getSkyEmptinessMap() {
 +        throw new UnsupportedOperationException(this.getClass().getName());
 +    }
-+    public default void setEmptinessMap(final boolean[] emptinessMap) {
++    public default void setSkyEmptinessMap(final boolean[] emptinessMap) {
++        throw new UnsupportedOperationException(this.getClass().getName());
++    }
++
++    public default boolean[] getBlockEmptinessMap() {
++        throw new UnsupportedOperationException(this.getClass().getName());
++    }
++
++    public default void setBlockEmptinessMap(final boolean[] emptinessMap) {
 +        throw new UnsupportedOperationException(this.getClass().getName());
 +    }
 +    // Tuinity end
@@ -10693,7 +10800,7 @@ index 180b6b58dc5663158db84b6f1257591439b48c31..62a648a78481b4f3f35882c689e137e7
      IBlockData getType(final int x, final int y, final int z); // Paper
      @Nullable
      IBlockData setType(BlockPosition blockposition, IBlockData iblockdata, boolean flag);
-@@ -122,6 +144,7 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
+@@ -122,6 +152,7 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
      @Nullable
      NBTTagCompound j(BlockPosition blockposition);
  
@@ -10701,7 +10808,7 @@ index 180b6b58dc5663158db84b6f1257591439b48c31..62a648a78481b4f3f35882c689e137e7
      Stream<BlockPosition> m();
  
      TickList<Block> n();
-@@ -142,6 +165,7 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
+@@ -142,6 +173,7 @@ public interface IChunkAccess extends IBlockAccess, IStructureAccess {
          return ashortlist[i];
      }
  
@@ -10824,6 +10931,19 @@ index be5384ee41290b24b0c419c3e8f4553db34b2399..df28f7a6bf4c650a22ddf046eae4d5e8
      default void a(EnumSkyBlock enumskyblock, SectionPosition sectionposition) {}
  
      IBlockAccess getWorld();
+diff --git a/src/main/java/net/minecraft/server/IProjectile.java b/src/main/java/net/minecraft/server/IProjectile.java
+index bbc089b41fcbe0141f13591db2cb44b9e688cac4..dc9f2a1a132b3a7925bd62aa1da0512afd90b8b1 100644
+--- a/src/main/java/net/minecraft/server/IProjectile.java
++++ b/src/main/java/net/minecraft/server/IProjectile.java
+@@ -118,7 +118,7 @@ public abstract class IProjectile extends Entity {
+     }
+ 
+     protected void a(MovingObjectPosition movingobjectposition) {
+-        if (!org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, movingobjectposition)) return; // CraftBukkit - Call event // Paper - make cancellable
++        // Tuinity - proper cancellation requires moving this into the caller (see method overrides) - TODO this unfortunately means we need to manually inspect each call on update
+         MovingObjectPosition.EnumMovingObjectType movingobjectposition_enummovingobjecttype = movingobjectposition.getType();
+ 
+         if (movingobjectposition_enummovingobjecttype == MovingObjectPosition.EnumMovingObjectType.ENTITY) {
 diff --git a/src/main/java/net/minecraft/server/LightEngineGraphSection.java b/src/main/java/net/minecraft/server/LightEngineGraphSection.java
 index 13d067f48647dea63ef1bf3a2a3e0868074ba75f..04afd7f285db2f281a038e0be6f557b8a692936b 100644
 --- a/src/main/java/net/minecraft/server/LightEngineGraphSection.java
@@ -13132,7 +13252,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..16779ffa00caf32752170700e1d88092
      }
      // Paper end - optimised tracker
 diff --git a/src/main/java/net/minecraft/server/PlayerConnection.java b/src/main/java/net/minecraft/server/PlayerConnection.java
-index 87b1ff21957d5d708209257e569785aeaf191181..5c708ed2cd3b10744b0d6d2eb2ef51d0411ce0dc 100644
+index 87b1ff21957d5d708209257e569785aeaf191181..4058c1f7ada7d0c9e4ba73a0073b4f94bf410a8f 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
 @@ -419,7 +419,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
@@ -13146,7 +13266,53 @@ index 87b1ff21957d5d708209257e569785aeaf191181..5c708ed2cd3b10744b0d6d2eb2ef51d0
                      this.networkManager.sendPacket(new PacketPlayOutVehicleMove(entity));
                      return;
                  }
-@@ -1068,7 +1070,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -432,12 +434,14 @@ public class PlayerConnection implements PacketListenerPlayIn {
+                     return;
+                 }
+ 
+-                boolean flag = worldserver.getCubes(entity, entity.getBoundingBox().shrink(0.0625D));
++                //boolean flag = worldserver.getCubes(entity, entity.getBoundingBox().shrink(0.0625D)); // Tuinity - replace with different checks
++                AxisAlignedBB oldBox = entity.getBoundingBox(); // Tuinity - copy from player movement packet
+ 
+                 d6 = d3 - this.v;
+                 d7 = d4 - this.w - 1.0E-6D;
+                 d8 = d5 - this.x;
+                 entity.move(EnumMoveType.PLAYER, new Vec3D(d6, d7, d8));
++                boolean didCollide = toX != entity.locX() || toY != entity.locY() || toZ != entity.locZ(); // Tuinity - needed here as the difference in Y can be reset - also note: this is only a guess at whether collisions took place, floating point errors can make this true when it shouldn't be...
+                 double d11 = d7;
+ 
+                 d6 = d3 - entity.locX();
+@@ -451,16 +455,25 @@ public class PlayerConnection implements PacketListenerPlayIn {
+                 boolean flag1 = false;
+ 
+                 if (d10 > org.spigotmc.SpigotConfig.movedWronglyThreshold) { // Spigot
+-                    flag1 = true;
++                    flag1 = true; // Tuinity - diff on change, this should be moved wrongly
+                     PlayerConnection.LOGGER.warn("{} (vehicle of {}) moved wrongly! {}", entity.getDisplayName().getString(), this.player.getDisplayName().getString(), Math.sqrt(d10));
+                 }
+                 Location curPos = this.getPlayer().getLocation(); // Spigot
+ 
+                 entity.setLocation(d3, d4, d5, f, f1);
+                 player.setLocation(d3, d4, d5, this.player.yaw, this.player.pitch); // CraftBukkit
+-                boolean flag2 = worldserver.getCubes(entity, entity.getBoundingBox().shrink(0.0625D));
+-
+-                if (flag && (flag1 || !flag2)) {
++                //boolean flag2 = worldserver.getCubes(entity, entity.getBoundingBox().shrink(0.0625D)); // Tuinity - replace with different checks
++
++                // Tuinity start - optimise out extra getCubes
++                boolean teleportBack = flag1; // violating this is always a fail
++                if (!teleportBack) {
++                    // note: only call after setLocation, or else getBoundingBox is wrong
++                    AxisAlignedBB newBox = entity.getBoundingBox();
++                    if (didCollide || !oldBox.equals(newBox)) {
++                        teleportBack = this.hasNewCollision(worldserver, entity, oldBox, newBox);
++                    } // else: no collision at all detected, why do we care?
++                }
++                if (teleportBack) { // Tuinity end - optimise out extra getCubes
+                     entity.setLocation(d0, d1, d2, f, f1);
+                     player.setLocation(d0, d1, d2, this.player.yaw, this.player.pitch); // CraftBukkit
+                     this.networkManager.sendPacket(new PacketPlayOutVehicleMove(entity));
+@@ -1068,7 +1081,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  }
  
                  if (this.teleportPos != null) {
@@ -13155,7 +13321,7 @@ index 87b1ff21957d5d708209257e569785aeaf191181..5c708ed2cd3b10744b0d6d2eb2ef51d0
                          this.A = this.e;
                          this.a(this.teleportPos.x, this.teleportPos.y, this.teleportPos.z, this.player.yaw, this.player.pitch);
                      }
-@@ -1138,7 +1140,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1138,7 +1151,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                  speed = player.abilities.walkSpeed * 10f;
                              }
                              // Paper start - Prevent moving into unloaded chunks
@@ -13164,7 +13330,16 @@ index 87b1ff21957d5d708209257e569785aeaf191181..5c708ed2cd3b10744b0d6d2eb2ef51d0
                                  this.internalTeleport(this.player.locX(), this.player.locY(), this.player.locZ(), this.player.yaw, this.player.pitch, Collections.emptySet());
                                  return;
                              }
-@@ -1194,6 +1196,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1155,7 +1168,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+                                 }
+                             }
+ 
+-                            AxisAlignedBB axisalignedbb = this.player.getBoundingBox();
++                            AxisAlignedBB axisalignedbb = this.player.getBoundingBox(); // Tuinity - diff on change, should be old AABB
+ 
+                             d7 = d4 - this.o;
+                             d8 = d5 - this.p;
+@@ -1194,6 +1207,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              }
  
                              this.player.move(EnumMoveType.PLAYER, new Vec3D(d7, d8, d9));
@@ -13172,15 +13347,59 @@ index 87b1ff21957d5d708209257e569785aeaf191181..5c708ed2cd3b10744b0d6d2eb2ef51d0
                              this.player.setOnGround(packetplayinflying.b()); // CraftBukkit - SPIGOT-5810, SPIGOT-5835: reset by this.player.move
                              // Paper start - prevent position desync
                              if (this.teleportPos != null) {
-@@ -1218,7 +1221,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1213,12 +1227,23 @@ public class PlayerConnection implements PacketListenerPlayIn {
+                             boolean flag1 = false;
+ 
+                             if (!this.player.H() && d11 > org.spigotmc.SpigotConfig.movedWronglyThreshold && !this.player.isSleeping() && !this.player.playerInteractManager.isCreative() && this.player.playerInteractManager.getGameMode() != EnumGamemode.SPECTATOR) { // Spigot
+-                                flag1 = true;
++                                flag1 = true; // Tuinity - diff on change, this should be moved wrongly
+                                 PlayerConnection.LOGGER.warn("{} moved wrongly!", this.player.getDisplayName().getString());
                              }
  
                              this.player.setLocation(d4, d5, d6, f, f1);
 -                            if (!this.player.noclip && !this.player.isSleeping() && (flag1 && worldserver.getCubes(this.player, axisalignedbb) || this.a((IWorldReader) worldserver, axisalignedbb))) {
-+                            if (!this.player.noclip && !this.player.isSleeping() && (flag1 && worldserver.getCubes(this.player, axisalignedbb) || (didCollide && this.a((IWorldReader) worldserver, axisalignedbb)))) { // Tuinity - optimise out the extra getCubes-like call most of the time
++                            // Tuinity start - optimise out extra getCubes
++                            // Original for reference:
++                            // boolean teleportBack = flag1 && worldserver.getCubes(this.player, axisalignedbb) || (didCollide && this.a((IWorldReader) worldserver, axisalignedbb));
++                            boolean teleportBack = flag1; // violating this is always a fail
++                            if (!this.player.noclip && !this.player.isSleeping() && !teleportBack) {
++                                AxisAlignedBB newBox = this.player.getBoundingBox();
++                                if (didCollide || !axisalignedbb.equals(newBox)) {
++                                    // note: only call after setLocation, or else getBoundingBox is wrong
++                                    teleportBack = this.hasNewCollision(worldserver, this.player, axisalignedbb, newBox);
++                                } // else: no collision at all detected, why do we care?
++                            }
++                            if (!this.player.noclip && !this.player.isSleeping() && teleportBack) { // Tuinity end - optimise out extra getCubes
                                  this.a(d0, d1, d2, f, f1);
                              } else {
                                  // CraftBukkit start - fire PlayerMoveEvent
+@@ -1305,6 +1330,26 @@ public class PlayerConnection implements PacketListenerPlayIn {
+         }
+     }
+ 
++    // Tuinity start - optimise out extra getCubes
++    private boolean hasNewCollision(final WorldServer world, final Entity entity, final AxisAlignedBB oldBox, final AxisAlignedBB newBox) {
++        final List<AxisAlignedBB> collisions = com.tuinity.tuinity.util.CachedLists.getTempCollisionList();
++        try {
++            world.getCollisions(entity, newBox, collisions, true);
++
++            for (int i = 0, len = collisions.size(); i < len; ++i) {
++                final AxisAlignedBB box = collisions.get(i);
++                if (!box.voxelShapeIntersect(oldBox)) {
++                    return true;
++                }
++            }
++
++            return false;
++        } finally {
++            com.tuinity.tuinity.util.CachedLists.returnTempCollisionList(collisions);
++        }
++    }
++    // Tuinity end - optimise out extra getCubes
++
+     private boolean a(IWorldReader iworldreader, AxisAlignedBB axisalignedbb) {
+         Stream<VoxelShape> stream = iworldreader.d(this.player, this.player.getBoundingBox().shrink(9.999999747378752E-6D), (entity) -> {
+             return true;
 diff --git a/src/main/java/net/minecraft/server/PlayerConnectionUtils.java b/src/main/java/net/minecraft/server/PlayerConnectionUtils.java
 index 7ea293f38dedd6066601d94adbe175a31c502e1f..e698dd22607b2b2c4068c5bfb03ac53eb5bac080 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnectionUtils.java
@@ -13365,17 +13584,18 @@ index 114e986e5132e5e4bb42d0f08a067429bce53ba6..05656ea8448aa569e8dd480461e2d5f7
              this.player.playerConnection.sendPacket(new PacketPlayOutBlockChange(this.world, blockposition)); // CraftBukkit - SPIGOT-5196
          }
 diff --git a/src/main/java/net/minecraft/server/ProtoChunk.java b/src/main/java/net/minecraft/server/ProtoChunk.java
-index 5b0cd414ca1949ab53b289f7159f18da07d21f14..71c7fca4ea925fee8790c5a4042ad26584a8ceb3 100644
+index 5b0cd414ca1949ab53b289f7159f18da07d21f14..d8b759874545293764690b2ba08a4bd7605c76ae 100644
 --- a/src/main/java/net/minecraft/server/ProtoChunk.java
 +++ b/src/main/java/net/minecraft/server/ProtoChunk.java
-@@ -48,6 +48,42 @@ public class ProtoChunk implements IChunkAccess {
+@@ -48,6 +48,54 @@ public class ProtoChunk implements IChunkAccess {
      private volatile boolean u;
      final World world; // Paper - Anti-Xray - Add world // Paper - private -> default
  
 +    // Tuinity start - rewrite light engine
-+    private volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] blockNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight();
-+    private volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] skyNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight();
-+    private volatile boolean[] emptinessMap;
++    protected volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] blockNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight();
++    protected volatile com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] skyNibbles = com.tuinity.tuinity.chunk.light.StarLightEngine.getFilledEmptyLight();
++    protected volatile boolean[] skyEmptinessMap;
++    protected volatile boolean[] blockEmptinessMap;
 +
 +    @Override
 +    public com.tuinity.tuinity.chunk.light.SWMRNibbleArray[] getBlockNibbles() {
@@ -13398,20 +13618,31 @@ index 5b0cd414ca1949ab53b289f7159f18da07d21f14..71c7fca4ea925fee8790c5a4042ad265
 +    }
 +
 +    @Override
-+    public boolean[] getEmptinessMap() {
-+        return this.emptinessMap;
++    public boolean[] getSkyEmptinessMap() {
++        return this.skyEmptinessMap;
 +    }
 +
 +    @Override
-+    public void setEmptinessMap(final boolean[] emptinessMap) {
-+        this.emptinessMap = emptinessMap;
++    public void setSkyEmptinessMap(boolean[] emptinessMap) {
++        this.skyEmptinessMap = emptinessMap;
 +    }
++
++    @Override
++    public boolean[] getBlockEmptinessMap() {
++        return this.blockEmptinessMap;
++    }
++
++    @Override
++    public void setBlockEmptinessMap(boolean[] emptinessMap) {
++        this.blockEmptinessMap = emptinessMap;
++    }
++
 +    // Tuinity end - rewrite light engine
 +
      // Paper start - Anti-Xray - Add world
      @Deprecated public ProtoChunk(ChunkCoordIntPair chunkcoordintpair, ChunkConverter chunkconverter) { this(chunkcoordintpair, chunkconverter, null); } // Notice for updates: Please make sure this constructor isn't used anywhere
      public ProtoChunk(ChunkCoordIntPair chunkcoordintpair, ChunkConverter chunkconverter, World world) {
-@@ -173,20 +209,17 @@ public class ProtoChunk implements IChunkAccess {
+@@ -173,20 +221,17 @@ public class ProtoChunk implements IChunkAccess {
                  ChunkSection chunksection = this.a(j >> 4);
                  IBlockData iblockdata1 = chunksection.setType(i & 15, j & 15, k & 15, iblockdata);
  
@@ -13426,17 +13657,17 @@ index 5b0cd414ca1949ab53b289f7159f18da07d21f14..71c7fca4ea925fee8790c5a4042ad265
 +                HeightMap.Type[] enumset = this.getChunkStatus().heightMaps; // Tuinity - reduce iterator creation
                  EnumSet<HeightMap.Type> enumset1 = null;
 -                Iterator iterator = enumset.iterator();
+-
+-                HeightMap.Type heightmap_type;
 +                // Tuinity - reduce iterator creation
  
--                HeightMap.Type heightmap_type;
--
 -                while (iterator.hasNext()) {
 -                    heightmap_type = (HeightMap.Type) iterator.next();
 +                for (HeightMap.Type heightmap_type : enumset) { // Tuinity - reduce iterator creation
                      HeightMap heightmap = (HeightMap) this.f.get(heightmap_type);
  
                      if (heightmap == null) {
-@@ -202,10 +235,9 @@ public class ProtoChunk implements IChunkAccess {
+@@ -202,10 +247,9 @@ public class ProtoChunk implements IChunkAccess {
                      HeightMap.a(this, enumset1);
                  }
  
@@ -13451,10 +13682,10 @@ index 5b0cd414ca1949ab53b289f7159f18da07d21f14..71c7fca4ea925fee8790c5a4042ad265
                  }
  
 diff --git a/src/main/java/net/minecraft/server/ProtoChunkExtension.java b/src/main/java/net/minecraft/server/ProtoChunkExtension.java
-index 300cbb8b01d94e7eb0cded0c8e118103c416d4b6..0e528df0d9d77f39af1b5c62a29ef31e6ac3b614 100644
+index 300cbb8b01d94e7eb0cded0c8e118103c416d4b6..2d7c86c9a323fb7294607ee5685cef8f9ef52794 100644
 --- a/src/main/java/net/minecraft/server/ProtoChunkExtension.java
 +++ b/src/main/java/net/minecraft/server/ProtoChunkExtension.java
-@@ -8,7 +8,39 @@ import javax.annotation.Nullable;
+@@ -8,7 +8,50 @@ import javax.annotation.Nullable;
  
  public class ProtoChunkExtension extends ProtoChunk {
  
@@ -13483,14 +13714,25 @@ index 300cbb8b01d94e7eb0cded0c8e118103c416d4b6..0e528df0d9d77f39af1b5c62a29ef31e
 +    }
 +
 +    @Override
-+    public boolean[] getEmptinessMap() {
-+        return this.getWrappedChunk().getEmptinessMap();
++    public boolean[] getSkyEmptinessMap() {
++        return this.getWrappedChunk().getSkyEmptinessMap();
 +    }
 +
 +    @Override
-+    public void setEmptinessMap(final boolean[] emptinessMap) {
-+        this.getWrappedChunk().setEmptinessMap(emptinessMap);
++    public void setSkyEmptinessMap(final boolean[] emptinessMap) {
++        this.getWrappedChunk().setSkyEmptinessMap(emptinessMap);
 +    }
++
++    @Override
++    public boolean[] getBlockEmptinessMap() {
++        return this.getWrappedChunk().getBlockEmptinessMap();
++    }
++
++    @Override
++    public void setBlockEmptinessMap(boolean[] emptinessMap) {
++        this.getWrappedChunk().setBlockEmptinessMap(emptinessMap);
++    }
++
 +    // Tuinity end - rewrite light engine
  
      public ProtoChunkExtension(Chunk chunk) {
@@ -14793,7 +15035,7 @@ index 7f05587d42b7cdb09552277ec2e467f0edf06f10..5af554870bcf36e47aef43b966b141b9
          return this.x * this.x + this.y * this.y + this.z * this.z;
      }
 diff --git a/src/main/java/net/minecraft/server/VillagePlace.java b/src/main/java/net/minecraft/server/VillagePlace.java
-index 6a0f07b13eef5560dfc7c7b39618c0b825533aec..731a7b52c1c659b3b985704dea9cf57f6c5bcecb 100644
+index 6a0f07b13eef5560dfc7c7b39618c0b825533aec..fce9967912628c232fe41ccc17fe2296f001ec61 100644
 --- a/src/main/java/net/minecraft/server/VillagePlace.java
 +++ b/src/main/java/net/minecraft/server/VillagePlace.java
 @@ -4,6 +4,7 @@ import com.mojang.datafixers.DataFixer;
@@ -14882,9 +15124,9 @@ index 6a0f07b13eef5560dfc7c7b39618c0b825533aec..731a7b52c1c659b3b985704dea9cf57f
 +
 +    long determineDelay(long coordinate) {
 +        if (this.isEmpty(coordinate)) {
-+            return 60 * 20;
++            return 5 * 60 * 20;
 +        } else {
-+            return 5 * 20;
++            return 60 * 20;
 +        }
 +    }
 +
@@ -16648,7 +16890,7 @@ index 7511e38130f38703164395a670f12d1af648ff04..e602efcb3fad390bb6bff1055e782bba
                  }
                  value.append("},");
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index dc7de2b59ec5ca3e5fba34dbb2aa2e6aed8f95cb..a383ba5e897101a3da1544c877148b43be7a6319 100644
+index 9ad6ea5ef331c3c057f39115d00f855ca57e219b..bd7bccbea1a0a052ef7bd6ab299ae72336874911 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -232,7 +232,7 @@ import javax.annotation.Nullable; // Paper
@@ -16688,7 +16930,7 @@ index dc7de2b59ec5ca3e5fba34dbb2aa2e6aed8f95cb..a383ba5e897101a3da1544c877148b43
      }
  
      @Override
-@@ -2280,6 +2285,14 @@ public final class CraftServer implements Server {
+@@ -2285,6 +2290,14 @@ public final class CraftServer implements Server {
              return com.destroystokyo.paper.PaperConfig.config;
          }
  
