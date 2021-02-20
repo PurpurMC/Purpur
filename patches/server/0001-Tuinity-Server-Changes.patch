@@ -267,12 +267,20 @@ and an action can be defined: DROP or KICK
 
 If interval or rate are less-than 0, the limit is ignored
 
-Optimise closest entity lookup used by AI goals
+Optimise closest entity lookup
 
-Use a special entity slice for tracking entities by class as well
-as counts per chunk. This should reduce the number of entities searched.
+Rewrites the entity slice storage so that entity by
+class lookups look through less entities in total.
 
-Optimise EntityInsentient#checkDespawn
+Also optimise the nearest entity by class method
+used by entity AI as well.
+
+As a sidenote, this entity slice implementation
+removes the async catchers because it has been
+designed to be MT-Safe for reads off of other
+threads.
+
+Optimise nearby player lookups
 
 Use a distance map to map out close players.
 Note that it's important that we cache the distance map value per chunk
@@ -857,198 +865,6 @@ index 7720578796e28d28e8c0c9aa40155cd205c17d54..e5db29d4cadb5702c7d06b0b6e2d0558
              return builder.suggest(literal).buildFuture();
          } else {
              return Suggestions.empty();
-diff --git a/src/main/java/com/tuinity/tuinity/chunk/ChunkEntitiesByClass.java b/src/main/java/com/tuinity/tuinity/chunk/ChunkEntitiesByClass.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..37428f4b9ae45175fda545e9d8b55cf8a3b8c87b
---- /dev/null
-+++ b/src/main/java/com/tuinity/tuinity/chunk/ChunkEntitiesByClass.java
-@@ -0,0 +1,186 @@
-+package com.tuinity.tuinity.chunk;
-+
-+import com.destroystokyo.paper.util.maplist.EntityList;
-+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
-+import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
-+import net.minecraft.server.AxisAlignedBB;
-+import net.minecraft.server.Chunk;
-+import net.minecraft.server.Entity;
-+import net.minecraft.server.MathHelper;
-+import org.spigotmc.AsyncCatcher;
-+import java.util.ArrayList;
-+import java.util.List;
-+import java.util.function.Predicate;
-+
-+public final class ChunkEntitiesByClass {
-+
-+    // this class attempts to restore the original intent of nms.EntitySlice and improve upon it:
-+    // fast lookups for specific entity types in a chunk. However vanilla does not track things on a
-+    // chunk-wide basis, which is very important to our optimisations here: we want to eliminate chunks
-+    // before searching multiple slices. We also want to maintain only lists that we need to maintain for memory purposes:
-+    // so we have no choice but to lazily initialise mappings of class -> entity.
-+    // Typically these are used for entity AI lookups, which means we take a heavy initial cost but ultimately win
-+    // since AI lookups happen a lot.
-+
-+    // This optimisation is only half of the battle with entity AI, we need to be smarter about picking the closest entity.
-+    // See World#getClosestEntity
-+
-+    // aggressively high load factors for each map here + fastutil collections: we want the smallest memory footprint
-+    private final ExposedReference2IntOpenHashMap<Class<?>> chunkWideCount = new ExposedReference2IntOpenHashMap<>(4, 0.9f);
-+    {
-+        this.chunkWideCount.defaultReturnValue(Integer.MIN_VALUE);
-+    }
-+    private final Reference2ObjectOpenHashMap<Class<?>, ArrayList<Entity>>[] slices = new Reference2ObjectOpenHashMap[16];
-+    private final Chunk chunk;
-+
-+    public ChunkEntitiesByClass(final Chunk chunk) {
-+        this.chunk = chunk;
-+    }
-+
-+    public boolean hasEntitiesMaybe(final Class<?> clazz) {
-+        final int count = this.chunkWideCount.getInt(clazz);
-+        return count == Integer.MIN_VALUE || count > 0;
-+    }
-+
-+    public void addEntity(final Entity entity, final int sectionY) {
-+        AsyncCatcher.catchOp("Add entity call");
-+        if (this.chunkWideCount.isEmpty()) {
-+            return;
-+        }
-+
-+        final Object[] keys = this.chunkWideCount.getKey();
-+        final int[] values = this.chunkWideCount.getValue();
-+
-+        Reference2ObjectOpenHashMap<Class<?>, ArrayList<Entity>> slice = this.slices[sectionY];
-+        if (slice == null) {
-+            slice = this.slices[sectionY] = new Reference2ObjectOpenHashMap<>(4, 0.9f);
-+        }
-+
-+        for (int i = 0, len = keys.length; i < len; ++i) {
-+            final Object _key = keys[i];
-+            if (!(_key instanceof Class)) {
-+                continue;
-+            }
-+            final Class<?> key = (Class<?>)_key;
-+            if (key.isInstance(entity)) {
-+                ++values[i];
-+                slice.computeIfAbsent(key, (keyInMap) -> {
-+                    return new ArrayList<>();
-+                }).add(entity);
-+            }
-+        }
-+    }
-+
-+    public void removeEntity(final Entity entity, final int sectionY) {
-+        AsyncCatcher.catchOp("Remove entity call");
-+        if (this.chunkWideCount.isEmpty()) {
-+            return;
-+        }
-+
-+        final Object[] keys = this.chunkWideCount.getKey();
-+        final int[] values = this.chunkWideCount.getValue();
-+
-+        Reference2ObjectOpenHashMap<Class<?>, ArrayList<Entity>> slice = this.slices[sectionY];
-+        if (slice == null) {
-+            return; // seriously brain damaged plugins
-+        }
-+
-+        for (int i = 0, len = keys.length; i < len; ++i) {
-+            final Object _key = keys[i];
-+            if (!(_key instanceof Class)) {
-+                continue;
-+            }
-+            final Class<?> key = (Class<?>)_key;
-+            if (key.isInstance(entity)) {
-+                --values[i];
-+                final ArrayList<Entity> list = slice.get(key);
-+                if (list == null) {
-+                    return; // seriously brain damaged plugins
-+                }
-+                list.remove(entity);
-+            }
-+        }
-+    }
-+
-+
-+    private void computeClass(final Class<?> clazz) {
-+        AsyncCatcher.catchOp("Entity class compute call");
-+        int totalCount = 0;
-+
-+        EntityList entityList = this.chunk.entities;
-+        Entity[] entities = entityList.getRawData();
-+        for (int i = 0, len = entityList.size(); i < len; ++i) {
-+            final Entity entity = entities[i];
-+
-+            if (clazz.isInstance(entity)) {
-+                ++totalCount;
-+                Reference2ObjectOpenHashMap<Class<?>, ArrayList<Entity>> slice = this.slices[entity.chunkY];
-+                if (slice == null) {
-+                    slice = this.slices[entity.chunkY] = new Reference2ObjectOpenHashMap<>(4, 0.9f);
-+                }
-+                slice.computeIfAbsent(clazz, (keyInMap) -> {
-+                    return new ArrayList<>();
-+                }).add(entity);
-+            }
-+        }
-+
-+        this.chunkWideCount.put(clazz, totalCount);
-+    }
-+
-+    public void lookupClass(final Class<?> clazz, final Entity entity, final AxisAlignedBB boundingBox, final Predicate<Entity> predicate, final List<Entity> into) {
-+        final int count = this.chunkWideCount.getInt(clazz);
-+        if (count == Integer.MIN_VALUE) {
-+            this.computeClass(clazz);
-+            if (this.chunkWideCount.getInt(clazz) <= 0) {
-+                return;
-+            }
-+        } else if (count <= 0) {
-+            return;
-+        }
-+
-+        // copied from getEntities
-+        int min = MathHelper.floor((boundingBox.minY - 2.0D) / 16.0D);
-+        int max = MathHelper.floor((boundingBox.maxY + 2.0D) / 16.0D);
-+
-+        min = MathHelper.clamp(min, 0, this.slices.length - 1);
-+        max = MathHelper.clamp(max, 0, this.slices.length - 1);
-+
-+        for (int y = min; y <= max; ++y) {
-+            final Reference2ObjectOpenHashMap<Class<?>, ArrayList<Entity>> slice = this.slices[y];
-+            if (slice == null) {
-+                continue;
-+            }
-+
-+            final ArrayList<Entity> entities = slice.get(clazz);
-+            if (entities == null) {
-+                continue;
-+            }
-+
-+            for (int i = 0, len = entities.size(); i < len; ++i) {
-+                Entity entity1 = entities.get(i);
-+                if (entity1.shouldBeRemoved) continue; // Paper
-+
-+                if (entity1 != entity && entity1.getBoundingBox().intersects(boundingBox)) {
-+                    if (predicate == null || predicate.test(entity1)) {
-+                        into.add(entity1);
-+                    }
-+                }
-+            }
-+        }
-+    }
-+
-+    static final class ExposedReference2IntOpenHashMap<K> extends Reference2IntOpenHashMap<K> {
-+
-+        public ExposedReference2IntOpenHashMap(final int expected, final float loadFactor) {
-+            super(expected, loadFactor);
-+        }
-+
-+        public Object[] getKey() {
-+            return this.key;
-+        }
-+
-+        public int[] getValue() {
-+            return this.value;
-+        }
-+    }
-+}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java b/src/main/java/com/tuinity/tuinity/chunk/SingleThreadChunkRegionManager.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..cae06962d80cdd00962236891472ba815b0ab8cd
@@ -7719,6 +7535,534 @@ index 0000000000000000000000000000000000000000..002abb3cbf0f742e685f2f043d2600de
 +        return this.aabb.voxelShapeIntersect(axisalingedbb);
 +    }
 +}
+diff --git a/src/main/java/com/tuinity/tuinity/world/ChunkEntitySlices.java b/src/main/java/com/tuinity/tuinity/world/ChunkEntitySlices.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9cc14620d26d63a9e8fec7735625b22411b43e98
+--- /dev/null
++++ b/src/main/java/com/tuinity/tuinity/world/ChunkEntitySlices.java
+@@ -0,0 +1,401 @@
++package com.tuinity.tuinity.world;
++
++import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
++import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
++import net.minecraft.server.AxisAlignedBB;
++import net.minecraft.server.Entity;
++import net.minecraft.server.EntityComplexPart;
++import net.minecraft.server.EntityEnderDragon;
++import net.minecraft.server.EntityTypes;
++import net.minecraft.server.MathHelper;
++import net.minecraft.server.World;
++import java.util.Arrays;
++import java.util.Iterator;
++import java.util.List;
++import java.util.function.Predicate;
++
++public final class ChunkEntitySlices {
++
++    private static final int RTREE_THRESHOLD = 20;
++
++    protected final int minSection;
++    protected final int maxSection;
++    protected final int chunkX;
++    protected final int chunkZ;
++    protected final World world;
++
++    protected final EntityCollectionBySection allEntities;
++    protected final EntityCollectionBySection hardCollidingEntities;
++    protected final Reference2ObjectOpenHashMap<Class<? extends Entity>, EntityCollectionBySection> entitiesByClass;
++
++    public ChunkEntitySlices(final World world, final int chunkX, final int chunkZ,
++                             final int minSection, final int maxSection) { // inclusive, inclusive
++        this.minSection = minSection;
++        this.maxSection = maxSection;
++        this.chunkX = chunkX;
++        this.chunkZ = chunkZ;
++        this.world = world;
++
++        this.allEntities = new EntityCollectionBySection(this);
++        this.hardCollidingEntities = new EntityCollectionBySection(this);
++        this.entitiesByClass = new Reference2ObjectOpenHashMap<>();
++    }
++
++    // synchronized is used in this class for write protection, thank you dumbass mods for doing dumb
++    // shit async.
++
++    public synchronized void addEntity(final Entity entity, final int chunkSection) {
++        final int sectionIndex = chunkSection - this.minSection;
++
++        this.allEntities.addEntity(entity, sectionIndex);
++
++        if (entity.hardCollides()) {
++            this.hardCollidingEntities.addEntity(entity, sectionIndex);
++        }
++
++        for (final Iterator<Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection>> iterator =
++             this.entitiesByClass.reference2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
++            final Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection> entry = iterator.next();
++
++            if (entry.getKey().isInstance(entity)) {
++                entry.getValue().addEntity(entity, sectionIndex);
++            }
++        }
++    }
++
++    public synchronized void removeEntity(final Entity entity, final int chunkSection) {
++        final int sectionIndex = chunkSection - this.minSection;
++
++        this.allEntities.removeEntity(entity, sectionIndex);
++
++        if (entity.hardCollides()) {
++            this.hardCollidingEntities.removeEntity(entity, sectionIndex);
++        }
++
++        for (final Iterator<Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection>> iterator =
++             this.entitiesByClass.reference2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
++            final Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection> entry = iterator.next();
++
++            if (entry.getKey().isInstance(entity)) {
++                entry.getValue().removeEntity(entity, sectionIndex);
++            }
++        }
++    }
++
++    public void getHardCollidingEntities(final Entity except, final AxisAlignedBB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
++        this.hardCollidingEntities.getEntities(except, box, into, predicate);
++    }
++
++    public void getEntities(final Entity except, final AxisAlignedBB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
++        this.allEntities.getEntitiesWithEnderDragonParts(except, box, into, predicate);
++    }
++
++    public <T extends Entity> void getEntities(final EntityTypes<?> type, final AxisAlignedBB box, final List<? super T> into,
++                                               final Predicate<? super T> predicate) {
++        this.allEntities.getEntities(type, box, (List)into, (Predicate)predicate);
++    }
++
++    protected EntityCollectionBySection initClass(final Class<? extends Entity> clazz) {
++        final EntityCollectionBySection ret = new EntityCollectionBySection(this);
++
++        for (int sectionIndex = 0; sectionIndex < this.allEntities.entitiesBySection.length; ++sectionIndex) {
++            final BasicEntityList<Entity> sectionEntities = this.allEntities.entitiesBySection[sectionIndex];
++            if (sectionEntities == null) {
++                continue;
++            }
++
++            final Entity[] storage = sectionEntities.storage;
++
++            for (int i = 0, len = Math.min(storage.length, sectionEntities.size()); i < len; ++i) {
++                final Entity entity = storage[i];
++
++                if (clazz.isInstance(entity)) {
++                    ret.addEntity(entity, sectionIndex);
++                }
++            }
++        }
++
++        return ret;
++    }
++
++    public <T extends Entity> void getEntities(final Class<? extends T> clazz, final Entity except, final AxisAlignedBB box, final List<? super T> into,
++                                               final Predicate<? super T> predicate) {
++        EntityCollectionBySection collection = this.entitiesByClass.get(clazz);
++        if (collection != null) {
++            collection.getEntities(except, box, (List)into, (Predicate)predicate);
++        } else {
++            synchronized (this) {
++                this.entitiesByClass.putIfAbsent(clazz, collection = this.initClass(clazz));
++            }
++            collection.getEntities(except, box, (List)into, (Predicate)predicate);
++        }
++    }
++
++    public synchronized void updateEntity(final Entity entity) {
++        /*// TODO
++        if (prev aabb != entity.getBoundingBox()) {
++            this.entityMap.delete(entity, prev aabb);
++            this.entityMap.insert(entity, prev aabb = entity.getBoundingBox());
++        }*/
++    }
++
++    protected static final class BasicEntityList<E extends Entity> {
++
++        protected static final Entity[] EMPTY = new Entity[0];
++        protected static final int DEFAULT_CAPACITY = 4;
++
++        protected E[] storage;
++        protected int size;
++
++        public BasicEntityList() {
++            this(0);
++        }
++
++        public BasicEntityList(final int cap) {
++            this.storage = (E[])(cap <= 0 ? EMPTY : new Entity[cap]);
++        }
++
++        public boolean isEmpty() {
++            return this.size == 0;
++        }
++
++        public int size() {
++            return this.size;
++        }
++
++        private void resize() {
++            if (this.storage == EMPTY) {
++                this.storage = (E[])new Entity[DEFAULT_CAPACITY];
++            } else {
++                this.storage = Arrays.copyOf(this.storage, this.storage.length * 2);
++            }
++        }
++
++        public void add(final E entity) {
++            final int idx = this.size++;
++            if (idx >= this.storage.length) {
++                this.resize();
++                this.storage[idx] = entity;
++            } else {
++                this.storage[idx] = entity;
++            }
++        }
++
++        public int indexOf(final E entity) {
++            final E[] storage = this.storage;
++
++            for (int i = 0, len = Math.min(this.storage.length, this.size); i < len; ++i) {
++                if (storage[i] == entity) {
++                    return i;
++                }
++            }
++
++            return -1;
++        }
++
++        public boolean remove(final E entity) {
++            final int idx = this.indexOf(entity);
++            if (idx == -1) {
++                return false;
++            }
++
++            final int size = --this.size;
++            final E[] storage = this.storage;
++            if (idx != size) {
++                System.arraycopy(storage, idx + 1, storage, idx, size - idx);
++            }
++
++            storage[size] = null;
++
++            return true;
++        }
++
++        public boolean has(final E entity) {
++            return this.indexOf(entity) != -1;
++        }
++    }
++
++    protected static final class EntityCollectionBySection {
++
++        protected final ChunkEntitySlices manager;
++        protected final long[] nonEmptyBitset;
++        protected final BasicEntityList<Entity>[] entitiesBySection;
++        protected int count;
++
++        public EntityCollectionBySection(final ChunkEntitySlices manager) {
++            this.manager = manager;
++
++            final int sectionCount = manager.maxSection - manager.minSection + 1;
++
++            this.nonEmptyBitset = new long[(sectionCount + (Long.SIZE - 1)) >>> 6]; // (sectionCount + (Long.SIZE - 1)) / Long.SIZE
++            this.entitiesBySection = new BasicEntityList[sectionCount];
++        }
++
++        public void addEntity(final Entity entity, final int sectionIndex) {
++            BasicEntityList<Entity> list = this.entitiesBySection[sectionIndex];
++
++            if (list != null && list.has(entity)) {
++                return;
++            }
++
++            if (list == null) {
++                this.entitiesBySection[sectionIndex] = list = new BasicEntityList<>();
++                this.nonEmptyBitset[sectionIndex >>> 6] |= (1L << (sectionIndex & (Long.SIZE - 1)));
++            }
++
++            list.add(entity);
++            ++this.count;
++        }
++
++        public void removeEntity(final Entity entity, final int sectionIndex) {
++            final BasicEntityList<Entity> list = this.entitiesBySection[sectionIndex];
++
++            if (list == null || !list.remove(entity)) {
++                return;
++            }
++
++            --this.count;
++
++            if (list.isEmpty()) {
++                this.entitiesBySection[sectionIndex] = null;
++                this.nonEmptyBitset[sectionIndex >>> 6] ^= (1L << (sectionIndex & (Long.SIZE - 1)));
++            }
++        }
++
++        public void getEntities(final Entity except, final AxisAlignedBB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
++            if (this.count == 0) {
++                return;
++            }
++
++            final int minSection = this.manager.minSection;
++            final int maxSection = this.manager.maxSection;
++
++            final int min = MathHelper.clamp(MathHelper.floor(box.minY - 2.0) >> 4, minSection, maxSection);
++            final int max = MathHelper.clamp(MathHelper.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
++
++            // TODO use the bitset
++
++            final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
++
++            for (int section = min; section <= max; ++section) {
++                final BasicEntityList<Entity> list = entitiesBySection[section - minSection];
++
++                if (list == null) {
++                    continue;
++                }
++
++                final Entity[] storage = list.storage;
++
++                for (int i = 0, len = Math.min(storage.length, list.size()); i < len; ++i) {
++                    final Entity entity = storage[i];
++
++                    if (entity == null || entity == except || !entity.getBoundingBox().intersects(box)) {
++                        continue;
++                    }
++
++                    if (predicate != null && !predicate.test(entity)) {
++                        continue;
++                    }
++
++                    into.add(entity);
++                }
++            }
++        }
++
++        public void getEntitiesWithEnderDragonParts(final Entity except, final AxisAlignedBB box, final List<Entity> into,
++                                                    final Predicate<? super Entity> predicate) {
++            if (this.count == 0) {
++                return;
++            }
++
++            final int minSection = this.manager.minSection;
++            final int maxSection = this.manager.maxSection;
++
++            final int min = MathHelper.clamp(MathHelper.floor(box.minY - 2.0) >> 4, minSection, maxSection);
++            final int max = MathHelper.clamp(MathHelper.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
++
++            // TODO use the bitset
++
++            final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
++
++            for (int section = min; section <= max; ++section) {
++                final BasicEntityList<Entity> list = entitiesBySection[section - minSection];
++
++                if (list == null) {
++                    continue;
++                }
++
++                final Entity[] storage = list.storage;
++
++                for (int i = 0, len = Math.min(storage.length, list.size()); i < len; ++i) {
++                    final Entity entity = storage[i];
++
++                    if (entity == null || entity == except || !entity.getBoundingBox().intersects(box)) {
++                        continue;
++                    }
++
++                    if (predicate != null && !predicate.test(entity)) {
++                        continue;
++                    }
++
++                    into.add(entity);
++
++                    if (entity instanceof EntityEnderDragon) {
++                        for (final EntityComplexPart part : ((EntityEnderDragon)entity).children) {
++                            if (part == except || !part.getBoundingBox().intersects(box)) {
++                                continue;
++                            }
++
++                            if (predicate != null && !predicate.test(part)) {
++                                continue;
++                            }
++
++                            into.add(part);
++                        }
++                    }
++                }
++            }
++        }
++
++        public <T extends Entity> void getEntities(final EntityTypes<?> type, final AxisAlignedBB box, final List<? super T> into,
++                                                   final Predicate<? super T> predicate) {
++            if (this.count == 0) {
++                return;
++            }
++
++            final int minSection = this.manager.minSection;
++            final int maxSection = this.manager.maxSection;
++
++            final int min = MathHelper.clamp(MathHelper.floor(box.minY - 2.0) >> 4, minSection, maxSection);
++            final int max = MathHelper.clamp(MathHelper.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
++
++            // TODO use the bitset
++
++            final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
++
++            for (int section = min; section <= max; ++section) {
++                final BasicEntityList<Entity> list = entitiesBySection[section - minSection];
++
++                if (list == null) {
++                    continue;
++                }
++
++                final Entity[] storage = list.storage;
++
++                for (int i = 0, len = Math.min(storage.length, list.size()); i < len; ++i) {
++                    final Entity entity = storage[i];
++
++                    if (entity == null || (type != null && entity.getEntityType() != type) || !entity.getBoundingBox().intersects(box)) {
++                        continue;
++                    }
++
++                    if (predicate != null && !predicate.test((T)entity)) {
++                        continue;
++                    }
++
++                    into.add((T)entity);
++                }
++            }
++        }
++    }
++}
+diff --git a/src/main/java/com/tuinity/tuinity/world/EntitySliceManager.java b/src/main/java/com/tuinity/tuinity/world/EntitySliceManager.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..000ab23a48186d6b910c62e6922af3b85c198fca
+--- /dev/null
++++ b/src/main/java/com/tuinity/tuinity/world/EntitySliceManager.java
+@@ -0,0 +1,115 @@
++package com.tuinity.tuinity.world;
++
++import com.tuinity.tuinity.util.CoordinateUtils;
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
++import net.minecraft.server.WorldServer;
++import java.util.concurrent.locks.StampedLock;
++
++public final class EntitySliceManager {
++
++    protected static final int REGION_SHIFT = 5;
++    protected static final int REGION_MASK = (1 << REGION_SHIFT) - 1;
++    protected static final int REGION_SIZE = 1 << REGION_SHIFT;
++
++    public final WorldServer world;
++
++    private final StampedLock stateLock = new StampedLock();
++    protected final Long2ObjectOpenHashMap<ChunkSlicesRegion> regions = new Long2ObjectOpenHashMap<>(32, 0.7f);
++
++    public EntitySliceManager(final WorldServer world) {
++        this.world = world;
++    }
++
++    public ChunkSlicesRegion getRegion(final int regionX, final int regionZ) {
++        final long key = CoordinateUtils.getChunkKey(regionX, regionZ);
++        final long attempt = this.stateLock.tryOptimisticRead();
++        if (attempt != 0L) {
++            try {
++                final ChunkSlicesRegion ret = this.regions.get(key);
++
++                if (this.stateLock.validate(attempt)) {
++                    return ret;
++                }
++            } catch (final Error error) {
++                throw error;
++            } catch (final Throwable thr) {
++                // ignore
++            }
++        }
++
++        this.stateLock.readLock();
++        try {
++            return this.regions.get(key);
++        } finally {
++            this.stateLock.tryUnlockRead();
++        }
++    }
++
++    public synchronized void removeChunk(final int chunkX, final int chunkZ) {
++        final long key = CoordinateUtils.getChunkKey(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT);
++        final int relIndex = (chunkX & REGION_MASK) | ((chunkZ & REGION_MASK) << REGION_SHIFT);
++
++        final ChunkSlicesRegion region = this.regions.get(key);
++        final int remaining = region.remove(relIndex);
++
++        if (remaining == 0) {
++            this.stateLock.writeLock();
++            try {
++                this.regions.remove(key);
++            } finally {
++                this.stateLock.tryUnlockWrite();
++            }
++        }
++    }
++
++    public synchronized void addChunk(final int chunkX, final int chunkZ, final ChunkEntitySlices slices) {
++        final long key = CoordinateUtils.getChunkKey(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT);
++        final int relIndex = (chunkX & REGION_MASK) | ((chunkZ & REGION_MASK) << REGION_SHIFT);
++
++        ChunkSlicesRegion region = this.regions.get(key);
++        if (region != null) {
++            region.add(relIndex, slices);
++        } else {
++            region = new ChunkSlicesRegion();
++            region.add(relIndex, slices);
++            this.stateLock.writeLock();
++            try {
++                this.regions.put(key, region);
++            } finally {
++                this.stateLock.tryUnlockWrite();
++            }
++        }
++    }
++
++    public static final class ChunkSlicesRegion {
++
++        protected final ChunkEntitySlices[] slices = new ChunkEntitySlices[REGION_SIZE * REGION_SIZE];
++        protected int sliceCount;
++
++        public ChunkEntitySlices get(final int index) {
++            return this.slices[index];
++        }
++
++        public int remove(final int index) {
++            final ChunkEntitySlices slices = this.slices[index];
++            if (slices == null) {
++                throw new IllegalStateException();
++            }
++
++            this.slices[index] = null;
++
++            return --this.sliceCount;
++        }
++
++        public void add(final int index, final ChunkEntitySlices slices) {
++            final ChunkEntitySlices curr = this.slices[index];
++            if (curr != null) {
++                throw new IllegalStateException();
++            }
++
++            this.slices[index] = slices;
++
++            ++this.sliceCount;
++        }
++    }
++}
 diff --git a/src/main/java/net/minecraft/server/AxisAlignedBB.java b/src/main/java/net/minecraft/server/AxisAlignedBB.java
 index ed9b2f9adfecdc6d1b9925579ec510657adde11f..5c3d5b22b833d9f835e17803295b87893fd05e62 100644
 --- a/src/main/java/net/minecraft/server/AxisAlignedBB.java
@@ -8626,60 +8970,18 @@ index 2d887af902a33b0e28d8f0a6ac2e59c815a7856e..2291135eaef64c403183724cb6e413cd
          @Override
          public BlockPosition immutableCopy() {
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
-index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa58272526 100644
+index 3bcd63a754538ccfc5965207a8fc79faa31925c0..8fda4702764e80dae93ef9c0eb53abc198642ab1 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
 +++ b/src/main/java/net/minecraft/server/Chunk.java
-@@ -91,6 +91,197 @@ public class Chunk implements IChunkAccess {
+@@ -91,6 +91,158 @@ public class Chunk implements IChunkAccess {
      private final int[] inventoryEntityCounts = new int[16];
      // Paper end
  
 +    // Tuinity start - optimise hard collision handling
-+    final com.destroystokyo.paper.util.maplist.EntityList[] hardCollidingEntities = new com.destroystokyo.paper.util.maplist.EntityList[16];
-+
-+    {
-+        for (int i = 0, len = this.hardCollidingEntities.length; i < len; ++i) {
-+            this.hardCollidingEntities[i] = new com.destroystokyo.paper.util.maplist.EntityList();
-+        }
-+    }
++    // Tuinity - optimised entity slices
 +
 +    public final void getHardCollidingEntities(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> into, Predicate<Entity> predicate) {
-+        // copied from getEntities
-+        int min = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
-+        int max = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
-+
-+        min = MathHelper.clamp(min, 0, this.hardCollidingEntities.length - 1);
-+        max = MathHelper.clamp(max, 0, this.hardCollidingEntities.length - 1);
-+
-+        for (int k = min; k <= max; ++k) {
-+            com.destroystokyo.paper.util.maplist.EntityList entityList = this.hardCollidingEntities[k];
-+            Entity[] entities = entityList.getRawData();
-+
-+            for (int i = 0, len = entityList.size(); i < len; ++i) {
-+                Entity entity1 = entities[i];
-+                if (entity1.shouldBeRemoved) continue; // Paper
-+
-+                if (entity1 != entity && entity1.getBoundingBox().intersects(axisalignedbb)) {
-+                    if (predicate == null || predicate.test(entity1)) {
-+                        into.add(entity1);
-+                    }
-+
-+                    if (!(entity1 instanceof EntityEnderDragon)) {
-+                        continue;
-+                    }
-+
-+                    EntityComplexPart[] aentitycomplexpart = ((EntityEnderDragon)entity1).children;
-+                    int l = aentitycomplexpart.length;
-+
-+                    for (int i1 = 0; i1 < l; ++i1) {
-+                        EntityComplexPart entitycomplexpart = aentitycomplexpart[i1];
-+
-+                        if (entitycomplexpart != entity && entitycomplexpart.getBoundingBox().intersects(axisalignedbb) && (predicate == null || predicate.test(entitycomplexpart))) {
-+                            into.add(entitycomplexpart);
-+                        }
-+                    }
-+                }
-+            }
-+        }
++        this.entitySlicesManager.getHardCollidingEntities(entity, axisalignedbb, into, predicate); // Tuinity
 +    }
 +    // Tuinity end - optimise hard collision handling
 +    // Tuinity start - rewrite light engine
@@ -8729,25 +9031,28 @@ index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa
 +    }
 +    // Tuinity end - rewrite light engine
 +
-+    // Tuinity start - entity slices by class
-+    private final com.tuinity.tuinity.chunk.ChunkEntitiesByClass entitiesByClass = new com.tuinity.tuinity.chunk.ChunkEntitiesByClass(this);
++    // Tuinity start - optimised entity slices
++    protected final com.tuinity.tuinity.world.ChunkEntitySlices entitySlicesManager;
 +
-+    public boolean hasEntitiesMaybe(Class<?> clazz) {
-+        return this.entitiesByClass.hasEntitiesMaybe(clazz);
++    public final boolean hasEntitiesMaybe(Class<?> clazz) { // Tuinity start
++        return true; // Tuinity end
 +    }
 +
 +    public final void getEntitiesClass(Class<?> clazz, Entity entity, AxisAlignedBB boundingBox, Predicate<Entity> predicate, List<Entity> into) {
-+        if (!org.bukkit.Bukkit.isPrimaryThread()) {
-+            this.getEntities((Class)clazz, boundingBox, (List)into, (Predicate)predicate);
-+            return;
-+        }
-+        this.entitiesByClass.lookupClass(clazz, entity, boundingBox, predicate, into);
++        this.entitySlicesManager.getEntities((Class)clazz, entity, boundingBox, (List)into, (Predicate)predicate); // Tuinity
 +    }
-+    // Tuinity end - entity slices by class
++    // Tuinity end - optimised entity slices
 +
 +    // Tuinity start - optimise checkDespawn
 +    private boolean playerGeneralAreaCacheSet;
 +    private com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<EntityPlayer> playerGeneralAreaCache;
++
++    public com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<EntityPlayer> getPlayerGeneralAreaCache() {
++        if (!this.playerGeneralAreaCacheSet) {
++            this.updateGeneralAreaCache();
++        }
++        return this.playerGeneralAreaCache;
++    }
 +
 +    void updateGeneralAreaCache() {
 +        this.updateGeneralAreaCache(((WorldServer)this.world).getChunkProvider().playerChunkMap.playerGeneralAreaMap.getObjectsInRange(this.coordinateKey));
@@ -8758,7 +9063,7 @@ index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa
 +        this.playerGeneralAreaCache = value;
 +    }
 +
-+    public EntityPlayer findNearestPlayer(Entity to, Predicate<Entity> predicate) {
++    public EntityPlayer findNearestPlayer(double sourceX, double sourceY, double sourceZ, double maxRange, Predicate<Entity> predicate) {
 +        if (!this.playerGeneralAreaCacheSet) {
 +            this.updateGeneralAreaCache();
 +        }
@@ -8770,7 +9075,7 @@ index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa
 +        }
 +
 +        Object[] backingSet = nearby.getBackingSet();
-+        double closestDistance = Double.MAX_VALUE;
++        double closestDistance = maxRange < 0.0 ? Double.MAX_VALUE : maxRange * maxRange;
 +        EntityPlayer closest = null;
 +        for (int i = 0, len = backingSet.length; i < len; ++i) {
 +            Object _player = backingSet[i];
@@ -8779,7 +9084,7 @@ index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa
 +            }
 +            EntityPlayer player = (EntityPlayer)_player;
 +
-+            double distance = to.getDistanceSquared(player.locX(), player.locY(), player.locZ());
++            double distance = player.getDistanceSquared(sourceX, sourceY, sourceZ);
 +            if (distance < closestDistance && predicate.test(player)) {
 +                closest = player;
 +                closestDistance = distance;
@@ -8789,7 +9094,7 @@ index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa
 +        return closest;
 +    }
 +
-+    public void getNearestPlayers(Entity source, Predicate<Entity> predicate, double range, List<EntityPlayer> ret) {
++    public void getNearestPlayers(double sourceX, double sourceY, double sourceZ, Predicate<Entity> predicate, double range, List<EntityPlayer> ret) {
 +        if (!this.playerGeneralAreaCacheSet) {
 +            this.updateGeneralAreaCache();
 +        }
@@ -8811,7 +9116,7 @@ index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa
 +            EntityPlayer player = (EntityPlayer)_player;
 +
 +            if (range >= 0.0) {
-+                double distanceSquared = player.getDistanceSquared(source.locX(), source.locY(), source.locZ());
++                double distanceSquared = player.getDistanceSquared(sourceX, sourceY, sourceZ);
 +                if (distanceSquared > rangeSquared) {
 +                    continue;
 +                }
@@ -8827,7 +9132,15 @@ index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa
      public Chunk(World world, ChunkCoordIntPair chunkcoordintpair, BiomeStorage biomestorage, ChunkConverter chunkconverter, TickList<Block> ticklist, TickList<FluidType> ticklist1, long i, @Nullable ChunkSection[] achunksection, @Nullable Consumer<Chunk> consumer) {
          this.sections = new ChunkSection[16];
          this.e = Maps.newHashMap();
-@@ -298,6 +489,12 @@ public class Chunk implements IChunkAccess {
+@@ -134,6 +286,7 @@ public class Chunk implements IChunkAccess {
+ 
+         // CraftBukkit start
+         this.bukkitChunk = new org.bukkit.craftbukkit.CraftChunk(this);
++        this.entitySlicesManager = new com.tuinity.tuinity.world.ChunkEntitySlices(this.world, this.loc.x, this.loc.z, 0, 15); // TODO update for 1.17 // Tuinity
+     }
+ 
+     public org.bukkit.Chunk bukkitChunk;
+@@ -298,6 +451,12 @@ public class Chunk implements IChunkAccess {
  
      public Chunk(World world, ProtoChunk protochunk) {
          this(world, protochunk.getPos(), protochunk.getBiomeIndex(), protochunk.p(), protochunk.n(), protochunk.o(), protochunk.getInhabitedTime(), protochunk.getSections(), (Consumer) null);
@@ -8840,34 +9153,149 @@ index 3bcd63a754538ccfc5965207a8fc79faa31925c0..68d6fb69a0c1b98b3c11b6d80783faaa
          Iterator iterator = protochunk.y().iterator();
  
          while (iterator.hasNext()) {
-@@ -594,8 +791,8 @@ public class Chunk implements IChunkAccess {
+@@ -594,8 +753,9 @@ public class Chunk implements IChunkAccess {
          entity.chunkX = this.loc.x;
          entity.chunkY = k;
          entity.chunkZ = this.loc.z;
 -        this.entities.add(entity); // Paper - per chunk entity list
 -        this.entitySlices[k].add(entity);
-+        this.entities.add(entity); this.entitiesByClass.addEntity(entity, entity.chunkY); // Paper - per chunk entity list // Tuinity - entities by class
-+        this.entitySlices[k].add(entity); if (entity.hardCollides()) this.hardCollidingEntities[k].add(entity); // Tuinity - optimise hard colliding entities
++        this.entities.add(entity); // Tuinity
++        this.entitySlices[k].add(entity);  // Tuinity
++        this.entitySlicesManager.addEntity(entity, k); // Tuinity
          // Paper start
          if (entity instanceof EntityItem) {
              itemCounts[k]++;
-@@ -633,7 +830,7 @@ public class Chunk implements IChunkAccess {
+@@ -633,7 +793,8 @@ public class Chunk implements IChunkAccess {
              entity.entitySlice = null;
              entity.inChunk = false;
          }
 -        if (!this.entitySlices[i].remove(entity)) {
-+        if (entity.hardCollides()) this.hardCollidingEntities[i].remove(entity); this.entitiesByClass.removeEntity(entity, i); if (!this.entitySlices[i].remove(entity)) { // Tuinity - optimise hard colliding entities // Tuinity - entities by class
++        this.entitySlicesManager.removeEntity(entity, i); // Tuinity
++        if (!this.entitySlices[i].remove(entity)) { // Tuinity - optimise hard colliding entities // Tuinity - entities by class // Tuinity
              return;
          }
          if (entity instanceof EntityItem) {
-@@ -946,6 +1143,7 @@ public class Chunk implements IChunkAccess {
+@@ -876,116 +1037,18 @@ public class Chunk implements IChunkAccess {
+     }
+ 
+     public void a(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> list, @Nullable Predicate<? super Entity> predicate) {
+-        org.spigotmc.AsyncCatcher.catchOp("Chunk getEntities call"); // Spigot
+-        int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
+-        int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
+-
+-        i = MathHelper.clamp(i, 0, this.entitySlices.length - 1);
+-        j = MathHelper.clamp(j, 0, this.entitySlices.length - 1);
+-
+-        for (int k = i; k <= j; ++k) {
+-            List<Entity> entityslice = this.entitySlices[k]; // Spigot
+-            List<Entity> list1 = entityslice; // Spigot
+-            int l = list1.size();
+-
+-            for (int i1 = 0; i1 < l; ++i1) {
+-                Entity entity1 = (Entity) list1.get(i1);
+-                if (entity1.shouldBeRemoved) continue; // Paper
+-
+-                if (entity1.getBoundingBox().c(axisalignedbb) && entity1 != entity) {
+-                    if (predicate == null || predicate.test(entity1)) {
+-                        list.add(entity1);
+-                    }
+-
+-                    if (entity1 instanceof EntityEnderDragon) {
+-                        EntityComplexPart[] aentitycomplexpart = ((EntityEnderDragon) entity1).eJ();
+-                        int j1 = aentitycomplexpart.length;
+-
+-                        for (int k1 = 0; k1 < j1; ++k1) {
+-                            EntityComplexPart entitycomplexpart = aentitycomplexpart[k1];
+-
+-                            if (entitycomplexpart != entity && entitycomplexpart.getBoundingBox().c(axisalignedbb) && (predicate == null || predicate.test(entitycomplexpart))) {
+-                                list.add(entitycomplexpart);
+-                            }
+-                        }
+-                    }
+-                }
+-            }
+-        }
++        this.entitySlicesManager.getEntities(entity, axisalignedbb, list, predicate); // Tuinity - optimised entity slices
+ 
+     }
+ 
+     public <T extends Entity> void a(@Nullable EntityTypes<?> entitytypes, AxisAlignedBB axisalignedbb, List<? super T> list, Predicate<? super T> predicate) {
+-        org.spigotmc.AsyncCatcher.catchOp("Chunk getEntities call"); // Spigot
+-        int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
+-        int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
+-
+-        i = MathHelper.clamp(i, 0, this.entitySlices.length - 1);
+-        j = MathHelper.clamp(j, 0, this.entitySlices.length - 1);
+-
+-        for (int k = i; k <= j; ++k) {
+-            Iterator iterator = this.entitySlices[k].iterator(); // Spigot
+-
+-            // Paper start - Don't search for inventories if we have none, and that is all we want
+-            /*
+-             * We check if they want inventories by seeing if it is the static `IEntitySelector.d`
+-             *
+-             * Make sure the inventory selector stays in sync.
+-             * It should be the one that checks `var1 instanceof IInventory && var1.isAlive()`
+-             */
+-            if (predicate == IEntitySelector.isInventory() && inventoryEntityCounts[k] <= 0) continue;
+-            while (iterator.hasNext()) {
+-                T entity = (T) iterator.next(); // CraftBukkit - decompile error
+-                if (entity.shouldBeRemoved) continue; // Paper
+-
+-                if ((entitytypes == null || entity.getEntityType() == entitytypes) && entity.getBoundingBox().c(axisalignedbb) && predicate.test(entity)) {
+-                    list.add(entity);
+-                }
+-            }
+-        }
++        this.entitySlicesManager.getEntities(entitytypes, axisalignedbb, (List)list, (Predicate)predicate); // Tuinity - optimised entity slices
  
      }
  
 +    public final <T extends Entity> void getEntities(Class<? extends T> oclass, AxisAlignedBB axisalignedbb, List<T> list, @Nullable Predicate<? super T> predicate) { this.a(oclass, axisalignedbb, list, predicate); } // Tuinity - OBFHELPER
      public <T extends Entity> void a(Class<? extends T> oclass, AxisAlignedBB axisalignedbb, List<T> list, @Nullable Predicate<? super T> predicate) {
-         org.spigotmc.AsyncCatcher.catchOp("Chunk getEntities call"); // Spigot
-         int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
+-        org.spigotmc.AsyncCatcher.catchOp("Chunk getEntities call"); // Spigot
+-        int i = MathHelper.floor((axisalignedbb.minY - 2.0D) / 16.0D);
+-        int j = MathHelper.floor((axisalignedbb.maxY + 2.0D) / 16.0D);
+-
+-        i = MathHelper.clamp(i, 0, this.entitySlices.length - 1);
+-        j = MathHelper.clamp(j, 0, this.entitySlices.length - 1);
+-
+-        // Paper start
+-        int[] counts;
+-        if (EntityItem.class.isAssignableFrom(oclass)) {
+-            counts = itemCounts;
+-        } else if (IInventory.class.isAssignableFrom(oclass)) {
+-            counts = inventoryEntityCounts;
+-        } else {
+-            counts = null;
+-        }
+-        // Paper end
+-        for (int k = i; k <= j; ++k) {
+-            if (counts != null && counts[k] <= 0) continue; // Paper - Don't check a chunk if it doesn't have the type we are looking for
+-            Iterator iterator = this.entitySlices[k].iterator(); // Spigot
+-
+-            // Paper start - Don't search for inventories if we have none, and that is all we want
+-            /*
+-             * We check if they want inventories by seeing if it is the static `IEntitySelector.d`
+-             *
+-             * Make sure the inventory selector stays in sync.
+-             * It should be the one that checks `var1 instanceof IInventory && var1.isAlive()`
+-             */
+-            if (predicate == IEntitySelector.isInventory() && inventoryEntityCounts[k] <= 0) continue;
+-            // Paper end
+-            while (iterator.hasNext()) {
+-                T t0 = (T) iterator.next(); // CraftBukkit - decompile error
+-                if (t0.shouldBeRemoved) continue; // Paper
+-
+-                if (oclass.isInstance(t0) && t0.getBoundingBox().c(axisalignedbb) && (predicate == null || predicate.test(t0))) { // Spigot - instance check
+-                    list.add(t0);
+-                }
+-            }
+-        }
++        this.entitySlicesManager.getEntities(oclass, null, axisalignedbb, list, predicate); // Tuinity - optimised entity slices
+ 
+     }
+ 
 diff --git a/src/main/java/net/minecraft/server/ChunkCache.java b/src/main/java/net/minecraft/server/ChunkCache.java
 index 8eecdcde510661ec3a13a25a04ba394f6b6dc012..ab1085091fefea3a3fa15f7028bec050d00a6f5e 100644
 --- a/src/main/java/net/minecraft/server/ChunkCache.java
@@ -9233,7 +9661,7 @@ index 76f9bb728def91744910d0b680b73e753f1a2b26..7f3887b0894aca0f972922f434382646
  
          for (java.util.Iterator<Entry<ArraySetSorted<Ticket<?>>>> iterator = this.tickets.long2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
 diff --git a/src/main/java/net/minecraft/server/ChunkProviderServer.java b/src/main/java/net/minecraft/server/ChunkProviderServer.java
-index 0ea1b25bf98d71c251351807fa92d4d08eb6b06e..fdbf984e64f135abfdee465d76eb1112bccfa8c3 100644
+index 0ea1b25bf98d71c251351807fa92d4d08eb6b06e..18270d44185b0ec41b9b6e1d2135e7aae3b33261 100644
 --- a/src/main/java/net/minecraft/server/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/ChunkProviderServer.java
 @@ -22,6 +22,12 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap; // Paper
@@ -9526,7 +9954,14 @@ index 0ea1b25bf98d71c251351807fa92d4d08eb6b06e..fdbf984e64f135abfdee465d76eb1112
          this.world.timings.doChunkUnload.stopTiming(); // Spigot
          this.world.getMethodProfiler().exit();
          this.clearCache();
-@@ -821,19 +1002,23 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -816,24 +997,30 @@ public class ChunkProviderServer extends IChunkProvider {
+             // Paper end
+             this.world.timings.countNaturalMobs.stopTiming(); // Paper - timings
+ 
++            int ticked = 0; // Tuinity - exec chunk tasks during world tick
++
+             this.p = spawnercreature_d;
+             this.world.getMethodProfiler().exit();
              //List<PlayerChunk> list = Lists.newArrayList(this.playerChunkMap.f()); // Paper
              //Collections.shuffle(list); // Paper
              // Paper - moved up
@@ -9558,12 +9993,12 @@ index 0ea1b25bf98d71c251351807fa92d4d08eb6b06e..fdbf984e64f135abfdee465d76eb1112
                          ChunkCoordIntPair chunkcoordintpair = playerchunk.i();
  
                          if (!this.playerChunkMap.isOutsideOfRange(playerchunk, chunkcoordintpair, false)) { // Paper - optimise isOutsideOfRange
-@@ -845,11 +1030,15 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -845,11 +1032,15 @@ public class ChunkProviderServer extends IChunkProvider {
                              this.world.timings.chunkTicks.startTiming(); // Spigot // Paper
                              this.world.a(chunk, k);
                              this.world.timings.chunkTicks.stopTiming(); // Spigot // Paper
 -                            if (chunksTicked[0]++ % 10 == 0) this.world.getMinecraftServer().midTickLoadChunks(); // Paper
-+                            MinecraftServer.getServer().executeMidTickTasks(); // Tuinity - exec chunk tasks during world tick
++                            if ((++ticked & 1) == 0) MinecraftServer.getServer().executeMidTickTasks(); // Tuinity - exec chunk tasks during world tick
                          }
                      }
                  }
@@ -9576,7 +10011,7 @@ index 0ea1b25bf98d71c251351807fa92d4d08eb6b06e..fdbf984e64f135abfdee465d76eb1112
              this.world.getMethodProfiler().enter("customSpawners");
              if (flag1) {
                  try (co.aikar.timings.Timing ignored = this.world.timings.miscMobSpawning.startTiming()) { // Paper - timings
-@@ -861,7 +1050,25 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -861,7 +1052,25 @@ public class ChunkProviderServer extends IChunkProvider {
              this.world.getMethodProfiler().exit();
          }
  
@@ -9602,7 +10037,7 @@ index 0ea1b25bf98d71c251351807fa92d4d08eb6b06e..fdbf984e64f135abfdee465d76eb1112
      }
  
      private void a(long i, Consumer<Chunk> consumer) {
-@@ -1001,51 +1208,18 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -1001,51 +1210,18 @@ public class ChunkProviderServer extends IChunkProvider {
              ChunkProviderServer.this.world.getMethodProfiler().c("runTask");
              super.executeTask(runnable);
          }
@@ -10413,7 +10848,7 @@ index e97c7794e86c0518bcec0a0370bffbeab20e2623..0816ab54bc99bcf29356b56516e83759
  
      @Override
 diff --git a/src/main/java/net/minecraft/server/EntityInsentient.java b/src/main/java/net/minecraft/server/EntityInsentient.java
-index a88521745f9f9b6935a61db52db915ea483af227..8a5e2806e68e5f4431fd9563fae780861e87632f 100644
+index a88521745f9f9b6935a61db52db915ea483af227..a47217c020d2c2a3caddafa0549dc827373798dd 100644
 --- a/src/main/java/net/minecraft/server/EntityInsentient.java
 +++ b/src/main/java/net/minecraft/server/EntityInsentient.java
 @@ -711,7 +711,13 @@ public abstract class EntityInsentient extends EntityLiving {
@@ -10423,7 +10858,7 @@ index a88521745f9f9b6935a61db52db915ea483af227..8a5e2806e68e5f4431fd9563fae78086
 -            EntityHuman entityhuman = this.world.findNearbyPlayer(this, -1.0D, IEntitySelector.affectsSpawning); // Paper
 +            // Tuinity start - optimise checkDespawn
 +            Chunk chunk = this.getCurrentChunk();
-+            EntityHuman entityhuman = chunk == null || this.world.paperConfig.hardDespawnDistance >= (31 * 16 * 31 * 16) ? this.world.findNearbyPlayer(this, -1.0D, IEntitySelector.affectsSpawning) : chunk.findNearestPlayer(this, IEntitySelector.affectsSpawning); // Paper
++            EntityHuman entityhuman = chunk == null || this.world.paperConfig.hardDespawnDistance >= (PlayerChunkMap.GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE_SQUARED) ? this.world.findNearbyPlayer(this, -1.0D, IEntitySelector.affectsSpawning) : chunk.findNearestPlayer(this.locX(), this.locY(), this.locZ(), -1.0, IEntitySelector.affectsSpawning); // Paper
 +            if (entityhuman == null) {
 +                entityhuman = ((WorldServer)this.world).playersAffectingSpawning.isEmpty() ? null : ((WorldServer)this.world).playersAffectingSpawning.get(0);
 +            }
@@ -10881,7 +11316,7 @@ index 25e54a1fadc5d31fb250a3f47524b4f345fc8cc6..cce0ac8a36bef3b9e5a2b95e0c3dd137
          return this.d(entity, axisalignedbb, predicate).allMatch(VoxelShape::isEmpty);
          } finally { if (entity != null) entity.collisionLoadChunks = false; } // Paper
 diff --git a/src/main/java/net/minecraft/server/IEntityAccess.java b/src/main/java/net/minecraft/server/IEntityAccess.java
-index 2639c17b7f6100533f33124f9e49990cd303d161..93f2ac996904ddefed04704e554209d047faa59f 100644
+index 2639c17b7f6100533f33124f9e49990cd303d161..ad286848ddb7803640ef7eeea46b58473dd1d0c4 100644
 --- a/src/main/java/net/minecraft/server/IEntityAccess.java
 +++ b/src/main/java/net/minecraft/server/IEntityAccess.java
 @@ -55,16 +55,26 @@ public interface IEntityAccess {
@@ -10914,7 +11349,7 @@ index 2639c17b7f6100533f33124f9e49990cd303d161..93f2ac996904ddefed04704e554209d0
                      label25:
                      {
                          if (entity == null) {
-@@ -82,7 +92,7 @@ public interface IEntityAccess {
+@@ -82,13 +92,13 @@ public interface IEntityAccess {
  
                  flag = false;
                  return flag;
@@ -10923,7 +11358,32 @@ index 2639c17b7f6100533f33124f9e49990cd303d161..93f2ac996904ddefed04704e554209d0
          }
      }
  
-@@ -204,12 +214,12 @@ public interface IEntityAccess {
+     default EntityHuman findNearbyPlayer(Entity entity, double d0, @Nullable Predicate<Entity> predicate) { return this.findNearbyPlayer(entity.locX(), entity.locY(), entity.locZ(), d0, predicate); } // Paper
+     @Nullable default EntityHuman findNearbyPlayer(double d0, double d1, double d2, double d3, @Nullable Predicate<Entity> predicate) { return a(d0, d1, d2, d3, predicate); } // Paper - OBFHELPER
+-    @Nullable default EntityHuman a(double d0, double d1, double d2, double d3, @Nullable Predicate<Entity> predicate) { // Paper
++    @Nullable default EntityHuman a(double d0, double d1, double d2, double d3, @Nullable Predicate<Entity> predicate) { // Paper // Tuinity - diff on change, override in World - this should be "get closest player that matches predicate"
+         double d4 = -1.0D;
+         EntityHuman entityhuman = null;
+         Iterator iterator = this.getPlayers().iterator();
+@@ -189,27 +199,27 @@ public interface IEntityAccess {
+     }
+ 
+     @Nullable
+-    default EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving) {
++    default EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving) { // Tuinity - diff on change, override in World - this should be "get closest player that matches path finder target condition"
+         return (EntityHuman) this.a(this.getPlayers(), pathfindertargetcondition, entityliving, entityliving.locX(), entityliving.locY(), entityliving.locZ());
+     }
+ 
+     @Nullable
+-    default EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving, double d0, double d1, double d2) {
++    default EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving, double d0, double d1, double d2) { // Tuinity - diff on change, override in World - this should be "get closest player that matches path finder target condition"
+         return (EntityHuman) this.a(this.getPlayers(), pathfindertargetcondition, entityliving, d0, d1, d2);
+     }
+ 
+     @Nullable
+-    default EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, double d0, double d1, double d2) {
++    default EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, double d0, double d1, double d2) { // Tuinity - diff on change, override in World - this should be "get closest player that matches path finder target condition"
+         return (EntityHuman) this.a(this.getPlayers(), pathfindertargetcondition, (EntityLiving) null, d0, d1, d2);
      }
  
      @Nullable
@@ -10937,6 +11397,15 @@ index 2639c17b7f6100533f33124f9e49990cd303d161..93f2ac996904ddefed04704e554209d0
 +    default <T extends EntityLiving> T b(Class<? extends T> oclass, PathfinderTargetCondition pathfindertargetcondition, @Nullable EntityLiving entityliving, double d0, double d1, double d2, AxisAlignedBB axisalignedbb) { // Tuinity - diff on change, override in World - this should be "get closest entity by class that matches path finder target condition"
          return this.a(this.b(oclass, axisalignedbb, null), pathfindertargetcondition, entityliving, d0, d1, d2); // Paper - decompile fix
      }
+ 
+@@ -235,7 +245,7 @@ public interface IEntityAccess {
+         return t0;
+     }
+ 
+-    default List<EntityHuman> a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving, AxisAlignedBB axisalignedbb) {
++    default List<EntityHuman> a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving, AxisAlignedBB axisalignedbb) { // Tuinity - diff on change, override in World - this should be "get players that matches path finder target condition"
+         List<EntityHuman> list = Lists.newArrayList();
+         Iterator iterator = this.getPlayers().iterator();
  
 diff --git a/src/main/java/net/minecraft/server/ILightAccess.java b/src/main/java/net/minecraft/server/ILightAccess.java
 index be5384ee41290b24b0c419c3e8f4553db34b2399..df28f7a6bf4c650a22ddf046eae4d5e8ca5879a9 100644
@@ -12923,7 +13392,7 @@ index 904c6a7d0a36b57bb4f693fc4fd0dd5b17adcbac..3127fc9dd87e82243e167862cae83ac8
                  if (chunk != null) {
                      playerchunkmap.callbackExecutor.execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2c8516c43 100644
+index 49008cdec739b19409fdaf1b0ed806a6c0e93200..61570ab947b5a153a4c2bcb5a09344f060e6052d 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -121,31 +121,28 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -12969,11 +13438,14 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
                  task.run();
              }
          }
-@@ -198,8 +195,12 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -198,8 +195,15 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerViewDistanceTickMap;
      public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerViewDistanceNoTickMap;
      // Paper end - no-tick view distance
 +    // Tuinity start - optimise checkDespawn
++    public static final int GENERAL_AREA_MAP_SQUARE_RADIUS = 38;
++    public static final double GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE = 16.0 * (GENERAL_AREA_MAP_SQUARE_RADIUS - 1);
++    public static final double GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE_SQUARED = GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE * GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE;
 +    public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerGeneralAreaMap;
 +    // Tuinity end - optimise checkDespawn
  
@@ -12982,12 +13454,12 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
          int chunkX = MCUtil.getChunkCoordinate(player.locX());
          int chunkZ = MCUtil.getChunkCoordinate(player.locZ());
          // Note: players need to be explicitly added to distance maps before they can be updated
-@@ -227,9 +228,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -227,9 +231,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          this.playerViewDistanceBroadcastMap.add(player, chunkX, chunkZ, effectiveNoTickViewDistance + 1); // clients need an extra neighbour to render the full view distance configured
          player.needsChunkCenterUpdate = false;
          // Paper end - no-tick view distance
 +        // Tuinity start - optimise checkDespawn
-+        this.playerGeneralAreaMap.add(player, chunkX, chunkZ, 33);
++        this.playerGeneralAreaMap.add(player, chunkX, chunkZ, GENERAL_AREA_MAP_SQUARE_RADIUS);
 +        // Tuinity end - optimise checkDespawn
      }
  
@@ -12996,7 +13468,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
          // Paper start - use distance map to optimise tracker
          for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
              this.playerEntityTrackerTrackMaps[i].remove(player);
-@@ -244,9 +249,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -244,9 +252,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          this.playerViewDistanceTickMap.remove(player);
          this.playerViewDistanceNoTickMap.remove(player);
          // Paper end - no-tick view distance
@@ -13010,12 +13482,12 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
          int chunkX = MCUtil.getChunkCoordinate(player.locX());
          int chunkZ = MCUtil.getChunkCoordinate(player.locZ());
          // Note: players need to be explicitly added to distance maps before they can be updated
-@@ -274,9 +283,35 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -274,9 +286,35 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          this.playerViewDistanceBroadcastMap.update(player, chunkX, chunkZ, effectiveNoTickViewDistance + 1); // clients need an extra neighbour to render the full view distance configured
          player.needsChunkCenterUpdate = false;
          // Paper end - no-tick view distance
 +        // Tuinity start - optimise checkDespawn
-+        this.playerGeneralAreaMap.update(player, chunkX, chunkZ, 33);
++        this.playerGeneralAreaMap.update(player, chunkX, chunkZ, GENERAL_AREA_MAP_SQUARE_RADIUS);
 +        // Tuinity end - optimise checkDespawn
      }
      // Paper end
@@ -13046,7 +13518,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
      private final java.util.concurrent.ExecutorService lightThread;
      public PlayerChunkMap(WorldServer worldserver, Convertable.ConversionSession convertable_conversionsession, DataFixer datafixer, DefinedStructureManager definedstructuremanager, Executor executor, IAsyncTaskHandler<Runnable> iasynctaskhandler, ILightAccess ilightaccess, ChunkGenerator chunkgenerator, WorldLoadListener worldloadlistener, Supplier<WorldPersistentData> supplier, int i, boolean flag) {
          super(new File(convertable_conversionsession.a(worldserver.getDimensionKey()), "region"), datafixer, flag);
-@@ -310,9 +345,10 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -310,9 +348,10 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
          this.worldLoadListener = worldloadlistener;
          // Paper start - use light thread
@@ -13058,7 +13530,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
              thread.setDaemon(true);
              thread.setPriority(Thread.NORM_PRIORITY+1);
              return thread;
-@@ -444,6 +480,26 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -444,6 +483,26 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                  PlayerChunkMap.this.sendChunk(player, new ChunkCoordIntPair(rangeX, rangeZ), null, true, false); // unloaded, loaded
              });
          // Paper end - no-tick view distance
@@ -13085,7 +13557,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
      }
      // Paper start - Chunk Prioritization
      public void queueHolderUpdate(PlayerChunk playerchunk) {
-@@ -756,6 +812,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -756,6 +815,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      @Nullable
      private PlayerChunk a(long i, int j, @Nullable PlayerChunk playerchunk, int k) {
@@ -13094,7 +13566,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
          if (k > PlayerChunkMap.GOLDEN_TICKET && j > PlayerChunkMap.GOLDEN_TICKET) {
              return playerchunk;
          } else {
-@@ -778,7 +836,9 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -778,7 +839,9 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                      playerchunk.a(j);
                  } else {
                      playerchunk = new PlayerChunk(new ChunkCoordIntPair(i), j, this.lightEngine, this.p, this);
@@ -13104,7 +13576,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
  
                  this.updatingChunks.put(i, playerchunk);
                  this.updatingChunksModified = true;
-@@ -904,7 +964,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -904,7 +967,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      }
  
@@ -13113,7 +13585,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
  
      protected void unloadChunks(BooleanSupplier booleansupplier) {
          GameProfilerFiller gameprofilerfiller = this.world.getMethodProfiler();
-@@ -970,7 +1030,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -970,7 +1033,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          }
  
          com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.scheduleSave(this.world, chunkPos.x, chunkPos.z,
@@ -13122,7 +13594,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
  
          if (!chunk.isNeedsSaving()) {
              return;
-@@ -1004,7 +1064,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1004,7 +1067,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
              asyncSaveData = ChunkRegionLoader.getAsyncSaveData(this.world, chunk);
          }
  
@@ -13131,7 +13603,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
              asyncSaveData, chunk);
  
          chunk.setLastSaved(this.world.getTime());
-@@ -1012,6 +1072,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1012,6 +1075,8 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
      // Paper end
  
@@ -13140,7 +13612,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
      private void a(long i, PlayerChunk playerchunk) {
          CompletableFuture<IChunkAccess> completablefuture = playerchunk.getChunkSave();
          Consumer<IChunkAccess> consumer = (ichunkaccess) -> { // CraftBukkit - decompile error
-@@ -1020,7 +1082,15 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1020,7 +1085,15 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
              if (completablefuture1 != completablefuture) {
                  this.a(i, playerchunk);
              } else {
@@ -13157,7 +13629,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
                      if (ichunkaccess instanceof Chunk) {
                          ((Chunk) ichunkaccess).setLoaded(false);
                      }
-@@ -1044,6 +1114,9 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1044,6 +1117,9 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                      this.lightEngine.queueUpdate();
                      this.worldLoadListener.a(ichunkaccess.getPos(), (ChunkStatus) null);
                  }
@@ -13167,7 +13639,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
  
              }
          };
-@@ -1059,6 +1132,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1059,6 +1135,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
  
      protected boolean b() {
@@ -13175,7 +13647,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
          if (!this.updatingChunksModified) {
              return false;
          } else {
-@@ -1134,6 +1208,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1134,6 +1211,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
                  this.getVillagePlace().loadInData(chunkcoordintpair, chunkHolder.poiData);
                  chunkHolder.tasks.forEach(Runnable::run);
@@ -13183,7 +13655,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
                  // Paper end
  
                  if (chunkHolder.protoChunk != null) {try (Timing ignored2 = this.world.timings.chunkLoadLevelTimer.startTimingIfSync()) { // Paper start - timings // Paper - chunk is created async
-@@ -1246,9 +1321,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1246,9 +1324,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
              }
              // Paper end
              this.mailboxWorldGen.a(ChunkTaskQueueSorter.a(playerchunk, runnable));
@@ -13198,7 +13670,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
      protected void c(ChunkCoordIntPair chunkcoordintpair) {
          this.executor.a(SystemUtils.a(() -> {
              this.chunkDistanceManager.b(TicketType.LIGHT, chunkcoordintpair, 33 + ChunkStatus.a(ChunkStatus.FEATURES), chunkcoordintpair);
-@@ -1415,9 +1494,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1415,9 +1497,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
                  chunk.B();
                  return chunk;
              });
@@ -13209,7 +13681,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
      }
  
      public int c() {
-@@ -1498,6 +1575,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1498,6 +1578,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      }
  
      public void setViewDistance(int i) { // Paper - public
@@ -13217,7 +13689,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
          int j = MathHelper.clamp(i + 1, 3, 33); // Paper - diff on change, these make the lower view distance limit 2 and the upper 32
  
          if (j != this.viewDistance) {
-@@ -1511,6 +1589,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1511,6 +1592,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
      // Paper start - no-tick view distance
      public final void setNoTickViewDistance(int viewDistance) {
@@ -13225,7 +13697,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
          viewDistance = viewDistance == -1 ? -1 : MathHelper.clamp(viewDistance, 2, 32);
  
          this.noTickViewDistance = viewDistance;
-@@ -1626,7 +1705,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1626,7 +1708,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          if (Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE) {
              com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.scheduleSave(
                  this.world, chunkcoordintpair.x, chunkcoordintpair.z, null, nbttagcompound,
@@ -13234,7 +13706,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
              return;
          }
          super.write(chunkcoordintpair, nbttagcompound);
-@@ -1710,6 +1789,11 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -1710,6 +1792,11 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
          return chunkHolder == null ? null : chunkHolder.getAvailableChunkNow();
      }
      // Paper end
@@ -13246,7 +13718,7 @@ index 49008cdec739b19409fdaf1b0ed806a6c0e93200..2c2becef8b56d7e5e998976222df85d2
  
  
      // Paper start - async io
-@@ -2037,22 +2121,25 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+@@ -2037,22 +2124,25 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
      private final void processTrackQueue() {
          this.world.timings.tracker1.startTiming();
          try {
@@ -14811,10 +15283,10 @@ index f6568a54ab85bc3a682f6fbb19dda7a783625bbe..4005df5ef3dec956a54feff539db2e63
  
      @Override
 diff --git a/src/main/java/net/minecraft/server/SensorNearestPlayers.java b/src/main/java/net/minecraft/server/SensorNearestPlayers.java
-index 904a6d5ac61d2ac81f1057068383e9ab432852db..c8e43a9f2a23178fdef52375b7204b90b28ac20b 100644
+index 904a6d5ac61d2ac81f1057068383e9ab432852db..fa2d366ca6695c099c29469bf69a7845350b4f07 100644
 --- a/src/main/java/net/minecraft/server/SensorNearestPlayers.java
 +++ b/src/main/java/net/minecraft/server/SensorNearestPlayers.java
-@@ -19,22 +19,30 @@ public class SensorNearestPlayers extends Sensor<EntityLiving> {
+@@ -19,22 +19,31 @@ public class SensorNearestPlayers extends Sensor<EntityLiving> {
  
      @Override
      protected void a(WorldServer worldserver, EntityLiving entityliving) {
@@ -14825,7 +15297,8 @@ index 904a6d5ac61d2ac81f1057068383e9ab432852db..c8e43a9f2a23178fdef52375b7204b90
 -        entityliving.getClass();
 -        List<EntityHuman> list = (List) stream.sorted(Comparator.comparingDouble(entityliving::h)).collect(Collectors.toList());
 +        // Tuinity start - remove streams
-+        List<EntityHuman> nearby = (List)worldserver.getNearbyPlayers(entityliving, 16.0, IEntitySelector.g);
++        List<EntityHuman> nearby = (List)worldserver.getNearbyPlayers(entityliving, entityliving.locX(), entityliving.locY(), entityliving.locZ(),
++                16.0, IEntitySelector.g);
 +        nearby.sort((e1, e2) -> Double.compare(entityliving.getDistanceSquared(e1), entityliving.getDistanceSquared(e2)));
          BehaviorController<?> behaviorcontroller = entityliving.getBehaviorController();
  
@@ -14906,6 +15379,28 @@ index 5f4dacf9c93c2495a07df2647fe0411f796da6af..0668d383db1f3a81d1053954d72678c7
              this.listeningChannels.add(((ServerBootstrap) ((ServerBootstrap) (new ServerBootstrap()).channel(oclass)).childHandler(new ChannelInitializer<Channel>() {
                  protected void initChannel(Channel channel) throws Exception {
                      try {
+diff --git a/src/main/java/net/minecraft/server/SpawnerCreature.java b/src/main/java/net/minecraft/server/SpawnerCreature.java
+index 661ad8f8e67046211e001ea40d97660d7c88f8e5..a77b1d61b9dcb0a2a27d7e50357eaf44c99a661e 100644
+--- a/src/main/java/net/minecraft/server/SpawnerCreature.java
++++ b/src/main/java/net/minecraft/server/SpawnerCreature.java
+@@ -216,7 +216,7 @@ public final class SpawnerCreature {
+                             blockposition_mutableblockposition.d(l, i, i1);
+                             double d0 = (double) l + 0.5D;
+                             double d1 = (double) i1 + 0.5D;
+-                            EntityHuman entityhuman = worldserver.a(d0, (double) i, d1, -1.0D, false);
++                            EntityHuman entityhuman = worldserver.a(d0, (double) i, d1, 576.0D, false); // Tuinity - copied from below method for range, for the love of god we do not need to fucking find the closet player outside of this range - limiting range lets us use the distance map
+ 
+                             if (entityhuman != null) {
+                                 double d2 = entityhuman.h(d0, (double) i, d1);
+@@ -288,7 +288,7 @@ public final class SpawnerCreature {
+     }
+ 
+     private static boolean a(WorldServer worldserver, IChunkAccess ichunkaccess, BlockPosition.MutableBlockPosition blockposition_mutableblockposition, double d0) {
+-        if (d0 <= 576.0D) {
++        if (d0 <= 576.0D) { // Tuinity - diff on change, copy into caller
+             return false;
+         } else if (worldserver.getSpawn().a((IPosition) (new Vec3D((double) blockposition_mutableblockposition.getX() + 0.5D, (double) blockposition_mutableblockposition.getY(), (double) blockposition_mutableblockposition.getZ() + 0.5D)), 24.0D)) {
+             return false;
 diff --git a/src/main/java/net/minecraft/server/StructureManager.java b/src/main/java/net/minecraft/server/StructureManager.java
 index f199368a6d78b0cd52f11ca2c8509d729b918852..2598ae3710d46c2cfd2be5d6be2a56e59ceef6ea 100644
 --- a/src/main/java/net/minecraft/server/StructureManager.java
@@ -15794,7 +16289,7 @@ index 5d9d58411f2fad9d5da703f964d269b4a7c2b205..f0fdfd6891e59891e7370a2d682b65c6
          private double c;
  
 diff --git a/src/main/java/net/minecraft/server/World.java b/src/main/java/net/minecraft/server/World.java
-index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda5f985b78 100644
+index f5ab99156ce5429e63976183cbf115d5340a83a1..970c1be5477a01ab9c6d79e84c519e22775564ff 100644
 --- a/src/main/java/net/minecraft/server/World.java
 +++ b/src/main/java/net/minecraft/server/World.java
 @@ -94,6 +94,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
@@ -15806,36 +16301,67 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
      public final co.aikar.timings.WorldTimingsHandler timings; // Paper
      public static BlockPosition lastPhysicsProblem; // Spigot
      private org.spigotmc.TickLimiter entityLimiter;
-@@ -121,10 +123,39 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -121,10 +123,70 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          return typeKey;
      }
  
 +    // Tuinity start - optimise checkDespawn
-+    public final List<EntityPlayer> getNearbyPlayers(Entity source, double maxRange, Predicate<Entity> predicate) {
-+        Chunk chunk = source.getCurrentChunk();
-+        if (chunk == null || maxRange < 0.0 || maxRange > 31.0*16.0) {
-+            return this.getNearbyPlayersSlow(source, maxRange, predicate);
++    public final List<EntityPlayer> getNearbyPlayers(@Nullable Entity source, double sourceX, double sourceY, double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
++        Chunk chunk;
++        if (source == null || (chunk = source.getCurrentChunk()) == null || maxRange < 0.0 || maxRange >= PlayerChunkMap.GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE) {
++            return this.getNearbyPlayersSlow(source, sourceX, sourceY, sourceZ, maxRange, predicate);
 +        }
 +
 +        List<EntityPlayer> ret = new java.util.ArrayList<>();
-+        chunk.getNearestPlayers(source, predicate, maxRange, ret);
++        chunk.getNearestPlayers(sourceX, sourceY, sourceZ, predicate, maxRange, ret);
 +        return ret;
 +    }
 +
-+    private List<EntityPlayer> getNearbyPlayersSlow(Entity source, double maxRange, Predicate<Entity> predicate) {
++    private List<EntityPlayer> getNearbyPlayersSlow(@Nullable Entity source, double sourceX, double sourceY, double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
 +        List<EntityPlayer> ret = new java.util.ArrayList<>();
 +        double maxRangeSquared = maxRange * maxRange;
 +
-+        for (EntityHuman player : this.getPlayers()) {
-+            if ((maxRange < 0.0 || player.getDistanceSquared(source.locX(), source.locY(), source.locZ()) < maxRangeSquared)) {
++        for (EntityPlayer player : (List<EntityPlayer>)this.getPlayers()) {
++            if ((maxRange < 0.0 || player.getDistanceSquared(sourceX, sourceY, sourceZ) < maxRangeSquared)) {
 +                if (predicate == null || predicate.test(player)) {
-+                    ret.add((EntityPlayer)player);
++                    ret.add(player);
 +                }
 +            }
 +        }
 +
 +        return ret;
 +    }
++
++    private EntityPlayer getNearestPlayerSlow(@Nullable Entity source, double sourceX, double sourceY, double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
++        EntityPlayer closest = null;
++        double closestRangeSquared = maxRange < 0.0 ? Double.MAX_VALUE : maxRange * maxRange;
++
++        for (EntityPlayer player : (List<EntityPlayer>)this.getPlayers()) {
++            double distanceSquared = player.getDistanceSquared(sourceX, sourceY, sourceZ);
++            if (distanceSquared < closestRangeSquared && (predicate == null || predicate.test(player))) {
++                closest = player;
++                closestRangeSquared = distanceSquared;
++            }
++        }
++
++        return closest;
++    }
++
++
++    public final EntityPlayer getNearestPlayer(@Nullable Entity source, double sourceX, double sourceY, double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
++        Chunk chunk;
++        if (source == null || (chunk = source.getCurrentChunk()) == null || maxRange < 0.0 || maxRange >= PlayerChunkMap.GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE) {
++            return this.getNearestPlayerSlow(source, sourceX, sourceY, sourceZ, maxRange, predicate);
++        }
++
++        return chunk.findNearestPlayer(sourceX, sourceY, sourceZ, maxRange, predicate);
++    }
++
++    @Override
++    public @Nullable EntityHuman a(double d0, double d1, double d2, double d3, @Nullable Predicate<Entity> predicate) {
++        return this.getNearestPlayer(null, d0, d1, d2, d3, predicate);
++    }
++
 +    // Tuinity end - optimise checkDespawn
 +
      protected World(WorldDataMutable worlddatamutable, ResourceKey<World> resourcekey, final DimensionManager dimensionmanager, Supplier<GameProfilerFiller> supplier, boolean flag, boolean flag1, long i, org.bukkit.generator.ChunkGenerator gen, org.bukkit.World.Environment env, java.util.concurrent.Executor executor) { // Paper
@@ -15846,7 +16372,7 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
          this.generator = gen;
          this.world = new CraftWorld((WorldServer) this, gen, env);
          this.ticksPerAnimalSpawns = this.getServer().getTicksPerAnimalSpawns(); // CraftBukkit
-@@ -286,6 +317,15 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -286,6 +348,15 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
  
      @Override
      public final Chunk getChunkAt(int i, int j) { // Paper - final to help inline
@@ -15862,7 +16388,7 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
          return (Chunk) this.getChunkAt(i, j, ChunkStatus.FULL, true); // Paper - avoid a method jump
      }
  
-@@ -360,6 +400,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -360,6 +431,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
  
      @Override
      public boolean a(BlockPosition blockposition, IBlockData iblockdata, int i, int j) {
@@ -15870,7 +16396,7 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
          // CraftBukkit start - tree generation
          if (this.captureTreeGeneration) {
              // Paper start
-@@ -461,6 +502,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -461,6 +533,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
  
      // CraftBukkit start - Split off from above in order to directly send client and physic updates
      public void notifyAndUpdatePhysics(BlockPosition blockposition, Chunk chunk, IBlockData oldBlock, IBlockData newBlock, IBlockData actualBlock, int i, int j) {
@@ -15878,7 +16404,7 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
          IBlockData iblockdata = newBlock;
          IBlockData iblockdata1 = oldBlock;
          IBlockData iblockdata2 = actualBlock;
-@@ -895,6 +937,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -895,6 +968,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
              return;
              // Paper end
          }
@@ -15886,7 +16412,7 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
      }
      // Paper start - Prevent armor stands from doing entity lookups
      @Override
-@@ -1078,10 +1121,44 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1078,10 +1152,44 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          return this.getChunkAt(i, j, ChunkStatus.FULL, false);
      }
  
@@ -15932,7 +16458,7 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
          int i = MathHelper.floor((axisalignedbb.minX - 2.0D) / 16.0D);
          int j = MathHelper.floor((axisalignedbb.maxX + 2.0D) / 16.0D);
          int k = MathHelper.floor((axisalignedbb.minZ - 2.0D) / 16.0D);
-@@ -1137,7 +1214,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1137,7 +1245,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
                  Chunk chunk = (Chunk)this.getChunkIfLoadedImmediately(i1, j1); // Paper
  
                  if (chunk != null) {
@@ -15941,7 +16467,7 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
                  }
              }
          }
-@@ -1160,7 +1237,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1160,7 +1268,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
                  Chunk chunk = (Chunk)this.getChunkIfLoadedImmediately(i1, j1); // Paper
  
                  if (chunk != null) {
@@ -15950,7 +16476,7 @@ index f5ab99156ce5429e63976183cbf115d5340a83a1..93c0c3376c3cb2fe416c8ae3e740ffda
                  }
              }
          }
-@@ -1168,6 +1245,106 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1168,6 +1276,106 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          return list;
      }
  
@@ -16145,7 +16671,7 @@ index f011869880fedae4b69e505491e8bdbc5f51dfba..0d10d317cd0b60fc0866ae505c7fd71f
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4e437acf3 100644
+index cf7d94aabab600822eb5e27f38690b06456d5fcc..d2b50cdc43c737d9fdfdcd7838de24cbca2017e4 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -55,12 +55,13 @@ import org.bukkit.event.server.MapInitializeEvent;
@@ -16172,7 +16698,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
      protected final PersistentRaid persistentRaid;
      private final ObjectLinkedOpenHashSet<BlockActionData> L;
      private boolean ticking;
-@@ -206,6 +207,111 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -206,6 +207,208 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      }
      // Paper end - rewrite ticklistserver
  
@@ -16273,6 +16799,103 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
 +    // Tuinity start - optimise checkDespawn
 +    final List<EntityPlayer> playersAffectingSpawning = new java.util.ArrayList<>();
 +    // Tuinity end - optimise checkDespawn
++    // Tuinity start - optimise get nearest players for entity AI
++    public final EntityPlayer getNearestPlayer(PathfinderTargetCondition condition, @Nullable EntityLiving source,
++                                               double centerX, double centerY, double centerZ) {
++        com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<EntityPlayer> nearby;
++        if (source != null) {
++            Chunk chunk = source.getCurrentChunk();
++            if (chunk != null && (MathHelper.floor(centerX) >> 4) == chunk.locX &&
++                    (MathHelper.floor(centerZ) >> 4) == chunk.locZ) {
++                nearby = chunk.getPlayerGeneralAreaCache();
++            } else {
++                nearby = this.getChunkProvider().playerChunkMap.playerGeneralAreaMap.getObjectsInRange(MathHelper.floor(centerX) >> 4, MathHelper.floor(centerZ) >> 4);
++            }
++        } else {
++            nearby = this.getChunkProvider().playerChunkMap.playerGeneralAreaMap.getObjectsInRange(MathHelper.floor(centerX) >> 4, MathHelper.floor(centerZ) >> 4);
++        }
++
++        if (nearby == null) {
++            return null;
++        }
++
++        Object[] backingSet = nearby.getBackingSet();
++
++        double closestDistanceSquared = Double.MAX_VALUE;
++        EntityPlayer closest = null;
++
++        for (int i = 0, len = backingSet.length; i < len; ++i) {
++            Object _player = backingSet[i];
++            if (!(_player instanceof EntityPlayer)) {
++                continue;
++            }
++            EntityPlayer player = (EntityPlayer)_player;
++
++            double distanceSquared = player.getDistanceSquared(centerX, centerY, centerZ);
++            if (distanceSquared < closestDistanceSquared && condition.test(source, player)) {
++                closest = player;
++                closestDistanceSquared = distanceSquared;
++            }
++        }
++
++        return closest;
++    }
++
++    @Override
++    public EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, EntityLiving entityliving) {
++        return this.getNearestPlayer(pathfindertargetcondition, entityliving, entityliving.locX(), entityliving.locY(), entityliving.locZ());
++    }
++
++    @Override
++    public EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, @Nullable EntityLiving entityliving, double d0, double d1, double d2) {
++        return this.getNearestPlayer(pathfindertargetcondition, entityliving, d0, d1, d2);
++    }
++
++    @Override
++    public EntityHuman a(PathfinderTargetCondition pathfindertargetcondition, double d0, double d1, double d2) {
++        return this.getNearestPlayer(pathfindertargetcondition, null, d0, d1, d2);
++    }
++
++    @Override
++    public List<EntityHuman> a(PathfinderTargetCondition condition, EntityLiving source, AxisAlignedBB axisalignedbb) {
++        com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<EntityPlayer> nearby;
++        double centerX = (axisalignedbb.maxX + axisalignedbb.minX) * 0.5;
++        double centerZ = (axisalignedbb.maxZ + axisalignedbb.minZ) * 0.5;
++        if (source != null) {
++            Chunk chunk = source.getCurrentChunk();
++            if (chunk != null && (MathHelper.floor(centerX) >> 4) == chunk.locX &&
++                    (MathHelper.floor(centerZ) >> 4) == chunk.locZ) {
++                nearby = chunk.getPlayerGeneralAreaCache();
++            } else {
++                nearby = this.getChunkProvider().playerChunkMap.playerGeneralAreaMap.getObjectsInRange(MathHelper.floor(centerX) >> 4, MathHelper.floor(centerZ) >> 4);
++            }
++        } else {
++            nearby = this.getChunkProvider().playerChunkMap.playerGeneralAreaMap.getObjectsInRange(MathHelper.floor(centerX) >> 4, MathHelper.floor(centerZ) >> 4);
++        }
++
++        List<EntityHuman> ret = new java.util.ArrayList<>();
++
++        if (nearby == null) {
++            return ret;
++        }
++
++        Object[] backingSet = nearby.getBackingSet();
++
++        for (int i = 0, len = backingSet.length; i < len; ++i) {
++            Object _player = backingSet[i];
++            if (!(_player instanceof EntityPlayer)) {
++                continue;
++            }
++            EntityPlayer player = (EntityPlayer)_player;
++
++            if (axisalignedbb.contains(player.locX(), player.locY(), player.locZ()) && condition.test(source, player)) {
++                ret.add(player);
++            }
++        }
++
++        return ret;
++    }
++    // Tuinity end - optimise get nearest players for entity AI
 +
 +    // Tuinity start - rewrite light engine
 +    /**
@@ -16284,7 +16907,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
      // Add env and gen to constructor, WorldData -> WorldDataServer
      public WorldServer(MinecraftServer minecraftserver, Executor executor, Convertable.ConversionSession convertable_conversionsession, IWorldDataServer iworlddataserver, ResourceKey<World> resourcekey, DimensionManager dimensionmanager, WorldLoadListener worldloadlistener, ChunkGenerator chunkgenerator, boolean flag, long i, List<MobSpawner> list, boolean flag1, org.bukkit.World.Environment env, org.bukkit.generator.ChunkGenerator gen) {
          super(iworlddataserver, resourcekey, dimensionmanager, minecraftserver::getMethodProfiler, false, flag, i, gen, env, executor); // Paper pass executor
-@@ -266,6 +372,251 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -266,6 +469,251 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          this.asyncChunkTaskManager = new com.destroystokyo.paper.io.chunk.ChunkTaskManager(this); // Paper
      }
  
@@ -16536,7 +17159,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
      // CraftBukkit start
      @Override
      protected TileEntity getTileEntity(BlockPosition pos, boolean validate) {
-@@ -319,6 +670,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -319,6 +767,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      public void doTick(BooleanSupplier booleansupplier) {
          GameProfilerFiller gameprofilerfiller = this.getMethodProfiler();
@@ -16551,7 +17174,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
  
          this.ticking = true;
          gameprofilerfiller.enter("world border");
-@@ -468,7 +827,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -468,7 +924,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          }
          timings.scheduledBlocks.stopTiming(); // Paper
  
@@ -16560,7 +17183,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
          gameprofilerfiller.exitEnter("raid");
          this.timings.raids.startTiming(); // Paper - timings
          this.persistentRaid.a();
-@@ -477,7 +836,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -477,7 +933,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          timings.doSounds.startTiming(); // Spigot
          this.ak();
          timings.doSounds.stopTiming(); // Spigot
@@ -16569,7 +17192,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
          this.ticking = false;
          gameprofilerfiller.exitEnter("entities");
          boolean flag3 = true || !this.players.isEmpty() || !this.getForceLoadedChunks().isEmpty(); // CraftBukkit - this prevents entity cleanup, other issues on servers with no players
-@@ -493,13 +852,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -493,13 +949,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              }
  
              this.tickingEntities = true;
@@ -16585,7 +17208,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
                  Entity entity1 = entity.getVehicle();
  
                  /* CraftBukkit start - We prevent spawning in general, so this butchering is not needed
-@@ -515,6 +873,15 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -515,6 +970,15 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  gameprofilerfiller.enter("checkDespawn");
                  if (!entity.dead) {
                      entity.checkDespawn();
@@ -16601,7 +17224,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
                  }
  
                  gameprofilerfiller.exit();
-@@ -535,14 +902,22 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -535,14 +999,22 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  gameprofilerfiller.enter("remove");
                  if (entity.dead) {
                      this.removeEntityFromChunk(entity);
@@ -16625,7 +17248,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
              this.tickingEntities = false;
              // Paper start
              for (java.lang.Runnable run : this.afterEntityTickingTasks) {
-@@ -554,7 +929,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -554,7 +1026,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              }
              this.afterEntityTickingTasks.clear();
              // Paper end
@@ -16634,7 +17257,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
  
              Entity entity2;
  
-@@ -564,7 +939,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -564,7 +1036,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              }
  
              timings.tickEntities.stopTiming(); // Spigot
@@ -16643,7 +17266,16 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
              this.tickBlockEntities();
          }
  
-@@ -810,7 +1185,26 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -715,7 +1187,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+             }
+             gameprofilerfiller.exit();
+             timings.chunkTicksBlocks.stopTiming(); // Paper
+-            getChunkProvider().getLightEngine().queueUpdate(); // Paper
++            //getChunkProvider().getLightEngine().queueUpdate(); // Paper // Tuinity - no longer needed here, moved into task execution
+             // Paper end
+         }
+     }
+@@ -810,7 +1282,26 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      }
  
@@ -16670,7 +17302,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
          if (!(entity instanceof EntityHuman) && !this.getChunkProvider().a(entity)) {
              this.chunkCheck(entity);
          } else {
-@@ -863,6 +1257,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -863,6 +1354,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              //} finally { timer.stopTiming(); } // Paper - timings - move up
  
          }
@@ -16682,7 +17314,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
      }
  
      public void a(Entity entity, Entity entity1) {
-@@ -921,6 +1320,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -921,6 +1417,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              int i = MathHelper.floor(entity.locX() / 16.0D);
              int j =  Math.min(15, Math.max(0, MathHelper.floor(entity.locY() / 16.0D))); // Paper - stay consistent with chunk add/remove behavior
              int k = MathHelper.floor(entity.locZ() / 16.0D);
@@ -16695,7 +17327,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
  
              if (!entity.inChunk || entity.chunkX != i || entity.chunkY != j || entity.chunkZ != k) {
                  // Paper start - remove entity if its in a chunk more correctly.
-@@ -930,6 +1335,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -930,6 +1432,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  }
                  // Paper end
  
@@ -16708,7 +17340,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
                  if (entity.inChunk && this.isChunkLoaded(entity.chunkX, entity.chunkZ)) {
                      this.getChunkAt(entity.chunkX, entity.chunkZ).a(entity, entity.chunkY);
                  }
-@@ -943,6 +1354,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -943,6 +1451,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  } else {
                      this.getChunkAt(i, k).a(entity);
                  }
@@ -16720,7 +17352,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
              }
  
              this.getMethodProfiler().exit();
-@@ -1298,7 +1714,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1298,7 +1811,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  Entity entity = (Entity) iterator.next();
  
                  if (!(entity instanceof EntityPlayer)) {
@@ -16729,7 +17361,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
                          throw (IllegalStateException) SystemUtils.c((Throwable) (new IllegalStateException("Removing entity while ticking!")));
                      }
  
-@@ -1326,6 +1742,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1326,6 +1839,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      public void unregisterEntity(Entity entity) {
          org.spigotmc.AsyncCatcher.catchOp("entity unregister"); // Spigot
@@ -16737,7 +17369,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
          // Paper start - fix entity registration issues
          if (entity instanceof EntityComplexPart) {
              // Usually this is a no-op for complex parts, and ID's should be removed, but go ahead and remove it anyways
-@@ -1392,17 +1809,108 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1392,17 +1906,108 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          this.getScoreboard().a(entity);
          // CraftBukkit start - SPIGOT-5278
          if (entity instanceof EntityDrowned) {
@@ -16849,7 +17481,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
      private void registerEntity(Entity entity) {
          org.spigotmc.AsyncCatcher.catchOp("entity register"); // Spigot
          // Paper start - don't double enqueue entity registration
-@@ -1413,7 +1921,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1413,7 +2018,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              return;
          }
          // Paper end
@@ -16858,7 +17490,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
              if (!entity.isQueuedForRegister) { // Paper
                  this.entitiesToAdd.add(entity);
                  entity.isQueuedForRegister = true; // Paper
-@@ -1421,6 +1929,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1421,6 +2026,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          } else {
              entity.isQueuedForRegister = false; // Paper
              this.entitiesById.put(entity.getId(), entity);
@@ -16866,7 +17498,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
              if (entity instanceof EntityEnderDragon) {
                  EntityComplexPart[] aentitycomplexpart = ((EntityEnderDragon) entity).eJ();
                  int i = aentitycomplexpart.length;
-@@ -1429,6 +1938,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1429,6 +2035,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                      EntityComplexPart entitycomplexpart = aentitycomplexpart[j];
  
                      this.entitiesById.put(entitycomplexpart.getId(), entitycomplexpart);
@@ -16874,7 +17506,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
                  }
              }
  
-@@ -1453,12 +1963,16 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1453,12 +2060,16 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              // this.getChunkProvider().addEntity(entity); // Paper - moved down below valid=true
              // CraftBukkit start - SPIGOT-5278
              if (entity instanceof EntityDrowned) {
@@ -16894,7 +17526,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
              }
              entity.valid = true; // CraftBukkit
              this.getChunkProvider().addEntity(entity); // Paper - from above to be below valid=true
-@@ -1474,7 +1988,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1474,7 +2085,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      }
  
      public void removeEntity(Entity entity) {
@@ -16903,7 +17535,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
              throw (IllegalStateException) SystemUtils.c((Throwable) (new IllegalStateException("Removing entity while ticking!")));
          } else {
              this.removeEntityFromChunk(entity);
-@@ -1570,14 +2084,33 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1570,14 +2181,33 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      @Override
      public void notify(BlockPosition blockposition, IBlockData iblockdata, IBlockData iblockdata1, int i) {
@@ -16938,7 +17570,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..43740b9b2d2c4a5b6bfe6061841ec4e4
  
              while (iterator.hasNext()) {
                  // CraftBukkit start - fix SPIGOT-6362
-@@ -1596,7 +2129,21 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1596,7 +2226,21 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  if (!navigationabstract.i()) {
                      navigationabstract.b(blockposition);
                  }
