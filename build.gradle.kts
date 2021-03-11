@@ -37,6 +37,10 @@ subprojects {
         mavenCentral()
         maven("https://repo.aikar.co/content/groups/aikar/")
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
+        maven("https://jd.adventure.kyori.net/api/4.7.0/")
+        maven("https://jd.adventure.kyori.net/text-serializer-gson/4.7.0/")
+        maven("https://jd.adventure.kyori.net/text-serializer-legacy/4.7.0/")
+        maven("https://jd.adventure.kyori.net/text-serializer-plain/4.7.0/")
         maven("https://libraries.minecraft.net")
         mavenLocal()
     }
