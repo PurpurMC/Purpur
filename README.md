@@ -50,8 +50,7 @@ Downloads API endpoints:
 
 All patches are licensed under the MIT license, unless otherwise noted in the patch headers.
 
-See [starlis/empirecraft](https://github.com/starlis/empirecraft), [electronicboy/byof](https://github.com/electronicboy/byof), and [mikroskeemsrealm/Toothpick](https://github.com/mikroskeemsrealm/Toothpick)
-for the license of material used/modified by this project.
+See [PaperMC/Paper](https://github.com/PaperMC/Paper), [Spottedleaf/Tuinity](https://github.com/Spottedleaf/Tuinity), and [jpenilla/Toothpick](https://github.com/jpenilla/Toothpick) for the license of material used by this project.
 
 ## bStats
 
