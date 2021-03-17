@@ -169,7 +169,7 @@ permanent authorization for you to choose that version for the
 Library.
 
 diff --git a/pom.xml b/pom.xml
-index 9ba379b7e3ee3bc8c6d2c8ec46213c404c73d682..e83e4241a56fe131a75fe21cc1518992c089da2c 100644
+index 11b4d56922cae5ba3f76c21a76a8ae40b3719afa..d9b46ca2fb2ec8f76f3c781d9250fdc68ad7e363 100644
 --- a/pom.xml
 +++ b/pom.xml
 @@ -1,11 +1,11 @@
@@ -235,7 +235,7 @@ index 9ba379b7e3ee3bc8c6d2c8ec46213c404c73d682..e83e4241a56fe131a75fe21cc1518992
          <!-- deprecated API depend -->
          <dependency>
              <groupId>com.googlecode.json-simple</groupId>
-@@ -149,6 +152,13 @@
+@@ -149,19 +152,26 @@
              <version>4.8.47</version>
              <scope>test</scope>
          </dependency>
@@ -247,9 +247,6 @@ index 9ba379b7e3ee3bc8c6d2c8ec46213c404c73d682..e83e4241a56fe131a75fe21cc1518992
 +            <scope>compile</scope>
 +        </dependency>
      </dependencies>
- 
-     <repositories>
-@@ -173,15 +183,15 @@
  
      <!-- This builds a completely 'ready to start' jar with all dependencies inside -->
      <build>
@@ -8904,172 +8901,6 @@ index 0000000000000000000000000000000000000000..606417a8aeaca2682595f417bba8e9d4
 +        }
 +    }
 +}
-diff --git a/src/main/java/com/tuinity/tuinity/util/table/ZeroCollidingReferenceStateTable.java b/src/main/java/com/tuinity/tuinity/util/table/ZeroCollidingReferenceStateTable.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..298d09634effcb06cd2237a1f7f903e9e46ec78d
---- /dev/null
-+++ b/src/main/java/com/tuinity/tuinity/util/table/ZeroCollidingReferenceStateTable.java
-@@ -0,0 +1,160 @@
-+package com.tuinity.tuinity.util.table;
-+
-+import com.google.common.collect.Table;
-+import net.minecraft.server.IBlockDataHolder;
-+import net.minecraft.server.IBlockState;
-+import java.util.Collection;
-+import java.util.HashSet;
-+import java.util.Map;
-+import java.util.Set;
-+
-+public final class ZeroCollidingReferenceStateTable {
-+
-+    // upper 32 bits: starting index
-+    // lower 32 bits: bitset for contained ids
-+    protected final long[] this_index_table;
-+    protected final Comparable<?>[] this_table;
-+    protected final IBlockDataHolder<?, ?> this_state;
-+
-+    protected long[] index_table;
-+    protected IBlockDataHolder<?, ?>[][] value_table;
-+
-+    public ZeroCollidingReferenceStateTable(final IBlockDataHolder<?, ?> state, final Map<IBlockState<?>, Comparable<?>> this_map) {
-+        this.this_state = state;
-+        this.this_index_table = this.create_table(this_map.keySet());
-+
-+        int max_id = -1;
-+        for (final IBlockState<?> property : this_map.keySet()) {
-+            final int id = lookup_vindex(property, this.this_index_table);
-+            if (id > max_id) {
-+                max_id = id;
-+            }
-+        }
-+
-+        this.this_table = new Comparable[max_id + 1];
-+        for (final Map.Entry<IBlockState<?>, Comparable<?>> entry : this_map.entrySet()) {
-+            this.this_table[lookup_vindex(entry.getKey(), this.this_index_table)] = entry.getValue();
-+        }
-+    }
-+
-+    public void loadInTable(final Table<IBlockState<?>, Comparable<?>, IBlockDataHolder<?, ?>> table,
-+                            final Map<IBlockState<?>, Comparable<?>> this_map) {
-+        final Set<IBlockState<?>> combined = new HashSet<>(table.rowKeySet());
-+        combined.addAll(this_map.keySet());
-+
-+        this.index_table = this.create_table(combined);
-+
-+        int max_id = -1;
-+        for (final IBlockState<?> property : combined) {
-+            final int id = lookup_vindex(property, this.index_table);
-+            if (id > max_id) {
-+                max_id = id;
-+            }
-+        }
-+
-+        this.value_table = new IBlockDataHolder[max_id + 1][];
-+
-+        final Map<IBlockState<?>, Map<Comparable<?>, IBlockDataHolder<?, ?>>> map = table.rowMap();
-+        for (final IBlockState<?> property : map.keySet()) {
-+            final Map<Comparable<?>, IBlockDataHolder<?, ?>> propertyMap = map.get(property);
-+
-+            final int id = lookup_vindex(property, this.index_table);
-+            final IBlockDataHolder<?, ?>[] states = this.value_table[id] = new IBlockDataHolder[property.getValues().size()];
-+
-+            for (final Map.Entry<Comparable<?>, IBlockDataHolder<?, ?>> entry : propertyMap.entrySet()) {
-+                if (entry.getValue() == null) {
-+                    // TODO what
-+                    continue;
-+                }
-+
-+                states[((IBlockState)property).getIdFor(entry.getKey())] = entry.getValue();
-+            }
-+        }
-+
-+
-+        for (final Map.Entry<IBlockState<?>, Comparable<?>> entry : this_map.entrySet()) {
-+            final IBlockState<?> property = entry.getKey();
-+            final int index = lookup_vindex(property, this.index_table);
-+
-+            if (this.value_table[index] == null) {
-+                this.value_table[index] = new IBlockDataHolder[property.getValues().size()];
-+            }
-+
-+            this.value_table[index][((IBlockState)property).getIdFor(entry.getValue())] = this.this_state;
-+        }
-+    }
-+
-+
-+    protected long[] create_table(final Collection<IBlockState<?>> collection) {
-+        int max_id = -1;
-+        for (final IBlockState<?> property : collection) {
-+            final int id = property.getId();
-+            if (id > max_id) {
-+                max_id = id;
-+            }
-+        }
-+
-+        final long[] ret = new long[((max_id + 1) + 31) >>> 5]; // ceil((max_id + 1) / 32)
-+
-+        for (final IBlockState<?> property : collection) {
-+            final int id = property.getId();
-+
-+            ret[id >>> 5] |= (1L << (id & 31));
-+        }
-+
-+        int total = 0;
-+        for (int i = 1, len = ret.length; i < len; ++i) {
-+            ret[i] |= (long)(total += Long.bitCount(ret[i - 1] & 0xFFFFFFFFL)) << 32;
-+        }
-+
-+        return ret;
-+    }
-+
-+    public Comparable<?> get(final IBlockState<?> state) {
-+        final Comparable<?>[] table = this.this_table;
-+        final int index = lookup_vindex(state, this.this_index_table);
-+
-+        if (index < 0 || index >= table.length) {
-+            return null;
-+        }
-+        return table[index];
-+    }
-+
-+    public IBlockDataHolder<?, ?> get(final IBlockState<?> property, final Comparable<?> with) {
-+        final int withId = ((IBlockState)property).getIdFor(with);
-+        if (withId < 0) {
-+            return null;
-+        }
-+
-+        final int index = lookup_vindex(property, this.index_table);
-+        final IBlockDataHolder<?, ?>[][] table = this.value_table;
-+        if (index < 0 || index >= table.length) {
-+            return null;
-+        }
-+
-+        final IBlockDataHolder<?, ?>[] values = table[index];
-+
-+        if (withId >= values.length) {
-+            return null;
-+        }
-+
-+        return values[withId];
-+    }
-+
-+    protected static int lookup_vindex(final IBlockState<?> property, final long[] index_table) {
-+        final int id = property.getId();
-+        final long bitset_mask = (1L << (id & 31));
-+        final long lower_mask = bitset_mask - 1;
-+        final int index = id >>> 5;
-+        if (index >= index_table.length) {
-+            return -1;
-+        }
-+        final long index_value = index_table[index];
-+        final long contains_check = ((index_value & bitset_mask) - 1) >> (Long.SIZE - 1); // -1L if doesn't contain
-+
-+        // index = total bits set in lower table values (upper 32 bits of index_value) plus total bits set in lower indices below id
-+        // contains_check is 0 if the bitset had id set, else it's -1: so index is unaffected if contains_check == 0,
-+        // otherwise it comes out as -1.
-+        return (int)(((index_value >>> 32) + Long.bitCount(index_value & lower_mask)) | contains_check);
-+    }
-+}
 diff --git a/src/main/java/com/tuinity/tuinity/voxel/AABBVoxelShape.java b/src/main/java/com/tuinity/tuinity/voxel/AABBVoxelShape.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..002abb3cbf0f742e685f2f043d2600de03e37a19
@@ -10525,80 +10356,6 @@ index 2d887af902a33b0e28d8f0a6ac2e59c815a7856e..2291135eaef64c403183724cb6e413cd
  
          @Override
          public BlockPosition immutableCopy() {
-diff --git a/src/main/java/net/minecraft/server/BlockStateBoolean.java b/src/main/java/net/minecraft/server/BlockStateBoolean.java
-index 4ca8db630434915de4eaeac6c4ecd60714d7f5d9..d6c8ae638b3993ce55be91087de09a300405e075 100644
---- a/src/main/java/net/minecraft/server/BlockStateBoolean.java
-+++ b/src/main/java/net/minecraft/server/BlockStateBoolean.java
-@@ -12,6 +12,13 @@ public class BlockStateBoolean extends IBlockState<Boolean> {
-         super(s, Boolean.class);
-     }
- 
-+    // Tuinity start - optimise iblockdata state lookup
-+    @Override
-+    public final int getIdFor(final Boolean value) {
-+        return value.booleanValue() ? 1 : 0;
-+    }
-+    // Tuinity end - optimise iblockdata state lookup
-+
-     @Override
-     public Collection<Boolean> getValues() {
-         return this.a;
-diff --git a/src/main/java/net/minecraft/server/BlockStateEnum.java b/src/main/java/net/minecraft/server/BlockStateEnum.java
-index 8dc620b22bb904aa6a82e2127aa9da861986525c..e6663281481a48fe1b838339160565fbf4c6a65a 100644
---- a/src/main/java/net/minecraft/server/BlockStateEnum.java
-+++ b/src/main/java/net/minecraft/server/BlockStateEnum.java
-@@ -17,6 +17,15 @@ public class BlockStateEnum<T extends Enum<T> & INamable> extends IBlockState<T>
-     private final ImmutableSet<T> a;
-     private final Map<String, T> b = Maps.newHashMap();
- 
-+    // Tuinity start - optimise iblockdata state lookup
-+    private int[] idLookupTable;
-+
-+    @Override
-+    public final int getIdFor(final T value) {
-+        return this.idLookupTable[value.ordinal()];
-+    }
-+    // Tuinity end - optimise iblockdata state lookup
-+
-     protected BlockStateEnum(String s, Class<T> oclass, Collection<T> collection) {
-         super(s, oclass);
-         this.a = ImmutableSet.copyOf(collection);
-@@ -32,6 +41,14 @@ public class BlockStateEnum<T extends Enum<T> & INamable> extends IBlockState<T>
- 
-             this.b.put(s1, t0);
-         }
-+        // Tuinity start - optimise iblockdata state lookup
-+        int id = 0;
-+        this.idLookupTable = new int[oclass.getEnumConstants().length];
-+        java.util.Arrays.fill(this.idLookupTable, -1);
-+        for (final T value : this.getValues()) {
-+            this.idLookupTable[value.ordinal()] = id++;
-+        }
-+        // Tuinity end - optimise iblockdata state lookup
- 
-     }
- 
-diff --git a/src/main/java/net/minecraft/server/BlockStateInteger.java b/src/main/java/net/minecraft/server/BlockStateInteger.java
-index 36b84446e96faefad3b783f73df74e0f3bce8255..acae5fe0bff44d2bc3921c8e078b2f261de3a035 100644
---- a/src/main/java/net/minecraft/server/BlockStateInteger.java
-+++ b/src/main/java/net/minecraft/server/BlockStateInteger.java
-@@ -13,6 +13,16 @@ public class BlockStateInteger extends IBlockState<Integer> {
-     public final int min;
-     public final int max;
- 
-+    // Tuinity start - optimise iblockdata state lookup
-+    @Override
-+    public final int getIdFor(final Integer value) {
-+        final int val = value.intValue();
-+        final int ret = val - this.min;
-+
-+        return ret | ((this.max - ret) >> 31);
-+    }
-+    // Tuinity end - optimise iblockdata state lookup
-+
-     protected BlockStateInteger(String s, int i, int j) {
-         super(s, Integer.class);
-         this.min = i;
 diff --git a/src/main/java/net/minecraft/server/Chunk.java b/src/main/java/net/minecraft/server/Chunk.java
 index 3bcd63a754538ccfc5965207a8fc79faa31925c0..8e59a794f6190930cb7bb81a2fe1a1d374dacce7 100644
 --- a/src/main/java/net/minecraft/server/Chunk.java
@@ -12559,20 +12316,19 @@ index 534238688be75c53058dcfeabcdf86d9c0504089..2ec48858be8eb2c522c9685b43bd36b3
              int j = MathHelper.floor(d1);
              int k = MathHelper.floor(d2);
 diff --git a/src/main/java/net/minecraft/server/EntityArrow.java b/src/main/java/net/minecraft/server/EntityArrow.java
-index 1e7f5957d879d1ba8cf2b29cf9397b8e204e4381..77ddda8bd5b8a37ed51324e9769da4978173e744 100644
+index 1e7f5957d879d1ba8cf2b29cf9397b8e204e4381..7532e4e6fc561645e7e7a4f703025af77825b0bd 100644
 --- a/src/main/java/net/minecraft/server/EntityArrow.java
 +++ b/src/main/java/net/minecraft/server/EntityArrow.java
-@@ -173,8 +173,10 @@ public abstract class EntityArrow extends IProjectile {
+@@ -173,7 +173,9 @@ public abstract class EntityArrow extends IProjectile {
                  // Paper end
  
                  if (object != null && !flag) {
 +                    if (org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, (MovingObjectPosition) object)) { // CraftBukkit - Call event // Paper - make cancellable // Tuinity - implement cancellation properly
                      this.a((MovingObjectPosition) object);
-                     this.impulse = true;
 +                    } // Tuinity - implement cancellation properly
+                     this.impulse = true;
                  }
  
-                 if (movingobjectpositionentity == null || this.getPierceLevel() <= 0) {
 @@ -507,7 +509,8 @@ public abstract class EntityArrow extends IProjectile {
                  }
                  itemstack = item.getItemStack();
@@ -12627,20 +12383,19 @@ index 0840fdf3585407ec317f0326359619220c64db78..6b9b64539d2272070b523ed6b927de02
                  // CraftBukkit start - Fire ProjectileHitEvent
                  if (this.dead) {
 diff --git a/src/main/java/net/minecraft/server/EntityFireworks.java b/src/main/java/net/minecraft/server/EntityFireworks.java
-index 9bc4d3dbd4c64a6fbf33dcf28afde59ace9171ba..d8faa18724baa240fca78a35c362cf661615ec4d 100644
+index 9bc4d3dbd4c64a6fbf33dcf28afde59ace9171ba..7ec62d734542d64809c71776eb865ff8ca51dc7f 100644
 --- a/src/main/java/net/minecraft/server/EntityFireworks.java
 +++ b/src/main/java/net/minecraft/server/EntityFireworks.java
-@@ -125,8 +125,10 @@ public class EntityFireworks extends IProjectile {
+@@ -125,7 +125,9 @@ public class EntityFireworks extends IProjectile {
          MovingObjectPosition movingobjectposition = ProjectileHelper.a((Entity) this, this::a);
  
          if (!this.noclip) {
 +            if (org.bukkit.craftbukkit.event.CraftEventFactory.callProjectileHitEvent(this, movingobjectposition)) { // CraftBukkit - Call event // Paper - make cancellable // Tuinity - implement cancellation properly
              this.a(movingobjectposition);
-             this.impulse = true;
 +            } // Tuinity - implement cancellation properly
+             this.impulse = true;
          }
  
-         this.x();
 diff --git a/src/main/java/net/minecraft/server/EntityFishingHook.java b/src/main/java/net/minecraft/server/EntityFishingHook.java
 index 3580f40b2bb30bceca0ce374edb29608168a00c0..9841c7c27cd296a5156ba79ab734d45922bacaf7 100644
 --- a/src/main/java/net/minecraft/server/EntityFishingHook.java
@@ -13099,106 +12854,6 @@ index c4a83448ed4513f6e4ab179d1d43e5bb0cb13641..5ccf6b483fe15d4ad12ce2d3d11e9440
              Vec3D vec3d = raytrace1.b();
              Vec3D vec3d1 = raytrace1.a();
              VoxelShape voxelshape = raytrace1.a(iblockdata, this, blockposition);
-diff --git a/src/main/java/net/minecraft/server/IBlockDataHolder.java b/src/main/java/net/minecraft/server/IBlockDataHolder.java
-index b19c694cf01bc868dd7c4ec6432b613d19f2ca40..06d2dd7584253a406aa77867fac5543aa01020fd 100644
---- a/src/main/java/net/minecraft/server/IBlockDataHolder.java
-+++ b/src/main/java/net/minecraft/server/IBlockDataHolder.java
-@@ -39,11 +39,13 @@ public abstract class IBlockDataHolder<O, S> {
-     private final ImmutableMap<IBlockState<?>, Comparable<?>> b;
-     private Table<IBlockState<?>, Comparable<?>, S> e;
-     protected final MapCodec<S> d;
-+    protected com.tuinity.tuinity.util.table.ZeroCollidingReferenceStateTable optimisedTable; // Tuinity - optimise state lookup
- 
-     protected IBlockDataHolder(O o0, ImmutableMap<IBlockState<?>, Comparable<?>> immutablemap, MapCodec<S> mapcodec) {
-         this.c = o0;
-         this.b = immutablemap;
-         this.d = mapcodec;
-+        this.optimisedTable = new com.tuinity.tuinity.util.table.ZeroCollidingReferenceStateTable(this, immutablemap); // Tuinity - optimise state lookup
-     }
- 
-     public <T extends Comparable<T>> S a(IBlockState<T> iblockstate) {
-@@ -85,11 +87,11 @@ public abstract class IBlockDataHolder<O, S> {
- 
-     public <T extends Comparable<T>> boolean contains(IBlockState<T> iblockstate) { return this.b(iblockstate); } // Paper - OBFHELPER
-     public <T extends Comparable<T>> boolean b(IBlockState<T> iblockstate) {
--        return this.b.containsKey(iblockstate);
-+        return this.optimisedTable.get(iblockstate) != null; // Tuinity - optimise state lookup
-     }
- 
-     public <T extends Comparable<T>> T get(IBlockState<T> iblockstate) {
--        Comparable<?> comparable = (Comparable) this.b.get(iblockstate);
-+        final Comparable<?> comparable = this.optimisedTable.get(iblockstate); // Tuinity - optimise state lookup
- 
-         if (comparable == null) {
-             throw new IllegalArgumentException("Cannot get property " + iblockstate + " as it does not exist in " + this.c);
-@@ -99,27 +101,21 @@ public abstract class IBlockDataHolder<O, S> {
-     }
- 
-     public <T extends Comparable<T>> Optional<T> d(IBlockState<T> iblockstate) {
--        Comparable<?> comparable = (Comparable) this.b.get(iblockstate);
-+        final Comparable<?> comparable = this.optimisedTable.get(iblockstate); // Tuinity - optimise state lookup
- 
-         return comparable == null ? Optional.empty() : Optional.of(iblockstate.getType().cast(comparable));
-     }
- 
-     public <T extends Comparable<T>, V extends T> S set(IBlockState<T> iblockstate, V v0) {
--        Comparable<?> comparable = (Comparable) this.b.get(iblockstate);
-+        // Tuinity start - optimise state lookup
-+        final S ret = (S)this.optimisedTable.get(iblockstate, v0);
- 
--        if (comparable == null) {
--            throw new IllegalArgumentException("Cannot set property " + iblockstate + " as it does not exist in " + this.c);
--        } else if (comparable == v0) {
--            return (S) this; // Paper - decompile error
--        } else {
--            S s0 = this.e.get(iblockstate, v0);
--
--            if (s0 == null) {
--                throw new IllegalArgumentException("Cannot set property " + iblockstate + " to " + v0 + " on " + this.c + ", it is not an allowed value");
--            } else {
--                return s0;
--            }
-+        if (ret == null) {
-+            throw new IllegalArgumentException("Cannot set property " + iblockstate + " to " + v0 + " on " + this.c + ", it is not an allowed value");
-         }
-+
-+        return ret;
-+        // Tuinity end - optimise state lookup
-     }
- 
-     public void a(Map<Map<IBlockState<?>, Comparable<?>>, S> map) {
-@@ -143,7 +139,8 @@ public abstract class IBlockDataHolder<O, S> {
-                 }
-             }
- 
--            this.e = (Table) (table.isEmpty() ? table : ArrayTable.create(table));
-+            this.e = (Table) (table.isEmpty() ? table : ArrayTable.create(table)); this.optimisedTable.loadInTable((Table)this.e, this.b); // Tuinity - optimise state lookup
-+
-         }
-     }
- 
-diff --git a/src/main/java/net/minecraft/server/IBlockState.java b/src/main/java/net/minecraft/server/IBlockState.java
-index 6550b55067db31dbbc903fe17a13849383651c5a..30344d1e5703690d97ecb889af24fa5e7b35f895 100644
---- a/src/main/java/net/minecraft/server/IBlockState.java
-+++ b/src/main/java/net/minecraft/server/IBlockState.java
-@@ -15,6 +15,17 @@ public abstract class IBlockState<T extends Comparable<T>> {
-     private final Codec<T> d;
-     private final Codec<IBlockState.a<T>> e;
- 
-+    // Tuinity start - optimise iblockdata state lookup
-+    private static final java.util.concurrent.atomic.AtomicInteger ID_GENERATOR = new java.util.concurrent.atomic.AtomicInteger();
-+    private final int id = ID_GENERATOR.getAndIncrement();
-+
-+    public final int getId() {
-+        return this.id;
-+    }
-+
-+    public abstract int getIdFor(final T value);
-+    // Tuinity end - optimise state lookup
-+
-     protected IBlockState(String s, Class<T> oclass) {
-         this.d = Codec.STRING.comapFlatMap((s1) -> this.b(s1).map(DataResult::success).orElseGet(() -> { // Paper - decompile error
-             return DataResult.error("Unable to read property: " + this + " with value: " + s1);
 diff --git a/src/main/java/net/minecraft/server/IChunkAccess.java b/src/main/java/net/minecraft/server/IChunkAccess.java
 index 180b6b58dc5663158db84b6f1257591439b48c31..eb0d794b7275af7f860e7c7b85a9e3b2aa4a863f 100644
 --- a/src/main/java/net/minecraft/server/IChunkAccess.java
@@ -15471,7 +15126,7 @@ index 904c6a7d0a36b57bb4f693fc4fd0dd5b17adcbac..dcf13e62264f97384fb2f6c30cbc183a
                  if (chunk != null) {
                      playerchunkmap.callbackExecutor.execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/PlayerChunkMap.java b/src/main/java/net/minecraft/server/PlayerChunkMap.java
-index 00d0a5fd7c5d2db19756f3c6cfb2381868af51fd..3e0bf6df7c4608a5b19024612db52558fd722f4b 100644
+index 00d0a5fd7c5d2db19756f3c6cfb2381868af51fd..945d16f57317406bff3cbe20756677eccfba1525 100644
 --- a/src/main/java/net/minecraft/server/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/PlayerChunkMap.java
 @@ -49,6 +49,7 @@ import java.util.stream.Collectors;
@@ -15956,6 +15611,15 @@ index 00d0a5fd7c5d2db19756f3c6cfb2381868af51fd..3e0bf6df7c4608a5b19024612db52558
          if (!this.updatingChunksModified) {
              return false;
          } else {
+@@ -1105,7 +1206,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+                     if (ichunkaccess.getChunkStatus().b(chunkstatus)) {
+                         CompletableFuture<Either<IChunkAccess, PlayerChunk.Failure>> completablefuture1; // Paper
+ 
+-                        if (chunkstatus == ChunkStatus.LIGHT) {
++                        if (!com.tuinity.tuinity.config.TuinityConfig.useNewLightEngine && chunkstatus == ChunkStatus.LIGHT) { // Tuinity - we use edge checks, so loading 1 radius neighbours isn't necessary
+                             completablefuture1 = this.b(playerchunk, chunkstatus);
+                         } else {
+                             completablefuture1 = chunkstatus.a(this.world, this.definedStructureManager, this.lightEngine, (ichunkaccess1) -> {
 @@ -1135,6 +1236,7 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
  
                  this.getVillagePlace().loadInData(chunkcoordintpair, chunkHolder.poiData);
@@ -19323,7 +18987,7 @@ index 6e82c1d1b272a95144bfc78d34b630c24466fa3e..6b4c007550c3e2e405314d8931630557
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/server/WorldServer.java b/src/main/java/net/minecraft/server/WorldServer.java
-index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6bf2a1a7c7 100644
+index cf7d94aabab600822eb5e27f38690b06456d5fcc..18d21f21c10974d21d17abe2f9319cdc7fd51eea 100644
 --- a/src/main/java/net/minecraft/server/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/WorldServer.java
 @@ -55,12 +55,13 @@ import org.bukkit.event.server.MapInitializeEvent;
@@ -20041,19 +19705,50 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
                  if (entity.inChunk && this.isChunkLoaded(entity.chunkX, entity.chunkZ)) {
                      this.getChunkAt(entity.chunkX, entity.chunkZ).a(entity, entity.chunkY);
                  }
-@@ -943,6 +1460,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -941,8 +1458,41 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+ 
+                     entity.inChunk = false;
                  } else {
-                     this.getChunkAt(i, k).a(entity);
-                 }
+-                    this.getChunkAt(i, k).a(entity);
++                    // Tuinity start - gotta be careful here, sync load can teleport entity.
++                    Chunk chunk = this.getChunkIfLoaded(i, k);
++                    if (chunk == null) {
++                        // might teleport the entity, so be prepared.
++                        // at this point, we are NOT in a chunk. so CLEARLY mark that for a recursive call to see.
++                        entity.inChunk = false;
++                        // now load
++                        chunk = this.getChunkAt(i, k);
++                        // are we in a chunk now?
++                        if (entity.inChunk) {
++                            // yup we teleported and were added to another chunk. do not add to the current one!
++                            return;
++                        }
++                        // did we teleport but did not add to a chunk?
++                        // copied from start
++                        int in = MathHelper.floor(entity.locX() / 16.0D);
++                        int jn =  Math.min(15, Math.max(0, MathHelper.floor(entity.locY() / 16.0D))); // Paper - stay consistent with chunk add/remove behavior
++                        int kn = MathHelper.floor(entity.locZ() / 16.0D);
++                        if (in != i || jn != j || kn != k) {
++                            // teleported but were not added to a chunk. try now, let the new call try to add again
++                            this.chunkCheck(entity);
++                            return;
++                        }
++
++                        // only now at this point have we verified the new load did not screw up our position, so
++                        // now we can add to the chunk
++                    }
++                    chunk.a(entity);
++                    // Tuinity end - gotta be careful here, sync load can teleport entity.
++                }
 +                // Tuinity start
 +                if (entity.inChunk && (oldRegionX != newRegionX || oldRegionZ != newRegionZ)) {
 +                    this.addNavigatorsIfPathingToRegion(entity);
-+                }
+                 }
 +                // Tuinity end
              }
  
              this.getMethodProfiler().exit();
-@@ -1279,9 +1801,13 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1279,9 +1829,13 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          // Spigot Start
          for (TileEntity tileentity : chunk.getTileEntities().values()) {
              if (tileentity instanceof IInventory) {
@@ -20068,7 +19763,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
              }
          }
          // Spigot End
-@@ -1298,7 +1824,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1298,7 +1852,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  Entity entity = (Entity) iterator.next();
  
                  if (!(entity instanceof EntityPlayer)) {
@@ -20077,7 +19772,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
                          throw (IllegalStateException) SystemUtils.c((Throwable) (new IllegalStateException("Removing entity while ticking!")));
                      }
  
-@@ -1326,6 +1852,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1326,6 +1880,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      public void unregisterEntity(Entity entity) {
          org.spigotmc.AsyncCatcher.catchOp("entity unregister"); // Spigot
@@ -20085,7 +19780,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
          // Paper start - fix entity registration issues
          if (entity instanceof EntityComplexPart) {
              // Usually this is a no-op for complex parts, and ID's should be removed, but go ahead and remove it anyways
-@@ -1392,17 +1919,76 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1392,17 +1947,76 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          this.getScoreboard().a(entity);
          // CraftBukkit start - SPIGOT-5278
          if (entity instanceof EntityDrowned) {
@@ -20165,7 +19860,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
      private void registerEntity(Entity entity) {
          org.spigotmc.AsyncCatcher.catchOp("entity register"); // Spigot
          // Paper start - don't double enqueue entity registration
-@@ -1413,7 +1999,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1413,7 +2027,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              return;
          }
          // Paper end
@@ -20174,7 +19869,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
              if (!entity.isQueuedForRegister) { // Paper
                  this.entitiesToAdd.add(entity);
                  entity.isQueuedForRegister = true; // Paper
-@@ -1421,6 +2007,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1421,6 +2035,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          } else {
              entity.isQueuedForRegister = false; // Paper
              this.entitiesById.put(entity.getId(), entity);
@@ -20182,7 +19877,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
              if (entity instanceof EntityEnderDragon) {
                  EntityComplexPart[] aentitycomplexpart = ((EntityEnderDragon) entity).eJ();
                  int i = aentitycomplexpart.length;
-@@ -1429,6 +2016,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1429,6 +2044,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                      EntityComplexPart entitycomplexpart = aentitycomplexpart[j];
  
                      this.entitiesById.put(entitycomplexpart.getId(), entitycomplexpart);
@@ -20190,7 +19885,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
                  }
              }
  
-@@ -1453,12 +2041,16 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1453,12 +2069,16 @@ public class WorldServer extends World implements GeneratorAccessSeed {
              // this.getChunkProvider().addEntity(entity); // Paper - moved down below valid=true
              // CraftBukkit start - SPIGOT-5278
              if (entity instanceof EntityDrowned) {
@@ -20210,7 +19905,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
              }
              entity.valid = true; // CraftBukkit
              this.getChunkProvider().addEntity(entity); // Paper - from above to be below valid=true
-@@ -1474,7 +2066,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1474,7 +2094,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      }
  
      public void removeEntity(Entity entity) {
@@ -20219,7 +19914,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
              throw (IllegalStateException) SystemUtils.c((Throwable) (new IllegalStateException("Removing entity while ticking!")));
          } else {
              this.removeEntityFromChunk(entity);
-@@ -1570,20 +2162,33 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1570,20 +2190,33 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
      @Override
      public void notify(BlockPosition blockposition, IBlockData iblockdata, IBlockData iblockdata1, int i) {
@@ -20255,7 +19950,7 @@ index cf7d94aabab600822eb5e27f38690b06456d5fcc..a77fceac7c9e79a6bac05becc21bcb6b
                  } catch (java.util.ConcurrentModificationException ex) {
                      // This can happen because the pathfinder update below may trigger a chunk load, which in turn may cause more navigators to register
                      // In this case we just run the update again across all the iterators as the chunk will then be loaded
-@@ -1597,6 +2202,9 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1597,6 +2230,9 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                      navigationabstract.b(blockposition);
                  }
              }
