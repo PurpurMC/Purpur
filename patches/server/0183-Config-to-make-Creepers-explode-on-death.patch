@@ -6,33 +6,57 @@ Subject: [PATCH] Config to make Creepers explode on death
 Creepers exploded after being killed in the alpha days. This brings that back.
 
 diff --git a/src/main/java/net/minecraft/server/EntityCreeper.java b/src/main/java/net/minecraft/server/EntityCreeper.java
-index 523988bcc0607198dfb73afca5932ed6dd82cca1..7b69eddd21e7effee63cbd4c78976eb87ed5d633 100644
+index 523988bcc0607198dfb73afca5932ed6dd82cca1..ef6d98912754dfb18c9bc531ee712aef06976996 100644
 --- a/src/main/java/net/minecraft/server/EntityCreeper.java
 +++ b/src/main/java/net/minecraft/server/EntityCreeper.java
-@@ -102,6 +102,14 @@ public class EntityCreeper extends EntityMonster {
+@@ -23,6 +23,7 @@ public class EntityCreeper extends EntityMonster {
+     private int spacebarCharge = 0;
+     private int prevSpacebarCharge = 0;
+     private int powerToggleDelay = 0;
++    private boolean exploding = false;
+     // Purpur end
+ 
+     public EntityCreeper(EntityTypes<? extends EntityCreeper> entitytypes, World world) {
+@@ -102,6 +103,14 @@ public class EntityCreeper extends EntityMonster {
      public void initAttributes() {
          this.getAttributeInstance(GenericAttributes.MAX_HEALTH).setValue(this.world.purpurConfig.creeperMaxHealth);
      }
 +
-+    public void die() {
-+        super.die();
-+
-+        if (this.world.purpurConfig.creeperExplodeWhenKilled && this.getKillingEntity() instanceof EntityPlayer) {
++    protected org.bukkit.event.entity.EntityDeathEvent d(DamageSource damagesource) {
++        if (!exploding && this.world.purpurConfig.creeperExplodeWhenKilled && damagesource.getEntity() instanceof EntityPlayer) {
 +            this.explode();
 +        }
++
++        return super.d(damagesource);
 +    }
      // Purpur end
  
      @Override
-@@ -297,7 +305,7 @@ public class EntityCreeper extends EntityMonster {
+@@ -287,6 +296,7 @@ public class EntityCreeper extends EntityMonster {
+     }
+ 
+     public void explode() {
++        this.exploding = true; // Purpur
+         if (!this.world.isClientSide) {
+             Explosion.Effect explosion_effect = this.world.getGameRules().getBoolean(GameRules.MOB_GRIEFING) && world.purpurConfig.creeperAllowGriefing ? Explosion.Effect.DESTROY : Explosion.Effect.NONE; // Purpur
+             float f = this.isPowered() ? 2.0F : 1.0F;
+@@ -295,6 +305,7 @@ public class EntityCreeper extends EntityMonster {
+             ExplosionPrimeEvent event = new ExplosionPrimeEvent(this.getBukkitEntity(), this.explosionRadius * f, false);
+             this.world.getServer().getPluginManager().callEvent(event);
              if (!event.isCancelled()) {
++
                  this.killed = true;
                  this.world.createExplosion(this, this.locX(), this.locY(), this.locZ(), event.getRadius(), event.getFire(), explosion_effect);
--                this.die();
-+                if (!this.dead) this.die(); // Purpur
-                 this.createEffectCloud();
-             } else {
-                 fuseTicks = 0;
+                 this.die();
+@@ -305,7 +316,7 @@ public class EntityCreeper extends EntityMonster {
+             }
+             // CraftBukkit end
+         }
+-
++        this.exploding = false; // Purpur
+     }
+ 
+     private void createEffectCloud() {
 diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 index e3dccf08a9b931f83e0c0a218f5db60e643f7674..5ce9e76e4aad9338b950a30cc90d7f2f77eba271 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
