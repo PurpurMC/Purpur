@@ -52,7 +52,3 @@ subprojects {
         credentials(PasswordCredentials::class)
     }
 }
-
-tasks.withType<xyz.jpenilla.toothpick.task.ApplyPatches> {
-    applyCommand("am", "--no-3way", "--ignore-whitespace", "--reject", "-C0")
-}
