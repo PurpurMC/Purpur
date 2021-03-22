@@ -5,7 +5,7 @@ Subject: [PATCH] Silk touch spawners
 
 
 diff --git a/src/main/java/io/papermc/paper/adventure/PaperAdventure.java b/src/main/java/io/papermc/paper/adventure/PaperAdventure.java
-index c45d48cef53476fa1602cebaa57c72894bba10d3..d563694540fd22c89ada65787d9e996eecee26f4 100644
+index 71938ad7b3494e803beca7e4022aad12a51f2096..0b77884d8134c328f8fd1bbb8230d260606dc5ee 100644
 --- a/src/main/java/io/papermc/paper/adventure/PaperAdventure.java
 +++ b/src/main/java/io/papermc/paper/adventure/PaperAdventure.java
 @@ -81,6 +81,7 @@ public final class PaperAdventure {
@@ -16,12 +16,92 @@ index c45d48cef53476fa1602cebaa57c72894bba10d3..d563694540fd22c89ada65787d9e996e
      public static final PlainComponentSerializer PLAIN = PlainComponentSerializer.builder().flattener(FLATTENER).build();
      static final GsonComponentSerializer GSON = GsonComponentSerializer.builder()
          .legacyHoverEventSerializer(NBTLegacyHoverEventSerializer.INSTANCE)
-diff --git a/src/main/java/net/minecraft/server/BlockMobSpawner.java b/src/main/java/net/minecraft/server/BlockMobSpawner.java
-index 81e145ff0759322f74888c81df8d2133fece7144..567a6a064254d99ae6a931b91e6bdd94badb19fc 100644
---- a/src/main/java/net/minecraft/server/BlockMobSpawner.java
-+++ b/src/main/java/net/minecraft/server/BlockMobSpawner.java
-@@ -1,5 +1,17 @@
- package net.minecraft.server;
+diff --git a/src/main/java/net/minecraft/server/ItemSpawner.java b/src/main/java/net/minecraft/server/ItemSpawner.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..599672ed4d0fc412ad3c0fa2e9d9df7035694fa2
+--- /dev/null
++++ b/src/main/java/net/minecraft/server/ItemSpawner.java
+@@ -0,0 +1,35 @@
++package net.minecraft.server;
++
++import net.minecraft.core.BlockPosition;
++import net.minecraft.nbt.NBTTagCompound;
++import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.player.EntityHuman;
++import net.minecraft.world.item.ItemBlock;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.level.World;
++import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.entity.TileEntity;
++import net.minecraft.world.level.block.entity.TileEntityMobSpawner;
++import net.minecraft.world.level.block.state.IBlockData;
++
++public class ItemSpawner extends ItemBlock {
++    public ItemSpawner(Block block, Info info) {
++        super(block, info);
++    }
++
++    @Override
++    protected boolean a(BlockPosition blockposition, World world, EntityHuman entityhuman, ItemStack itemstack, IBlockData iblockdata) {
++        boolean handled = super.a(blockposition, world, entityhuman, itemstack, iblockdata);
++        if (world.purpurConfig.silkTouchEnabled && entityhuman.getBukkitEntity().hasPermission("purpur.place.spawners")) {
++            TileEntity spawner = world.getTileEntity(blockposition);
++            if (spawner instanceof TileEntityMobSpawner && itemstack.hasTag()) {
++                NBTTagCompound tag = itemstack.getTag();
++                if (tag.hasKey("Purpur.mob_type")) {
++                    EntityTypes.getByName(tag.getString("Purpur.mob_type")).ifPresent(type ->
++                            ((TileEntityMobSpawner) spawner).getSpawner().setMobName(type));
++                }
++            }
++        }
++        return handled;
++    }
++}
+diff --git a/src/main/java/net/minecraft/world/item/Items.java b/src/main/java/net/minecraft/world/item/Items.java
+index fc5cc610e7ea584ce72600b9d9f47543265725bb..8e9a25495d76251a86268d3059e2960a86dc46b3 100644
+--- a/src/main/java/net/minecraft/world/item/Items.java
++++ b/src/main/java/net/minecraft/world/item/Items.java
+@@ -2,6 +2,7 @@ package net.minecraft.world.item;
+ 
+ import net.minecraft.core.IRegistry;
+ import net.minecraft.resources.MinecraftKey;
++import net.minecraft.server.ItemSpawner;
+ import net.minecraft.sounds.SoundEffects;
+ import net.minecraft.world.entity.EntityTypes;
+ import net.minecraft.world.entity.EnumItemSlot;
+@@ -193,7 +194,7 @@ public class Items {
+     public static final Item ct = a(Blocks.PURPUR_BLOCK, CreativeModeTab.b);
+     public static final Item cu = a(Blocks.PURPUR_PILLAR, CreativeModeTab.b);
+     public static final Item cv = a(Blocks.PURPUR_STAIRS, CreativeModeTab.b);
+-    public static final Item cw = a(Blocks.SPAWNER);
++    public static final Item cw = a(Blocks.SPAWNER, new ItemSpawner(Blocks.SPAWNER, new Item.Info().a(EnumItemRarity.EPIC))); // Purpur
+     public static final Item cx = a(Blocks.OAK_STAIRS, CreativeModeTab.b);
+     public static final Item cy = a(Blocks.CHEST, CreativeModeTab.c);
+     public static final Item cz = a(Blocks.DIAMOND_ORE, CreativeModeTab.b);
+diff --git a/src/main/java/net/minecraft/world/level/block/BlockMobSpawner.java b/src/main/java/net/minecraft/world/level/block/BlockMobSpawner.java
+index 287dd5f1b2b913df4029966860cd1a426947b187..af3c1a6307fb9e244226794508382d2ffa2aeb4b 100644
+--- a/src/main/java/net/minecraft/world/level/block/BlockMobSpawner.java
++++ b/src/main/java/net/minecraft/world/level/block/BlockMobSpawner.java
+@@ -1,14 +1,35 @@
+ package net.minecraft.world.level.block;
+ 
+ import net.minecraft.core.BlockPosition;
++import net.minecraft.nbt.NBTTagCompound;
++import net.minecraft.nbt.NBTTagList;
++import net.minecraft.nbt.NBTTagString;
++import net.minecraft.resources.MinecraftKey;
+ import net.minecraft.server.level.WorldServer;
++import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.player.EntityHuman;
+ import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.enchantment.EnchantmentManager;
++import net.minecraft.world.item.enchantment.Enchantments;
+ import net.minecraft.world.level.IBlockAccess;
++import net.minecraft.world.level.World;
+ import net.minecraft.world.level.block.entity.TileEntity;
+ import net.minecraft.world.level.block.entity.TileEntityMobSpawner;
+ import net.minecraft.world.level.block.state.BlockBase;
+ import net.minecraft.world.level.block.state.IBlockData;
  
 +// Purpur start
 +import io.papermc.paper.adventure.PaperAdventure;
@@ -38,7 +118,7 @@ index 81e145ff0759322f74888c81df8d2133fece7144..567a6a064254d99ae6a931b91e6bdd94
  public class BlockMobSpawner extends BlockTileEntity {
  
      protected BlockMobSpawner(BlockBase.Info blockbase_info) {
-@@ -11,6 +23,59 @@ public class BlockMobSpawner extends BlockTileEntity {
+@@ -20,6 +41,59 @@ public class BlockMobSpawner extends BlockTileEntity {
          return new TileEntityMobSpawner();
      }
  
@@ -98,7 +178,7 @@ index 81e145ff0759322f74888c81df8d2133fece7144..567a6a064254d99ae6a931b91e6bdd94
      @Override
      public void dropNaturally(IBlockData iblockdata, WorldServer worldserver, BlockPosition blockposition, ItemStack itemstack) {
          super.dropNaturally(iblockdata, worldserver, blockposition, itemstack);
-@@ -23,6 +88,7 @@ public class BlockMobSpawner extends BlockTileEntity {
+@@ -32,6 +106,7 @@ public class BlockMobSpawner extends BlockTileEntity {
  
      @Override
      public int getExpDrop(IBlockData iblockdata, WorldServer worldserver, BlockPosition blockposition, ItemStack itemstack) {
@@ -106,59 +186,17 @@ index 81e145ff0759322f74888c81df8d2133fece7144..567a6a064254d99ae6a931b91e6bdd94
          int i = 15 + worldserver.random.nextInt(15) + worldserver.random.nextInt(15);
  
          return i;
-diff --git a/src/main/java/net/minecraft/server/ItemSpawner.java b/src/main/java/net/minecraft/server/ItemSpawner.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..5c7f73918542bbdbc8d8f97671f24091fc6cb83b
---- /dev/null
-+++ b/src/main/java/net/minecraft/server/ItemSpawner.java
-@@ -0,0 +1,23 @@
-+package net.minecraft.server;
-+
-+public class ItemSpawner extends ItemBlock {
-+    public ItemSpawner(Block block, Info info) {
-+        super(block, info);
-+    }
-+
-+    @Override
-+    protected boolean a(BlockPosition blockposition, World world, EntityHuman entityhuman, ItemStack itemstack, IBlockData iblockdata) {
-+        boolean handled = super.a(blockposition, world, entityhuman, itemstack, iblockdata);
-+        if (world.purpurConfig.silkTouchEnabled && entityhuman.getBukkitEntity().hasPermission("purpur.place.spawners")) {
-+            TileEntity spawner = world.getTileEntity(blockposition);
-+            if (spawner instanceof TileEntityMobSpawner && itemstack.hasTag()) {
-+                NBTTagCompound tag = itemstack.getTag();
-+                if (tag.hasKey("Purpur.mob_type")) {
-+                    EntityTypes.getByName(tag.getString("Purpur.mob_type")).ifPresent(type ->
-+                            ((TileEntityMobSpawner) spawner).getSpawner().setMobName(type));
-+                }
-+            }
-+        }
-+        return handled;
-+    }
-+}
-diff --git a/src/main/java/net/minecraft/server/Items.java b/src/main/java/net/minecraft/server/Items.java
-index 1c861bccc2652057cb154667a5bf7269092b2db4..67ebcbe4daa1ef3cef6ca43ec92befbe4156842e 100644
---- a/src/main/java/net/minecraft/server/Items.java
-+++ b/src/main/java/net/minecraft/server/Items.java
-@@ -180,7 +180,7 @@ public class Items {
-     public static final Item ct = a(Blocks.PURPUR_BLOCK, CreativeModeTab.b);
-     public static final Item cu = a(Blocks.PURPUR_PILLAR, CreativeModeTab.b);
-     public static final Item cv = a(Blocks.PURPUR_STAIRS, CreativeModeTab.b);
--    public static final Item cw = a(Blocks.SPAWNER);
-+    public static final Item cw = a(Blocks.SPAWNER, new ItemSpawner(Blocks.SPAWNER, new Item.Info().a(EnumItemRarity.EPIC))); // Purpur
-     public static final Item cx = a(Blocks.OAK_STAIRS, CreativeModeTab.b);
-     public static final Item cy = a(Blocks.CHEST, CreativeModeTab.c);
-     public static final Item cz = a(Blocks.DIAMOND_ORE, CreativeModeTab.b);
 diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
-index c7fb5a737cab0083c39732247acb8f4e87562894..ba89efb3159ab04a6239865967f93055cb6be7a9 100644
+index c7fb5a737cab0083c39732247acb8f4e87562894..10a6fcd70869719ed2b2d1442a83ab912e00c898 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
 @@ -1,6 +1,12 @@
  package net.pl3x.purpur;
  
-+import net.minecraft.server.IRegistry;
-+import net.minecraft.server.Item;
-+import net.minecraft.server.Items;
-+import net.minecraft.server.MinecraftKey;
++import net.minecraft.core.IRegistry;
++import net.minecraft.world.item.Item;
++import net.minecraft.world.item.Items;
++import net.minecraft.resources.MinecraftKey;
  import org.bukkit.configuration.ConfigurationSection;
 +
 +import java.util.ArrayList;
