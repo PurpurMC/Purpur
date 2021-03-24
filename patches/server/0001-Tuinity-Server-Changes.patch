@@ -3,587 +3,170 @@ From: Spottedleaf <Spottedleaf@users.noreply.github.com>
 Date: Fri, 14 Dec 2018 21:53:58 -0800
 Subject: [PATCH] Tuinity Server Changes
 
-Brand changes
+                   GNU LESSER GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
 
-MC-Dev fixes
-
-Util patch
-
-Tuinity Server Config
-
-Multi-Threaded Server Ticking Vanilla
-
-This patch is the vanilla server changes
-
-Currently a placeholder patch.
-
-Multi-Threaded ticking CraftBukkit
-
-These are the changes to CB
-
-Currently a placeholder patch.
-
-Add soft async catcher
-
-Must be enabled via -Dtuinity.strict-thread-checks=true
-
-Delay chunk unloads
-
-Chunk unloads are now delayed by 1s. Specifically, ticket level
-reduction is delayed by 1s. This is done to allow players to
-teleport and have their pets follow them, as the chunks will no longer
-unload or have entity ticking status removed.
-
-It's also targetted to reduce performance regressions when
-plugins or edge cases in code do not spam sync loads since chunks
-without tickets get unloaded immediately.
-
-Configurable under `delay-chunkunloads-by` in config.
-
-This patch replaces the paper patch as the paper patch only
-affects player loaded chunks, when we want to target all
-loads.
-
-Attempt to recalculate regionfile header if it is corrupt
-
-Instead of trying to relocate the chunk, which is seems to never
-be the correct choice, so we end up duplicating or swapping chunks,
-we instead drop the current regionfile header and recalculate -
-hoping that at least then we don't swap chunks, and maybe recover
-them all.
-
-Lag compensate block breaking
-
-Use time instead of ticks if ticks fall behind
-
-Update version fetcher repo
-
-Sets the target github repo to Tuinity in the version checker. Also disables the jenkins build lookups.
-
-This patch is licensed under the MIT license. See /licenses/MIT.md.
-
-Per World Spawn Limits
-
-This patch is licensed under the MIT license. See /licenses/MIT.md.
-
-Detail more information in watchdog dumps
-
-- Dump position, world, velocity, and uuid for currently ticking entities
-- Dump player name, player uuid, position, and world for packet handling
-
-Execute chunk tasks mid-tick
-
-This will help the server load chunks if tick times are high.
-
-Change writes to use NORMAL priority rather than LOW
-
-Should limit build up of I/O tasks, or at least properly
-indicate to server owners that I/O is falling behind
-
-Allow controlled flushing for network manager
-
-Only make one flush call when emptying the packet queue too
-
-This patch will be used to optimise out flush calls in later
-patches.
-
-Consolidate flush calls for entity tracker packets
-
-Most server packets seem to be sent from here, so try to avoid
-expensive flush calls from them.
-
-This change was motivated due to local testing:
-
-- My server spawn has 130 cows in it (for testing a prev. patch)
-- Try to let 200 players join spawn
-
-Without this change, I could only get 20 players on before they
-all started timing out due to the load put on the Netty I/O threads.
-
-With this change I could get all 200 on at 0ms ping.
-
-(one of the primary issues is that my CPU is kinda trash, and having
-4 extra threads at 100% is just too much for it).
-
-So in general this patch should reduce Netty I/O thread load.
-
-Time scoreboard search
-
-Plugins leaking scoreboards will make this very expensive,
-let server owners debug it easily
-
-Make CallbackExecutor strict again
-
-The correct fix for double scheduling is to avoid it. The reason
-this class is used is because double scheduling causes issues
-elsewhere, and it acts as an explicit detector of what double
-schedules. Effectively, use the callback executor as a tool of
-finding issues rather than hiding these issues.
-
-This patch also reverts incorrect use(s) of the class by paper.
-
-- getChunkFutureAsynchronously
-  There is no risk at all of recursion. The future is executed on
-  the chunk provider's thread queue, the same place general plugin
-  load callbacks are executed on. Forcing the task execution into
-  the callback executor also prevents the future from catching
-  any exception thrown from it.
-
-Optimise entity hard collision checking
-
-Very few entities actually hard collide, so store them in their own
-entity slices and provide a special getEntites type call just for them.
-This reduces entity collision checking impact (in my testing) by 25%
-for crammed entities (shove 130 cows into an 8x6 area in one chunk).
-Less crammed entities are likely to show significantly less benefit.
-Effectively, this patch optimises crammed entity situations.
-
-Improved oversized chunk data packet handling
-
-Now target all TE data, except for TE's that do not have
-update packets.
-
-This patch relies upon the improve extra packet handling
-patch, as we now use PacketPlayOutMapChunk as an extra packet.
-See its patch notes for further details.
-
-Reduce iterator allocation from chunk gen
-
-Replace via iterating over an array
-
-Prevent long map entry creation in light engine
-
-Use fastiterator to prevent it
-
-Highly optimise single and multi-AABB VoxelShapes and collisions
-
-Reduce allocation rate from crammed entities
-
-Optimise chunk tick iteration
-
-Use a dedicated list of entity ticking chunks to reduce the cost
-
-Use entity ticking chunk map for entity tracker
-
-Should bring us back in-line with tracker performance
-before the loaded entity list reversion.
-
-Improve paper prevent moving into unloaded chunk check
-
-Check the AABB of the move
-
-Improve async tp to not load chunks when crossing worlds
-
-Fixes an issue where a getCubes call would load neighbouring chunks.
-Loads less chunks than paper's implementation
-
-Revert getChunkAt(Async) retaining chunks for long periods of time
-
-Rework PlayerChunk main thread checks
-
-These need to fail instead of continuing, as hiding these errors
-the way paper has is just going to allow unexpected reordering
-of callbacks.
-
-For example, thanks to this patch incorrect future
-completion (completion of the world gen future,
-PlayerChunkMap#b(PlayerChunk, ChunkStatus)) was detected and fixed.
-
-Allow Entities to be removed from a world while ticking
-
-Fixes issues like disconnecting players while ticking them, or
-issues where teleporting players across worlds while ticking.
-
-Also allows us to run mid tick while ticking entities.
-
-Prevent unload() calls removing tickets for sync loads
-
-Optimise collision checking in player move packet handling
-
-Move collision logic to just the hasNewCollision call instead of getCubes + hasNewCollision
-
-Manually inline methods in BlockPosition
-
-Separate lookup locking from state access in UserCache
-
-Prevent lookups from stalling simple state access/write calls
-
-Distance manager tick timings
-
-Recently this has been taking up more time, so add a timings to
-really figure out how much.
-
-Name craft scheduler threads according to the plugin using them
-
-Provides quick access to culprits running far more threads than
-they should be
-
-Fix swamp hut cat generation deadlock
-
-The worldgen thread will attempt to get structure references
-via the world's getChunkAt method, which is fine if the gen is
-not cancelled - but if the chunk was unloaded, the call will block
-indefinitely. Instead of using the world state, we use the already
-supplied generatoraccess which will always have the chunk available.
-
-Range check flag dirty calls in PlayerChunk
-
-Simply return.
-
-Optimise tab complete
-
-Some of the toLowerCase calls can be expensive.
-
-Do not allow ticket level changes while unloading playerchunks
-
-Sync loading the chunk at this stage would cause it to load
-older data, as well as screwing our region state.
-
-Make sure inlined getChunkAt has inlined logic for loaded chunks
-
-Tux did some profiling some time ago and showed that the
-previous getChunkAt method which had inlined logic for loaded
-chunks did get inlined, but the standard CPS.getChunkAt
-method was not inlined.
-
-Paper recently reverted this optimisation, so it's been reintroduced
-here.
-
-Add packet limiter config
-
-Example config:
-packet-limiter:
-  kick-message: '&cSent too many packets'
-  limits:
-    all:
-      interval: 7.0
-      max-packet-rate: 500.0
-    PacketPlayInAutoRecipe:
-      interval: 4.0
-      max-packet-rate: 5.0
-      action: DROP
-
-all section refers to all incoming packets, the action for all is
-hard coded to KICK.
-
-For specific limits, the section name is the class's name,
-and an action can be defined: DROP or KICK
-
-If interval or rate are less-than 0, the limit is ignored
-
-Optimise closest entity lookup
-
-Rewrites the entity slice storage so that entity by
-class lookups look through less entities in total.
-
-Also optimise the nearest entity by class method
-used by entity AI as well.
-
-As a sidenote, this entity slice implementation
-removes the async catchers because it has been
-designed to be MT-Safe for reads off of other
-threads.
-
-Optimise nearby player lookups
-
-Use a distance map to map out close players.
-Note that it's important that we cache the distance map value per chunk
-since the penalty of a map lookup could outweigh the benefits of
-searching less players (as it basically did in the outside range patch).
-
-Remove streams for villager AI
-
-Don't lookup fluid state when raytracing
-
-Just use the iblockdata already retrieved, removes a getType call.
-
-Reduce pathfinder branches
-
-Reduce static path type detection to simple lazy-init fields
-
-Add Velocity natives for encryption and compression
-
-This patch is licensed under the MIT license. See /licenses/MIT.md.
-
-Optimise non-flush packet sending
-
-Places like entity tracking make heavy use of packet sending,
-and internally netty will use some very expensive thread wakeup
-calls when scheduling.
-
-Thanks to various hacks in ProtocolLib as well as other
-plugins, we cannot simply use a queue of packets to group
-send on execute. We have to call execute for each packet.
-
-Tux's suggestion here is exactly what was needed - tag
-the Runnable indicating it should not make a wakeup call.
-
-Big thanks to Tux for making this possible as I had given
-up on this optimisation before he came along.
-
-Locally this patch drops the entity tracker tick by a full 1.5x.
-
-Do not retain playerchunkmap instance in light thread factory
-
-The executor returned is finalizable and of course
-that causes issues.
-
-Do not load chunks during a crash report
-
-This causes deadlocks in some cases when generating
-crash reports.
-
-Fixes https://github.com/Spottedleaf/Tuinity/issues/215
-
-Improve abnormal server shutdown process
-
-- When we're trying to kill the main thread from watchdog,
-step up the stop() spamming after 15s to really kill the main thread.
-
-- Do not wait for window disposing when disposing of the server
-gui. It looks like during sigint shutdown there can be some
-deadlock between the server thread and awt shutdown thread here.
-
-Copy passenger list in enderTeleportTo
-
-Fixes https://github.com/Spottedleaf/Tuinity/issues/208
-
-Revert MC-4 fix
-
-When messing around with collisions, I ran into problems where
-entity position was off by ULP and that caused clipping problems.
-Now, the collision epsilon is 1.0e-7 to account for those errors.
-
-But this patch is going to cause problems on the order of 1.0e-4.
-
-I do not want to deal with clipping problems. The very fact it works
-shows it's causing the clipping to occur serverside.
-
-Prevent light queue overfill when no players are online
-
-block changes don't queue light updates (and they shouldn't)
-
-Don't allow StructureLocateEvent to change worlds
-
-Callers and even the function itself aren't expecting
-this to happen
-
-Properly handle cancellation of projectile hit event
-
-Subclasses override and run logic. Some of this logic destroys
-the projectile as well, which wouldn't be fitting for cancellation.
-
-Rewrite the light engine
-
-The standard vanilla light engine is plagued by
-awful performance. Paper's changes to the light engine
-help a bit, however they appear to cause some lighting
-errors - most easily noticed in coral generation.
-
-The vanilla light engine's is too abstract to be modified -
-so an entirely new implementation is required to fix the
-performance and lighting errors.
-
-The new implementation is designed primarily to optimise
-light level propagations (increase and decrease). Unlike
-the vanilla light engine, this implementation tracks more
-information per queued value when performing a
-breadth first search. Vanilla just tracks coordinate, which
-means every time they handle a queued value, they must
-also determine the coordinate's target light level
-from its neighbours - very wasteful, especially considering
-these checks read neighbour block data.
-The new light engine tracks both position and target level,
-as well as whether the target block needs to be read at all
-(for checking sided propagation). So, the work done per coordinate
-is significantly reduced because no work is done for calculating
-the target level.
-In my testing, the block get calls were reduced by approximately
-an order of magnitude. However, the light read checks were only
-reduced by approximately 2x - but this is fine, light read checks
-are extremely cheap compared to block gets.
-
-Generation testing showed that the new light engine improved
-total generation (not lighting itself, but the whole generation process)
-by 2x. According to cpu time, the light engine itself spent 10x less time
-lighting chunks for generation.
-
-Optimise WorldServer#notify
-
-Iterating over all of the navigators in the world is pretty expensive.
-Instead, only iterate over navigators in the current region that are
-eligible for repathing.
-
-Actually unload POI data
-
-While it's not likely for a poi data leak to be meaningful,
-sometimes it is.
-
-This patch also prevents the saving/unloading of POI data when
-world saving is disabled.
-
-Send full pos packets for hard colliding entities
-
-Prevent collision problems due to desync (i.e boats)
-
-Configurable under
-`send-full-pos-for-hard-colliding-entities`
-
-Fix chunks refusing to unload at low TPS
-
-The full chunk future is appended to the chunk save future, but
-when moving to unloaded ticket level it is not being completed with
-the empty chunk access, so the chunk save must wait for the full
-chunk future to complete. We can simply schedule to the immediate
-executor to get this effect, rather than the main mailbox.
-
-Fix incorrect isRealPlayer init
-
-Some plugins, namely ProtocolSupport, don't route to where
-paper placed their logic. So it wont correctly set in this case.
-
-Fix by moving it to a different place.
-
-Do not run raytrace logic for AIR
-
-Saves approx. 5% for the raytrace call, as most (expensive)
-raytracing tends to go through air and returning early is an
-easy win. The remaining problems with this function
-are mostly with the block getting itself.
-
-Make entity tracker use highest range of passengers
-
-This should prevent people from having to up their animal range
-just so players riding horses or whatever can be seen at the
-configured player range.
-
-Do not allow the server to unload chunks at request of plugins
-
-In general the chunk system is not well suited for this behavior,
-especially if it is called during a chunk load. The chunks pushed
-to be unloaded will simply be unloaded next tick, rather than
-immediately.
-
-Do not run close logic for inventories on chunk unload
-
-Still call the event and change the active container though. We
-want to avoid close logic because it's possible to load the
-chunk through it. This should also be OK from a leak prevention/
-state desync POV because the TE is getting unloaded anyways.
-
-Fix NPE in pickup logic for arrow
-
-Apparently the shooter can be null for tridents returning to players.
-
-Remove chunk lookup & lambda allocation from counting mobs
-
-The chunk lookup doesn't look cheap.
-
-Optimise snow & ice in chunk ticking
-
-Avoid the biome lookups most of the time by
-hiding them behind the snow/air checks. The biome
-checks take up the most here, followed by the block gets.
-Soften some of the block gets by passing the chunk to
-the biome methods, removing the need to invoke a chunk
-lookup.
-
-Oprimise map impl for tracked players
-
-Reference2BooleanOpenHashMap is going to have
-better lookups than HashMap.
-
-Use hash table for maintaing changed block set
-
-When a lot of block changes occur the iteration for checking can
-add up a bit and cause a small performance impact.
-
-Replace player chunk loader system
-
-The old one has undebuggable problems. Rewriting seems
-the most sensible option.
-
-This new player chunk manager will also strictly rate limit
-chunk sends so that netty threads do not get overloaded, whether
-it be from the anti-xray logic or the compression itself.
-
-Chunk loading is also rate limited in the same manner, so this
-will result in a maximum responsiveness for change.
-
-Config:
-```
-player-chunks:
-  autoconfig-send-distance: true
-  min-load-radius: 3
-  max-concurrent-sends: 12.0
-  max-concurrent-loads: 5.0
-```
-
-autoconfig-send-distance - Whether to try to use the client's
-view distance for the send view distance in the server. In the
-case that no plugin has explicitly set the send distance and
-the client view distance is less-than the server's send distance,
-the client's view distance will be used. This will not affect
-tick view distance or no-tick view distance.
-
-min-load-radius - The radius of chunks around a player that
-are not throttled for loading. The number of chunks
-affected is actually the configured value plus one as this
-config controls the chunks the client will be able to render.
-
-max-concurrent-sends - The maximum number of chunks that
-can be queued to send at any given time. Low values
-are generally going to solve server-sided networking
-bottlenecks like anti-xray and chunk compression. Client
-side networking is unlikely to be helped (i.e this wont help
-people running off McDonald's wifi). Setting this
-value to negative will make the server dynamically scale it
-with players. i.e -5 will use 5 * online players for the max sends.
-
-max-concurrent-loads - The maxmium number of chunks
-that can be queued to be loaded at any given time. Lower
-values help the responsitivity to player movement and
-higher values help loading when the server is at a low TPS.
-
-Optimise general POI access
-
-There are a couple of problems with mojang's POI code.
-Firstly, it's all streams. Unsurprisingly, stacking
-streams on top of each other is horrible for performance
-and ultimately took up half of a villager's tick!
-
-Secondly, sometime's the search radius is large and there are
-a significant number of poi entries per chunk section. Even
-removing streams at this point doesn't help much. The only solution
-is to start at the search point and iterate outwards. This
-type of approach shows massive gains for portals, simply because
-we can avoid sync loading a large area of chunks. I also tested
-a massive farm I found in JellySquid's discord, which showed
-to benefit significantly simply because the farm had so many
-portal blocks that searching through them all was very slow.
-
-Great care has been taken so that behavior remains identical to
-vanilla, however I cannot account for oddball Stream API
-implementations, if they even exist (streams can technically
-be loose with iteration order in a sorted stream given its
-source stream is not tagged with ordered, and mojang does not
-tag the source stream as ordered). However in my testing on openjdk
-there showed no difference, as expected.
-
-This patch also specifically optimises other areas of code to
-use PoiAccess. For example, some villager AI and portaling code
-had to be specifically modified.
-
-Be aware of entity teleports when chunk checking entities
-
-If an entity were to be teleported via the sync load
-that occured from the getChunkAt call, we would either
-add to the wrong chunk or add to both chunks! not good.
-
-Custom table implementation for blockstate state lookups
-
-Testing some redstone intensive machines showed to bring about a 10%
-improvement.
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+  This version of the GNU Lesser General Public License incorporates
+the terms and conditions of version 3 of the GNU General Public
+License, supplemented by the additional permissions listed below.
+
+  0. Additional Definitions.
+
+  As used herein, "this License" refers to version 3 of the GNU Lesser
+General Public License, and the "GNU GPL" refers to version 3 of the GNU
+General Public License.
+
+  "The Library" refers to a covered work governed by this License,
+other than an Application or a Combined Work as defined below.
+
+  An "Application" is any work that makes use of an interface provided
+by the Library, but which is not otherwise based on the Library.
+Defining a subclass of a class defined by the Library is deemed a mode
+of using an interface provided by the Library.
+
+  A "Combined Work" is a work produced by combining or linking an
+Application with the Library.  The particular version of the Library
+with which the Combined Work was made is also called the "Linked
+Version".
+
+  The "Minimal Corresponding Source" for a Combined Work means the
+Corresponding Source for the Combined Work, excluding any source code
+for portions of the Combined Work that, considered in isolation, are
+based on the Application, and not on the Linked Version.
+
+  The "Corresponding Application Code" for a Combined Work means the
+object code and/or source code for the Application, including any data
+and utility programs needed for reproducing the Combined Work from the
+Application, but excluding the System Libraries of the Combined Work.
+
+  1. Exception to Section 3 of the GNU GPL.
+
+  You may convey a covered work under sections 3 and 4 of this License
+without being bound by section 3 of the GNU GPL.
+
+  2. Conveying Modified Versions.
+
+  If you modify a copy of the Library, and, in your modifications, a
+facility refers to a function or data to be supplied by an Application
+that uses the facility (other than as an argument passed when the
+facility is invoked), then you may convey a copy of the modified
+version:
+
+   a) under this License, provided that you make a good faith effort to
+   ensure that, in the event an Application does not supply the
+   function or data, the facility still operates, and performs
+   whatever part of its purpose remains meaningful, or
+
+   b) under the GNU GPL, with none of the additional permissions of
+   this License applicable to that copy.
+
+  3. Object Code Incorporating Material from Library Header Files.
+
+  The object code form of an Application may incorporate material from
+a header file that is part of the Library.  You may convey such object
+code under terms of your choice, provided that, if the incorporated
+material is not limited to numerical parameters, data structure
+layouts and accessors, or small macros, inline functions and templates
+(ten or fewer lines in length), you do both of the following:
+
+   a) Give prominent notice with each copy of the object code that the
+   Library is used in it and that the Library and its use are
+   covered by this License.
+
+   b) Accompany the object code with a copy of the GNU GPL and this license
+   document.
+
+  4. Combined Works.
+
+  You may convey a Combined Work under terms of your choice that,
+taken together, effectively do not restrict modification of the
+portions of the Library contained in the Combined Work and reverse
+engineering for debugging such modifications, if you also do each of
+the following:
+
+   a) Give prominent notice with each copy of the Combined Work that
+   the Library is used in it and that the Library and its use are
+   covered by this License.
+
+   b) Accompany the Combined Work with a copy of the GNU GPL and this license
+   document.
+
+   c) For a Combined Work that displays copyright notices during
+   execution, include the copyright notice for the Library among
+   these notices, as well as a reference directing the user to the
+   copies of the GNU GPL and this license document.
+
+   d) Do one of the following:
+
+       0) Convey the Minimal Corresponding Source under the terms of this
+       License, and the Corresponding Application Code in a form
+       suitable for, and under terms that permit, the user to
+       recombine or relink the Application with a modified version of
+       the Linked Version to produce a modified Combined Work, in the
+       manner specified by section 6 of the GNU GPL for conveying
+       Corresponding Source.
+
+       1) Use a suitable shared library mechanism for linking with the
+       Library.  A suitable mechanism is one that (a) uses at run time
+       a copy of the Library already present on the user's computer
+       system, and (b) will operate properly with a modified version
+       of the Library that is interface-compatible with the Linked
+       Version.
+
+   e) Provide Installation Information, but only if you would otherwise
+   be required to provide such information under section 6 of the
+   GNU GPL, and only to the extent that such information is
+   necessary to install and execute a modified version of the
+   Combined Work produced by recombining or relinking the
+   Application with a modified version of the Linked Version. (If
+   you use option 4d0, the Installation Information must accompany
+   the Minimal Corresponding Source and Corresponding Application
+   Code. If you use option 4d1, you must provide the Installation
+   Information in the manner specified by section 6 of the GNU GPL
+   for conveying Corresponding Source.)
+
+  5. Combined Libraries.
+
+  You may place library facilities that are a work based on the
+Library side by side in a single library together with other library
+facilities that are not Applications and are not covered by this
+License, and convey such a combined library under terms of your
+choice, if you do both of the following:
+
+   a) Accompany the combined library with a copy of the same work based
+   on the Library, uncombined with any other library facilities,
+   conveyed under the terms of this License.
+
+   b) Give prominent notice with the combined library that part of it
+   is a work based on the Library, and explaining where to find the
+   accompanying uncombined form of the same work.
+
+  6. Revised Versions of the GNU Lesser General Public License.
+
+  The Free Software Foundation may publish revised and/or new versions
+of the GNU Lesser General Public License from time to time. Such new
+versions will be similar in spirit to the present version, but may
+differ in detail to address new problems or concerns.
+
+  Each version is given a distinguishing version number. If the
+Library as you received it specifies that a certain numbered version
+of the GNU Lesser General Public License "or any later version"
+applies to it, you have the option of following the terms and
+conditions either of that published version or of any later version
+published by the Free Software Foundation. If the Library as you
+received it does not specify a version number of the GNU Lesser
+General Public License, you may choose any version of the GNU Lesser
+General Public License ever published by the Free Software Foundation.
+
+  If the Library as you received it specifies that a proxy can decide
+whether future versions of the GNU Lesser General Public License shall
+apply, that proxy's public statement of acceptance of any version is
+permanent authorization for you to choose that version for the
+Library.
 
 diff --git a/pom.xml b/pom.xml
 index 25ec9c4f8c08551fd80a597a1b39854e70e4f895..dad9981b1cd1ca8b27a45972188fd2b92f5146e7 100644
