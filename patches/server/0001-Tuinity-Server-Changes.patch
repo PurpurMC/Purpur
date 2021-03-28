@@ -595,10 +595,10 @@ index 7720578796e28d28e8c0c9aa40155cd205c17d54..e5db29d4cadb5702c7d06b0b6e2d0558
              return Suggestions.empty();
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/PlayerChunkLoader.java b/src/main/java/com/tuinity/tuinity/chunk/PlayerChunkLoader.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1fbd220b8a2c77ba85e98349b012b293ee7686a8
+index 0000000000000000000000000000000000000000..0d577aa1c7868ce89c3902535adcb554b1f47551
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/PlayerChunkLoader.java
-@@ -0,0 +1,955 @@
+@@ -0,0 +1,964 @@
 +package com.tuinity.tuinity.chunk;
 +
 +import com.destroystokyo.paper.util.misc.PlayerAreaMap;
@@ -905,7 +905,7 @@ index 0000000000000000000000000000000000000000..1fbd220b8a2c77ba85e98349b012b293
 +
 +    protected double getTargetSendRatePerPlayer() {
 +        double config = TuinityConfig.playerTargetChunkSendRate;
-+        return config <= 0 ? -config : (int)Math.ceil(-config / MinecraftServer.getServer().getPlayerCount());
++        return config <= 0 ? -config : config / MinecraftServer.getServer().getPlayerCount();
 +    }
 +
 +    public void onChunkPlayerTickReady(final int chunkX, final int chunkZ) {
@@ -974,6 +974,9 @@ index 0000000000000000000000000000000000000000..1fbd220b8a2c77ba85e98349b012b293
 +
 +    public void addPlayer(final EntityPlayer player) {
 +        TickThread.ensureTickThread("Cannot add player async");
++        if (!player.isRealPlayer) {
++            return;
++        }
 +        final PlayerLoaderData data = new PlayerLoaderData(player, this);
 +        if (this.playerMap.putIfAbsent(player, data) == null) {
 +            data.update();
@@ -982,6 +985,9 @@ index 0000000000000000000000000000000000000000..1fbd220b8a2c77ba85e98349b012b293
 +
 +    public void removePlayer(final EntityPlayer player) {
 +        TickThread.ensureTickThread("Cannot remove player async");
++        if (!player.isRealPlayer) {
++            return;
++        }
 +
 +        final PlayerLoaderData loaderData = this.playerMap.remove(player);
 +        if (loaderData == null) {
@@ -1001,6 +1007,9 @@ index 0000000000000000000000000000000000000000..1fbd220b8a2c77ba85e98349b012b293
 +
 +    public void updatePlayer(final EntityPlayer player) {
 +        TickThread.ensureTickThread("Cannot update player async");
++        if (!player.isRealPlayer) {
++            return;
++        }
 +        final PlayerLoaderData loaderData = this.playerMap.get(player);
 +        if (loaderData != null) {
 +            loaderData.update();
@@ -5637,7 +5646,7 @@ index 0000000000000000000000000000000000000000..0e4442a94559346b19a536d35ce5def6
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..d29b537bbe4f852162b720d6b23b741829af21f9
+index 0000000000000000000000000000000000000000..d0433feeb274f474af04ba1e09f9f75d5b4dcfea
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
 @@ -0,0 +1,415 @@
@@ -5767,7 +5776,7 @@ index 0000000000000000000000000000000000000000..d29b537bbe4f852162b720d6b23b7418
 +        tickWorldsInParallel = TuinityConfig.getBoolean("tick-worlds-in-parallel", false);
 +        tickThreads = TuinityConfig.getInt("server-tick-threads", 1); // will be 4 in the future
 +    }*/
-+
++    
 +    public static int delayChunkUnloadsBy;
 +
 +    private static void delayChunkUnloadsBy() {
@@ -9915,7 +9924,7 @@ index 7d9a16eb81288b74425319c60525f57c98ad3b69..427413c668865e1660f1d81daf6a3385
      }
  
 diff --git a/src/main/java/net/minecraft/network/NetworkManager.java b/src/main/java/net/minecraft/network/NetworkManager.java
-index f86f430598026a3a7e27fb8d40cfc5fe7b9b845d..e101b1dccec98d5c7b9ee9a2c8aa2e3b911de652 100644
+index f86f430598026a3a7e27fb8d40cfc5fe7b9b845d..0f8cbe1f656b46f71c6494bd2e0057be63017272 100644
 --- a/src/main/java/net/minecraft/network/NetworkManager.java
 +++ b/src/main/java/net/minecraft/network/NetworkManager.java
 @@ -45,6 +45,8 @@ import org.apache.logging.log4j.Logger;
@@ -9966,7 +9975,7 @@ index f86f430598026a3a7e27fb8d40cfc5fe7b9b845d..e101b1dccec98d5c7b9ee9a2c8aa2e3b
 +    // Tuinity start - add pending task queue
 +    private final Queue<Runnable> pendingTasks = new java.util.concurrent.ConcurrentLinkedQueue<>();
 +    public void execute(final Runnable run) {
-+        if (!this.channel.isRegistered()) {
++        if (this.channel == null || !this.channel.isRegistered()) {
 +            run.run();
 +            return;
 +        }
@@ -14659,7 +14668,7 @@ index 185667110cd6f566b23546728d20fc79223f3c92..dc98ef48a664d9ee2a302fff8c611fd1
              throw new IllegalStateException("Protocol error", cryptographyexception);
          }
 diff --git a/src/main/java/net/minecraft/server/network/PlayerConnection.java b/src/main/java/net/minecraft/server/network/PlayerConnection.java
-index a15230235ba0244c42346f51cabb470cb362a455..b7e72fe1cd04219391c75beb7d67a1e32e393a16 100644
+index 4a3f6f26da0d99ee2ff6942c2ff7d0595b53b684..a5871955d487dbf6552d20e5559f2cb1427aeb3e 100644
 --- a/src/main/java/net/minecraft/server/network/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/network/PlayerConnection.java
 @@ -568,7 +568,9 @@ public class PlayerConnection implements PacketListenerPlayIn {
@@ -14858,10 +14867,10 @@ index dc362724ea0cc1b2f9d9ceffff483217b4356c40..70fde7bad2e0a6d7432d8509fdb7c46d
                  protected void initChannel(Channel channel) throws Exception {
                      try {
 diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
-index 92ed4938d5fe6b76e3a9ac5491d6e9c004ade843..ac98a3122ee30971b31761f3bc564b41d5ac879f 100644
+index 2df8e914f66176e22aeddf8b94a83af5ea921d88..499b516330f3f3a48fb64802f2e8c1b7c9684f4d 100644
 --- a/src/main/java/net/minecraft/server/players/PlayerList.java
 +++ b/src/main/java/net/minecraft/server/players/PlayerList.java
-@@ -178,6 +178,7 @@ public abstract class PlayerList {
+@@ -179,6 +179,7 @@ public abstract class PlayerList {
      abstract public void loadAndSaveFiles(); // Paper - moved from DedicatedPlayerList constructor
  
      public void a(NetworkManager networkmanager, EntityPlayer entityplayer) {
@@ -14869,7 +14878,7 @@ index 92ed4938d5fe6b76e3a9ac5491d6e9c004ade843..ac98a3122ee30971b31761f3bc564b41
          EntityPlayer prev = pendingPlayers.put(entityplayer.getUniqueID(), entityplayer);// Paper
          if (prev != null) {
              disconnectPendingPlayer(prev);
-@@ -268,7 +269,7 @@ public abstract class PlayerList {
+@@ -269,7 +270,7 @@ public abstract class PlayerList {
          boolean flag1 = gamerules.getBoolean(GameRules.REDUCED_DEBUG_INFO);
  
          // Spigot - view distance
@@ -14878,7 +14887,7 @@ index 92ed4938d5fe6b76e3a9ac5491d6e9c004ade843..ac98a3122ee30971b31761f3bc564b41
          entityplayer.getBukkitEntity().sendSupportedChannels(); // CraftBukkit
          playerconnection.sendPacket(new PacketPlayOutCustomPayload(PacketPlayOutCustomPayload.a, (new PacketDataSerializer(Unpooled.buffer())).a(this.getServer().getServerModName())));
          playerconnection.sendPacket(new PacketPlayOutServerDifficulty(worlddata.getDifficulty(), worlddata.isDifficultyLocked()));
-@@ -720,7 +721,7 @@ public abstract class PlayerList {
+@@ -729,7 +730,7 @@ public abstract class PlayerList {
          SocketAddress socketaddress = loginlistener.networkManager.getSocketAddress();
  
          EntityPlayer entity = new EntityPlayer(this.server, this.server.getWorldServer(World.OVERWORLD), gameprofile, new PlayerInteractManager(this.server.getWorldServer(World.OVERWORLD)));
@@ -14887,7 +14896,7 @@ index 92ed4938d5fe6b76e3a9ac5491d6e9c004ade843..ac98a3122ee30971b31761f3bc564b41
          Player player = entity.getBukkitEntity();
          PlayerLoginEvent event = new PlayerLoginEvent(player, hostname, ((java.net.InetSocketAddress) socketaddress).getAddress(), ((java.net.InetSocketAddress) loginlistener.networkManager.getRawAddress()).getAddress());
  
-@@ -940,7 +941,7 @@ public abstract class PlayerList {
+@@ -949,7 +950,7 @@ public abstract class PlayerList {
          // CraftBukkit start
          WorldData worlddata = worldserver1.getWorldData();
          entityplayer1.playerConnection.sendPacket(new PacketPlayOutRespawn(worldserver1.getDimensionManager(), worldserver1.getDimensionKey(), BiomeManager.a(worldserver1.getSeed()), entityplayer1.playerInteractManager.getGameMode(), entityplayer1.playerInteractManager.c(), worldserver1.isDebugWorld(), worldserver1.isFlatWorld(), flag));
@@ -14896,7 +14905,7 @@ index 92ed4938d5fe6b76e3a9ac5491d6e9c004ade843..ac98a3122ee30971b31761f3bc564b41
          entityplayer1.spawnIn(worldserver1);
          entityplayer1.dead = false;
          entityplayer1.playerConnection.teleport(new Location(worldserver1.getWorld(), entityplayer1.locX(), entityplayer1.locY(), entityplayer1.locZ(), entityplayer1.yaw, entityplayer1.pitch));
-@@ -1209,7 +1210,7 @@ public abstract class PlayerList {
+@@ -1218,7 +1219,7 @@ public abstract class PlayerList {
              // Really shouldn't happen...
              backingSet = world != null ? world.players.toArray() : players.toArray();
          } else {
@@ -16951,7 +16960,7 @@ index 03584572fa5bf0d96fc4cecece573547f9c94cea..8bc965a3b3d0d4140c6b94636f0b33b2
                      }
  
 diff --git a/src/main/java/net/minecraft/world/level/World.java b/src/main/java/net/minecraft/world/level/World.java
-index 78dcba08d6d796d5d97c8304bf1f1e7d1e650d5d..c8a5d4972431ce9615312280f36181a2b9645df7 100644
+index 78dcba08d6d796d5d97c8304bf1f1e7d1e650d5d..68fa071fc576f398682ef461df102be432cdcb4c 100644
 --- a/src/main/java/net/minecraft/world/level/World.java
 +++ b/src/main/java/net/minecraft/world/level/World.java
 @@ -154,6 +154,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
@@ -17074,6 +17083,15 @@ index 78dcba08d6d796d5d97c8304bf1f1e7d1e650d5d..c8a5d4972431ce9615312280f36181a2
 +            } else if ((i & 2) != 0 && (!this.isClientSide || (i & 4) == 0) && (this.isClientSide || chunk == null || ((WorldServer)this).getChunkProvider().playerChunkMap.playerChunkManager.broadcastMap.getObjectsInRange(MCUtil.getCoordinateKey(blockposition)) != null)) { // Tuinity - replace old player chunk management
                  ((WorldServer)this).getChunkProvider().flagDirty(blockposition);
                  // Paper end - per player view distance
+             }
+@@ -895,7 +968,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+                 //this.tileEntityList.remove(tileentity); // Paper - remove unused list
+                 // Paper - prevent double chunk lookups
+                 Chunk chunk; if ((chunk = this.getChunkIfLoaded(tileentity.getPosition())) != null) { // inlined contents of this.isLoaded(BlockPosition). Reuse the returned chunk instead of looking it up again
+-                    chunk.removeTileEntity(tileentity.getPosition());
++                    chunk.removeTileEntity(tileentity.getPosition(), tileentity); // Tuinity - make sure we remove the correct TE
+                 }
+                 // Paper end
              }
 @@ -955,6 +1028,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
              return;
@@ -17730,7 +17748,7 @@ index 3c25021835d6d8fd112fc89636616bfd744e7f1a..aa49565cd364db3781a110ee138ee1a4
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/world/level/chunk/Chunk.java b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
-index 34a9f7b2f998f77b1279516cd09397ab6c2ac1cc..259d4ac89e84fd334ff65ea8a606e1fc50cc882b 100644
+index 34a9f7b2f998f77b1279516cd09397ab6c2ac1cc..ffef28f9fa82a6961ef6db5f6732cfee4352ee01 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 +++ b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 @@ -137,6 +137,158 @@ public class Chunk implements IChunkAccess {
@@ -17984,7 +18002,28 @@ index 34a9f7b2f998f77b1279516cd09397ab6c2ac1cc..259d4ac89e84fd334ff65ea8a606e1fc
              return;
          }
          if (entity instanceof EntityItem) {
-@@ -858,6 +995,7 @@ public class Chunk implements IChunkAccess {
+@@ -819,10 +956,18 @@ public class Chunk implements IChunkAccess {
+ 
+     @Override
+     public void removeTileEntity(BlockPosition blockposition) {
++        // Tuinity start - make sure we remove the correct TE
++        this.removeTileEntity(blockposition, null);
++    }
++    public void removeTileEntity(BlockPosition blockposition, TileEntity match) {
++        // Tuinity end - make sure we remove the correct TE
+         if (this.loaded || this.world.s_()) {
+-            TileEntity tileentity = (TileEntity) this.tileEntities.remove(blockposition);
++            // Tuinity start - make sure we remove the correct TE
++            TileEntity tileentity = (TileEntity) this.tileEntities.get(blockposition);
+ 
+-            if (tileentity != null) {
++            if (tileentity != null && (match == null || match == tileentity)) {
++                this.tileEntities.remove(blockposition);
++                // Tuinity end - make sure we remove the correct TE
+                 tileentity.al_();
+             }
+         }
+@@ -858,6 +1003,7 @@ public class Chunk implements IChunkAccess {
          // Paper end - neighbour cache
          org.bukkit.Server server = this.world.getServer();
          ((WorldServer)this.world).getChunkProvider().addLoadedChunk(this); // Paper
@@ -17992,7 +18031,7 @@ index 34a9f7b2f998f77b1279516cd09397ab6c2ac1cc..259d4ac89e84fd334ff65ea8a606e1fc
          if (server != null) {
              /*
               * If it's a new world, the first few chunks are generated inside
-@@ -922,116 +1060,18 @@ public class Chunk implements IChunkAccess {
+@@ -922,116 +1068,18 @@ public class Chunk implements IChunkAccess {
      }
  
      public void a(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> list, @Nullable Predicate<? super Entity> predicate) {
@@ -20375,7 +20414,7 @@ index 03b8d67a5f0088c0254b2099f27e8dcae32a6221..fd3333fef4112e6469ccd316ba2c8292
          public void restart() {
              org.spigotmc.RestartCommand.restart();
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 16567619d7ca84a997ef46417d72f92e6db6993d..292bd2187eb08fe535a8c1f8047be2bb29f55c53 100644
+index e739b4f8a7b8785ceb11c553bd27e2fe0e64a4bb..b393490231ea00af15d883336a07de6cca642195 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 @@ -342,6 +342,14 @@ public class CraftWorld implements World {
@@ -20448,7 +20487,7 @@ index 16567619d7ca84a997ef46417d72f92e6db6993d..292bd2187eb08fe535a8c1f8047be2bb
      @Override
      public boolean isChunkForceLoaded(int x, int z) {
          return getHandle().getForceLoadedChunks().contains(ChunkCoordIntPair.pair(x, z));
-@@ -2581,7 +2607,7 @@ public class CraftWorld implements World {
+@@ -2586,7 +2612,7 @@ public class CraftWorld implements World {
          }
          return this.world.getChunkProvider().getChunkAtAsynchronously(x, z, gen, urgent).thenComposeAsync((either) -> {
              net.minecraft.world.level.chunk.Chunk chunk = (net.minecraft.world.level.chunk.Chunk) either.left().orElse(null);
@@ -20457,7 +20496,7 @@ index 16567619d7ca84a997ef46417d72f92e6db6993d..292bd2187eb08fe535a8c1f8047be2bb
              return CompletableFuture.completedFuture(chunk == null ? null : chunk.getBukkitChunk());
          }, net.minecraft.server.MinecraftServer.getServer());
      }
-@@ -2606,14 +2632,14 @@ public class CraftWorld implements World {
+@@ -2611,14 +2637,14 @@ public class CraftWorld implements World {
              throw new IllegalArgumentException("View distance " + viewDistance + " is out of range of [2, 32]");
          }
          PlayerChunkMap chunkMap = getHandle().getChunkProvider().playerChunkMap;
@@ -20474,7 +20513,7 @@ index 16567619d7ca84a997ef46417d72f92e6db6993d..292bd2187eb08fe535a8c1f8047be2bb
      }
  
      @Override
-@@ -2622,11 +2648,22 @@ public class CraftWorld implements World {
+@@ -2627,11 +2653,22 @@ public class CraftWorld implements World {
              throw new IllegalArgumentException("View distance " + viewDistance + " is out of range of [2, 32]");
          }
          PlayerChunkMap chunkMap = getHandle().getChunkProvider().playerChunkMap;
