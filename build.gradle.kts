@@ -34,17 +34,12 @@ toothpick {
 
 subprojects {
     repositories {
-        mavenCentral()
-        maven("https://repo.aikar.co/content/groups/aikar/")
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
-        maven("https://libraries.minecraft.net")
-        mavenLocal()
     }
 
     java {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-        withSourcesJar()
+        sourceCompatibility = JavaVersion.toVersion(8)
+        targetCompatibility = JavaVersion.toVersion(8)
     }
 
     publishing.repositories.maven {

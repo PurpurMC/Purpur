@@ -14,11 +14,11 @@ val forkNameLowercase = forkName.toLowerCase(Locale.ENGLISH)
 rootProject.name = forkNameLowercase
 
 setupSubproject("$forkNameLowercase-api") {
-    projectDir = File("$forkName-API")
+    projectDir = file("$forkName-API")
     buildFileName = "../subprojects/api.gradle.kts"
 }
 setupSubproject("$forkNameLowercase-server") {
-    projectDir = File("$forkName-Server")
+    projectDir = file("$forkName-Server")
     buildFileName = "../subprojects/server.gradle.kts"
 }
 
