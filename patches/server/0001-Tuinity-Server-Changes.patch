@@ -10912,7 +10912,7 @@ index 1d72af9cace7aa8f1d20c7c1c5be621f533e2dad..b7399d17dd64ca8b1f1fab405cb0ac91
              worldData.addProperty("keep-spawn-loaded-range", world.paperConfig.keepLoadedRange);
              worldData.addProperty("visible-chunk-count", visibleChunks.size());
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index c372e6897c73fad6f9c478cec9f58303fb0cce17..e757cb5c2d50cb3a4dbe50d4726db09ab845fcbb 100644
+index 0db00322ebf600245bf9311e547c8c743a60a173..02d8a8f13d81c47316f704fb700afd0214a5f546 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -267,6 +267,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
@@ -16960,7 +16960,7 @@ index 03584572fa5bf0d96fc4cecece573547f9c94cea..8bc965a3b3d0d4140c6b94636f0b33b2
                      }
  
 diff --git a/src/main/java/net/minecraft/world/level/World.java b/src/main/java/net/minecraft/world/level/World.java
-index 78dcba08d6d796d5d97c8304bf1f1e7d1e650d5d..68fa071fc576f398682ef461df102be432cdcb4c 100644
+index 6581fe0d93a5c2e7b444a44c01726e02d4a28e63..af01f5d635eada7175b9d7fdb47a65530686a539 100644
 --- a/src/main/java/net/minecraft/world/level/World.java
 +++ b/src/main/java/net/minecraft/world/level/World.java
 @@ -154,6 +154,8 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
@@ -17083,15 +17083,6 @@ index 78dcba08d6d796d5d97c8304bf1f1e7d1e650d5d..68fa071fc576f398682ef461df102be4
 +            } else if ((i & 2) != 0 && (!this.isClientSide || (i & 4) == 0) && (this.isClientSide || chunk == null || ((WorldServer)this).getChunkProvider().playerChunkMap.playerChunkManager.broadcastMap.getObjectsInRange(MCUtil.getCoordinateKey(blockposition)) != null)) { // Tuinity - replace old player chunk management
                  ((WorldServer)this).getChunkProvider().flagDirty(blockposition);
                  // Paper end - per player view distance
-             }
-@@ -895,7 +968,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
-                 //this.tileEntityList.remove(tileentity); // Paper - remove unused list
-                 // Paper - prevent double chunk lookups
-                 Chunk chunk; if ((chunk = this.getChunkIfLoaded(tileentity.getPosition())) != null) { // inlined contents of this.isLoaded(BlockPosition). Reuse the returned chunk instead of looking it up again
--                    chunk.removeTileEntity(tileentity.getPosition());
-+                    chunk.removeTileEntity(tileentity.getPosition(), tileentity); // Tuinity - make sure we remove the correct TE
-                 }
-                 // Paper end
              }
 @@ -955,6 +1028,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
              return;
@@ -17748,7 +17739,7 @@ index 3c25021835d6d8fd112fc89636616bfd744e7f1a..aa49565cd364db3781a110ee138ee1a4
          return this.j.d();
      }
 diff --git a/src/main/java/net/minecraft/world/level/chunk/Chunk.java b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
-index 34a9f7b2f998f77b1279516cd09397ab6c2ac1cc..ffef28f9fa82a6961ef6db5f6732cfee4352ee01 100644
+index 0727b12b5ff146b4efa9204bf4f495f2f1aa20b9..df35ae12ecbe88ab396bed9850ef80433ff42fd4 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 +++ b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 @@ -137,6 +137,158 @@ public class Chunk implements IChunkAccess {
@@ -18002,28 +17993,7 @@ index 34a9f7b2f998f77b1279516cd09397ab6c2ac1cc..ffef28f9fa82a6961ef6db5f6732cfee
              return;
          }
          if (entity instanceof EntityItem) {
-@@ -819,10 +956,18 @@ public class Chunk implements IChunkAccess {
- 
-     @Override
-     public void removeTileEntity(BlockPosition blockposition) {
-+        // Tuinity start - make sure we remove the correct TE
-+        this.removeTileEntity(blockposition, null);
-+    }
-+    public void removeTileEntity(BlockPosition blockposition, TileEntity match) {
-+        // Tuinity end - make sure we remove the correct TE
-         if (this.loaded || this.world.s_()) {
--            TileEntity tileentity = (TileEntity) this.tileEntities.remove(blockposition);
-+            // Tuinity start - make sure we remove the correct TE
-+            TileEntity tileentity = (TileEntity) this.tileEntities.get(blockposition);
- 
--            if (tileentity != null) {
-+            if (tileentity != null && (match == null || match == tileentity)) {
-+                this.tileEntities.remove(blockposition);
-+                // Tuinity end - make sure we remove the correct TE
-                 tileentity.al_();
-             }
-         }
-@@ -858,6 +1003,7 @@ public class Chunk implements IChunkAccess {
+@@ -866,6 +1003,7 @@ public class Chunk implements IChunkAccess {
          // Paper end - neighbour cache
          org.bukkit.Server server = this.world.getServer();
          ((WorldServer)this.world).getChunkProvider().addLoadedChunk(this); // Paper
@@ -18031,7 +18001,7 @@ index 34a9f7b2f998f77b1279516cd09397ab6c2ac1cc..ffef28f9fa82a6961ef6db5f6732cfee
          if (server != null) {
              /*
               * If it's a new world, the first few chunks are generated inside
-@@ -922,116 +1068,18 @@ public class Chunk implements IChunkAccess {
+@@ -930,116 +1068,18 @@ public class Chunk implements IChunkAccess {
      }
  
      public void a(@Nullable Entity entity, AxisAlignedBB axisalignedbb, List<Entity> list, @Nullable Predicate<? super Entity> predicate) {
