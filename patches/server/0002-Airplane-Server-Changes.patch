@@ -626,7 +626,7 @@ copy of the Program in return for a fee.
                      END OF TERMS AND CONDITIONS
 
 diff --git a/pom.xml b/pom.xml
-index dad9981b1cd1ca8b27a45972188fd2b92f5146e7..fc2c3714b6c772d67e258be269aa92dda80cdb12 100644
+index dad9981b1cd1ca8b27a45972188fd2b92f5146e7..2071c1f39cdf954c7dc15afcabab58cf2e340e68 100644
 --- a/pom.xml
 +++ b/pom.xml
 @@ -27,8 +27,8 @@
@@ -640,10 +640,17 @@ index dad9981b1cd1ca8b27a45972188fd2b92f5146e7..fc2c3714b6c772d67e258be269aa92dd
              <version>${project.version}</version>
              <scope>compile</scope>
          </dependency>
-@@ -159,8 +159,23 @@
+@@ -159,6 +159,20 @@
              <version>1.1.0-SNAPSHOT</version>
              <scope>compile</scope>
          </dependency>
++        <!-- Airplane Config -->
++        <dependency>
++            <groupId>com.github.technove</groupId>
++            <artifactId>AIR</artifactId>
++            <version>fe3dbb4420</version>
++            <scope>compile</scope>
++        </dependency>
 +        <!-- Airplane - Flare -->
 +        <dependency>
 +            <groupId>com.github.technove</groupId>
@@ -653,17 +660,7 @@ index dad9981b1cd1ca8b27a45972188fd2b92f5146e7..fc2c3714b6c772d67e258be269aa92dd
 +        </dependency>
      </dependencies>
  
-+    <repositories>
-+        <!-- Airplane - Flare -->
-+        <repository>
-+            <id>jitpack.io</id>
-+            <url>https://jitpack.io</url>
-+        </repository>
-+    </repositories>
-+
      <!-- This builds a completely 'ready to start' jar with all dependencies inside -->
-     <build>
-         <finalName>tuinity-${minecraft.version}</finalName>
 diff --git a/src/main/java/com/destroystokyo/paper/Metrics.java b/src/main/java/com/destroystokyo/paper/Metrics.java
 index 52c0ab1ce46e1f3233ef746d9bc699356fa9fae4..b480bd3044370b8eb733166f0c4b737344475993 100644
 --- a/src/main/java/com/destroystokyo/paper/Metrics.java
@@ -723,12 +720,14 @@ index 7063f1da3654b382e26b0093ad5d0ff04a2b38c2..b9c5479e5561f8fe68ea8f94fbf4e64d
          return history != null ? TextComponent.ofChildren(updateMessage, Component.newline(), history) : updateMessage;
 diff --git a/src/main/java/gg/airplane/AirplaneCommand.java b/src/main/java/gg/airplane/AirplaneCommand.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1fa9b40e2f89272fa8bc9d927a9a852b5eb0db22
+index 0000000000000000000000000000000000000000..89c89e633f14b5820147e734b1b7ad8cadfdce80
 --- /dev/null
 +++ b/src/main/java/gg/airplane/AirplaneCommand.java
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,65 @@
 +package gg.airplane;
 +
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
 +import net.md_5.bungee.api.ChatColor;
 +import net.minecraft.server.MinecraftServer;
 +import org.bukkit.Bukkit;
@@ -736,6 +735,7 @@ index 0000000000000000000000000000000000000000..1fa9b40e2f89272fa8bc9d927a9a852b
 +import org.bukkit.command.Command;
 +import org.bukkit.command.CommandSender;
 +
++import java.io.IOException;
 +import java.util.Collections;
 +import java.util.List;
 +import java.util.stream.Collectors;
@@ -772,7 +772,13 @@ index 0000000000000000000000000000000000000000..1fa9b40e2f89272fa8bc9d927a9a852b
 +
 +        if (args[0].equalsIgnoreCase("reload")) {
 +            MinecraftServer console = MinecraftServer.getServer();
-+            AirplaneConfig.load();
++            try {
++                AirplaneConfig.load();
++            } catch (IOException e) {
++                sender.sendMessage(Component.text("Failed to reload.", NamedTextColor.RED));
++                e.printStackTrace();
++                return true;
++            }
 +            console.server.reloadCount++;
 +
 +            Command.broadcastCommandMessage(sender, prefix + "Airplane configuration has been reloaded.");
@@ -785,37 +791,42 @@ index 0000000000000000000000000000000000000000..1fa9b40e2f89272fa8bc9d927a9a852b
 +}
 diff --git a/src/main/java/gg/airplane/AirplaneConfig.java b/src/main/java/gg/airplane/AirplaneConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..39ef53c9dd49d5951103777002f866a64a252bfd
+index 0000000000000000000000000000000000000000..a77e628518920e84b03a8a00e1308a9a53a00896
 --- /dev/null
 +++ b/src/main/java/gg/airplane/AirplaneConfig.java
-@@ -0,0 +1,94 @@
+@@ -0,0 +1,99 @@
 +package gg.airplane;
 +
-+import gg.airplane.manual.ManualParser;
++import co.technove.air.AIR;
 +import net.minecraft.server.MinecraftServer;
 +import org.apache.logging.log4j.Level;
 +
 +import java.io.File;
++import java.io.FileInputStream;
++import java.io.FileOutputStream;
 +import java.io.IOException;
 +import java.lang.reflect.Method;
 +import java.lang.reflect.Modifier;
 +
 +public class AirplaneConfig {
 +
-+    private static ManualParser manual;
++    private static AIR config;
 +
-+    public static void load() {
-+        try {
-+            manual = new ManualParser(new File("airplane.air"));
-+        } catch (IOException e) {
-+            e.printStackTrace();
++    public static void load() throws IOException {
++        File configFile = new File("airplane.air");
++        if (configFile.exists()) {
++            try (FileInputStream inputStream = new FileInputStream(configFile)) {
++                config = new AIR(inputStream);
++            }
++        } else {
++            config = new AIR();
 +        }
 +
-+        manual.get("info.version", "1.0");
-+        manual.setComment("info",
++        config.setComment("info",
 +          "Airplane Configuration",
 +          "Read https://blog.airplane.gg/ to find out more about Airplane",
 +          "Join our Discord to receive support & optimization help: https://discord.gg/3gtc45q");
++        config.getString("info.version", "1.0");
 +
 +        for (Method method : AirplaneConfig.class.getDeclaredMethods()) {
 +            if (Modifier.isStatic(method.getModifiers()) && Modifier.isPrivate(method.getModifiers())) {
@@ -828,10 +839,8 @@ index 0000000000000000000000000000000000000000..39ef53c9dd49d5951103777002f866a6
 +            }
 +        }
 +
-+        try {
-+            manual.save();
-+        } catch (IOException e) {
-+            e.printStackTrace();
++        try (FileOutputStream outputStream = new FileOutputStream(configFile)) {
++            config.save(outputStream);
 +        }
 +    }
 +
@@ -843,44 +852,46 @@ index 0000000000000000000000000000000000000000..39ef53c9dd49d5951103777002f866a6
 +    public static boolean dynamicHoglinBehavior = true;
 +
 +    private static void dynamicActivationRange() {
-+        manual.setComment("activation-range", "Optimizes how entities act when", "they're far away from the player");
++        config.setComment("activation-range", "Optimizes how entities act when", "they're far away from the player");
 +
-+        maximumActivationPrio = manual.get("activation-range.max-tick-freq", maximumActivationPrio,
++        maximumActivationPrio = config.getInt("activation-range.max-tick-freq", maximumActivationPrio,
 +          "This value defines how often in ticks, the furthest entity",
 +          "will get their pathfinders and behaviors ticked. 20 = 1s");
-+        activationDistanceMod = manual.get("activation-range.activation-dist-mod", activationDistanceMod,
++        activationDistanceMod = config.getInt("activation-range.activation-dist-mod", activationDistanceMod,
 +          "This value defines how much distance modifies an entity's",
 +          "tick frequency. freq = (distanceToPlayer^2) / (2^value)",
 +          "If you want further away entities to tick less often, use 8.",
 +          "If you want further away entities to tick more often, try 10.");
 +
-+        manual.setComment("behavior-activation", "A list of entities to use the dynamic activation range", "to modify how often their behaviors are ticked");
-+        dynamicVillagerBehavior = manual.get("behavior-activation.villager", dynamicVillagerBehavior);
-+        dynamicPiglinBehavior = manual.get("behavior-activation.piglin", dynamicPiglinBehavior);
-+        dynamicHoglinBehavior = manual.get("behavior-activation.hoglin", dynamicHoglinBehavior);
++        config.setComment("behavior-activation", "A list of entities to use the dynamic activation range", "to modify how often their behaviors are ticked");
++
++        dynamicVillagerBehavior = config.getBoolean("behavior-activation.villager", dynamicVillagerBehavior);
++        dynamicPiglinBehavior = config.getBoolean("behavior-activation.piglin", dynamicPiglinBehavior);
++        dynamicHoglinBehavior = config.getBoolean("behavior-activation.hoglin", dynamicHoglinBehavior);
 +    }
 +
 +
 +    public static String profileWebUrl = "https://flare.airplane.gg";
 +
 +    private static void profilerOptions() {
-+        manual.setComment("flare", "Configures Flare, the built-in profiler");
++        config.setComment("flare", "Configures Flare, the built-in profiler");
 +
-+        profileWebUrl = manual.get("flare.url", profileWebUrl, "Sets the server to use for profiles.");
++        profileWebUrl = config.getString("flare.url", profileWebUrl, "Sets the server to use for profiles.");
 +    }
 +
 +
 +    public static String accessToken = "";
 +
 +    private static void airplaneWebServices() {
-+        manual.setComment("web-services", "Options for connecting to Airplane's online utilities");
++        config.setComment("web-services", "Options for connecting to Airplane's online utilities");
 +
-+        accessToken = manual.get("web-services.token", "");
++        accessToken = config.getString("web-services.token", "");
 +        // todo lookup token (off-thread) and let users know if their token is valid
 +        if (accessToken.length() > 0) {
 +            gg.airplane.flare.FlareSetup.init(); // Airplane
 +        }
 +    }
++
 +
 +}
 diff --git a/src/main/java/gg/airplane/AirplaneLogger.java b/src/main/java/gg/airplane/AirplaneLogger.java
@@ -1385,222 +1396,6 @@ index 0000000000000000000000000000000000000000..86d6650d174a7794a7ebe793cad033b4
 +    }
 +
 +}
-diff --git a/src/main/java/gg/airplane/manual/ManualParser.java b/src/main/java/gg/airplane/manual/ManualParser.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..ace29adb0f140d99a8d85ac824654beded4bf5b8
---- /dev/null
-+++ b/src/main/java/gg/airplane/manual/ManualParser.java
-@@ -0,0 +1,210 @@
-+package gg.airplane.manual;
-+
-+import java.io.BufferedReader;
-+import java.io.BufferedWriter;
-+import java.io.File;
-+import java.io.FileReader;
-+import java.io.FileWriter;
-+import java.io.IOException;
-+import java.util.ArrayList;
-+import java.util.Arrays;
-+import java.util.LinkedHashMap;
-+import java.util.List;
-+import java.util.Map;
-+import java.util.TreeMap;
-+
-+// todo make this cleaner and more ergonomic to use
-+// also probably needs lists eventually
-+public class ManualParser {
-+
-+    private final File file;
-+    private final Map<String, Section> sections = new LinkedHashMap<>();
-+
-+    private static class ManualObject {
-+        public final String key;
-+        public final List<String> comments;
-+
-+        private ManualObject(String key, List<String> comments) {
-+            this.key = key;
-+            this.comments = comments == null ? new ArrayList<>() : comments;
-+        }
-+    }
-+
-+    private static class Section extends ManualObject {
-+        public final Map<String, Value> values;
-+
-+        private Section(String key, List<String> comments) {
-+            super(key, comments);
-+            this.values = new LinkedHashMap<>();
-+        }
-+
-+        public void add(String key, Value value) {
-+            this.values.put(key, value);
-+            value.parent = this;
-+        }
-+
-+        public Value get(String key) {
-+            return this.values.computeIfAbsent(key, k -> {
-+                Value value = new Value(k, null, null);
-+                value.parent = this;
-+                return value;
-+            });
-+        }
-+    }
-+
-+    private static class Value extends ManualObject {
-+        public Object value;
-+        public Section parent;
-+
-+        private Value(String key, Object value, List<String> comments) {
-+            super(key, comments);
-+            this.value = value;
-+        }
-+    }
-+
-+    public ManualParser(File file) throws IOException {
-+        this.file = file;
-+
-+        if (!file.exists()) {
-+            return;
-+        }
-+
-+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-+            Section currentSection = null;
-+            List<String> currentComment = new ArrayList<>();
-+
-+            String line;
-+            while ((line = reader.readLine()) != null) {
-+                line = line.trim();
-+
-+                if (line.length() == 0) {
-+                    continue; // empty line
-+                }
-+
-+                if (line.startsWith("#")) {
-+                    currentComment.add(line.substring(1).trim());
-+                } else if (line.startsWith("[")) {
-+                    if (!line.endsWith("]")) {
-+                        throw new IllegalArgumentException("Invalid configuration, section '" + line + "' does not end with ]");
-+                    }
-+                    if (line.length() < 3) {
-+                        throw new IllegalArgumentException("Invalid configuration, section '" + line + "' does not have a name");
-+                    }
-+                    String sectionName = line.substring(1, line.length() - 1);
-+                    Section newSection = new Section(sectionName, currentComment);
-+                    currentComment = new ArrayList<>();
-+                    currentSection = newSection;
-+                    this.sections.put(sectionName, newSection);
-+                } else {
-+                    if (currentSection == null) {
-+                        throw new IllegalArgumentException("Invalid configuration, found value outside of section " + line);
-+                    }
-+                    int equals = line.indexOf("=");
-+                    if (equals <= 1 || equals == line.length() - 1) {
-+                        throw new IllegalArgumentException("Invalid configuration, assignment invalid " + line);
-+                    }
-+
-+                    String key = line.substring(0, equals).trim();
-+
-+                    String value = line.substring(equals + 1).trim();
-+                    if (value.length() == 0) {
-+                        throw new IllegalArgumentException("Invalid configuration, value does not exist " + line);
-+                    }
-+                    if (value.startsWith("\"")) {
-+                        if (!value.endsWith("\"")) {
-+                            throw new IllegalArgumentException("Invalid configuration, value has no ending quote " + line);
-+                        }
-+                        String stringValue = value.substring(1, value.length() - 1);
-+                        currentSection.add(key, new Value(key, stringValue, currentComment));
-+                    } else if (Character.isDigit(value.charAt(0))) {
-+                        if (value.contains(".")) {
-+                            double doubleValue = Double.parseDouble(value);
-+                            currentSection.add(key, new Value(key, doubleValue, currentComment));
-+                        } else {
-+                            int intValue = Integer.parseInt(value);
-+                            currentSection.add(key, new Value(key, intValue, currentComment));
-+                        }
-+                    } else if (value.equals("true") || value.equals("false")) {
-+                        boolean boolValue = Boolean.parseBoolean(value);
-+                        currentSection.add(key, new Value(key, boolValue, currentComment));
-+                    } else {
-+                        throw new IllegalArgumentException("Invalid configuration, unknown type for " + line);
-+                    }
-+                    currentComment = new ArrayList<>();
-+                }
-+            }
-+        }
-+    }
-+
-+    public void save() throws IOException {
-+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(this.file))) {
-+            for (Map.Entry<String, Section> entry : this.sections.entrySet()) {
-+                Section section = entry.getValue();
-+                if (section.comments != null) {
-+                    for (String comment : section.comments) {
-+                        writer.write("# " + comment + "\n");
-+                    }
-+                }
-+                writer.write("[" + section.key + "]" + "\n");
-+                for (Value value : section.values.values()) {
-+                    if (value.comments != null) {
-+                        for (String comment : value.comments) {
-+                            writer.write("  # " + comment + "\n");
-+                        }
-+                    }
-+                    writer.write("  " + value.key + " = " + serialize(value.value) + "\n");
-+                }
-+                writer.write("\n");
-+            }
-+        }
-+    }
-+
-+    private ManualObject getObject(String key) {
-+        String[] split = key.split("\\.", 2);
-+        if (split.length == 1) {
-+            return this.sections.computeIfAbsent(key, k -> new Section(k, null));
-+        }
-+        return this.sections.computeIfAbsent(split[0], k -> new Section(k, null)).get(split[1]);
-+    }
-+
-+    public void setComment(String key, String... comment) {
-+        ManualObject object = this.getObject(key);
-+        object.comments.clear();
-+        object.comments.addAll(Arrays.asList(comment));
-+    }
-+
-+    public <T> T get(String key, T defaultValue, String... comment) {
-+        String[] split = key.split("\\.", 2);
-+        if (split.length == 1) {
-+            throw new IllegalArgumentException("Key " + key + " does not include section");
-+        }
-+        Section section = this.sections.computeIfAbsent(split[0], k -> new Section(k, null));
-+        if (!section.values.containsKey(split[1])) {
-+            Value value = section.get(split[1]);
-+            value.value = defaultValue;
-+            value.comments.addAll(Arrays.asList(comment));
-+            return defaultValue;
-+        }
-+        Value value = section.get(split[1]);
-+        if (value.comments.isEmpty()) {
-+            value.comments.addAll(Arrays.asList(comment));
-+        }
-+        return (T) value.value;
-+    }
-+
-+    public void set(String key, Object value) {
-+        ManualObject object = getObject(key);
-+        if (!(object instanceof Value)) {
-+            throw new IllegalArgumentException("Invalid key for value " + key);
-+        }
-+        ((Value) object).value = value;
-+    }
-+
-+    private String serialize(Object object) {
-+        if (object instanceof String) {
-+            return "\"" + object + "\"";
-+        }
-+        return String.valueOf(object);
-+    }
-+
-+}
 diff --git a/src/main/java/net/minecraft/core/BlockPosition.java b/src/main/java/net/minecraft/core/BlockPosition.java
 index 8edc279e7a3fdfb7e10718f1deee34b7e3fb2f28..73ec17dea5d5668e49c9a6ad679bd3a362960c72 100644
 --- a/src/main/java/net/minecraft/core/BlockPosition.java
@@ -1647,7 +1442,7 @@ index d902efdb8f2d42ea4c3933f7fa76ebe135ee09db..24a46ad36613faa5f5a1a12b70f7af88
          this.setPVP(dedicatedserverproperties.pvp);
          this.setAllowFlight(dedicatedserverproperties.allowFlight);
 diff --git a/src/main/java/net/minecraft/server/level/ChunkProviderServer.java b/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
-index cb83f1152c52a99d25e4e80cc8bf18c6793e8b50..87c87b9767003652814c3726eece64470dbb69a8 100644
+index fe040615ff03478a20cdf8376f89a6b7d100ba61..207a9c3928aad7c6e89a120b54d87e003ebd232c 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
 @@ -1000,6 +1000,7 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -1736,10 +1531,10 @@ index d7eede51f1c4ebbe8e00b16efd6331c87db53bb4..bc18b9c3aac4c5feeb1603554e0ac009
              return this.a(i);
          }
 diff --git a/src/main/java/net/minecraft/server/level/WorldServer.java b/src/main/java/net/minecraft/server/level/WorldServer.java
-index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8e0a1bb1e 100644
+index 46baad407de5598ecb23fcbb9a3fb4ee82addb17..c35e7d01af6dde7998edc4da74ed005c8ccc11ee 100644
 --- a/src/main/java/net/minecraft/server/level/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/level/WorldServer.java
-@@ -1081,11 +1081,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1083,11 +1083,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  // CraftBukkit end */
  
                  gameprofilerfiller.enter("checkDespawn");
@@ -1753,7 +1548,7 @@ index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8
                              this.updateNavigatorsInRegion(entity);
                          }
                      } else {
-@@ -1105,7 +1106,28 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1107,7 +1108,28 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
                  gameprofilerfiller.enter("tick");
                  if (!entity.dead && !(entity instanceof EntityComplexPart)) {
@@ -1782,7 +1577,7 @@ index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8
                  }
  
                  gameprofilerfiller.exit();
-@@ -1115,7 +1137,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1117,7 +1139,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                      this.entitiesById.remove(entity.getId()); // Tuinity
                      this.unregisterEntity(entity);
                  } else if (entity.inChunk && entity.valid) { // Tuinity start - optimise notify()
@@ -1791,7 +1586,7 @@ index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8
                          this.updateNavigatorsInRegion(entity);
                      }
                  } else {
-@@ -1200,6 +1222,8 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1202,6 +1224,8 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      private final BiomeBase[] biomeBaseCache = new BiomeBase[1];
      // Tuinity end - optimise chunk ice snow ticking
  
@@ -1800,7 +1595,7 @@ index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8
      public void a(Chunk chunk, int i) { final int randomTickSpeed = i; // Paper
          ChunkCoordIntPair chunkcoordintpair = chunk.getPos();
          boolean flag = this.isRaining();
-@@ -1210,7 +1234,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1212,7 +1236,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          gameprofilerfiller.enter("thunder");
          final BlockPosition.MutableBlockPosition blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
  
@@ -1809,7 +1604,7 @@ index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8
              blockposition.setValues(this.a(this.a(j, 0, k, 15))); // Paper
              if (this.isRainingAt(blockposition)) {
                  DifficultyDamageScaler difficultydamagescaler = this.getDamageScaler(blockposition);
-@@ -1234,7 +1258,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1236,7 +1260,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          }
  
          gameprofilerfiller.exitEnter("iceandsnow");
@@ -1818,7 +1613,7 @@ index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8
              // Paper start - optimise chunk ticking
              // Tuinity start - optimise chunk ice snow ticking
              BiomeBase[] biomeCache = this.biomeBaseCache;
-@@ -1414,7 +1438,9 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1415,7 +1439,9 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      }
      // Tuinity end - log detailed entity tick information
  
@@ -1829,7 +1624,7 @@ index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8
          // Tuinity start - log detailed entity tick information
          com.tuinity.tuinity.util.TickThread.ensureTickThread("Cannot tick an entity off-main");
          try {
-@@ -1422,7 +1448,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1423,7 +1449,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  currentlyTickingEntity.lazySet(entity);
              }
              // Tuinity end - log detailed entity tick information
@@ -1838,7 +1633,7 @@ index 46f960b9276dced41deb8f741454b6cce5a81529..9d97e2ea5c207c42f1cc9aa14bc87dc8
              this.chunkCheck(entity);
          } else {
              ++TimingHistory.entityTicks; // Paper - timings
-@@ -1448,9 +1474,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1449,9 +1475,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  ++entity.ticksLived;
                  GameProfilerFiller gameprofilerfiller = this.getMethodProfiler();
  
@@ -1925,7 +1720,7 @@ index aae13c2e6c2a30b69c33417932c6a4d0aefeb7f5..f4440a5c4aedb1d7d303517f86a07c85
          this.world.getMethodProfiler().exit();
          this.world.getMethodProfiler().enter("navigation");
 diff --git a/src/main/java/net/minecraft/world/entity/EntityLiving.java b/src/main/java/net/minecraft/world/entity/EntityLiving.java
-index 561905be42428855a07a2e63aca80d5dd63b22bf..1a7866bed9cb7f0431454d3af4733de05c0cba78 100644
+index d933323d57a2a7ff283408f12d4650699f8177e7..5c983a441cd2a06eae6e79bc07ba5440d294574b 100644
 --- a/src/main/java/net/minecraft/world/entity/EntityLiving.java
 +++ b/src/main/java/net/minecraft/world/entity/EntityLiving.java
 @@ -111,6 +111,7 @@ import net.minecraft.world.phys.AxisAlignedBB;
@@ -2479,10 +2274,10 @@ index d497006f05f79015cd791849888832bb53f4a414..d98526785ff2fa3b72e8ffffcb89a57a
  
      private static BlockPosition getRandomPosition(World world, Chunk chunk) {
 diff --git a/src/main/java/net/minecraft/world/level/StructureManager.java b/src/main/java/net/minecraft/world/level/StructureManager.java
-index acacbf9617f99b97fc7fd2ba718775e1b3e429e9..967ae0212028d57d366497f7f25c61776c1ac3f2 100644
+index 43418273f00f3703c7bd86586847d469af92c18f..d11e79093f9a5121c98b7da840bc79d204895b65 100644
 --- a/src/main/java/net/minecraft/world/level/StructureManager.java
 +++ b/src/main/java/net/minecraft/world/level/StructureManager.java
-@@ -15,6 +15,11 @@ import net.minecraft.world.level.levelgen.feature.StructureGenerator;
+@@ -16,6 +16,11 @@ import net.minecraft.world.level.levelgen.feature.StructureGenerator;
  import net.minecraft.world.level.levelgen.structure.StructurePiece;
  import net.minecraft.world.level.levelgen.structure.StructureStart;
  
@@ -2494,7 +2289,7 @@ index acacbf9617f99b97fc7fd2ba718775e1b3e429e9..967ae0212028d57d366497f7f25c6177
  public class StructureManager {
  
      private final GeneratorAccess a; public GeneratorAccess getLevel() { return a; } // Paper - OBFHELPER
-@@ -51,13 +56,15 @@ public class StructureManager {
+@@ -52,13 +57,15 @@ public class StructureManager {
      public java.util.List<StructureStart<?>> getFeatureStarts(SectionPosition sectionPosition, StructureGenerator<?> structureGenerator, IWorldReader world) {
          // Tuinity end - add world parameter
          java.util.List<StructureStart<?>> list = new ObjectArrayList<>();
@@ -2513,7 +2308,7 @@ index acacbf9617f99b97fc7fd2ba718775e1b3e429e9..967ae0212028d57d366497f7f25c6177
          return list;
      }
      // Paper end
-@@ -85,7 +92,18 @@ public class StructureManager {
+@@ -86,7 +93,18 @@ public class StructureManager {
      }
      public StructureStart<?> getStructureStarts(BlockPosition blockposition, boolean flag, StructureGenerator<?> structuregenerator, IWorldReader world) {
          // Paper start - remove structure streams
@@ -2533,7 +2328,7 @@ index acacbf9617f99b97fc7fd2ba718775e1b3e429e9..967ae0212028d57d366497f7f25c6177
              if (structurestart.c().b(blockposition)) {
                  if (!flag) {
                      return structurestart;
-@@ -96,7 +114,10 @@ public class StructureManager {
+@@ -97,7 +115,10 @@ public class StructureManager {
                      }
                  }
              }
