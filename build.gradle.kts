@@ -35,6 +35,7 @@ toothpick {
 subprojects {
     repositories {
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
+        maven("https://jitpack.io")
     }
 
     java {
