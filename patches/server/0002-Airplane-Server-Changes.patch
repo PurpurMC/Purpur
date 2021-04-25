@@ -684,7 +684,7 @@ index 52c0ab1ce46e1f3233ef746d9bc699356fa9fae4..b480bd3044370b8eb733166f0c4b7373
                  metrics.addCustomChart(new Metrics.DrilldownPie("java_version", () -> {
                      Map<String, Map<String, Integer>> map = new HashMap<>();
 diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
-index c56e7fb18f9a56c8025eb70a524f028b5942da37..f39452535b2807a226ada095f5c21b19ea238e5c 100644
+index efc1e42d606e1c9feb1a4871c0714933ae92a1b2..14ac28d4d6b1ab0f0a70dfefc589f7723a1d2e1a 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
 @@ -202,6 +202,15 @@ public class PaperConfig {
@@ -791,10 +791,10 @@ index 0000000000000000000000000000000000000000..89c89e633f14b5820147e734b1b7ad8c
 +}
 diff --git a/src/main/java/gg/airplane/AirplaneConfig.java b/src/main/java/gg/airplane/AirplaneConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a77e628518920e84b03a8a00e1308a9a53a00896
+index 0000000000000000000000000000000000000000..7ec84ef1d1cbb1fabf4c590a2f2c1da3cc181010
 --- /dev/null
 +++ b/src/main/java/gg/airplane/AirplaneConfig.java
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,105 @@
 +package gg.airplane;
 +
 +import co.technove.air.AIR;
@@ -845,42 +845,48 @@ index 0000000000000000000000000000000000000000..a77e628518920e84b03a8a00e1308a9a
 +    }
 +
 +
-+    public static int maximumActivationPrio = 20;
-+    public static int activationDistanceMod = 9;
-+    public static boolean dynamicVillagerBehavior = true;
-+    public static boolean dynamicPiglinBehavior = true;
-+    public static boolean dynamicHoglinBehavior = true;
++    public static int startDistance;
++    public static int startDistanceSquared;
++    public static int maximumActivationPrio;
++    public static int activationDistanceMod;
++    public static boolean dynamicVillagerBehavior;
++    public static boolean dynamicPiglinBehavior;
++    public static boolean dynamicHoglinBehavior;
 +
 +    private static void dynamicActivationRange() {
 +        config.setComment("activation-range", "Optimizes how entities act when", "they're far away from the player");
 +
-+        maximumActivationPrio = config.getInt("activation-range.max-tick-freq", maximumActivationPrio,
++        startDistance = config.getInt("activation-range.start-distance", 12,
++          "This value determines how far away an entity has to be",
++          "from the player to start being effected by DEAR.");
++        startDistanceSquared = startDistance * startDistance;
++        maximumActivationPrio = config.getInt("activation-range.max-tick-freq", 20,
 +          "This value defines how often in ticks, the furthest entity",
 +          "will get their pathfinders and behaviors ticked. 20 = 1s");
-+        activationDistanceMod = config.getInt("activation-range.activation-dist-mod", activationDistanceMod,
++        activationDistanceMod = config.getInt("activation-range.activation-dist-mod", 8,
 +          "This value defines how much distance modifies an entity's",
 +          "tick frequency. freq = (distanceToPlayer^2) / (2^value)",
-+          "If you want further away entities to tick less often, use 8.",
-+          "If you want further away entities to tick more often, try 10.");
++          "If you want further away entities to tick less often, use 7.",
++          "If you want further away entities to tick more often, try 9.");
 +
 +        config.setComment("behavior-activation", "A list of entities to use the dynamic activation range", "to modify how often their behaviors are ticked");
 +
-+        dynamicVillagerBehavior = config.getBoolean("behavior-activation.villager", dynamicVillagerBehavior);
-+        dynamicPiglinBehavior = config.getBoolean("behavior-activation.piglin", dynamicPiglinBehavior);
-+        dynamicHoglinBehavior = config.getBoolean("behavior-activation.hoglin", dynamicHoglinBehavior);
++        dynamicVillagerBehavior = config.getBoolean("behavior-activation.villager", true);
++        dynamicPiglinBehavior = config.getBoolean("behavior-activation.piglin", true);
++        dynamicHoglinBehavior = config.getBoolean("behavior-activation.hoglin", true);
 +    }
 +
 +
-+    public static String profileWebUrl = "https://flare.airplane.gg";
++    public static String profileWebUrl;
 +
 +    private static void profilerOptions() {
 +        config.setComment("flare", "Configures Flare, the built-in profiler");
 +
-+        profileWebUrl = config.getString("flare.url", profileWebUrl, "Sets the server to use for profiles.");
++        profileWebUrl = config.getString("flare.url", "https://flare.airplane.gg", "Sets the server to use for profiles.");
 +    }
 +
 +
-+    public static String accessToken = "";
++    public static String accessToken;
 +
 +    private static void airplaneWebServices() {
 +        config.setComment("web-services", "Options for connecting to Airplane's online utilities");
@@ -1396,11 +1402,159 @@ index 0000000000000000000000000000000000000000..86d6650d174a7794a7ebe793cad033b4
 +    }
 +
 +}
+diff --git a/src/main/java/gg/airplane/structs/FluidDirectionCache.java b/src/main/java/gg/airplane/structs/FluidDirectionCache.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..11279fb136bbaf3e51d9b080a9e283d8ff0cbb47
+--- /dev/null
++++ b/src/main/java/gg/airplane/structs/FluidDirectionCache.java
+@@ -0,0 +1,142 @@
++package gg.airplane.structs;
++
++import it.unimi.dsi.fastutil.HashCommon;
++
++/**
++ * This is a replacement for the cache used in FluidTypeFlowing.
++ * The requirements for the previous cache were:
++ *  - Store 200 entries
++ *  - Look for the flag in the cache
++ *  - If it exists, move to front of cache
++ *  - If it doesn't exist, remove last entry in cache and insert in front
++ *
++ * This class accomplishes something similar, however has a few different
++ * requirements put into place to make this more optimize:
++ *
++ *  - maxDistance is the most amount of entries to be checked, instead
++ *    of having to check the entire list.
++ *  - In combination with that, entries are all tracked by age and how
++ *    frequently they're used. This enables us to remove old entries,
++ *    without constantly shifting any around.
++ *
++ * Usage of the previous map would have to reset the head every single usage,
++ * shifting the entire map. Here, nothing happens except an increment when
++ * the cache is hit, and when it needs to replace an old element only a single
++ * element is modified.
++ */
++public class FluidDirectionCache<T> {
++
++    private static class FluidDirectionEntry<T> {
++        private final T data;
++        private final boolean flag;
++        private short uses = 0;
++        private short age = 0;
++
++        private FluidDirectionEntry(T data, boolean flag) {
++            this.data = data;
++            this.flag = flag;
++        }
++
++        public int getValue() {
++            return this.uses - (this.age >> 1); // age isn't as important as uses
++        }
++
++        public void incrementUses() {
++            if (this.uses < Short.MAX_VALUE) {
++                this.uses++;
++            }
++        }
++
++        public void incrementAge() {
++            if (this.age < Short.MAX_VALUE) {
++                this.age++;
++            }
++        }
++    }
++
++    private final FluidDirectionEntry[] entries;
++    private final int mask;
++    private final int maxDistance; // the most amount of entries to check for a value
++
++    public FluidDirectionCache(int size) {
++        float fill = 0.75f;
++
++        int arraySize = HashCommon.arraySize(size, fill);
++        this.entries = new FluidDirectionEntry[arraySize];
++        this.mask = arraySize - 1;
++        this.maxDistance = Math.max(4, arraySize >> 4);
++    }
++
++    public Boolean getValue(T data) {
++        FluidDirectionEntry curr;
++        int pos;
++
++        if ((curr = this.entries[pos = HashCommon.mix(data.hashCode()) & this.mask]) == null) {
++            return null;
++        } else if (data.equals(curr.data)) {
++            curr.incrementUses();
++            return curr.flag;
++        }
++
++        int checked = 1; // start at 1 because we already checked the first spot above
++
++        while ((curr = this.entries[pos = (pos + 1) & this.mask]) != null) {
++            if (data.equals(curr.data)) {
++                curr.incrementUses();
++                return curr.flag;
++            } else if (++checked >= this.maxDistance) {
++                break;
++            }
++        }
++
++        return null;
++    }
++
++    public void putValue(T data, boolean flag) {
++        FluidDirectionEntry<T> curr;
++        int pos;
++
++        if ((curr = this.entries[pos = HashCommon.mix(data.hashCode()) & this.mask]) == null) {
++            this.entries[pos] = new FluidDirectionEntry<>(data, flag); // add
++            return;
++        } else if (data.equals(curr.data)) {
++            curr.incrementUses();
++            return;
++        }
++
++        int checked = 1; // start at 1 because we already checked the first spot above
++
++        while ((curr = this.entries[pos = (pos + 1) & this.mask]) != null) {
++            if (data.equals(curr.data)) {
++                curr.incrementUses();
++                return;
++            } else if (++checked >= this.maxDistance) {
++                this.forceAdd(data, flag);
++                return;
++            }
++        }
++
++        this.entries[pos] = new FluidDirectionEntry<>(data, flag); // add
++    }
++
++    private void forceAdd(T data, boolean flag) {
++        int expectedPos = HashCommon.mix(data.hashCode()) & this.mask;
++
++        int toRemovePos = expectedPos;
++        FluidDirectionEntry<T> entryToRemove = this.entries[toRemovePos];
++
++        for (int i = expectedPos + 1; i < expectedPos + this.maxDistance; i++) {
++            int pos = i & this.mask;
++            FluidDirectionEntry<T> entry = this.entries[pos];
++            if (entry.getValue() < entryToRemove.getValue()) {
++                toRemovePos = pos;
++                entryToRemove = entry;
++            }
++
++            entry.incrementAge(); // use this as a mechanism to age the other entries
++        }
++
++        // remove the least used/oldest entry
++        this.entries[toRemovePos] = new FluidDirectionEntry(data, flag);
++    }
++}
 diff --git a/src/main/java/net/minecraft/core/BlockPosition.java b/src/main/java/net/minecraft/core/BlockPosition.java
-index 8edc279e7a3fdfb7e10718f1deee34b7e3fb2f28..73ec17dea5d5668e49c9a6ad679bd3a362960c72 100644
+index 8edc279e7a3fdfb7e10718f1deee34b7e3fb2f28..3c51ee00aa53e561c02bb779c7115d8475d70ed7 100644
 --- a/src/main/java/net/minecraft/core/BlockPosition.java
 +++ b/src/main/java/net/minecraft/core/BlockPosition.java
-@@ -438,6 +438,14 @@ public class BlockPosition extends BaseBlockPosition {
+@@ -438,12 +438,26 @@ public class BlockPosition extends BaseBlockPosition {
          public BlockPosition b(int i, int j, int k) {
              return super.b(i, j, k).immutableCopy();
          }
@@ -1415,8 +1569,33 @@ index 8edc279e7a3fdfb7e10718f1deee34b7e3fb2f28..73ec17dea5d5668e49c9a6ad679bd3a3
  
          @Override
          public BlockPosition shift(EnumDirection enumdirection, int i) {
+             return super.shift(enumdirection, i).immutableCopy();
+         }
+ 
++        // Airplane start - mutable shift method
++        public MutableBlockPosition mutableShift(EnumDirection enumdirection, int i) {
++            return this.setValues(this.getX() + enumdirection.getAdjacentX() * i, this.getY() + enumdirection.getAdjacentY() * i, this.getZ() + enumdirection.getAdjacentZ() * i);
++        }
++        // Airplane end
++
+         @Override
+         public BlockPosition a(EnumDirection.EnumAxis enumdirection_enumaxis, int i) {
+             return super.a(enumdirection_enumaxis, i).immutableCopy();
+diff --git a/src/main/java/net/minecraft/core/EnumDirection.java b/src/main/java/net/minecraft/core/EnumDirection.java
+index 7918d830a4aef09c9f517284e83a9376299116ad..0a40df2151bd388b6633a6f50b14f1f41ed4ce62 100644
+--- a/src/main/java/net/minecraft/core/EnumDirection.java
++++ b/src/main/java/net/minecraft/core/EnumDirection.java
+@@ -30,7 +30,7 @@ public enum EnumDirection implements INamable {
+     private final EnumDirection.EnumAxis k;
+     private final EnumDirection.EnumAxisDirection l;
+     private final BaseBlockPosition m;
+-    private static final EnumDirection[] n = values();
++    private static final EnumDirection[] n = values(); public static EnumDirection[] getValues() { return n; } // Airplane - getter
+     private static final Map<String, EnumDirection> o = (Map) Arrays.stream(EnumDirection.n).collect(Collectors.toMap(EnumDirection::m, (enumdirection) -> {
+         return enumdirection;
+     }));
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 7b0b416c73c8914f3c8c570f2020490ef2babf64..246fcc9b40152964810ceef356ecb2eee3551135 100644
+index 2767a9369ddc922f1d9c7cb6c7acc8270545535a..7b4b9f54510b3a05aad3f7e50e32ee0bf977244a 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -1646,7 +1646,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
@@ -1429,11 +1608,11 @@ index 7b0b416c73c8914f3c8c570f2020490ef2babf64..246fcc9b40152964810ceef356ecb2ee
  
      public CrashReport b(CrashReport crashreport) {
 diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
-index d902efdb8f2d42ea4c3933f7fa76ebe135ee09db..24a46ad36613faa5f5a1a12b70f7af886e1608ae 100644
+index fa7a78549a9bb92b93c305dc16f43a9ace7f6f43..858bd62d2a17c15ee573c5cd607a876d3a99c2b1 100644
 --- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
 +++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
-@@ -215,6 +215,8 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
-         com.destroystokyo.paper.VersionHistoryManager.INSTANCE.getClass(); // load version history now
+@@ -216,6 +216,8 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+         io.papermc.paper.brigadier.PaperBrigadierProviderImpl.INSTANCE.getClass(); // init PaperBrigadierProvider
          // Paper end
          com.tuinity.tuinity.config.TuinityConfig.init((java.io.File) options.valueOf("tuinity-settings")); // Tuinity - Server Config
 +        gg.airplane.AirplaneConfig.load(); // Airplane - config
@@ -1441,8 +1620,21 @@ index d902efdb8f2d42ea4c3933f7fa76ebe135ee09db..24a46ad36613faa5f5a1a12b70f7af88
  
          this.setPVP(dedicatedserverproperties.pvp);
          this.setAllowFlight(dedicatedserverproperties.allowFlight);
+diff --git a/src/main/java/net/minecraft/server/level/ChunkMapDistance.java b/src/main/java/net/minecraft/server/level/ChunkMapDistance.java
+index a5fc023312c99e591fc269999c28a766a46f8849..fb4d006f86229fd093f1a9ea8cab2add0a4cacfa 100644
+--- a/src/main/java/net/minecraft/server/level/ChunkMapDistance.java
++++ b/src/main/java/net/minecraft/server/level/ChunkMapDistance.java
+@@ -215,7 +215,7 @@ public abstract class ChunkMapDistance {
+     public boolean a(PlayerChunkMap playerchunkmap) {
+         com.tuinity.tuinity.util.TickThread.softEnsureTickThread("Cannot tick ChunkMapDistance off of the main-thread");// Tuinity
+         //this.f.a(); // Paper - no longer used
+-        AsyncCatcher.catchOp("DistanceManagerTick"); // Paper
++        //AsyncCatcher.catchOp("DistanceManagerTick"); // Paper // Airplane - leave up to softEnsures
+         //this.g.a(); // Tuinity - no longer used
+         boolean flag = this.ticketLevelPropagator.propagateUpdates(); // Tuinity - replace ticket level propagator
+ 
 diff --git a/src/main/java/net/minecraft/server/level/ChunkProviderServer.java b/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
-index cb83f1152c52a99d25e4e80cc8bf18c6793e8b50..87c87b9767003652814c3726eece64470dbb69a8 100644
+index fe040615ff03478a20cdf8376f89a6b7d100ba61..207a9c3928aad7c6e89a120b54d87e003ebd232c 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
 @@ -1000,6 +1000,7 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -1453,8 +1645,57 @@ index cb83f1152c52a99d25e4e80cc8bf18c6793e8b50..87c87b9767003652814c3726eece6447
              int k = this.world.getGameRules().getInt(GameRules.RANDOM_TICK_SPEED);
              boolean flag2 = world.ticksPerAnimalSpawns != 0L && worlddata.getTime() % world.ticksPerAnimalSpawns == 0L; // CraftBukkit
  
+diff --git a/src/main/java/net/minecraft/server/level/PlayerChunk.java b/src/main/java/net/minecraft/server/level/PlayerChunk.java
+index 86f156587a0939b28c5cf6f64907255c1c4f8b35..516b77edab4d737fa947e051c463bbd65d0e9e49 100644
+--- a/src/main/java/net/minecraft/server/level/PlayerChunk.java
++++ b/src/main/java/net/minecraft/server/level/PlayerChunk.java
+@@ -269,6 +269,23 @@ public class PlayerChunk {
+         return either == null ? null : either.left().orElse(null);
+     }
+ 
++    // Airplane start - update entity ticking on entities
++    private void setEntityTickingReady(boolean isEntityTickingReady) {
++        this.isEntityTickingReady = isEntityTickingReady;
++        Chunk chunk = this.getFullReadyChunk();
++        if (chunk != null) {
++            // update all entities in chunk
++            List<net.minecraft.world.entity.Entity>[] entitySlices = chunk.getEntitySlices();
++            for (int i = 0, entitySlicesLength = entitySlices.length; i < entitySlicesLength; i++) {
++                List<net.minecraft.world.entity.Entity> entitySlice = entitySlices[i];
++                for (net.minecraft.world.entity.Entity entity : entitySlice) {
++                    entity.inEntityTickingChunk = isEntityTickingReady;
++                    entity.lastEntityTickingChunkKey = chunk.coordinateKey;
++                }
++            }
++        }
++    }
++    // Airplane end
+     public final boolean isEntityTickingReady() {
+         return this.isEntityTickingReady;
+     }
+@@ -763,7 +780,10 @@ public class PlayerChunk {
+                 if (either.left().isPresent()) {
+                     // note: Here is a very good place to add callbacks to logic waiting on this.
+                     Chunk entityTickingChunk = either.left().get();
+-                    PlayerChunk.this.isEntityTickingReady = true;
++                    // Airplane start
++                    //PlayerChunk.this.isEntityTickingReady = true;
++                    PlayerChunk.this.setEntityTickingReady(true);
++                    // Airplane end
+ 
+                     // Tuinity start - entity ticking chunk set
+                     PlayerChunk.this.chunkMap.world.getChunkProvider().entityTickingChunks.add(entityTickingChunk);
+@@ -777,7 +797,7 @@ public class PlayerChunk {
+         }
+ 
+         if (flag6 && !flag7) {
+-            this.entityTickingFuture.complete(PlayerChunk.UNLOADED_CHUNK); this.isEntityTickingReady = false; // Paper - cache chunk ticking stage
++            this.entityTickingFuture.complete(PlayerChunk.UNLOADED_CHUNK); this.setEntityTickingReady(false); /*this.isEntityTickingReady = false;*/ // Paper - cache chunk ticking stage // Airplane
+             this.entityTickingFuture = PlayerChunk.UNLOADED_CHUNK_FUTURE;
+             // Tuinity start - entity ticking chunk set
+             Chunk chunkIfCached = this.getFullChunkIfCached();
 diff --git a/src/main/java/net/minecraft/server/level/PlayerChunkMap.java b/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
-index d7eede51f1c4ebbe8e00b16efd6331c87db53bb4..bc18b9c3aac4c5feeb1603554e0ac009af9b457e 100644
+index b28995ecfd7f45e6b6197be96c418aa0d05d3383..914c7a1b18151f29183cfe9474313ce18e7c4ae2 100644
 --- a/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
 @@ -705,7 +705,9 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -1489,7 +1730,7 @@ index d7eede51f1c4ebbe8e00b16efd6331c87db53bb4..bc18b9c3aac4c5feeb1603554e0ac009
  
          return Math.max(Math.abs(k), Math.abs(l));
      }
-@@ -2571,11 +2577,17 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
+@@ -2541,11 +2547,17 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
                      boolean flag1 = this.tracker.attachedToPlayer;
  
                      if (!flag1) {
@@ -1509,7 +1750,7 @@ index d7eede51f1c4ebbe8e00b16efd6331c87db53bb4..bc18b9c3aac4c5feeb1603554e0ac009
                          }
                      }
  
-@@ -2605,8 +2617,10 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
+@@ -2575,8 +2587,10 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
          }
  
          private int b() {
@@ -1521,7 +1762,7 @@ index d7eede51f1c4ebbe8e00b16efd6331c87db53bb4..bc18b9c3aac4c5feeb1603554e0ac009
              Iterator iterator = collection.iterator();
  
              while (iterator.hasNext()) {
-@@ -2618,6 +2632,8 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
+@@ -2588,6 +2602,8 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
                      i = j;
                  }
              }
@@ -1531,14 +1772,24 @@ index d7eede51f1c4ebbe8e00b16efd6331c87db53bb4..bc18b9c3aac4c5feeb1603554e0ac009
              return this.a(i);
          }
 diff --git a/src/main/java/net/minecraft/server/level/WorldServer.java b/src/main/java/net/minecraft/server/level/WorldServer.java
-index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94cf166e7e3 100644
+index 58e61aa19d71011c40c69a691f5644b3e823ad68..e159a08b3cde339bf95d8b3ded4c35511451879f 100644
 --- a/src/main/java/net/minecraft/server/level/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/level/WorldServer.java
-@@ -1083,11 +1083,12 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1083,11 +1083,22 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  // CraftBukkit end */
  
                  gameprofilerfiller.enter("checkDespawn");
-+                boolean entityTickingChunk = false; if (!entity.dead) entityTickingChunk = this.getChunkProvider().isInEntityTickingChunk(entity); // Airplane - check once, chunks won't unload ticking entities
++                // Airplane start
++                boolean entityTickingChunk = false;
++                if (!entity.dead) {
++                    long key = MCUtil.getCoordinateKey(entity);
++                    if (entity.lastEntityTickingChunkKey != key) {
++                        entity.lastEntityTickingChunkKey = key;
++                        entity.inEntityTickingChunk = this.getChunkProvider().isInEntityTickingChunk(entity);
++                    }
++                    entityTickingChunk = entity.inEntityTickingChunk;
++                }
++                // Airplane end
                  if (!entity.dead) {
                      entity.checkDespawn();
                      // Tuinity start - optimise notify()
@@ -1548,7 +1799,7 @@ index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94c
                              this.updateNavigatorsInRegion(entity);
                          }
                      } else {
-@@ -1107,7 +1108,28 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1107,7 +1118,28 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
                  gameprofilerfiller.enter("tick");
                  if (!entity.dead && !(entity instanceof EntityComplexPart)) {
@@ -1577,7 +1828,7 @@ index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94c
                  }
  
                  gameprofilerfiller.exit();
-@@ -1117,7 +1139,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1117,7 +1149,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                      this.entitiesById.remove(entity.getId()); // Tuinity
                      this.unregisterEntity(entity);
                  } else if (entity.inChunk && entity.valid) { // Tuinity start - optimise notify()
@@ -1586,7 +1837,7 @@ index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94c
                          this.updateNavigatorsInRegion(entity);
                      }
                  } else {
-@@ -1202,6 +1224,8 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1202,6 +1234,8 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      private final BiomeBase[] biomeBaseCache = new BiomeBase[1];
      // Tuinity end - optimise chunk ice snow ticking
  
@@ -1595,7 +1846,7 @@ index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94c
      public void a(Chunk chunk, int i) { final int randomTickSpeed = i; // Paper
          ChunkCoordIntPair chunkcoordintpair = chunk.getPos();
          boolean flag = this.isRaining();
-@@ -1212,7 +1236,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1212,7 +1246,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          gameprofilerfiller.enter("thunder");
          final BlockPosition.MutableBlockPosition blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
  
@@ -1604,7 +1855,7 @@ index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94c
              blockposition.setValues(this.a(this.a(j, 0, k, 15))); // Paper
              if (this.isRainingAt(blockposition)) {
                  DifficultyDamageScaler difficultydamagescaler = this.getDamageScaler(blockposition);
-@@ -1236,7 +1260,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1236,7 +1270,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          }
  
          gameprofilerfiller.exitEnter("iceandsnow");
@@ -1613,7 +1864,7 @@ index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94c
              // Paper start - optimise chunk ticking
              // Tuinity start - optimise chunk ice snow ticking
              BiomeBase[] biomeCache = this.biomeBaseCache;
-@@ -1415,7 +1439,9 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1415,7 +1449,9 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      }
      // Tuinity end - log detailed entity tick information
  
@@ -1624,7 +1875,7 @@ index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94c
          // Tuinity start - log detailed entity tick information
          com.tuinity.tuinity.util.TickThread.ensureTickThread("Cannot tick an entity off-main");
          try {
-@@ -1423,7 +1449,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1423,7 +1459,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  currentlyTickingEntity.lazySet(entity);
              }
              // Tuinity end - log detailed entity tick information
@@ -1633,7 +1884,7 @@ index fcf9af44702f34d75185eee0b3259fe0e57001b1..d13c6f4c368ca6fe3326b66d4c3ef94c
              this.chunkCheck(entity);
          } else {
              ++TimingHistory.entityTicks; // Paper - timings
-@@ -1449,9 +1475,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1449,9 +1485,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  ++entity.ticksLived;
                  GameProfilerFiller gameprofilerfiller = this.getMethodProfiler();
  
@@ -1677,19 +1928,70 @@ index cc566784c7dd21cc2c44e0f351347f657e57ddcf..e9e7fcf2b63febe2a7d055826fabb86b
          return d0 == 0.0D ? 0 : (d0 > 0.0D ? 1 : -1);
      }
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index feab0ae1930b5271fe0d06a40c180317dcbc9d1d..c6b4af810fe3bda7797ab94316b2357178c9cd49 100644
+index feab0ae1930b5271fe0d06a40c180317dcbc9d1d..5ac2811c88370a55f055c791baa3804fc9a107a8 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
-@@ -289,6 +289,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -289,6 +289,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
      public void inactiveTick() { }
      // Spigot end
      public boolean shouldBeRemoved; // Paper
 +    // Airplane start
 +    public int activatedPriority = gg.airplane.AirplaneConfig.maximumActivationPrio; // golf score
++    public boolean inEntityTickingChunk = false;
++    public long lastEntityTickingChunkKey = Long.MIN_VALUE;
 +    // Airplane end
  
      public float getBukkitYaw() {
          return this.yaw;
+@@ -316,10 +321,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+         this.isLegacyTrackingEntity = isLegacyTrackingEntity;
+     }
+ 
++    // Airplane start - behavior of getAllPassengers + getting bigger range
++    private org.spigotmc.TrackingRange.TrackingRangeType getBiggestRangeOfPassengers(net.minecraft.server.level.PlayerChunkMap chunkMap, int[] range, Entity entity) {
++        org.spigotmc.TrackingRange.TrackingRangeType type = null;
++
++        for (int i = 0; i < entity.passengers.size(); i++) {
++            Entity passenger = entity.passengers.get(i);
++            org.spigotmc.TrackingRange.TrackingRangeType passengerType = passenger.trackingRangeType;
++            int passengerRange = chunkMap.getEntityTrackerRange(passengerType.ordinal());
++            if (passengerRange > range[0]) {
++                type = passengerType;
++                range[0] = passengerRange;
++            }
++
++            org.spigotmc.TrackingRange.TrackingRangeType childType = this.getBiggestRangeOfPassengers(chunkMap, range, passenger);
++            if (childType != null) {
++                type = childType;
++            }
++        }
++
++        return type;
++    }
++    // Airplane end
++
+     public final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<EntityPlayer> getPlayersInTrackRange() {
++        // Airplane start - replicate behavior of getAllPassengers to skip creating hashset
++        /*
+         Collection<Entity> passengers = this.getAllPassengers();
++        */
+         net.minecraft.server.level.PlayerChunkMap chunkMap = ((WorldServer)this.world).getChunkProvider().playerChunkMap;
+         org.spigotmc.TrackingRange.TrackingRangeType type = this.trackingRangeType;
++        type = this.getBiggestRangeOfPassengers(chunkMap, new int[]{chunkMap.getEntityTrackerRange(type.ordinal())}, this);
++        if (type == null) type = this.trackingRangeType;
++        /*
+         int range = chunkMap.getEntityTrackerRange(type.ordinal());
+ 
+         for (Entity passenger : passengers) {
+@@ -330,6 +364,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+                 range = passengerRange;
+             }
+         }
++         */
++        // Airplane end
+ 
+         return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this));
+     }
 diff --git a/src/main/java/net/minecraft/world/entity/EntityInsentient.java b/src/main/java/net/minecraft/world/entity/EntityInsentient.java
 index aae13c2e6c2a30b69c33417932c6a4d0aefeb7f5..f4440a5c4aedb1d7d303517f86a07c856dd1309b 100644
 --- a/src/main/java/net/minecraft/world/entity/EntityInsentient.java
@@ -1720,7 +2022,7 @@ index aae13c2e6c2a30b69c33417932c6a4d0aefeb7f5..f4440a5c4aedb1d7d303517f86a07c85
          this.world.getMethodProfiler().exit();
          this.world.getMethodProfiler().enter("navigation");
 diff --git a/src/main/java/net/minecraft/world/entity/EntityLiving.java b/src/main/java/net/minecraft/world/entity/EntityLiving.java
-index d933323d57a2a7ff283408f12d4650699f8177e7..5c983a441cd2a06eae6e79bc07ba5440d294574b 100644
+index 96cc46a26eef701b0579f3407e67af9176e1743b..74f80b6af18c0b91d9613384ca6bafd9c89f23a4 100644
 --- a/src/main/java/net/minecraft/world/entity/EntityLiving.java
 +++ b/src/main/java/net/minecraft/world/entity/EntityLiving.java
 @@ -111,6 +111,7 @@ import net.minecraft.world.phys.AxisAlignedBB;
@@ -1827,7 +2129,7 @@ index bc8786e2aaeab4dbae4e9c7666ad816bc5bfac3f..09133c5822bc1386bc3d8a5f3c941964
  
          this.g.long2ObjectEntrySet().removeIf((entry) -> {
 diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/PathfinderGoalSelector.java b/src/main/java/net/minecraft/world/entity/ai/goal/PathfinderGoalSelector.java
-index 637928664f8c7b1c694a234e507c20724294e450..f303c5d6b2e55fc9fd8b49ec21121805e7351034 100644
+index 637928664f8c7b1c694a234e507c20724294e450..02e8288473138dcea008d6157318758e8d7ee3be 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/goal/PathfinderGoalSelector.java
 +++ b/src/main/java/net/minecraft/world/entity/ai/goal/PathfinderGoalSelector.java
 @@ -44,9 +44,14 @@ public class PathfinderGoalSelector {
@@ -1838,7 +2140,7 @@ index 637928664f8c7b1c694a234e507c20724294e450..f303c5d6b2e55fc9fd8b49ec21121805
 -        incRate();
 -        return getCurRate() % getTickRate() == 0;
 +    public boolean inactiveTick(int tickRate) { // Airplane - take tick rate
-+        tickRate = Math.max(tickRate, getTickRate()); // Airplane
++        tickRate = Math.min(tickRate, getTickRate()); // Airplane
 +        if (this.curRate++ % tickRate != 0) { // Airplane - use tick rate / increment curRate every tick
 +            //incRate();
 +            return false;
@@ -2063,7 +2365,7 @@ index 2d0b83923d58cc7b6918b4e2ff2bece13ca26899..d8028675fc82883d716bcfb44431ca6a
          if (this.bF) {
              this.bF = false;
 diff --git a/src/main/java/net/minecraft/world/entity/player/EntityHuman.java b/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
-index 44038dd278b988508047023107683e5370af54ad..ad85dda5c50b797904824a08513fbcec042128ea 100644
+index 5bce47fa8f191bc1d33c04c9865cb0efd492a9a2..5f9e64df007ebc40f7bcb50be495b10e51d5b87a 100644
 --- a/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
 +++ b/src/main/java/net/minecraft/world/entity/player/EntityHuman.java
 @@ -162,7 +162,8 @@ public abstract class EntityHuman extends EntityLiving {
@@ -2076,7 +2378,7 @@ index 44038dd278b988508047023107683e5370af54ad..ad85dda5c50b797904824a08513fbcec
      private ItemStack bL;
      private final ItemCooldown bM;
      @Nullable
-@@ -1828,7 +1829,12 @@ public abstract class EntityHuman extends EntityLiving {
+@@ -1840,7 +1841,12 @@ public abstract class EntityHuman extends EntityLiving {
  
      @Override
      public IChatBaseComponent getDisplayName() {
@@ -2494,6 +2796,18 @@ index af01f5d635eada7175b9d7fdb47a65530686a539..51e6cd6119465f9fd638507299797144
      }
      // Paper start - Prevent armor stands from doing entity lookups
      @Override
+diff --git a/src/main/java/net/minecraft/world/level/block/Block.java b/src/main/java/net/minecraft/world/level/block/Block.java
+index 596b4597313b87296d39027b13555b5ad1cba9e6..f8a982add50862f1bc977f3039e7e9aeed9138ae 100644
+--- a/src/main/java/net/minecraft/world/level/block/Block.java
++++ b/src/main/java/net/minecraft/world/level/block/Block.java
+@@ -392,6 +392,7 @@ public class Block extends BlockBase implements IMaterial {
+         return this.d;
+     }
+ 
++    /** currently seems to only return true for MOVING_PISTON and SCAFFOLDING */ public boolean isComplexHitbox() { return this.o(); } // Airplane - OBFHELPER
+     public boolean o() {
+         return this.aA;
+     }
 diff --git a/src/main/java/net/minecraft/world/level/block/BlockDirtSnowSpreadable.java b/src/main/java/net/minecraft/world/level/block/BlockDirtSnowSpreadable.java
 index 712596420af83e6e1b9d147ae2fd8d8a1f36e1b9..9c29fa3efac7e16df81b8a44934e3286bb37f1f6 100644
 --- a/src/main/java/net/minecraft/world/level/block/BlockDirtSnowSpreadable.java
@@ -2513,8 +2827,30 @@ index 712596420af83e6e1b9d147ae2fd8d8a1f36e1b9..9c29fa3efac7e16df81b8a44934e3286
  
                      if (worldserver.getType(blockposition1).a(Blocks.DIRT) && c(iblockdata1, (IWorldReader) worldserver, blockposition1)) {
                          org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockSpreadEvent(worldserver, blockposition, blockposition1, (IBlockData) iblockdata1.set(BlockDirtSnowSpreadable.a, worldserver.getType(blockposition1.up()).a(Blocks.SNOW))); // CraftBukkit
+diff --git a/src/main/java/net/minecraft/world/level/block/BlockFire.java b/src/main/java/net/minecraft/world/level/block/BlockFire.java
+index 70c32b7a53a1107cced3491ebac19b0eaf4fec2e..3f3e241f3b24d9df9d57760c5515ff021718065a 100644
+--- a/src/main/java/net/minecraft/world/level/block/BlockFire.java
++++ b/src/main/java/net/minecraft/world/level/block/BlockFire.java
+@@ -340,13 +340,15 @@ public class BlockFire extends BlockFireAbstract {
+             return 0;
+         } else {
+             int i = 0;
+-            EnumDirection[] aenumdirection = EnumDirection.values();
++            EnumDirection[] aenumdirection = EnumDirection.getValues(); // Airplane - don't allocate new array here
+             int j = aenumdirection.length;
+ 
++            BlockPosition.MutableBlockPosition copy = new BlockPosition.MutableBlockPosition(); // Airplane - single allocation for this method
+             for (int k = 0; k < j; ++k) {
++                copy.setValues(blockposition); // Airplane - reset values
+                 EnumDirection enumdirection = aenumdirection[k];
+                 // Paper start
+-                IBlockData iblockdata = iworldreader.getTypeIfLoaded(blockposition.shift(enumdirection));
++                IBlockData iblockdata = iworldreader.getTypeIfLoaded(copy.mutableShift(enumdirection, 1)); // Airplane - mutable shift
+                 if (iblockdata == null) {
+                     continue;
+                 }
 diff --git a/src/main/java/net/minecraft/world/level/chunk/Chunk.java b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
-index df35ae12ecbe88ab396bed9850ef80433ff42fd4..7474c070598bc093e06f02f19d49f3a6fa6b3d4e 100644
+index fc07e2014e961da5d97095c4ee6f972e2ece3ec3..9ba7c5080ce0cacf438bdd6e11f75cb34fbc5759 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 +++ b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 @@ -99,6 +99,18 @@ public class Chunk implements IChunkAccess {
@@ -2544,6 +2880,17 @@ index df35ae12ecbe88ab396bed9850ef80433ff42fd4..7474c070598bc093e06f02f19d49f3a6
      }
  
      public org.bukkit.Chunk bukkitChunk;
+@@ -786,6 +799,10 @@ public class Chunk implements IChunkAccess {
+         entity.chunkX = this.loc.x;
+         entity.chunkY = k;
+         entity.chunkZ = this.loc.z;
++        // Airplane start
++        entity.inEntityTickingChunk = this.world.getChunkProvider().isInEntityTickingChunk(entity);
++        entity.lastEntityTickingChunkKey = this.coordinateKey;
++        // Airplane end
+         this.entities.add(entity); // Tuinity
+         this.entitySlices[k].add(entity);  // Tuinity
+         this.entitySlicesManager.addEntity(entity, k); // Tuinity
 diff --git a/src/main/java/net/minecraft/world/level/chunk/DataPaletteBlock.java b/src/main/java/net/minecraft/world/level/chunk/DataPaletteBlock.java
 index a6937366cd9c9d708edb5cd1ab3ac096e7b2032e..a579c5bf9e20c74aa3bf8ef6bc00576409805ca6 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/DataPaletteBlock.java
@@ -2595,6 +2942,94 @@ index ec2b238480413ba9c123d9ddeaa787d9520e1b74..bf96f9e538fc29ca914536e8a7ce727e
                  }
  
                  if (nibblearray != null && !nibblearray.c()) {
+diff --git a/src/main/java/net/minecraft/world/level/material/FluidTypeFlowing.java b/src/main/java/net/minecraft/world/level/material/FluidTypeFlowing.java
+index 6bb4ec00e40795ced73648fefcd1f5027e0113cd..b14b0134b42aa6d1eb285aa453ec6067cc702878 100644
+--- a/src/main/java/net/minecraft/world/level/material/FluidTypeFlowing.java
++++ b/src/main/java/net/minecraft/world/level/material/FluidTypeFlowing.java
+@@ -45,6 +45,8 @@ public abstract class FluidTypeFlowing extends FluidType {
+ 
+     public static final BlockStateBoolean FALLING = BlockProperties.i;
+     public static final BlockStateInteger LEVEL = BlockProperties.at;
++    // Airplane start - use our own threadlocal cache
++    /*
+     private static final ThreadLocal<Object2ByteLinkedOpenHashMap<Block.a>> e = ThreadLocal.withInitial(() -> {
+         Object2ByteLinkedOpenHashMap<Block.a> object2bytelinkedopenhashmap = new Object2ByteLinkedOpenHashMap<Block.a>(200) {
+             protected void rehash(int i) {}
+@@ -53,6 +55,13 @@ public abstract class FluidTypeFlowing extends FluidType {
+         object2bytelinkedopenhashmap.defaultReturnValue((byte) 127);
+         return object2bytelinkedopenhashmap;
+     });
++     */
++    private static final ThreadLocal<gg.airplane.structs.FluidDirectionCache<Block.a>> localFluidDirectionCache = ThreadLocal.withInitial(() -> {
++        // Airplane todo - mess with this number for performance
++        //  with 1024 it seems very infrequent on a small world that it has to remove old entries
++        return new gg.airplane.structs.FluidDirectionCache<>(1024);
++    });
++    // Airplane end
+     private final Map<Fluid, VoxelShape> f = Maps.newIdentityHashMap();
+ 
+     public FluidTypeFlowing() {}
+@@ -240,6 +249,8 @@ public abstract class FluidTypeFlowing extends FluidType {
+     }
+ 
+     private boolean a(EnumDirection enumdirection, IBlockAccess iblockaccess, BlockPosition blockposition, IBlockData iblockdata, BlockPosition blockposition1, IBlockData iblockdata1) {
++        // Airplane start - modify to use our cache
++        /*
+         Object2ByteLinkedOpenHashMap object2bytelinkedopenhashmap;
+ 
+         if (!iblockdata.getBlock().o() && !iblockdata1.getBlock().o()) {
+@@ -247,9 +258,16 @@ public abstract class FluidTypeFlowing extends FluidType {
+         } else {
+             object2bytelinkedopenhashmap = null;
+         }
++         */
++        gg.airplane.structs.FluidDirectionCache<Block.a> cache = null;
++
++        if (!iblockdata.getBlock().isComplexHitbox() && !iblockdata1.getBlock().isComplexHitbox()) {
++            cache = localFluidDirectionCache.get();
++        }
+ 
+         Block.a block_a;
+ 
++        /*
+         if (object2bytelinkedopenhashmap != null) {
+             block_a = new Block.a(iblockdata, iblockdata1, enumdirection);
+             byte b0 = object2bytelinkedopenhashmap.getAndMoveToFirst(block_a);
+@@ -260,11 +278,22 @@ public abstract class FluidTypeFlowing extends FluidType {
+         } else {
+             block_a = null;
+         }
++         */
++        if (cache != null) {
++            block_a = new Block.a(iblockdata, iblockdata1, enumdirection);
++            Boolean flag = cache.getValue(block_a);
++            if (flag != null) {
++                return flag;
++            }
++        } else {
++            block_a = null;
++        }
+ 
+         VoxelShape voxelshape = iblockdata.getCollisionShape(iblockaccess, blockposition);
+         VoxelShape voxelshape1 = iblockdata1.getCollisionShape(iblockaccess, blockposition1);
+         boolean flag = !VoxelShapes.b(voxelshape, voxelshape1, enumdirection);
+ 
++        /*
+         if (object2bytelinkedopenhashmap != null) {
+             if (object2bytelinkedopenhashmap.size() == 200) {
+                 object2bytelinkedopenhashmap.removeLastByte();
+@@ -272,6 +301,11 @@ public abstract class FluidTypeFlowing extends FluidType {
+ 
+             object2bytelinkedopenhashmap.putAndMoveToFirst(block_a, (byte) (flag ? 1 : 0));
+         }
++         */
++        if (cache != null) {
++            cache.putValue(block_a, flag);
++        }
++        // Airplane end
+ 
+         return flag;
+     }
 diff --git a/src/main/java/net/minecraft/world/level/storage/loot/LootTableInfo.java b/src/main/java/net/minecraft/world/level/storage/loot/LootTableInfo.java
 index 95d0c9f22d79194ca83ca6f6a8e6d91180a3c8da..20cc04be75ab202d4c4ee9a07e9876ceff8422ca 100644
 --- a/src/main/java/net/minecraft/world/level/storage/loot/LootTableInfo.java
@@ -2725,7 +3160,7 @@ index 001b1e5197eaa51bfff9031aa6c69876c9a47960..1788d79ea489e446d3d9f541693d4ba3
  
          if (stream != null) {
 diff --git a/src/main/java/org/spigotmc/ActivationRange.java b/src/main/java/org/spigotmc/ActivationRange.java
-index 5c2eaca0bc63c7880ee928aba6a24761737aa649..6c4c4580faef39e48de5af4db003cf2e3b8a99b5 100644
+index 5c2eaca0bc63c7880ee928aba6a24761737aa649..8b36ca5062f8e0e8bd58aa506e91704a747de81b 100644
 --- a/src/main/java/org/spigotmc/ActivationRange.java
 +++ b/src/main/java/org/spigotmc/ActivationRange.java
 @@ -47,6 +47,9 @@ import net.minecraft.world.entity.schedule.Activity;
@@ -2756,23 +3191,19 @@ index 5c2eaca0bc63c7880ee928aba6a24761737aa649..6c4c4580faef39e48de5af4db003cf2e
      {
          // Paper start
          Entity[] rawData = chunk.entities.getRawData();
-@@ -249,11 +252,19 @@ public class ActivationRange
+@@ -249,6 +252,15 @@ public class ActivationRange
              //for ( Entity entity : (Collection<Entity>) slice )
              // Paper end
              {
 +                // Airplane start
 +                Vec3D entityVec = entity.getPositionVector();
 +                double diffX = playerVec.x - entityVec.x, diffY = playerVec.y - entityVec.y, diffZ = playerVec.z - entityVec.z;
-+                int priority = Math.max(1, (int) (diffX * diffX + diffY * diffY + diffZ * diffZ) >> gg.airplane.AirplaneConfig.activationDistanceMod);
++                int squaredDistance = (int) (diffX * diffX + diffY * diffY + diffZ * diffZ);
++                entity.activatedPriority = squaredDistance > gg.airplane.AirplaneConfig.startDistanceSquared ?
++                  Math.max(1, Math.min(squaredDistance >> gg.airplane.AirplaneConfig.activationDistanceMod, gg.airplane.AirplaneConfig.maximumActivationPrio)) :
++                  1;
++                // Airplane end
++
                  if (MinecraftServer.currentTick > entity.activatedTick) {
                      if (entity.defaultActivationState || entity.activationType.boundingBox.c(entity.getBoundingBox())) { // Paper
                          entity.activatedTick = MinecraftServer.currentTick;
-                     }
-+                    entity.activatedPriority = Math.min(gg.airplane.AirplaneConfig.maximumActivationPrio, priority);
-+                } else {
-+                    entity.activatedPriority = Math.min(gg.airplane.AirplaneConfig.maximumActivationPrio, Math.min(priority, entity.activatedPriority));
-                 }
-+                // Airplane end
-             }
-         }
-     }
