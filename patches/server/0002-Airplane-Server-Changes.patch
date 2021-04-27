@@ -791,10 +791,10 @@ index 0000000000000000000000000000000000000000..89c89e633f14b5820147e734b1b7ad8c
 +}
 diff --git a/src/main/java/gg/airplane/AirplaneConfig.java b/src/main/java/gg/airplane/AirplaneConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..7ec84ef1d1cbb1fabf4c590a2f2c1da3cc181010
+index 0000000000000000000000000000000000000000..65adf3ceda012c8cfdea675c40e2bb27d34ebac7
 --- /dev/null
 +++ b/src/main/java/gg/airplane/AirplaneConfig.java
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,123 @@
 +package gg.airplane;
 +
 +import co.technove.air.AIR;
@@ -896,6 +896,24 @@ index 0000000000000000000000000000000000000000..7ec84ef1d1cbb1fabf4c590a2f2c1da3
 +        if (accessToken.length() > 0) {
 +            gg.airplane.flare.FlareSetup.init(); // Airplane
 +        }
++    }
++
++
++    public static byte entityDespawnCheckFrequency;
++
++    private static void entitySettings() {
++        config.setComment("entities", "Configures settings for generic entities");
++
++        entityDespawnCheckFrequency = (byte) Math.max(config.getInt("entities.despawn-check-freq", 8), Byte.MAX_VALUE);
++    }
++
++
++    public static boolean disableMethodProfiler;
++
++    private static void miscSettings() {
++        config.setComment("misc", "Settings for things that don't belong elsewhere");
++
++        disableMethodProfiler = config.getBoolean("misc.disable-method-profiler", true);
 +    }
 +
 +
@@ -1595,7 +1613,7 @@ index 7918d830a4aef09c9f517284e83a9376299116ad..0a40df2151bd388b6633a6f50b14f1f4
          return enumdirection;
      }));
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 2767a9369ddc922f1d9c7cb6c7acc8270545535a..7b4b9f54510b3a05aad3f7e50e32ee0bf977244a 100644
+index 2767a9369ddc922f1d9c7cb6c7acc8270545535a..2bb00a42492b08036e984d3e1d9a564d4b4226c2 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -1646,7 +1646,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
@@ -1607,6 +1625,18 @@ index 2767a9369ddc922f1d9c7cb6c7acc8270545535a..7b4b9f54510b3a05aad3f7e50e32ee0b
      }
  
      public CrashReport b(CrashReport crashreport) {
+@@ -2196,7 +2196,11 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+         }
+     }
+ 
++    // Airplane start
++    private final GameProfilerFiller disabledProfiler = net.minecraft.util.profiling.GameProfilerDisabled.a;
+     public GameProfilerFiller getMethodProfiler() {
++        if (gg.airplane.AirplaneConfig.disableMethodProfiler) return disabledProfiler;
++        // Airplane end
+         return this.methodProfiler;
+     }
+ 
 diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
 index fa7a78549a9bb92b93c305dc16f43a9ace7f6f43..858bd62d2a17c15ee573c5cd607a876d3a99c2b1 100644
 --- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
@@ -1646,54 +1676,35 @@ index fe040615ff03478a20cdf8376f89a6b7d100ba61..207a9c3928aad7c6e89a120b54d87e00
              boolean flag2 = world.ticksPerAnimalSpawns != 0L && worlddata.getTime() % world.ticksPerAnimalSpawns == 0L; // CraftBukkit
  
 diff --git a/src/main/java/net/minecraft/server/level/PlayerChunk.java b/src/main/java/net/minecraft/server/level/PlayerChunk.java
-index 86f156587a0939b28c5cf6f64907255c1c4f8b35..516b77edab4d737fa947e051c463bbd65d0e9e49 100644
+index 86f156587a0939b28c5cf6f64907255c1c4f8b35..06157bb07cce3ba24087ceaca7138b5609b37b5b 100644
 --- a/src/main/java/net/minecraft/server/level/PlayerChunk.java
 +++ b/src/main/java/net/minecraft/server/level/PlayerChunk.java
-@@ -269,6 +269,23 @@ public class PlayerChunk {
-         return either == null ? null : either.left().orElse(null);
-     }
+@@ -58,6 +58,7 @@ public class PlayerChunk {
+     private int ticketLevel; public final void setTicketLevel(final int level) { this.ticketLevel = level; } // Tuinity - OBFHELPER
+     volatile int n; public final int getCurrentPriority() { return n; } // Paper - OBFHELPER - make volatile since this is concurrently accessed
+     public final ChunkCoordIntPair location; // Paper - private -> public
++    private final long coordinateKey; // Airplane - cache key for location
+     private boolean p;
+     private final ShortSet[] dirtyBlocks;
+     private int r;
+@@ -80,7 +81,7 @@ public class PlayerChunk {
+     com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<EntityPlayer> playersInChunkTickRange;
  
-+    // Airplane start - update entity ticking on entities
-+    private void setEntityTickingReady(boolean isEntityTickingReady) {
-+        this.isEntityTickingReady = isEntityTickingReady;
-+        Chunk chunk = this.getFullReadyChunk();
-+        if (chunk != null) {
-+            // update all entities in chunk
-+            List<net.minecraft.world.entity.Entity>[] entitySlices = chunk.getEntitySlices();
-+            for (int i = 0, entitySlicesLength = entitySlices.length; i < entitySlicesLength; i++) {
-+                List<net.minecraft.world.entity.Entity> entitySlice = entitySlices[i];
-+                for (net.minecraft.world.entity.Entity entity : entitySlice) {
-+                    entity.inEntityTickingChunk = isEntityTickingReady;
-+                    entity.lastEntityTickingChunkKey = chunk.coordinateKey;
-+                }
-+            }
-+        }
-+    }
-+    // Airplane end
-     public final boolean isEntityTickingReady() {
-         return this.isEntityTickingReady;
-     }
-@@ -763,7 +780,10 @@ public class PlayerChunk {
-                 if (either.left().isPresent()) {
-                     // note: Here is a very good place to add callbacks to logic waiting on this.
-                     Chunk entityTickingChunk = either.left().get();
--                    PlayerChunk.this.isEntityTickingReady = true;
-+                    // Airplane start
-+                    //PlayerChunk.this.isEntityTickingReady = true;
-+                    PlayerChunk.this.setEntityTickingReady(true);
-+                    // Airplane end
- 
-                     // Tuinity start - entity ticking chunk set
-                     PlayerChunk.this.chunkMap.world.getChunkProvider().entityTickingChunks.add(entityTickingChunk);
-@@ -777,7 +797,7 @@ public class PlayerChunk {
-         }
- 
-         if (flag6 && !flag7) {
--            this.entityTickingFuture.complete(PlayerChunk.UNLOADED_CHUNK); this.isEntityTickingReady = false; // Paper - cache chunk ticking stage
-+            this.entityTickingFuture.complete(PlayerChunk.UNLOADED_CHUNK); this.setEntityTickingReady(false); /*this.isEntityTickingReady = false;*/ // Paper - cache chunk ticking stage // Airplane
-             this.entityTickingFuture = PlayerChunk.UNLOADED_CHUNK_FUTURE;
-             // Tuinity start - entity ticking chunk set
-             Chunk chunkIfCached = this.getFullChunkIfCached();
+     void updateRanges() {
+-        long key = net.minecraft.server.MCUtil.getCoordinateKey(this.location);
++        long key = this.coordinateKey; //net.minecraft.server.MCUtil.getCoordinateKey(this.location); // Airplane - use cached key
+         this.playersInMobSpawnRange = this.chunkMap.playerMobSpawnMap.getObjectsInRange(key);
+         this.playersInChunkTickRange = this.chunkMap.playerChunkTickRangeMap.getObjectsInRange(key);
+         // Tuinity start - optimise checkDespawn
+@@ -232,7 +233,7 @@ public class PlayerChunk {
+         this.entityTickingFuture = PlayerChunk.UNLOADED_CHUNK_FUTURE;
+         this.chunkSave = CompletableFuture.completedFuture(null); // CraftBukkit - decompile error
+         this.dirtyBlocks = new ShortSet[16];
+-        this.location = chunkcoordintpair;
++        this.location = chunkcoordintpair; this.coordinateKey = net.minecraft.server.MCUtil.getCoordinateKey(this.location); // Airplane
+         this.lightEngine = lightengine;
+         this.u = playerchunk_c;
+         this.players = playerchunk_d;
 diff --git a/src/main/java/net/minecraft/server/level/PlayerChunkMap.java b/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
 index b28995ecfd7f45e6b6197be96c418aa0d05d3383..914c7a1b18151f29183cfe9474313ce18e7c4ae2 100644
 --- a/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
@@ -1772,34 +1783,10 @@ index b28995ecfd7f45e6b6197be96c418aa0d05d3383..914c7a1b18151f29183cfe9474313ce1
              return this.a(i);
          }
 diff --git a/src/main/java/net/minecraft/server/level/WorldServer.java b/src/main/java/net/minecraft/server/level/WorldServer.java
-index 58e61aa19d71011c40c69a691f5644b3e823ad68..e159a08b3cde339bf95d8b3ded4c35511451879f 100644
+index 58e61aa19d71011c40c69a691f5644b3e823ad68..51bb2502e4efb052f55de6eabce07f59e936c9d9 100644
 --- a/src/main/java/net/minecraft/server/level/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/level/WorldServer.java
-@@ -1083,11 +1083,22 @@ public class WorldServer extends World implements GeneratorAccessSeed {
-                 // CraftBukkit end */
- 
-                 gameprofilerfiller.enter("checkDespawn");
-+                // Airplane start
-+                boolean entityTickingChunk = false;
-+                if (!entity.dead) {
-+                    long key = MCUtil.getCoordinateKey(entity);
-+                    if (entity.lastEntityTickingChunkKey != key) {
-+                        entity.lastEntityTickingChunkKey = key;
-+                        entity.inEntityTickingChunk = this.getChunkProvider().isInEntityTickingChunk(entity);
-+                    }
-+                    entityTickingChunk = entity.inEntityTickingChunk;
-+                }
-+                // Airplane end
-                 if (!entity.dead) {
-                     entity.checkDespawn();
-                     // Tuinity start - optimise notify()
-                     if (entity.inChunk && entity.valid) {
--                        if (this.getChunkProvider().isInEntityTickingChunk(entity)) {
-+                        if (entityTickingChunk) { // Airplane - reuse
-                             this.updateNavigatorsInRegion(entity);
-                         }
-                     } else {
-@@ -1107,7 +1118,28 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1107,7 +1107,28 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
                  gameprofilerfiller.enter("tick");
                  if (!entity.dead && !(entity instanceof EntityComplexPart)) {
@@ -1809,7 +1796,7 @@ index 58e61aa19d71011c40c69a691f5644b3e823ad68..e159a08b3cde339bf95d8b3ded4c3551
 +                     */
 +                    boolean doMidTick = false; // usually there's a returns in the catch, so treat it like that
 +                    try {
-+                        this.entityJoinedWorld(entity, entityTickingChunk); // Airplane - reuse
++                        this.entityJoinedWorld(entity);
 +                        doMidTick = true;
 +                    } catch (Throwable throwable) {
 +                        if (throwable instanceof ThreadDeath) throw throwable; // Paper
@@ -1828,16 +1815,7 @@ index 58e61aa19d71011c40c69a691f5644b3e823ad68..e159a08b3cde339bf95d8b3ded4c3551
                  }
  
                  gameprofilerfiller.exit();
-@@ -1117,7 +1149,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
-                     this.entitiesById.remove(entity.getId()); // Tuinity
-                     this.unregisterEntity(entity);
-                 } else if (entity.inChunk && entity.valid) { // Tuinity start - optimise notify()
--                    if (this.getChunkProvider().isInEntityTickingChunk(entity)) {
-+                    if (entityTickingChunk) { // Airplane - reuse
-                         this.updateNavigatorsInRegion(entity);
-                     }
-                 } else {
-@@ -1202,6 +1234,8 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1202,6 +1223,8 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      private final BiomeBase[] biomeBaseCache = new BiomeBase[1];
      // Tuinity end - optimise chunk ice snow ticking
  
@@ -1846,7 +1824,7 @@ index 58e61aa19d71011c40c69a691f5644b3e823ad68..e159a08b3cde339bf95d8b3ded4c3551
      public void a(Chunk chunk, int i) { final int randomTickSpeed = i; // Paper
          ChunkCoordIntPair chunkcoordintpair = chunk.getPos();
          boolean flag = this.isRaining();
-@@ -1212,7 +1246,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1212,7 +1235,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          gameprofilerfiller.enter("thunder");
          final BlockPosition.MutableBlockPosition blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
  
@@ -1855,7 +1833,7 @@ index 58e61aa19d71011c40c69a691f5644b3e823ad68..e159a08b3cde339bf95d8b3ded4c3551
              blockposition.setValues(this.a(this.a(j, 0, k, 15))); // Paper
              if (this.isRainingAt(blockposition)) {
                  DifficultyDamageScaler difficultydamagescaler = this.getDamageScaler(blockposition);
-@@ -1236,7 +1270,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1236,7 +1259,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          }
  
          gameprofilerfiller.exitEnter("iceandsnow");
@@ -1864,27 +1842,7 @@ index 58e61aa19d71011c40c69a691f5644b3e823ad68..e159a08b3cde339bf95d8b3ded4c3551
              // Paper start - optimise chunk ticking
              // Tuinity start - optimise chunk ice snow ticking
              BiomeBase[] biomeCache = this.biomeBaseCache;
-@@ -1415,7 +1449,9 @@ public class WorldServer extends World implements GeneratorAccessSeed {
-     }
-     // Tuinity end - log detailed entity tick information
- 
--    public void entityJoinedWorld(Entity entity) {
-+    // Airplane start - reuse check for in entity ticking chunk
-+    public void entityJoinedWorld(Entity entity) { entityJoinedWorld(entity, this.getChunkProvider().isInEntityTickingChunk(entity)); }
-+    public void entityJoinedWorld(Entity entity, boolean entityTickingChunk) { // Airplane end
-         // Tuinity start - log detailed entity tick information
-         com.tuinity.tuinity.util.TickThread.ensureTickThread("Cannot tick an entity off-main");
-         try {
-@@ -1423,7 +1459,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
-                 currentlyTickingEntity.lazySet(entity);
-             }
-             // Tuinity end - log detailed entity tick information
--        if (!(entity instanceof EntityHuman) && !this.getChunkProvider().a(entity)) {
-+        if (!(entity instanceof EntityHuman) && !entityTickingChunk) { // Airplane - reuse
-             this.chunkCheck(entity);
-         } else {
-             ++TimingHistory.entityTicks; // Paper - timings
-@@ -1449,9 +1485,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1449,9 +1472,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  ++entity.ticksLived;
                  GameProfilerFiller gameprofilerfiller = this.getMethodProfiler();
  
@@ -1928,22 +1886,20 @@ index cc566784c7dd21cc2c44e0f351347f657e57ddcf..e9e7fcf2b63febe2a7d055826fabb86b
          return d0 == 0.0D ? 0 : (d0 > 0.0D ? 1 : -1);
      }
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index feab0ae1930b5271fe0d06a40c180317dcbc9d1d..5ac2811c88370a55f055c791baa3804fc9a107a8 100644
+index feab0ae1930b5271fe0d06a40c180317dcbc9d1d..99c93d48726b4b92a341ba98721173df8b4ff30a 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
-@@ -289,6 +289,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -289,6 +289,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
      public void inactiveTick() { }
      // Spigot end
      public boolean shouldBeRemoved; // Paper
 +    // Airplane start
 +    public int activatedPriority = gg.airplane.AirplaneConfig.maximumActivationPrio; // golf score
-+    public boolean inEntityTickingChunk = false;
-+    public long lastEntityTickingChunkKey = Long.MIN_VALUE;
 +    // Airplane end
  
      public float getBukkitYaw() {
          return this.yaw;
-@@ -316,10 +321,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -316,10 +319,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
          this.isLegacyTrackingEntity = isLegacyTrackingEntity;
      }
  
@@ -1983,17 +1939,20 @@ index feab0ae1930b5271fe0d06a40c180317dcbc9d1d..5ac2811c88370a55f055c791baa3804f
          int range = chunkMap.getEntityTrackerRange(type.ordinal());
  
          for (Entity passenger : passengers) {
-@@ -330,6 +364,8 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -330,8 +362,10 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
                  range = passengerRange;
              }
          }
 +         */
 +        // Airplane end
  
-         return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this));
+-        return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this));
++        return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this.chunkX, this.chunkZ)); // Airplane - don't convert doubles to ints here
      }
+     // Paper end - optimise entity tracking
+ 
 diff --git a/src/main/java/net/minecraft/world/entity/EntityInsentient.java b/src/main/java/net/minecraft/world/entity/EntityInsentient.java
-index aae13c2e6c2a30b69c33417932c6a4d0aefeb7f5..f4440a5c4aedb1d7d303517f86a07c856dd1309b 100644
+index aae13c2e6c2a30b69c33417932c6a4d0aefeb7f5..dc78bafeddf6b584181c818b90efa7ff531377a3 100644
 --- a/src/main/java/net/minecraft/world/entity/EntityInsentient.java
 +++ b/src/main/java/net/minecraft/world/entity/EntityInsentient.java
 @@ -201,10 +201,10 @@ public abstract class EntityInsentient extends EntityLiving {
@@ -2009,7 +1968,23 @@ index aae13c2e6c2a30b69c33417932c6a4d0aefeb7f5..f4440a5c4aedb1d7d303517f86a07c85
              this.targetSelector.doTick();
          }
      }
-@@ -829,9 +829,11 @@ public abstract class EntityInsentient extends EntityLiving {
+@@ -774,8 +774,15 @@ public abstract class EntityInsentient extends EntityLiving {
+         return false;
+     }
+ 
++    // Airplane start - just reduce frequency of checking for despawn
++    private byte despawnCheck = 0;
+     @Override
+     public void checkDespawn() {
++        if (++despawnCheck < gg.airplane.AirplaneConfig.entityDespawnCheckFrequency) {
++            return;
++        }
++        this.despawnCheck = 0;
++        // Airplane end
+         if (this.world.getDifficulty() == EnumDifficulty.PEACEFUL && this.L()) {
+             this.die();
+         } else if (!this.isPersistent() && !this.isSpecialPersistence()) {
+@@ -829,9 +836,11 @@ public abstract class EntityInsentient extends EntityLiving {
          this.bo.a();
          this.world.getMethodProfiler().exit();
          this.world.getMethodProfiler().enter("targetSelector");
@@ -2022,7 +1997,7 @@ index aae13c2e6c2a30b69c33417932c6a4d0aefeb7f5..f4440a5c4aedb1d7d303517f86a07c85
          this.world.getMethodProfiler().exit();
          this.world.getMethodProfiler().enter("navigation");
 diff --git a/src/main/java/net/minecraft/world/entity/EntityLiving.java b/src/main/java/net/minecraft/world/entity/EntityLiving.java
-index 96cc46a26eef701b0579f3407e67af9176e1743b..74f80b6af18c0b91d9613384ca6bafd9c89f23a4 100644
+index 96cc46a26eef701b0579f3407e67af9176e1743b..003e1f6dc8efbabcb2e0f7a6b379196f02203903 100644
 --- a/src/main/java/net/minecraft/world/entity/EntityLiving.java
 +++ b/src/main/java/net/minecraft/world/entity/EntityLiving.java
 @@ -111,6 +111,7 @@ import net.minecraft.world.phys.AxisAlignedBB;
@@ -2050,7 +2025,27 @@ index 96cc46a26eef701b0579f3407e67af9176e1743b..74f80b6af18c0b91d9613384ca6bafd9
                  d0 *= 0.5D;
              }
          }
-@@ -3101,7 +3104,7 @@ public abstract class EntityLiving extends Entity {
+@@ -1742,6 +1745,19 @@ public abstract class EntityLiving extends Entity {
+         }
+     }
+ 
++    // Airplane start
++    private boolean cachedIsClimbing = false;
++    private BlockPosition lastClimbingPosition = null;
++
++    public boolean isClimbingCached() {
++        if (!this.getChunkCoordinates().equals(this.lastClimbingPosition)) {
++            this.cachedIsClimbing = this.isClimbing();
++            this.lastClimbingPosition = this.getChunkCoordinates();
++        }
++        return this.cachedIsClimbing;
++    }
++    // Airplane end
++
+     public IBlockData ds() {
+         return this.world.getType(this.getChunkCoordinates());
+     }
+@@ -3101,7 +3117,7 @@ public abstract class EntityLiving extends Entity {
          Vec3D vec3d = new Vec3D(this.locX(), this.getHeadY(), this.locZ());
          Vec3D vec3d1 = new Vec3D(entity.locX(), entity.getHeadY(), entity.locZ());
  
@@ -2850,7 +2845,7 @@ index 70c32b7a53a1107cced3491ebac19b0eaf4fec2e..3f3e241f3b24d9df9d57760c5515ff02
                      continue;
                  }
 diff --git a/src/main/java/net/minecraft/world/level/chunk/Chunk.java b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
-index fc07e2014e961da5d97095c4ee6f972e2ece3ec3..9ba7c5080ce0cacf438bdd6e11f75cb34fbc5759 100644
+index fc07e2014e961da5d97095c4ee6f972e2ece3ec3..8f5809756b4fb358f1207c1d61c5cbe6df3fff00 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 +++ b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 @@ -99,6 +99,18 @@ public class Chunk implements IChunkAccess {
@@ -2880,17 +2875,6 @@ index fc07e2014e961da5d97095c4ee6f972e2ece3ec3..9ba7c5080ce0cacf438bdd6e11f75cb3
      }
  
      public org.bukkit.Chunk bukkitChunk;
-@@ -786,6 +799,10 @@ public class Chunk implements IChunkAccess {
-         entity.chunkX = this.loc.x;
-         entity.chunkY = k;
-         entity.chunkZ = this.loc.z;
-+        // Airplane start
-+        entity.inEntityTickingChunk = this.world.getChunkProvider().isInEntityTickingChunk(entity);
-+        entity.lastEntityTickingChunkKey = this.coordinateKey;
-+        // Airplane end
-         this.entities.add(entity); // Tuinity
-         this.entitySlices[k].add(entity);  // Tuinity
-         this.entitySlicesManager.addEntity(entity, k); // Tuinity
 diff --git a/src/main/java/net/minecraft/world/level/chunk/DataPaletteBlock.java b/src/main/java/net/minecraft/world/level/chunk/DataPaletteBlock.java
 index a6937366cd9c9d708edb5cd1ab3ac096e7b2032e..a579c5bf9e20c74aa3bf8ef6bc00576409805ca6 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/DataPaletteBlock.java
@@ -3160,7 +3144,7 @@ index 001b1e5197eaa51bfff9031aa6c69876c9a47960..1788d79ea489e446d3d9f541693d4ba3
  
          if (stream != null) {
 diff --git a/src/main/java/org/spigotmc/ActivationRange.java b/src/main/java/org/spigotmc/ActivationRange.java
-index 5c2eaca0bc63c7880ee928aba6a24761737aa649..8b36ca5062f8e0e8bd58aa506e91704a747de81b 100644
+index 5c2eaca0bc63c7880ee928aba6a24761737aa649..94910bf0c53c79588c55b89e4a023273d6c859ef 100644
 --- a/src/main/java/org/spigotmc/ActivationRange.java
 +++ b/src/main/java/org/spigotmc/ActivationRange.java
 @@ -47,6 +47,9 @@ import net.minecraft.world.entity.schedule.Activity;
@@ -3207,3 +3191,12 @@ index 5c2eaca0bc63c7880ee928aba6a24761737aa649..8b36ca5062f8e0e8bd58aa506e91704a
                  if (MinecraftServer.currentTick > entity.activatedTick) {
                      if (entity.defaultActivationState || entity.activationType.boundingBox.c(entity.getBoundingBox())) { // Paper
                          entity.activatedTick = MinecraftServer.currentTick;
+@@ -297,7 +309,7 @@ public class ActivationRange
+         if ( entity instanceof EntityLiving )
+         {
+             EntityLiving living = (EntityLiving) entity;
+-            if ( living.isClimbing() || living.jumping || living.hurtTicks > 0 || living.effects.size() > 0 ) // Paper
++            if ( living.isClimbingCached() || living.jumping || living.hurtTicks > 0 || living.effects.size() > 0 ) // Paper // Airplane - use cached climbing
+             {
+                 return 1; // Paper
+             }
