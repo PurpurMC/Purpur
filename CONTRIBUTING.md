@@ -40,17 +40,17 @@ just need to add it to our import script to be ran during the patch process.
 1. Save (rebuild) any patches you are in the middle of working on!
 2. Identify the names of the files you want to import.
    - A complete list of all possible file names can be found at ```./Paper/work/Minecraft/$MCVER/net/minecraft/server```
-3. Open the file at `./buildSrc/src/main/kotlin/MCDevImports.kt` and add the name of your file to the `nmsImports` set.
+3. Edit the `mcdevimports.conf` file and add the name of your file to the `nms-imports` list.
 4. Re-patch the server to make the imports take effect `./gradlew applyPatches`
 5. Edit away!
 
-This change is temporary! DO NOT COMMIT CHANGES TO THE `MCDevImports.kt` FILE!
-Once you have made your changes to the new file, and rebuilt patches, you may undo your changes to `MCDevImports.kt`
+This change is temporary! DO NOT COMMIT CHANGES TO THE `mcdevimports.conf` FILE!
+Once you have made your changes to the new file, and rebuilt patches, you may undo your changes to `mcdevimports.conf`
 
 Any file modified in a patch file gets automatically imported, so you only need this temporarily
 to import it to create the first patch.
 
-To undo your changes to the file, type `git checkout buildSrc/src/main/kotlin/MCDevImports.kt`, or just remove the import lines you added previously.
+To undo your changes to the file, delete the `mcdevimports.conf` file and re-apply patches, or just remove the import lines you added previously.
 
 ## Modifying Patches
 Modifying previous patches is a bit more complex:
