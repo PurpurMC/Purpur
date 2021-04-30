@@ -3,6 +3,9 @@ repositories {
     maven("https://jitpack.io") {
         content { includeGroupByRegex("com\\.github\\..*") }
     }
+    maven("https://notom3ga.jfrog.io/artifactory/repo") {
+        content { includeGroup("me.notom3ga") }
+    }
 }
 
 dependencies {
