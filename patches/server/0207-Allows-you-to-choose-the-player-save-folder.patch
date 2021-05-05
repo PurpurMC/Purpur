@@ -1,0 +1,240 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DoctaEnkoda <bierquejason@gmail.com>
+Date: Wed, 5 May 2021 14:34:53 +0200
+Subject: [PATCH] Allows you to choose the player save folder
+
+
+diff --git a/src/main/java/net/minecraft/server/Main.java b/src/main/java/net/minecraft/server/Main.java
+index 6818f8496ab76ee6ffc747bd6848b43830ec8914..3ca5d4a134728c78c8452935ac761afd1bbf2f72 100644
+--- a/src/main/java/net/minecraft/server/Main.java
++++ b/src/main/java/net/minecraft/server/Main.java
+@@ -65,6 +65,8 @@ public class Main {
+ 
+     private static final Logger LOGGER = LogManager.getLogger();
+ 
++    private static org.bukkit.configuration.file.YamlConfiguration purpurConfiguration = null; // Purpur
++
+     public Main() {}
+ 
+     public static void main(final OptionSet optionset) { // CraftBukkit - replaces main(String[] astring)
+@@ -108,6 +110,7 @@ public class Main {
+             org.bukkit.configuration.file.YamlConfiguration bukkitConfiguration = loadConfigFile((File) optionset.valueOf("bukkit-settings"));
+             org.bukkit.configuration.file.YamlConfiguration spigotConfiguration = loadConfigFile((File) optionset.valueOf("spigot-settings"));
+             org.bukkit.configuration.file.YamlConfiguration paperConfiguration = loadConfigFile((File) optionset.valueOf("paper-settings"));
++            purpurConfiguration = loadConfigFile((File) optionset.valueOf("purpur-settings"));
+             // Paper end
+ 
+             java.nio.file.Path java_nio_file_path1 = Paths.get("eula.txt");
+@@ -223,7 +226,7 @@ public class Main {
+             */
+             Class.forName(VillagerTrades.class.getName());// Paper - load this sync so it won't fail later async
+             final DedicatedServer dedicatedserver = (DedicatedServer) MinecraftServer.a((thread) -> {
+-                DedicatedServer dedicatedserver1 = new DedicatedServer(optionset, datapackconfiguration1, thread, iregistrycustom_dimension, convertable_conversionsession, resourcepackrepository, datapackresources, null, dedicatedserversettings, DataConverterRegistry.a(), minecraftsessionservice, gameprofilerepository, usercache, WorldLoadListenerLogger::new);
++                DedicatedServer dedicatedserver1 = new DedicatedServer(optionset, datapackconfiguration1, thread, iregistrycustom_dimension, convertable_conversionsession, resourcepackrepository, datapackresources, null, dedicatedserversettings, DataConverterRegistry.a(), minecraftsessionservice, gameprofilerepository, usercache, WorldLoadListenerLogger::new, purpurConfiguration.getBoolean("settings.player-data.use-custom-folder", false)); // Purpur
+ 
+                 /*
+                 dedicatedserver1.d((String) optionset.valueOf(optionspec8));
+@@ -262,6 +265,12 @@ public class Main {
+ 
+     }
+ 
++    // Purpur Start
++    public static org.bukkit.configuration.file.YamlConfiguration getPurpurConfiguration() {
++        return purpurConfiguration;
++    }
++    // Purpur End
++
+     // Paper start - load config files
+     private static org.bukkit.configuration.file.YamlConfiguration loadConfigFile(File configFile) throws Exception {
+         org.bukkit.configuration.file.YamlConfiguration config = new org.bukkit.configuration.file.YamlConfiguration();
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 137c52999666ea331ac52c230f0674d489a95524..d996e0f02eb310790cfae32338bf6d18701aed2c 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -302,7 +302,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+         return s0;
+     }
+ 
+-    public MinecraftServer(OptionSet options, DataPackConfiguration datapackconfiguration, Thread thread, IRegistryCustom.Dimension iregistrycustom_dimension, Convertable.ConversionSession convertable_conversionsession, SaveData savedata, ResourcePackRepository resourcepackrepository, Proxy proxy, DataFixer datafixer, DataPackResources datapackresources, MinecraftSessionService minecraftsessionservice, GameProfileRepository gameprofilerepository, UserCache usercache, WorldLoadListenerFactory worldloadlistenerfactory) {
++    public MinecraftServer(OptionSet options, DataPackConfiguration datapackconfiguration, Thread thread, IRegistryCustom.Dimension iregistrycustom_dimension, Convertable.ConversionSession convertable_conversionsession, SaveData savedata, ResourcePackRepository resourcepackrepository, Proxy proxy, DataFixer datafixer, DataPackResources datapackresources, MinecraftSessionService minecraftsessionservice, GameProfileRepository gameprofilerepository, UserCache usercache, WorldLoadListenerFactory worldloadlistenerfactory, boolean useCustomPlayerSave) { // Purpur
+         super("Server");
+         SERVER = this; // Paper - better singleton
+         this.m = new GameProfilerSwitcher(SystemUtils.a, this::ai);
+@@ -330,7 +330,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+         // this.serverConnection = new ServerConnection(this); // Spigot
+         this.worldLoadListenerFactory = worldloadlistenerfactory;
+         this.convertable = convertable_conversionsession;
+-        this.worldNBTStorage = convertable_conversionsession.b();
++        this.worldNBTStorage = convertable_conversionsession.getCustomWorldNBTStorage(useCustomPlayerSave); // Purpur
+         this.dataConverterManager = datafixer;
+         this.customFunctionData = new CustomFunctionData(this, datapackresources.a());
+         this.ak = new DefinedStructureManager(datapackresources.h(), convertable_conversionsession, datafixer);
+diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+index 4f7fed0418df17b80cb41e16bb1978c5cb284810..b6f76641773f73434e1752710b705e1d41e2a09b 100644
+--- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -86,8 +86,8 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+     private final TextFilter r;
+ 
+     // CraftBukkit start - Signature changed
+-    public DedicatedServer(joptsimple.OptionSet options, DataPackConfiguration datapackconfiguration, Thread thread, IRegistryCustom.Dimension iregistrycustom_dimension, Convertable.ConversionSession convertable_conversionsession, ResourcePackRepository resourcepackrepository, DataPackResources datapackresources, SaveData savedata, DedicatedServerSettings dedicatedserversettings, DataFixer datafixer, MinecraftSessionService minecraftsessionservice, GameProfileRepository gameprofilerepository, UserCache usercache, WorldLoadListenerFactory worldloadlistenerfactory) {
+-        super(options, datapackconfiguration, thread, iregistrycustom_dimension, convertable_conversionsession, savedata, resourcepackrepository, Proxy.NO_PROXY, datafixer, datapackresources, minecraftsessionservice, gameprofilerepository, usercache, worldloadlistenerfactory);
++    public DedicatedServer(joptsimple.OptionSet options, DataPackConfiguration datapackconfiguration, Thread thread, IRegistryCustom.Dimension iregistrycustom_dimension, Convertable.ConversionSession convertable_conversionsession, ResourcePackRepository resourcepackrepository, DataPackResources datapackresources, SaveData savedata, DedicatedServerSettings dedicatedserversettings, DataFixer datafixer, MinecraftSessionService minecraftsessionservice, GameProfileRepository gameprofilerepository, UserCache usercache, WorldLoadListenerFactory worldloadlistenerfactory, boolean useCustomPlayerSaveFolder) { // Purpur
++        super(options, datapackconfiguration, thread, iregistrycustom_dimension, convertable_conversionsession, savedata, resourcepackrepository, Proxy.NO_PROXY, datafixer, datapackresources, minecraftsessionservice, gameprofilerepository, usercache, worldloadlistenerfactory, useCustomPlayerSaveFolder); // Purpur
+         // CraftBukkit end
+         this.propertyManager = dedicatedserversettings;
+         this.remoteControlCommandListener = new RemoteControlCommandListener(this);
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index d8d54274b5a294391b8bf2bc660c6b623914f5bf..2dea8c8cacba98c71e648ac26bd79d908f7b1cc2 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -1465,7 +1465,13 @@ public abstract class PlayerList {
+         AdvancementDataPlayer advancementdataplayer = (AdvancementDataPlayer) entityplayer.getAdvancementData(); // CraftBukkit
+ 
+         if (advancementdataplayer == null) {
+-            File file = this.server.a(SavedFile.ADVANCEMENTS).toFile();
++            // Purpur Start
++            File file;
++            if (net.pl3x.purpur.PurpurConfig.useCustomFolderPlayerData) {
++                file = new File(net.pl3x.purpur.PurpurConfig.customFolderPlayerData + SavedFile.ADVANCEMENTS);
++            } else {
++                file = this.server.a(SavedFile.ADVANCEMENTS).toFile();
++            }
+             File file1 = new File(file, uuid + ".json");
+ 
+             advancementdataplayer = new AdvancementDataPlayer(this.server.getDataFixer(), this, this.server.getAdvancementData(), file1, entityplayer);
+diff --git a/src/main/java/net/minecraft/world/level/storage/Convertable.java b/src/main/java/net/minecraft/world/level/storage/Convertable.java
+index fcc6a3251f02822c1caba37bb884049c774b0252..893f23be927483b17dfb80f2e427a8c746282c07 100644
+--- a/src/main/java/net/minecraft/world/level/storage/Convertable.java
++++ b/src/main/java/net/minecraft/world/level/storage/Convertable.java
+@@ -58,7 +58,7 @@ public class Convertable {
+     private static final ImmutableList<String> c = ImmutableList.of("RandomSeed", "generatorName", "generatorOptions", "generatorVersion", "legacy_custom_options", "MapFeatures", "BonusChest");
+     public final Path universe;
+     private final Path backupUniverse;
+-    private final DataFixer f;
++    private final DataFixer f; public DataFixer getDataFixer() { return f; } // Purpur - OBFHELPERS
+ 
+     public Convertable(Path path, Path path1, DataFixer datafixer) {
+         this.f = datafixer;
+@@ -277,6 +277,13 @@ public class Convertable {
+             }
+         }
+ 
++        // Purpur Start
++        public WorldNBTStorage getCustomWorldNBTStorage(boolean useCustomPlayerSaveFolder) {
++            this.checkSession();
++            return new WorldNBTStorage(this, getDataFixer(), useCustomPlayerSaveFolder);
++        }
++        // Purpur End
++
+         public WorldNBTStorage b() {
+             this.checkSession();
+             return new WorldNBTStorage(this, Convertable.this.f);
+diff --git a/src/main/java/net/minecraft/world/level/storage/WorldNBTStorage.java b/src/main/java/net/minecraft/world/level/storage/WorldNBTStorage.java
+index 4d30ca69dd303f1d76c8e6292021deda97851773..11a40e0bf7bc7bc1386a7cec4a7a155a55bc8121 100644
+--- a/src/main/java/net/minecraft/world/level/storage/WorldNBTStorage.java
++++ b/src/main/java/net/minecraft/world/level/storage/WorldNBTStorage.java
+@@ -22,7 +22,7 @@ import org.bukkit.craftbukkit.entity.CraftPlayer;
+ public class WorldNBTStorage {
+ 
+     private static final Logger LOGGER = LogManager.getLogger();
+-    private final File playerDir;
++    private File playerDir; // Purpur
+     protected final DataFixer a;
+ 
+     public WorldNBTStorage(Convertable.ConversionSession convertable_conversionsession, DataFixer datafixer) {
+@@ -31,8 +31,24 @@ public class WorldNBTStorage {
+         this.playerDir.mkdirs();
+     }
+ 
++    // Purpur Start
++    public WorldNBTStorage(Convertable.ConversionSession convertable_conversionsession, DataFixer datafixer, boolean useCustomPlayerSaveFolder) {
++        this.a = datafixer;
++        if (!useCustomPlayerSaveFolder) {
++            this.playerDir = convertable_conversionsession.getWorldFolder(SavedFile.PLAYERDATA).toFile();
++            this.playerDir.mkdirs();
++        }
++    }
++    // Purpur End
++
+     public void save(EntityHuman entityhuman) {
+         if (org.spigotmc.SpigotConfig.disablePlayerDataSaving) return; // Spigot
++        // Purpur Start - Fix null
++        if (this.playerDir == null) {
++            this.playerDir = new File(net.pl3x.purpur.PurpurConfig.customFolderPlayerData + SavedFile.PLAYERDATA);
++            this.playerDir.mkdirs();
++        }
++        // Purpur End
+         try {
+             NBTTagCompound nbttagcompound = entityhuman.save(new NBTTagCompound());
+             File file = File.createTempFile(entityhuman.getUniqueIDString() + "-", ".dat", this.playerDir);
+@@ -52,6 +68,13 @@ public class WorldNBTStorage {
+     public NBTTagCompound load(EntityHuman entityhuman) {
+         NBTTagCompound nbttagcompound = null;
+ 
++        // Purpur Start - Fix null
++        if (this.playerDir == null) {
++            this.playerDir = new File(net.pl3x.purpur.PurpurConfig.customFolderPlayerData + SavedFile.PLAYERDATA);
++            this.playerDir.mkdirs();
++        }
++        // Purpur End
++
+         try {
+             File file = new File(this.playerDir, entityhuman.getUniqueIDString() + ".dat");
+             // Spigot Start
+@@ -101,6 +124,12 @@ public class WorldNBTStorage {
+ 
+     // CraftBukkit start
+     public NBTTagCompound getPlayerData(String s) {
++        // Purpur Start - Fix null
++        if (this.playerDir == null) {
++            this.playerDir = new File(net.pl3x.purpur.PurpurConfig.customFolderPlayerData + SavedFile.PLAYERDATA);
++            this.playerDir.mkdirs();
++        }
++        // Purpur End
+         try {
+             File file1 = new File(this.playerDir, s + ".dat");
+ 
+@@ -116,6 +145,12 @@ public class WorldNBTStorage {
+     // CraftBukkit end
+ 
+     public String[] getSeenPlayers() {
++        // Purpur Start - Fix null
++        if (this.playerDir == null) {
++            this.playerDir = new File(net.pl3x.purpur.PurpurConfig.customFolderPlayerData + SavedFile.PLAYERDATA);
++            this.playerDir.mkdirs();
++        }
++        // Purpur End
+         String[] astring = this.playerDir.list();
+ 
+         if (astring == null) {
+@@ -133,6 +168,12 @@ public class WorldNBTStorage {
+ 
+     // CraftBukkit start
+     public File getPlayerDir() {
++        // Purpur Start - Fix null
++        if (this.playerDir == null) {
++            this.playerDir = new File(net.pl3x.purpur.PurpurConfig.customFolderPlayerData + SavedFile.PLAYERDATA);
++            this.playerDir.mkdirs();
++        }
++        // Purpur End
+         return playerDir;
+     }
+     // CraftBukkit end
+diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+index 7e8654e4df61527f33d4fce2afdb14e29b90a4c2..edf363695cd06db0988304f94baffd1615ad7d95 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
+@@ -292,4 +292,12 @@ public class PurpurConfig {
+     private static void advancementSettings() {
+         advancementOnlyBroadcastToAffectedPlayer  = getBoolean("settings.advancement.only-broadcast-to-affected-player", advancementOnlyBroadcastToAffectedPlayer );
+     }
++
++    public static boolean useCustomFolderPlayerData = false;
++    public static String customFolderPlayerData = "world/";
++
++    private static void changeFolderPlayerData() {
++        useCustomFolderPlayerData = getBoolean("settings.player-data.use-custom-folder", useCustomFolderPlayerData);
++        customFolderPlayerData = getString("settings.player-data.folder-name", customFolderPlayerData);
++    }
+ }
