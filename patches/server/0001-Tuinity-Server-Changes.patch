@@ -2059,7 +2059,7 @@ index 0000000000000000000000000000000000000000..5ea5b3933725d80dd193e815ac507ee5
 \ No newline at end of file
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java b/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..331f0ae05384b29ceb59f2846c52a2194658bb39
+index 0000000000000000000000000000000000000000..f722f9838424f345b69aef11510c194c6629e439
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/BlockStarLightEngine.java
 @@ -0,0 +1,289 @@
@@ -2298,16 +2298,16 @@ index 0000000000000000000000000000000000000000..331f0ae05384b29ceb59f2846c52a219
 +
 +            return ret.iterator();
 +        } else {
-+            if (chunk instanceof ProtoChunk) {
-+                ProtoChunk protoChunk = (ProtoChunk)chunk;
-+                protoChunk.lockLightSources();
++            // world gen and lighting run in parallel, and if lighting keeps up it can be lighting chunks that are
++            // being generated. In the nether, lava will add a lot of sources. This resulted in quite a few CME crashes.
++            // So all we do spinloop until we can collect a list of sources, and even if it is out of date we will pick up
++            // the missing sources from checkBlock.
++            for (;;) {
 +                try {
-+                    return new ArrayList<>(chunk.getLightSources().collect(Collectors.toList())).iterator();
-+                } finally {
-+                    protoChunk.releaseLightSources();
++                    return chunk.getLightSources().collect(Collectors.toList()).iterator();
++                } catch (final Exception cme) {
++                    continue;
 +                }
-+            } else {
-+                return new ArrayList<>(chunk.getLightSources().collect(Collectors.toList())).iterator();
 +            }
 +        }
 +    }
@@ -5514,10 +5514,10 @@ index 0000000000000000000000000000000000000000..df686b97460796004cad1477760647a9
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandler.java b/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandler.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..b8df658c09a6dc739ff3f4d6e18c9cef7caea6c9
+index 0000000000000000000000000000000000000000..20309334d81011f18fbb67be209a1eec25447b5c
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/chunk/light/VariableBlockLightHandler.java
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,33 @@
 +package com.tuinity.tuinity.chunk.light;
 +
 +import net.minecraft.core.BlockPosition;
@@ -5526,7 +5526,10 @@ index 0000000000000000000000000000000000000000..b8df658c09a6dc739ff3f4d6e18c9cef
 +/**
 + * Recommended implementation is {@link VariableBlockLightHandlerImpl}, but you can implement this interface yourself
 + * if you want.
++ *
++ * @deprecated To be removed in 1.17 due to Mojang adding a custom light block.
 + */
++@Deprecated
 +public interface VariableBlockLightHandler {
 +
 +    /**
@@ -11199,7 +11202,7 @@ index df8270c40ed7ce6f628686ff6f4fa4cf96af6738..fa7a78549a9bb92b93c305dc16f43a9a
  
          if (this.remoteControlListener != null) {
 diff --git a/src/main/java/net/minecraft/server/level/ChunkMapDistance.java b/src/main/java/net/minecraft/server/level/ChunkMapDistance.java
-index 3644e8b24b082e17752ef52934625416130aaa08..a5fc023312c99e591fc269999c28a766a46f8849 100644
+index 3644e8b24b082e17752ef52934625416130aaa08..58e14c174cdf76cdea861fd3d4d1195fa27f888a 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkMapDistance.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkMapDistance.java
 @@ -8,6 +8,7 @@ import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
@@ -11401,31 +11404,32 @@ index 3644e8b24b082e17752ef52934625416130aaa08..a5fc023312c99e591fc269999c28a766
 -            if (!this.l.isEmpty()) {
 -                LongIterator longiterator = this.l.iterator();
 +        // Tuinity start - replace level propagator
-+        if (!this.ticketLevelUpdates.isEmpty()) {
++        ticket_update_loop:
++        while (!this.ticketLevelUpdates.isEmpty()) {
++            flag = true;
+ 
+-                while (longiterator.hasNext()) {
+-                    long j = longiterator.nextLong();
 +            boolean oldPolling = this.pollingPendingChunkUpdates;
 +            this.pollingPendingChunkUpdates = true;
 +            try {
-+                for (java.util.Iterator<Long2IntMap.Entry> iterator = this.ticketLevelUpdates.long2IntEntrySet().fastIterator(); iterator.hasNext(); ) {
++                for (java.util.Iterator<Long2IntMap.Entry> iterator = this.ticketLevelUpdates.long2IntEntrySet().fastIterator(); iterator.hasNext();) {
 +                    Long2IntMap.Entry entry = iterator.next();
 +                    long key = entry.getLongKey();
 +                    int newLevel = entry.getIntValue();
 +                    PlayerChunk chunk = this.getUpdatingChunk(key);
- 
--                while (longiterator.hasNext()) {
--                    long j = longiterator.nextLong();
++
 +                    if (chunk == null && newLevel > PlayerChunkMap.GOLDEN_TICKET) {
 +                        // not loaded and it shouldn't be loaded!
 +                        continue;
 +                    }
++
++                    int currentLevel = chunk == null ? PlayerChunkMap.GOLDEN_TICKET + 1 : chunk.getTicketLevel();
  
 -                    if (this.e(j).stream().anyMatch((ticket) -> {
 -                        return ticket.getTicketType() == TicketType.PLAYER;
 -                    })) {
 -                        PlayerChunk playerchunk = playerchunkmap.getUpdatingChunk(j);
-+                    int currentLevel = chunk == null ? PlayerChunkMap.GOLDEN_TICKET + 1 : chunk.getTicketLevel();
- 
--                        if (playerchunk == null) {
--                            throw new IllegalStateException();
 +                    if (currentLevel == newLevel) {
 +                        // nothing to do
 +                        continue;
@@ -11433,7 +11437,9 @@ index 3644e8b24b082e17752ef52934625416130aaa08..a5fc023312c99e591fc269999c28a766
 +
 +                    this.updateTicketLevel(key, newLevel, chunk, currentLevel);
 +                }
-+
+ 
+-                        if (playerchunk == null) {
+-                            throw new IllegalStateException();
 +                long recursiveCheck = ++this.ticketLevelUpdateCount;
 +                while (!this.ticketLevelUpdates.isEmpty()) {
 +                    long key = this.ticketLevelUpdates.firstLongKey();
@@ -11464,31 +11470,29 @@ index 3644e8b24b082e17752ef52934625416130aaa08..a5fc023312c99e591fc269999c28a766
 +
 +                    chunk.handleLevelUpdate(playerchunkmap);
 +                    if (recursiveCheck != this.ticketLevelUpdateCount) {
-+                        if (!this.ticketLevelUpdates.isEmpty()) {
-+                            throw new IllegalStateException("Recursive call should have processed updates");
-+                        }
-+                        break;
++                        // back to the start, we must create player chunks and update the ticket level fields before
++                        // processing the actual level updates
++                        continue ticket_update_loop;
                      }
                  }
  
 -                this.l.clear();
+-            }
 +                for (;;) {
 +                    if (recursiveCheck != this.ticketLevelUpdateCount) {
-+                        break;
++                        continue ticket_update_loop;
 +                    }
 +                    PlayerChunk pendingUpdate = this.pendingChunkUpdates.poll();
 +                    if (pendingUpdate == null) {
 +                        break;
 +                    }
-+
+ 
+-            return flag;
 +                    pendingUpdate.handleLevelUpdate(playerchunkmap);
 +                }
 +            } finally {
 +                this.pollingPendingChunkUpdates = oldPolling;
-             }
- 
--            return flag;
-+            return true;
++            }
          }
 +
 +        return flag;
@@ -12351,7 +12355,7 @@ index 4ee7070364a8989eece4fa4237b529926821f9c9..f22ab98d2e250081df8949be8a997370
          this.a(Long.MAX_VALUE, i, j, flag);
      }
 diff --git a/src/main/java/net/minecraft/server/level/LightEngineThreaded.java b/src/main/java/net/minecraft/server/level/LightEngineThreaded.java
-index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5bf67f9746 100644
+index 0b80569648c1df01aab52d0b8d47028cda925d86..76ac408021c5124fd634682cba97dc63392642f5 100644
 --- a/src/main/java/net/minecraft/server/level/LightEngineThreaded.java
 +++ b/src/main/java/net/minecraft/server/level/LightEngineThreaded.java
 @@ -2,6 +2,11 @@ package net.minecraft.server.level;
@@ -12380,7 +12384,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
          PlayerChunk playerChunk = playerChunkMap.getVisibleChunk(pair);
          if (playerChunk == null) {
              return false;
-@@ -169,13 +175,184 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -169,13 +175,191 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      private volatile int f = 5;
      private final AtomicBoolean g = new AtomicBoolean();
  
@@ -12451,8 +12455,8 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
 +        this.queueUpdate();
 +
 +        return totalChunks;
-     }
- 
++    }
++
 +    protected final Long2IntOpenHashMap holdingChunks = new Long2IntOpenHashMap();
 +    protected final LongArrayList postWorkTicketRelease = new LongArrayList();
 +
@@ -12499,20 +12503,27 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
 +        }
 +
 +        return CompletableFuture.completedFuture(playerChunk.getAvailableChunkNow());
-+    }
-+
+     }
+ 
 +    // note: task is discarded if the chunk is not at light status or if the chunk is not lit
 +    protected final void scheduleLightWorkTask(int chunkX, int chunkZ, LightEngineThreaded.Update type, Runnable task) {
++        IChunkAccess current = this.getChunk(chunkX, chunkZ);
++
++        if (current == null || !current.getChunkStatus().isAtLeastStatus(ChunkStatus.LIGHT)) {
++            return;
++        }
++
++        if (current.getChunkStatus() != ChunkStatus.FULL) {
++            // do not keep chunk loaded, we are probably in a gen thread
++            // if we proceed to add a ticket the chunk will be loaded, which is not what we want (avoid cascading gen)
++            this.scheduleTask(chunkX, chunkZ, type, task);
++            return;
++        }
++
 +        if (!org.bukkit.Bukkit.isPrimaryThread()) {
 +            this.playerChunkMap.mainInvokingExecutor.execute(() -> {
 +                this.scheduleLightWorkTask(chunkX, chunkZ, type, task);
 +            });
-+            return;
-+        }
-+
-+        IChunkAccess current = this.getChunk(chunkX, chunkZ);
-+
-+        if (current == null || !current.isLit() || !current.getChunkStatus().isAtLeastStatus(ChunkStatus.LIGHT)) {
 +            return;
 +        }
 +
@@ -12565,7 +12576,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
      public void close() {}
  
      @Override
-@@ -192,6 +369,15 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -192,6 +376,15 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      public void a(BlockPosition blockposition) {
          BlockPosition blockposition1 = blockposition.immutableCopy();
  
@@ -12581,7 +12592,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
          this.a(blockposition.getX() >> 4, blockposition.getZ() >> 4, LightEngineThreaded.Update.POST_UPDATE, SystemUtils.a(() -> {
              super.a(blockposition1);
          }, () -> {
-@@ -200,6 +386,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -200,6 +393,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      }
  
      protected void a(ChunkCoordIntPair chunkcoordintpair) {
@@ -12593,7 +12604,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -224,6 +415,14 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -224,6 +422,14 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(SectionPosition sectionposition, boolean flag) {
@@ -12608,7 +12619,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
          this.a(sectionposition.a(), sectionposition.c(), () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -235,6 +434,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -235,6 +441,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(ChunkCoordIntPair chunkcoordintpair, boolean flag) {
@@ -12620,7 +12631,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
              super.a(chunkcoordintpair, flag);
          }, () -> {
-@@ -244,6 +448,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -244,6 +455,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void a(EnumSkyBlock enumskyblock, SectionPosition sectionposition, @Nullable NibbleArray nibblearray, boolean flag) {
@@ -12632,7 +12643,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
          this.a(sectionposition.a(), sectionposition.c(), () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -253,6 +462,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -253,6 +469,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
          }));
      }
  
@@ -12640,7 +12651,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
      private void a(int i, int j, LightEngineThreaded.Update lightenginethreaded_update, Runnable runnable) {
          this.a(i, j, this.d.c(ChunkCoordIntPair.pair(i, j)), lightenginethreaded_update, runnable);
      }
-@@ -265,6 +475,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -265,6 +482,11 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
  
      @Override
      public void b(ChunkCoordIntPair chunkcoordintpair, boolean flag) {
@@ -12652,7 +12663,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
          this.a(chunkcoordintpair.x, chunkcoordintpair.z, () -> {
              return 0;
          }, LightEngineThreaded.Update.PRE_UPDATE, SystemUtils.a(() -> {
-@@ -277,6 +492,35 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -277,6 +499,35 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      public CompletableFuture<IChunkAccess> a(IChunkAccess ichunkaccess, boolean flag) {
          ChunkCoordIntPair chunkcoordintpair = ichunkaccess.getPos();
  
@@ -12688,7 +12699,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
          // Paper start
          //ichunkaccess.b(false); // Don't need to disable this
          long pair = chunkcoordintpair.pair();
-@@ -324,7 +568,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -324,7 +575,7 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      }
  
      public void queueUpdate() {
@@ -12697,7 +12708,7 @@ index 0b80569648c1df01aab52d0b8d47028cda925d86..ad584ba21c6e201b778f32cea6d7cc5b
              this.b.a((() -> { // Paper - decompile error
                  this.b();
                  this.g.set(false);
-@@ -338,17 +582,36 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
+@@ -338,17 +589,36 @@ public class LightEngineThreaded extends LightEngine implements AutoCloseable {
      private final java.util.List<Runnable> pre = new java.util.ArrayList<>();
      private final java.util.List<Runnable> post = new java.util.ArrayList<>();
      private void b() {
@@ -14043,7 +14054,7 @@ index 3c804c7b20a14ea6e510810e2be10c1cc89ff5c1..3738c51b5e673c439d88a7ef7f4614f3
          return new TicketType<>(s, comparator, 0L);
      }
 diff --git a/src/main/java/net/minecraft/server/level/WorldServer.java b/src/main/java/net/minecraft/server/level/WorldServer.java
-index 47fbb8df04b2b77e10314666e87eaef621cffb3b..58e61aa19d71011c40c69a691f5644b3e823ad68 100644
+index 47fbb8df04b2b77e10314666e87eaef621cffb3b..a42d3c6c227a74d691278a65a9c516f6507b6865 100644
 --- a/src/main/java/net/minecraft/server/level/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/level/WorldServer.java
 @@ -168,12 +168,13 @@ import org.bukkit.event.server.MapInitializeEvent;
@@ -14786,11 +14797,11 @@ index 47fbb8df04b2b77e10314666e87eaef621cffb3b..58e61aa19d71011c40c69a691f5644b3
 +                    }
 +                    chunk.a(entity);
 +                    // Tuinity end - gotta be careful here, sync load can teleport entity.
-                 }
++                }
 +                // Tuinity start
 +                if (entity.inChunk && (oldRegionX != newRegionX || oldRegionZ != newRegionZ)) {
 +                    this.addNavigatorsIfPathingToRegion(entity);
-+                }
+                 }
 +                // Tuinity end
              }
  
@@ -15008,19 +15019,6 @@ index 47fbb8df04b2b77e10314666e87eaef621cffb3b..58e61aa19d71011c40c69a691f5644b3
  
              this.tickingEntities = wasTicking; // Paper
          }
-@@ -2072,8 +2708,11 @@ public class WorldServer extends World implements GeneratorAccessSeed {
-         Optional<VillagePlaceType> optional = VillagePlaceType.b(iblockdata);
-         Optional<VillagePlaceType> optional1 = VillagePlaceType.b(iblockdata1);
- 
-+        // Paper start
-+        // Tuinity - oh god not for each block set
-         if (!Objects.equals(optional, optional1)) {
--            BlockPosition blockposition1 = blockposition.immutableCopy();
-+            BlockPosition blockposition1 = blockposition.immutableCopy(); // Tuinity - oh god not for each block set
-+            // Paper end
- 
-             optional.ifPresent((villageplacetype) -> {
-                 this.getMinecraftServer().execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/network/LoginListener.java b/src/main/java/net/minecraft/server/network/LoginListener.java
 index c67b94840e4c967baebf6eb351df15f0e4ead4be..ed836462123efc6903e406fa926e55e1cedddb95 100644
 --- a/src/main/java/net/minecraft/server/network/LoginListener.java
@@ -15035,7 +15033,7 @@ index c67b94840e4c967baebf6eb351df15f0e4ead4be..ed836462123efc6903e406fa926e55e1
              throw new IllegalStateException("Protocol error", cryptographyexception);
          }
 diff --git a/src/main/java/net/minecraft/server/network/PlayerConnection.java b/src/main/java/net/minecraft/server/network/PlayerConnection.java
-index 9455cb9bc849a330e57fdc466fb51902631e22d8..53320d1d134305c0b37442dfca9931629a6d196d 100644
+index 8c9e97bb093c0e6297397edc71d72deebbcfbed9..e0c606bb6ecf23f2118a65775c05b437a09826d3 100644
 --- a/src/main/java/net/minecraft/server/network/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/network/PlayerConnection.java
 @@ -542,6 +542,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
@@ -15145,7 +15143,7 @@ index 9455cb9bc849a330e57fdc466fb51902631e22d8..53320d1d134305c0b37442dfca993162
      }
  
      @Override
-@@ -1219,7 +1263,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1224,7 +1268,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                  }
  
                  if (this.teleportPos != null) {
@@ -15154,7 +15152,7 @@ index 9455cb9bc849a330e57fdc466fb51902631e22d8..53320d1d134305c0b37442dfca993162
                          this.A = this.e;
                          this.a(this.teleportPos.x, this.teleportPos.y, this.teleportPos.z, this.player.yaw, this.player.pitch);
                      }
-@@ -1257,6 +1301,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1262,6 +1306,12 @@ public class PlayerConnection implements PacketListenerPlayIn {
                          double currDeltaZ = toZ - prevZ;
                          double d11 = Math.max(d7 * d7 + d8 * d8 + d9 * d9, (currDeltaX * currDeltaX + currDeltaY * currDeltaY + currDeltaZ * currDeltaZ) - 1);
                          // Paper end - fix large move vectors killing the server
@@ -15167,7 +15165,7 @@ index 9455cb9bc849a330e57fdc466fb51902631e22d8..53320d1d134305c0b37442dfca993162
  
                          if (this.player.isSleeping()) {
                              if (d11 > 1.0D) {
-@@ -1289,7 +1339,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1294,7 +1344,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                  speed = player.abilities.walkSpeed * 10f;
                              }
                              // Paper start - Prevent moving into unloaded chunks
@@ -15176,7 +15174,7 @@ index 9455cb9bc849a330e57fdc466fb51902631e22d8..53320d1d134305c0b37442dfca993162
                                  this.internalTeleport(this.player.locX(), this.player.locY(), this.player.locZ(), this.player.yaw, this.player.pitch, Collections.emptySet());
                                  return;
                              }
-@@ -1306,11 +1356,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1311,11 +1361,11 @@ public class PlayerConnection implements PacketListenerPlayIn {
                                  }
                              }
  
@@ -15192,7 +15190,7 @@ index 9455cb9bc849a330e57fdc466fb51902631e22d8..53320d1d134305c0b37442dfca993162
                              boolean flag = d8 > 0.0D;
  
                              if (this.player.isOnGround() && !packetplayinflying.b() && flag) {
-@@ -1345,6 +1395,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1350,6 +1400,7 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              }
  
                              this.player.move(EnumMoveType.PLAYER, new Vec3D(d7, d8, d9));
@@ -15200,7 +15198,7 @@ index 9455cb9bc849a330e57fdc466fb51902631e22d8..53320d1d134305c0b37442dfca993162
                              this.player.setOnGround(packetplayinflying.b()); // CraftBukkit - SPIGOT-5810, SPIGOT-5835: reset by this.player.move
                              // Paper start - prevent position desync
                              if (this.teleportPos != null) {
-@@ -1364,12 +1415,23 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1369,12 +1420,23 @@ public class PlayerConnection implements PacketListenerPlayIn {
                              boolean flag1 = false;
  
                              if (!this.player.H() && d11 > org.spigotmc.SpigotConfig.movedWronglyThreshold && !this.player.isSleeping() && !this.player.playerInteractManager.isCreative() && this.player.playerInteractManager.getGameMode() != EnumGamemode.SPECTATOR) { // Spigot
@@ -15226,7 +15224,7 @@ index 9455cb9bc849a330e57fdc466fb51902631e22d8..53320d1d134305c0b37442dfca993162
                                  this.a(d0, d1, d2, f, f1);
                              } else {
                                  // CraftBukkit start - fire PlayerMoveEvent
-@@ -1456,6 +1518,26 @@ public class PlayerConnection implements PacketListenerPlayIn {
+@@ -1461,6 +1523,26 @@ public class PlayerConnection implements PacketListenerPlayIn {
          }
      }
  
@@ -18727,7 +18725,7 @@ index 0fec15e141051863dbf51a2b3e1ace5028cd2fc1..d7757e60402be9939fc2d90ad79b2bb7
  
      public String toString() {
 diff --git a/src/main/java/net/minecraft/world/level/chunk/ProtoChunk.java b/src/main/java/net/minecraft/world/level/chunk/ProtoChunk.java
-index 7bfac4e852c4a6697435647dab173913df6034e9..c90f530b9cf556da950d8f61156159941815bd99 100644
+index 7bfac4e852c4a6697435647dab173913df6034e9..1658f0bb379653c205d08c771a7c23242d50f66d 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/ProtoChunk.java
 +++ b/src/main/java/net/minecraft/world/level/chunk/ProtoChunk.java
 @@ -54,7 +54,7 @@ public class ProtoChunk implements IChunkAccess {
@@ -18739,7 +18737,7 @@ index 7bfac4e852c4a6697435647dab173913df6034e9..c90f530b9cf556da950d8f6115615994
      private final ShortList[] m;
      private final Map<StructureGenerator<?>, StructureStart<?>> n;
      private final Map<StructureGenerator<?>, LongSet> o;
-@@ -66,6 +66,73 @@ public class ProtoChunk implements IChunkAccess {
+@@ -66,6 +66,53 @@ public class ProtoChunk implements IChunkAccess {
      private volatile boolean u;
      final World world; // Paper - Anti-Xray - Add world // Paper - private -> default
  
@@ -18788,55 +18786,17 @@ index 7bfac4e852c4a6697435647dab173913df6034e9..c90f530b9cf556da950d8f6115615994
 +    public void setBlockEmptinessMap(boolean[] emptinessMap) {
 +        this.blockEmptinessMap = emptinessMap;
 +    }
-+
-+    private void checkLightSourceLock() {
-+        if (!this.lightSourcesLocked.get()) {
-+            return;
-+        }
-+
-+        IllegalStateException thr = new IllegalStateException("Concurrent access of light sources by thread '" + Thread.currentThread().getName() + "'");
-+        LOGGER.fatal(thr.getMessage(), thr);
-+        throw thr;
-+    }
-+
-+    public void lockLightSources() {
-+        if (this.lightSourcesLocked.getAndSet(true)) {
-+            throw new IllegalStateException("Light sources is already locked!");
-+        }
-+    }
-+
-+    public void releaseLightSources() {
-+        this.lightSourcesLocked.set(false);
-+    }
 +    // Tuinity end - rewrite light engine
 +
      // Paper start - Anti-Xray - Add world
      @Deprecated public ProtoChunk(ChunkCoordIntPair chunkcoordintpair, ChunkConverter chunkconverter) { this(chunkcoordintpair, chunkconverter, null); } // Notice for updates: Please make sure this constructor isn't used anywhere
      public ProtoChunk(ChunkCoordIntPair chunkcoordintpair, ChunkConverter chunkconverter, World world) {
-@@ -170,7 +237,9 @@ public class ProtoChunk implements IChunkAccess {
-     }
- 
-     public void k(BlockPosition blockposition) {
-+        this.checkLightSourceLock(); // Tuinity - make sure we don't access this concurrently
-         this.l.add(blockposition.immutableCopy());
-+        this.checkLightSourceLock(); // Tuinity - make sure we don't access this concurrently
-     }
- 
-     @Nullable
-@@ -185,26 +254,25 @@ public class ProtoChunk implements IChunkAccess {
-                 return iblockdata;
-             } else {
-                 if (iblockdata.f() > 0) {
-+                    this.checkLightSourceLock(); // Tuinity - make sure we don't access this concurrently
-                     this.l.add(new BlockPosition((i & 15) + this.getPos().d(), j, (k & 15) + this.getPos().e()));
-+                    this.checkLightSourceLock(); // Tuinity - make sure we don't access this concurrently
-                 }
- 
+@@ -191,20 +238,17 @@ public class ProtoChunk implements IChunkAccess {
                  ChunkSection chunksection = this.a(j >> 4);
                  IBlockData iblockdata1 = chunksection.setType(i & 15, j & 15, k & 15, iblockdata);
  
 -                if (this.g.b(ChunkStatus.FEATURES) && iblockdata != iblockdata1 && (iblockdata.b((IBlockAccess) this, blockposition) != iblockdata1.b((IBlockAccess) this, blockposition) || iblockdata.f() != iblockdata1.f() || iblockdata.e() || iblockdata1.e())) {
-+                if ((com.tuinity.tuinity.config.TuinityConfig.useNewLightEngine ? (this.g.b(ChunkStatus.LIGHT) && this.isLit()) : (this.g.b(ChunkStatus.FEATURES))) && iblockdata != iblockdata1 && (iblockdata.b((IBlockAccess) this, blockposition) != iblockdata1.b((IBlockAccess) this, blockposition) || iblockdata.f() != iblockdata1.f() || iblockdata.e() || iblockdata1.e())) { // Tuinity - move block updates to only happen after lighting occurs
++                if ((com.tuinity.tuinity.config.TuinityConfig.useNewLightEngine ? (this.g.b(ChunkStatus.LIGHT)) : (this.g.b(ChunkStatus.FEATURES))) && iblockdata != iblockdata1 && (iblockdata.b((IBlockAccess) this, blockposition) != iblockdata1.b((IBlockAccess) this, blockposition) || iblockdata.f() != iblockdata1.f() || iblockdata.e() || iblockdata1.e())) { // Tuinity - move block updates to only happen after lighting occurs (or during, thanks chunk system)
                      LightEngine lightengine = this.e();
  
                      lightengine.a(blockposition);
@@ -18846,17 +18806,17 @@ index 7bfac4e852c4a6697435647dab173913df6034e9..c90f530b9cf556da950d8f6115615994
 +                HeightMap.Type[] enumset = this.getChunkStatus().heightMaps; // Tuinity - reduce iterator creation
                  EnumSet<HeightMap.Type> enumset1 = null;
 -                Iterator iterator = enumset.iterator();
+-
+-                HeightMap.Type heightmap_type;
 +                // Tuinity - reduce iterator creation
  
--                HeightMap.Type heightmap_type;
--
 -                while (iterator.hasNext()) {
 -                    heightmap_type = (HeightMap.Type) iterator.next();
 +                for (HeightMap.Type heightmap_type : enumset) { // Tuinity - reduce iterator creation
                      HeightMap heightmap = (HeightMap) this.f.get(heightmap_type);
  
                      if (heightmap == null) {
-@@ -220,10 +288,9 @@ public class ProtoChunk implements IChunkAccess {
+@@ -220,10 +264,9 @@ public class ProtoChunk implements IChunkAccess {
                      HeightMap.a(this, enumset1);
                  }
  
