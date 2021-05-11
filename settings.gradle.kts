@@ -2,6 +2,7 @@ import java.util.Locale
 
 pluginManagement {
     repositories {
+        gradlePluginPortal()
         mavenCentral()
         jcenter()
         maven("https://repo.jpenilla.xyz/snapshots")
