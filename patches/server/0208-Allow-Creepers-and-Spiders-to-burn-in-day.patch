@@ -1,0 +1,270 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Encode42 <me@encode42.dev>
+Date: Tue, 11 May 2021 15:18:37 -0400
+Subject: [PATCH] Allow Creepers and Spiders to burn in day
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/monster/EntityCreeper.java b/src/main/java/net/minecraft/world/entity/monster/EntityCreeper.java
+index 27d5e9fc5ec1396e95180fc14e8a61b030cfd1e6..032db3336672126cf3ffe725b968a99352553680 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/EntityCreeper.java
++++ b/src/main/java/net/minecraft/world/entity/monster/EntityCreeper.java
+@@ -20,6 +20,7 @@ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.EntityAreaEffectCloud;
+ import net.minecraft.world.entity.EntityLightning;
+ import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.EnumItemSlot;
+ import net.minecraft.world.entity.EnumMobSpawn;
+ import net.minecraft.world.entity.GroupDataEntity;
+ import net.minecraft.world.entity.ai.attributes.AttributeProvider;
+@@ -65,6 +66,13 @@ public class EntityCreeper extends EntityMonster {
+     private int prevSpacebarCharge = 0;
+     private int powerToggleDelay = 0;
+     private boolean exploding = false;
++    private boolean shouldBurnInDay = true;
++    public boolean shouldBurnInDay() {
++        return shouldBurnInDay;
++    }
++    public void setShouldBurnInDay(boolean shouldBurnInDay) {
++        this.shouldBurnInDay = shouldBurnInDay;
++    }
+     // Purpur end
+ 
+     public EntityCreeper(EntityTypes<? extends EntityCreeper> entitytypes, World world) {
+@@ -209,6 +217,7 @@ public class EntityCreeper extends EntityMonster {
+         nbttagcompound.setShort("Fuse", (short) this.maxFuseTicks);
+         nbttagcompound.setByte("ExplosionRadius", (byte) this.explosionRadius);
+         nbttagcompound.setBoolean("ignited", this.isIgnited());
++        nbttagcompound.setBoolean("Purpur.ShouldBurnInDay", shouldBurnInDay); // Purpur
+     }
+ 
+     @Override
+@@ -227,6 +236,11 @@ public class EntityCreeper extends EntityMonster {
+             this.ignite();
+         }
+ 
++        // Purpur start
++        if (nbttagcompound.hasKey("Purpur.ShouldBurnInDay")) {
++            shouldBurnInDay = nbttagcompound.getBoolean("Purpur.ShouldBurnInDay");
++        }
++        // Purpur end
+     }
+ 
+     @Override
+@@ -257,6 +271,37 @@ public class EntityCreeper extends EntityMonster {
+         super.tick();
+     }
+ 
++    // Purpur start
++    @Override
++    public void movementTick() {
++        if (this.isAlive()) {
++            boolean shouldBurn = this.world.purpurConfig.creeperBurnInDaylight && this.shouldBurnInDay && this.isInDaylight();
++
++            if (shouldBurn) {
++                ItemStack itemstack = this.getEquipment(EnumItemSlot.HEAD);
++
++                if (!itemstack.isEmpty()) {
++                    if (itemstack.isDamageableItem()) {
++                        itemstack.setDamage(itemstack.getDamage() + this.random.nextInt(2));
++                        if (itemstack.getDamage() >= itemstack.getMaxDamage()) {
++                            this.broadcastItemBreak(EnumItemSlot.HEAD);
++                            this.setSlot(EnumItemSlot.HEAD, ItemStack.NULL_ITEM);
++                        }
++                    }
++
++                    shouldBurn = false;
++                }
++
++                if (shouldBurn) {
++                    this.setOnFire(8);
++                }
++            }
++        }
++
++        super.movementTick();
++    }
++    // Purpur end
++
+     @Override
+     protected SoundEffect getSoundHurt(DamageSource damagesource) {
+         return SoundEffects.ENTITY_CREEPER_HURT;
+diff --git a/src/main/java/net/minecraft/world/entity/monster/EntitySpider.java b/src/main/java/net/minecraft/world/entity/monster/EntitySpider.java
+index 9b596aa061aa1d4ddfd66361d5277089c3e18246..1f9d1005ad448550ca7b48ab12927d855e1b6056 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/EntitySpider.java
++++ b/src/main/java/net/minecraft/world/entity/monster/EntitySpider.java
+@@ -20,6 +20,7 @@ import net.minecraft.world.entity.EntityLiving;
+ import net.minecraft.world.entity.EntityPose;
+ import net.minecraft.world.entity.EntitySize;
+ import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.EnumItemSlot;
+ import net.minecraft.world.entity.EnumMobSpawn;
+ import net.minecraft.world.entity.EnumMonsterType;
+ import net.minecraft.world.entity.GroupDataEntity;
+@@ -37,6 +38,7 @@ import net.minecraft.world.entity.ai.navigation.NavigationAbstract;
+ import net.minecraft.world.entity.ai.navigation.NavigationSpider;
+ import net.minecraft.world.entity.animal.EntityIronGolem;
+ import net.minecraft.world.entity.player.EntityHuman;
++import net.minecraft.world.item.ItemStack;
+ import net.minecraft.world.level.World;
+ import net.minecraft.world.level.WorldAccess;
+ import net.minecraft.world.level.block.Blocks;
+@@ -66,6 +68,14 @@ public class EntitySpider extends EntityMonster {
+     public void initAttributes() {
+         this.getAttributeInstance(GenericAttributes.MAX_HEALTH).setValue(this.world.purpurConfig.spiderMaxHealth);
+     }
++
++    private boolean shouldBurnInDay = true;
++    public boolean shouldBurnInDay() {
++        return shouldBurnInDay;
++    }
++    public void setShouldBurnInDay(boolean shouldBurnInDay) {
++        this.shouldBurnInDay = shouldBurnInDay;
++    }
+     // Purpur end
+ 
+     @Override
+@@ -108,6 +118,51 @@ public class EntitySpider extends EntityMonster {
+ 
+     }
+ 
++    // Purpur start
++    @Override
++    public void saveData(NBTTagCompound nbttagcompound) {
++        super.saveData(nbttagcompound);
++        nbttagcompound.setBoolean("Purpur.ShouldBurnInDay", shouldBurnInDay);
++    }
++
++    @Override
++    public void loadData(NBTTagCompound nbttagcompound) {
++        super.loadData(nbttagcompound);
++        if (nbttagcompound.hasKey("Purpur.ShouldBurnInDay")) {
++            shouldBurnInDay = nbttagcompound.getBoolean("Purpur.ShouldBurnInDay");
++        }
++    }
++
++    @Override
++    public void movementTick() {
++        if (this.isAlive()) {
++            boolean shouldBurn = this.world.purpurConfig.spiderBurnInDaylight && this.shouldBurnInDay && this.isInDaylight();
++
++            if (shouldBurn) {
++                ItemStack itemstack = this.getEquipment(EnumItemSlot.HEAD);
++
++                if (!itemstack.isEmpty()) {
++                    if (itemstack.isDamageableItem()) {
++                        itemstack.setDamage(itemstack.getDamage() + this.random.nextInt(2));
++                        if (itemstack.getDamage() >= itemstack.getMaxDamage()) {
++                            this.broadcastItemBreak(EnumItemSlot.HEAD);
++                            this.setSlot(EnumItemSlot.HEAD, ItemStack.NULL_ITEM);
++                        }
++                    }
++
++                    shouldBurn = false;
++                }
++
++                if (shouldBurn) {
++                    this.setOnFire(8);
++                }
++            }
++        }
++
++        super.movementTick();
++    }
++    // Purpur end
++
+     public static AttributeProvider.Builder eK() {
+         return EntityMonster.eR().a(GenericAttributes.MAX_HEALTH, 16.0D).a(GenericAttributes.MOVEMENT_SPEED, 0.30000001192092896D);
+     }
+diff --git a/src/main/java/net/minecraft/world/item/ItemStack.java b/src/main/java/net/minecraft/world/item/ItemStack.java
+index 26fff0540e3d8863e83b0a60df2205422d50f1e1..69f6b527952fb814d9adef90cfac0a74937620d0 100644
+--- a/src/main/java/net/minecraft/world/item/ItemStack.java
++++ b/src/main/java/net/minecraft/world/item/ItemStack.java
+@@ -458,7 +458,7 @@ public final class ItemStack {
+         return this.getMaxStackSize() > 1 && (!this.e() || !this.f());
+     }
+ 
+-    public boolean e() {
++    public boolean isDamageableItem() { return e(); } public boolean e() { // Purpur - OBFHELPER
+         if (!this.j && this.getItem().getMaxDurability() > 0) {
+             NBTTagCompound nbttagcompound = this.getTag();
+ 
+@@ -489,7 +489,7 @@ public final class ItemStack {
+         this.getOrCreateTag().setInt("Damage", Math.max(0, i));
+     }
+ 
+-    public int h() {
++    public int getMaxDamage() { return h(); } public int h() { // Purpur - OBFHELPER
+         return this.getItem().getMaxDurability();
+     }
+ 
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 07c66f9d41e7a74021dde6702d654710e400e93b..8a6d015d0183e253476156b8b7e7c6a6240773dd 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -825,6 +825,7 @@ public class PurpurWorldConfig {
+     public boolean creeperRidable = false;
+     public boolean creeperRidableInWater = false;
+     public boolean creeperExplodeWhenKilled = false;
++    public boolean creeperBurnInDaylight = false;
+     public boolean creeperAllowGriefing = true;
+     public double creeperChargedChance = 0.0D;
+     public double creeperMaxHealth = 20.0D;
+@@ -832,6 +833,7 @@ public class PurpurWorldConfig {
+         creeperRidable = getBoolean("mobs.creeper.ridable", creeperRidable);
+         creeperRidableInWater = getBoolean("mobs.creeper.ridable-in-water", creeperRidableInWater);
+         creeperExplodeWhenKilled = getBoolean("mobs.creeper.explode-when-killed", creeperExplodeWhenKilled);
++        creeperBurnInDaylight = getBoolean("mobs.creeper.burn-in-daylight", creeperBurnInDaylight);
+         creeperAllowGriefing = getBoolean("mobs.creeper.allow-griefing", creeperAllowGriefing);
+         creeperChargedChance = getDouble("mobs.creeper.naturally-charged-chance", creeperChargedChance);
+         if (PurpurConfig.version < 10) {
+@@ -1726,10 +1728,12 @@ public class PurpurWorldConfig {
+         squidMaxHealth = getDouble("mobs.squid.attributes.max_health", squidMaxHealth);
+     }
+ 
++    public boolean spiderBurnInDaylight = false;
+     public boolean spiderRidable = false;
+     public boolean spiderRidableInWater = false;
+     public double spiderMaxHealth = 16.0D;
+     private void spiderSettings() {
++        spiderBurnInDaylight = getBoolean("mobs.spider.burn-in-daylight", spiderBurnInDaylight);
+         spiderRidable = getBoolean("mobs.spider.ridable", spiderRidable);
+         spiderRidableInWater = getBoolean("mobs.spider.ridable-in-water", spiderRidableInWater);
+         if (PurpurConfig.version < 10) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftCreeper.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftCreeper.java
+index 629518d4bb314a1d46e32397b6fb7b90bce94e83..7e746b18abac5fdd12915ce4793147843ba57a68 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftCreeper.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftCreeper.java
+@@ -111,4 +111,14 @@ public class CraftCreeper extends CraftMonster implements Creeper {
+         return getHandle().isIgnited();
+     }
+     // Paper end
++
++    // Purpur start
++    public void setShouldBurnInDay(boolean shouldBurnInDay) {
++        getHandle().setShouldBurnInDay(shouldBurnInDay);
++    }
++
++    public boolean shouldBurnInDay() {
++        return getHandle().shouldBurnInDay();
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftSpider.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftSpider.java
+index 1cfef80f2f6ee767e052966670ee1e7f0ee05321..5ccaf6c80bbd1ecd33d977eae006cd13ebb3712b 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftSpider.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftSpider.java
+@@ -25,4 +25,14 @@ public class CraftSpider extends CraftMonster implements Spider {
+     public EntityType getType() {
+         return EntityType.SPIDER;
+     }
++
++    // Purpur start
++    public void setShouldBurnInDay(boolean shouldBurnInDay) {
++        getHandle().setShouldBurnInDay(shouldBurnInDay);
++    }
++
++    public boolean shouldBurnInDay() {
++        return getHandle().shouldBurnInDay();
++    }
++    // Purpur end
+ }
