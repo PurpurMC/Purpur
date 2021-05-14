@@ -1422,10 +1422,10 @@ index 0000000000000000000000000000000000000000..86d6650d174a7794a7ebe793cad033b4
 +}
 diff --git a/src/main/java/gg/airplane/structs/FluidDirectionCache.java b/src/main/java/gg/airplane/structs/FluidDirectionCache.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..11279fb136bbaf3e51d9b080a9e283d8ff0cbb47
+index 0000000000000000000000000000000000000000..aa8467b9dda1f7707e41f50ac7b3e9d7343723ec
 --- /dev/null
 +++ b/src/main/java/gg/airplane/structs/FluidDirectionCache.java
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,136 @@
 +package gg.airplane.structs;
 +
 +import it.unimi.dsi.fastutil.HashCommon;
@@ -1457,8 +1457,8 @@ index 0000000000000000000000000000000000000000..11279fb136bbaf3e51d9b080a9e283d8
 +    private static class FluidDirectionEntry<T> {
 +        private final T data;
 +        private final boolean flag;
-+        private short uses = 0;
-+        private short age = 0;
++        private int uses = 0;
++        private int age = 0;
 +
 +        private FluidDirectionEntry(T data, boolean flag) {
 +            this.data = data;
@@ -1470,15 +1470,11 @@ index 0000000000000000000000000000000000000000..11279fb136bbaf3e51d9b080a9e283d8
 +        }
 +
 +        public void incrementUses() {
-+            if (this.uses < Short.MAX_VALUE) {
-+                this.uses++;
-+            }
++            this.uses = this.uses + 1 & Integer.MAX_VALUE;
 +        }
 +
 +        public void incrementAge() {
-+            if (this.age < Short.MAX_VALUE) {
-+                this.age++;
-+            }
++            this.age = this.age + 1 & Integer.MAX_VALUE;
 +        }
 +    }
 +
@@ -1487,12 +1483,10 @@ index 0000000000000000000000000000000000000000..11279fb136bbaf3e51d9b080a9e283d8
 +    private final int maxDistance; // the most amount of entries to check for a value
 +
 +    public FluidDirectionCache(int size) {
-+        float fill = 0.75f;
-+
-+        int arraySize = HashCommon.arraySize(size, fill);
++        int arraySize = HashCommon.nextPowerOfTwo(size);
 +        this.entries = new FluidDirectionEntry[arraySize];
 +        this.mask = arraySize - 1;
-+        this.maxDistance = Math.max(4, arraySize >> 4);
++        this.maxDistance = Math.min(arraySize, 4);
 +    }
 +
 +    public Boolean getValue(T data) {
@@ -1551,11 +1545,11 @@ index 0000000000000000000000000000000000000000..11279fb136bbaf3e51d9b080a9e283d8
 +        int expectedPos = HashCommon.mix(data.hashCode()) & this.mask;
 +
 +        int toRemovePos = expectedPos;
-+        FluidDirectionEntry<T> entryToRemove = this.entries[toRemovePos];
++        FluidDirectionEntry entryToRemove = this.entries[toRemovePos];
 +
 +        for (int i = expectedPos + 1; i < expectedPos + this.maxDistance; i++) {
 +            int pos = i & this.mask;
-+            FluidDirectionEntry<T> entry = this.entries[pos];
++            FluidDirectionEntry entry = this.entries[pos];
 +            if (entry.getValue() < entryToRemove.getValue()) {
 +                toRemovePos = pos;
 +                entryToRemove = entry;
@@ -1568,8 +1562,49 @@ index 0000000000000000000000000000000000000000..11279fb136bbaf3e51d9b080a9e283d8
 +        this.entries[toRemovePos] = new FluidDirectionEntry(data, flag);
 +    }
 +}
+diff --git a/src/main/java/gg/airplane/structs/LinkedHashSetArrayList.java b/src/main/java/gg/airplane/structs/LinkedHashSetArrayList.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..36eea0acd815e08e0be10bf55541ea0bb605b8f5
+--- /dev/null
++++ b/src/main/java/gg/airplane/structs/LinkedHashSetArrayList.java
+@@ -0,0 +1,35 @@
++package gg.airplane.structs;
++
++import java.util.AbstractSet;
++import java.util.ArrayList;
++import java.util.Iterator;
++import java.util.List;
++
++/*
++ * Used when you want fast iteration more than fast contain/remove
++ */
++public class LinkedHashSetArrayList<E> extends AbstractSet<E> {
++    private final List<E> internal = new ArrayList<>();
++
++    @Override
++    public boolean add(E e) {
++        if (this.internal.contains(e)) {
++            return false;
++        }
++        return this.internal.add(e);
++    }
++
++    @Override
++    public Iterator<E> iterator() {
++        return this.internal.iterator();
++    }
++
++    public E get(int index) {
++        return this.internal.get(index);
++    }
++
++    @Override
++    public int size() {
++        return this.internal.size();
++    }
++}
 diff --git a/src/main/java/net/minecraft/core/BlockPosition.java b/src/main/java/net/minecraft/core/BlockPosition.java
-index 8edc279e7a3fdfb7e10718f1deee34b7e3fb2f28..3c51ee00aa53e561c02bb779c7115d8475d70ed7 100644
+index 6a6381e85fef2ae2b9b5e6dff0b7917b92fa01e5..2685a395a2eff9083cd8c654c4b7e2141b0ca99b 100644
 --- a/src/main/java/net/minecraft/core/BlockPosition.java
 +++ b/src/main/java/net/minecraft/core/BlockPosition.java
 @@ -438,12 +438,26 @@ public class BlockPosition extends BaseBlockPosition {
@@ -2124,9 +2159,18 @@ index bc8786e2aaeab4dbae4e9c7666ad816bc5bfac3f..09133c5822bc1386bc3d8a5f3c941964
  
          this.g.long2ObjectEntrySet().removeIf((entry) -> {
 diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/PathfinderGoalSelector.java b/src/main/java/net/minecraft/world/entity/ai/goal/PathfinderGoalSelector.java
-index 637928664f8c7b1c694a234e507c20724294e450..02e8288473138dcea008d6157318758e8d7ee3be 100644
+index 637928664f8c7b1c694a234e507c20724294e450..697e666a027d5e2ace7d0758909be5a658c480d2 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/goal/PathfinderGoalSelector.java
 +++ b/src/main/java/net/minecraft/world/entity/ai/goal/PathfinderGoalSelector.java
+@@ -28,7 +28,7 @@ public class PathfinderGoalSelector {
+         }
+     };
+     private final Map<PathfinderGoal.Type, PathfinderGoalWrapped> c = new EnumMap(PathfinderGoal.Type.class);
+-    private final Set<PathfinderGoalWrapped> d = Sets.newLinkedHashSet(); public final Set<PathfinderGoalWrapped> getTasks() { return d; }// Paper - OBFHELPER // Paper - private -> public
++    private final gg.airplane.structs.LinkedHashSetArrayList<PathfinderGoalWrapped> d = new gg.airplane.structs.LinkedHashSetArrayList<>(); public final Set<PathfinderGoalWrapped> getTasks() { return d; }// Paper - OBFHELPER // Paper - private -> public // Airplane - it's a set, but it's an arraylist
+     private final Supplier<GameProfilerFiller> e;
+     private final EnumSet<PathfinderGoal.Type> f = EnumSet.noneOf(PathfinderGoal.Type.class); // Paper unused, but dummy to prevent plugins from crashing as hard. Theyll need to support paper in a special case if this is super important, but really doesn't seem like it would be.
+     private final OptimizedSmallEnumSet<PathfinderGoal.Type> goalTypes = new OptimizedSmallEnumSet<>(PathfinderGoal.Type.class); // Paper - remove streams from pathfindergoalselector
 @@ -44,9 +44,14 @@ public class PathfinderGoalSelector {
      }
  
@@ -2145,6 +2189,47 @@ index 637928664f8c7b1c694a234e507c20724294e450..02e8288473138dcea008d6157318758e
      }
      public boolean hasTasks() {
          for (PathfinderGoalWrapped task : getTasks()) {
+@@ -80,8 +85,11 @@ public class PathfinderGoalSelector {
+ 
+         gameprofilerfiller.enter("goalCleanup");
+         // Paper start - remove streams from pathfindergoalselector
+-        for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
+-            PathfinderGoalWrapped wrappedGoal = iterator.next();
++        // Airplane start - remove iterators from pathfindergoalselector
++        //for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
++        //    PathfinderGoalWrapped wrappedGoal = iterator.next();
++        for (int goalIndex = 0; goalIndex < this.d.size(); goalIndex++) {
++            PathfinderGoalWrapped wrappedGoal = this.d.get(goalIndex);
+             if (!wrappedGoal.g()) {
+                 continue;
+             }
+@@ -100,8 +108,10 @@ public class PathfinderGoalSelector {
+         gameprofilerfiller.exit();
+         gameprofilerfiller.enter("goalUpdate");
+         // Paper start - remove streams from pathfindergoalselector
+-        goal_update_loop: for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
+-            PathfinderGoalWrapped wrappedGoal = iterator.next();
++        // Airplane start - remove iterators from pathfindergoalselector
++        goal_update_loop: for (int goalIndex = 0; goalIndex < this.d.size(); goalIndex++) { //for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
++            PathfinderGoalWrapped wrappedGoal = this.d.get(goalIndex);
++            // Airplane end
+             if (wrappedGoal.g()) {
+                 continue;
+             }
+@@ -144,8 +154,11 @@ public class PathfinderGoalSelector {
+         gameprofilerfiller.exit();
+         gameprofilerfiller.enter("goalTick");
+         // Paper start - remove streams from pathfindergoalselector
+-        for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
+-            PathfinderGoalWrapped wrappedGoal = iterator.next();
++        // Airplane start - remove iterators from pathfindergoalselector
++        //for (Iterator<PathfinderGoalWrapped> iterator = this.d.iterator(); iterator.hasNext();) {
++        //    PathfinderGoalWrapped wrappedGoal = iterator.next();
++        for (int goalIndex = 0; goalIndex < this.d.size(); goalIndex++) { PathfinderGoalWrapped wrappedGoal = this.d.get(goalIndex);
++        // Airplane end
+             if (wrappedGoal.g()) {
+                 wrappedGoal.e();
+             }
 diff --git a/src/main/java/net/minecraft/world/entity/ai/navigation/NavigationAbstract.java b/src/main/java/net/minecraft/world/entity/ai/navigation/NavigationAbstract.java
 index 148bdbc2cffb002d8b6dd05e70854ab503804949..48e6a4c588ef39a4bde067d79b96a656c68750ce 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/navigation/NavigationAbstract.java
@@ -2522,6 +2607,64 @@ index e112d149fc3a7af7f0c9a5280c94c9b03b2aba2d..d2afc367fb393c6206f9cd599d460329
          AutoRecipeStackManager autorecipestackmanager = new AutoRecipeStackManager();
          int i = 0;
  
+diff --git a/src/main/java/net/minecraft/world/level/GameRules.java b/src/main/java/net/minecraft/world/level/GameRules.java
+index 3783f3a83e3e70d77cf0fa1021f62a89c5950af5..d0c63be6ebfa2f95fb3d63eed2e11b1c5cd6384e 100644
+--- a/src/main/java/net/minecraft/world/level/GameRules.java
++++ b/src/main/java/net/minecraft/world/level/GameRules.java
+@@ -86,6 +86,7 @@ public class GameRules {
+     public static final GameRules.GameRuleKey<GameRules.GameRuleBoolean> FORGIVE_DEAD_PLAYERS = a("forgiveDeadPlayers", GameRules.GameRuleCategory.MOBS, GameRules.GameRuleBoolean.b(true));
+     public static final GameRules.GameRuleKey<GameRules.GameRuleBoolean> UNIVERSAL_ANGER = a("universalAnger", GameRules.GameRuleCategory.MOBS, GameRules.GameRuleBoolean.b(false));
+     private final Map<GameRules.GameRuleKey<?>, GameRules.GameRuleValue<?>> J;
++    private final GameRules.GameRuleValue<?>[] gameruleArray;
+ 
+     private static <T extends GameRules.GameRuleValue<T>> GameRules.GameRuleKey<T> a(String s, GameRules.GameRuleCategory gamerules_gamerulecategory, GameRules.GameRuleDefinition<T> gamerules_gameruledefinition) {
+         GameRules.GameRuleKey<T> gamerules_gamerulekey = new GameRules.GameRuleKey<>(s, gamerules_gamerulecategory);
+@@ -104,17 +105,31 @@ public class GameRules {
+     }
+ 
+     public GameRules() {
+-        this.J = (Map) GameRules.I.entrySet().stream().collect(ImmutableMap.toImmutableMap(Entry::getKey, (entry) -> {
++        // Airplane start - use this()
++        this((Map) GameRules.I.entrySet().stream().collect(ImmutableMap.toImmutableMap(Entry::getKey, (entry) -> {
+             return ((GameRules.GameRuleDefinition) entry.getValue()).getValue();
+-        }));
++        })));
++        // Airplane end
+     }
+ 
+     private GameRules(Map<GameRules.GameRuleKey<?>, GameRules.GameRuleValue<?>> map) {
+         this.J = map;
++
++        int arraySize = map.keySet().stream().mapToInt(key -> key.gameRuleIndex).max().orElse(-1) + 1;
++        GameRules.GameRuleValue<?>[] values = new GameRules.GameRuleValue[arraySize];
++
++        for (Entry<GameRuleKey<?>, GameRuleValue<?>> entry : map.entrySet()) {
++            values[entry.getKey().gameRuleIndex] = entry.getValue();
++        }
++
++        this.gameruleArray = values;
+     }
+ 
+     public <T extends GameRules.GameRuleValue<T>> T get(GameRules.GameRuleKey<T> gamerules_gamerulekey) {
+-        return (T) this.J.get(gamerules_gamerulekey); // CraftBukkit - decompile error
++        // Airplane start
++        return gamerules_gamerulekey == null ? null : (T) this.gameruleArray[gamerules_gamerulekey.gameRuleIndex];
++        //return (T) this.J.get(gamerules_gamerulekey); // CraftBukkit - decompile error
++        // Airplane end
+     }
+ 
+     public NBTTagCompound a() {
+@@ -357,6 +372,10 @@ public class GameRules {
+     }
+ 
+     public static final class GameRuleKey<T extends GameRules.GameRuleValue<T>> {
++        // Airplane start
++        private static int lastGameRuleIndex = 0;
++        public final int gameRuleIndex = lastGameRuleIndex++;
++        // Airplane end
+ 
+         private final String a;
+         private final GameRules.GameRuleCategory b;
 diff --git a/src/main/java/net/minecraft/world/level/IBlockAccess.java b/src/main/java/net/minecraft/world/level/IBlockAccess.java
 index e612e1d30f76e217b1aa23488ab025adce048f57..c9198d242b9053fad6fa5b53c1894679002d50a7 100644
 --- a/src/main/java/net/minecraft/world/level/IBlockAccess.java
@@ -2927,7 +3070,7 @@ index ec2b238480413ba9c123d9ddeaa787d9520e1b74..bf96f9e538fc29ca914536e8a7ce727e
  
                  if (nibblearray != null && !nibblearray.c()) {
 diff --git a/src/main/java/net/minecraft/world/level/material/FluidTypeFlowing.java b/src/main/java/net/minecraft/world/level/material/FluidTypeFlowing.java
-index 6bb4ec00e40795ced73648fefcd1f5027e0113cd..b14b0134b42aa6d1eb285aa453ec6067cc702878 100644
+index 6bb4ec00e40795ced73648fefcd1f5027e0113cd..3b8fa837db21c5f67eab2ff8752e906ea97c288d 100644
 --- a/src/main/java/net/minecraft/world/level/material/FluidTypeFlowing.java
 +++ b/src/main/java/net/minecraft/world/level/material/FluidTypeFlowing.java
 @@ -45,6 +45,8 @@ public abstract class FluidTypeFlowing extends FluidType {
@@ -2946,8 +3089,8 @@ index 6bb4ec00e40795ced73648fefcd1f5027e0113cd..b14b0134b42aa6d1eb285aa453ec6067
 +     */
 +    private static final ThreadLocal<gg.airplane.structs.FluidDirectionCache<Block.a>> localFluidDirectionCache = ThreadLocal.withInitial(() -> {
 +        // Airplane todo - mess with this number for performance
-+        //  with 1024 it seems very infrequent on a small world that it has to remove old entries
-+        return new gg.airplane.structs.FluidDirectionCache<>(1024);
++        //  with 2048 it seems very infrequent on a small world that it has to remove old entries
++        return new gg.airplane.structs.FluidDirectionCache<>(2048);
 +    });
 +    // Airplane end
      private final Map<Fluid, VoxelShape> f = Maps.newIdentityHashMap();
@@ -3056,6 +3199,57 @@ index 95d0c9f22d79194ca83ca6f6a8e6d91180a3c8da..20cc04be75ab202d4c4ee9a07e9876ce
          }
  
          public LootTableInfo build(LootContextParameterSet lootcontextparameterset) {
+diff --git a/src/main/java/net/minecraft/world/phys/shapes/VoxelShapeCollisionEntity.java b/src/main/java/net/minecraft/world/phys/shapes/VoxelShapeCollisionEntity.java
+index dcb3e4b0cf34699ed77208f8122710bbdfa3d063..a51b47892c726f4b4b10d870991e9b8517f57fb7 100644
+--- a/src/main/java/net/minecraft/world/phys/shapes/VoxelShapeCollisionEntity.java
++++ b/src/main/java/net/minecraft/world/phys/shapes/VoxelShapeCollisionEntity.java
+@@ -23,7 +23,8 @@ public class VoxelShapeCollisionEntity implements VoxelShapeCollision {
+     };
+     private final boolean b;
+     private final double c;
+-    private final Item d;
++    private Item d; // Airplane
++    private Entity entity; // Airplane
+     private final Predicate<FluidType> e;
+ 
+     protected VoxelShapeCollisionEntity(boolean flag, double d0, Item item, Predicate<FluidType> predicate) {
+@@ -31,10 +32,13 @@ public class VoxelShapeCollisionEntity implements VoxelShapeCollision {
+         this.c = d0;
+         this.d = item;
+         this.e = predicate;
++        this.entity = null; // Airplane
+     }
+ 
+     @Deprecated
+     protected VoxelShapeCollisionEntity(Entity entity) {
++        // Airplane start - compile fixes
++        /*
+         boolean flag = entity.by();
+         double d0 = entity.locY();
+         Item item = entity instanceof EntityLiving ? ((EntityLiving) entity).getItemInMainHand().getItem() : Items.AIR;
+@@ -50,12 +54,21 @@ public class VoxelShapeCollisionEntity implements VoxelShapeCollision {
+                 return false;
+             };
+         }
++         */
+ 
+-        this(flag, d0, item, predicate);
++        this(
++            entity.by(),
++            entity.locY(),
++            null, //entity instanceof EntityLiving ? ((EntityLiving) entity).getItemInMainHand().getItem() : Items.AIR, // Airplane - lazy
++            entity instanceof EntityLiving ? ((EntityLiving) entity)::a : (fluidtype) -> false
++        );
++        this.entity = entity;
++        // Airplane end
+     }
+ 
+     @Override
+     public boolean a(Item item) {
++        if (this.d == null) this.d = this.entity instanceof EntityLiving ? ((EntityLiving) this.entity).getItemInMainHand().getItem() : Items.AIR; // Airplane
+         return this.d == item;
+     }
+ 
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 index 55f2834373ccc7362836b4fab4ae2f069f31fd63..6aa14f959e8f53ad16839e94315eae0727ad0b42 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
