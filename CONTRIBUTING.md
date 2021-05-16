@@ -206,4 +206,4 @@ return this.world.purpurConfig.useInhabitedTime ? this.w : 0;
 ```
 
 ### Naming your Commits/PRs
-We are trying to use a new naming system where all (or most) commits pushed to master are prefixed with a tag like `[feat]`, `[fix]`, `[meta]`, etc and would appreciate if this were done in PR titles as well. While this is by no means a requirement, it allows users to see what's in a new build without reading the commit or even the entire message, and makes it easier to find a specific commit as well.
+We are trying to use a new naming system where all (or most) patches are prefixed with a tag like `[feat]`, `[fix]`, `[meta]`, etc and would appreciate if this were done in PR titles as well. While this is by no means a requirement, it allows users to see what's in a new build without reading the commit or even the entire message, and makes it easier to find a specific commit as well.
