@@ -91,7 +91,7 @@ This method has the benefit of being able to compile to test your change without
 
 
 ## PR Policy
-We'll accept changes that make sense. You should be able to justify their existence, along with any maintenance costs that come with them. Remember, these changes will affect everyone who runs Paper, not just you and your server.
+We'll accept changes that make sense. You should be able to justify their existence, along with any maintenance costs that come with them. Remember, these changes will affect everyone who runs Purpur, not just you and your server.
 While we will fix minor formatting issues, you should stick to the guide below when making and submitting changes.
 
 ## Formatting
@@ -204,3 +204,6 @@ Again, notice that the field is always public, but the setter is always private.
 ```java
 return this.world.purpurConfig.useInhabitedTime ? this.w : 0;
 ```
+
+### Naming your Commits/PRs
+We are trying to use a new naming system where all (or most) commits pushed to master are prefixed with a tag like `[feat]`, `[fix]`, `[meta]`, etc and would appreciate if this were done in PR titles as well. While this is by no means a requirement, it allows users to see what's in a new build without reading the commit or even the entire message, and makes it easier to find a specific commit as well.
