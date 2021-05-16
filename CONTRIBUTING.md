@@ -205,5 +205,12 @@ Again, notice that the field is always public, but the setter is always private.
 return this.world.purpurConfig.useInhabitedTime ? this.w : 0;
 ```
 
-### Naming your Commits/PRs
-We are trying to use a new naming system where all (or most) patches are prefixed with a tag like `[feat]`, `[fix]`, `[meta]`, etc and would appreciate if this were done in PR titles as well. While this is by no means a requirement, it allows users to see what's in a new patch without reading the file or even the entire message, and makes it easier to find a specific patches as well.
+### Naming your Patches/PRs
+We use a naming system with a similar concept to [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary).
+
+Patches are prefixed with a type (`[feat]`, `[fix]`, `[meta]`, `[refactor]`, `[perf]`). The type should also appear in your PR title. 
+
+This lets us and users:
+* know what type of PR it is
+* know what the patches do at a glance
+* categorize the patches
