@@ -1562,6 +1562,117 @@ index 0000000000000000000000000000000000000000..aa8467b9dda1f7707e41f50ac7b3e9d7
 +        this.entries[toRemovePos] = new FluidDirectionEntry(data, flag);
 +    }
 +}
+diff --git a/src/main/java/gg/airplane/structs/ItemListWithBitset.java b/src/main/java/gg/airplane/structs/ItemListWithBitset.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd3b58cb1a48da2f5259b0c64290b2be2ff1fdf7
+--- /dev/null
++++ b/src/main/java/gg/airplane/structs/ItemListWithBitset.java
+@@ -0,0 +1,105 @@
++package gg.airplane.structs;
++
++import net.minecraft.core.NonNullList;
++import net.minecraft.world.item.ItemStack;
++import org.apache.commons.lang.Validate;
++import org.jetbrains.annotations.NotNull;
++
++import java.util.Arrays;
++
++public class ItemListWithBitset extends NonNullList<ItemStack> {
++    public static ItemListWithBitset fromNonNullList(NonNullList<ItemStack> list) {
++        if (list instanceof ItemListWithBitset) {
++            return (ItemListWithBitset) list;
++        }
++        return new ItemListWithBitset(list);
++    }
++
++    private static ItemStack[] createArray(int size) {
++        ItemStack[] array = new ItemStack[size];
++        Arrays.fill(array, ItemStack.NULL_ITEM);
++        return array;
++    }
++
++    private final ItemStack[] items;
++
++    private int bitSet = 0;
++    private final int allBits;
++
++    private ItemListWithBitset(NonNullList<ItemStack> list) {
++        this(list.size());
++
++        for (int i = 0; i < list.size(); i++) {
++            this.set(i, list.get(i));
++        }
++    }
++
++    public ItemListWithBitset(int size) {
++        super(null, ItemStack.NULL_ITEM);
++
++        Validate.isTrue(size < Integer.BYTES * 8, "size is too large");
++
++        this.items = createArray(size);
++        this.allBits = ((1 << size) - 1);
++    }
++
++    public boolean isCompletelyEmpty() {
++        return this.bitSet == 0;
++    }
++
++    public boolean hasFullStacks() {
++        return (this.bitSet & this.allBits) == allBits;
++    }
++
++    @Override
++    public ItemStack set(int index, ItemStack itemStack) {
++        ItemStack existing = this.items[index];
++
++        this.items[index] = itemStack;
++
++        if (itemStack == ItemStack.NULL_ITEM) {
++            this.bitSet &= ~(1 << index);
++        } else {
++            this.bitSet |= 1 << index;
++        }
++
++        return existing;
++    }
++
++    @NotNull
++    @Override
++    public ItemStack get(int var0) {
++        return this.items[var0];
++    }
++
++    @Override
++    public int size() {
++        return this.items.length;
++    }
++
++    @Override
++    public void clear() {
++        Arrays.fill(this.items, ItemStack.NULL_ITEM);
++    }
++
++    // these are unsupported for block inventories which have a static size
++    @Override
++    public void add(int var0, ItemStack var1) {
++        throw new UnsupportedOperationException();
++    }
++
++    @Override
++    public ItemStack remove(int var0) {
++        throw new UnsupportedOperationException();
++    }
++
++    @Override
++    public String toString() {
++        return "ItemListWithBitset{" +
++          "items=" + Arrays.toString(items) +
++          ", bitSet=" + Long.toString(bitSet, 2) +
++          ", allBits=" + Long.toString(allBits, 2) +
++          ", size=" + this.items.length +
++          '}';
++    }
++}
 diff --git a/src/main/java/gg/airplane/structs/LinkedHashSetArrayList.java b/src/main/java/gg/airplane/structs/LinkedHashSetArrayList.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..36eea0acd815e08e0be10bf55541ea0bb605b8f5
@@ -1648,10 +1759,10 @@ index 7918d830a4aef09c9f517284e83a9376299116ad..0a40df2151bd388b6633a6f50b14f1f4
          return enumdirection;
      }));
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 38547858a415ac36d6c04070d27933a6552b1612..073df4e4e21b7a57e8d4159e2c5d68bda11e3d51 100644
+index 72d1c1202581abc284848000663ada5514cfcb15..06d0592bebaefc16c1995781a9e8a3554f4a3205 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
-@@ -1647,7 +1647,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+@@ -1649,7 +1649,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
      }
  
      public String getServerModName() {
@@ -1660,7 +1771,7 @@ index 38547858a415ac36d6c04070d27933a6552b1612..073df4e4e21b7a57e8d4159e2c5d68bd
      }
  
      public CrashReport b(CrashReport crashreport) {
-@@ -2197,7 +2197,11 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+@@ -2199,7 +2199,11 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
          }
      }
  
@@ -1699,7 +1810,7 @@ index 58e14c174cdf76cdea861fd3d4d1195fa27f888a..fedd0482bd4ff8cc5857a71f509700df
          boolean flag = this.ticketLevelPropagator.propagateUpdates(); // Tuinity - replace ticket level propagator
  
 diff --git a/src/main/java/net/minecraft/server/level/ChunkProviderServer.java b/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
-index fe040615ff03478a20cdf8376f89a6b7d100ba61..207a9c3928aad7c6e89a120b54d87e003ebd232c 100644
+index fe040615ff03478a20cdf8376f89a6b7d100ba61..06864951af539e22f6e459c0f0c097b7c2fb929b 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
 @@ -1000,6 +1000,7 @@ public class ChunkProviderServer extends IChunkProvider {
@@ -1710,6 +1821,56 @@ index fe040615ff03478a20cdf8376f89a6b7d100ba61..207a9c3928aad7c6e89a120b54d87e00
              int k = this.world.getGameRules().getInt(GameRules.RANDOM_TICK_SPEED);
              boolean flag2 = world.ticksPerAnimalSpawns != 0L && worlddata.getTime() % world.ticksPerAnimalSpawns == 0L; // CraftBukkit
  
+@@ -1032,10 +1033,12 @@ public class ChunkProviderServer extends IChunkProvider {
+             //Collections.shuffle(list); // Paper
+             // Paper - moved up
+             // Tuinity start - optimise chunk tick iteration
+-            com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Chunk> iterator = this.entityTickingChunks.iterator();
++            // Airplane start - use raw iterator
++            //com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Chunk> iterator = this.entityTickingChunks.iterator();
++            int iterator = this.entityTickingChunks.createRawIterator();
+             try {
+-            while (iterator.hasNext()) {
+-                Chunk chunk = iterator.next();
++            while (iterator != -1) {
++                Chunk chunk = this.entityTickingChunks.rawGet(iterator);
+                 PlayerChunk playerchunk = chunk.playerChunk;
+                 if (playerchunk != null) { // make sure load event has been called along with the load logic we put there
+                     // Tuinity end - optimise chunk tick iteration
+@@ -1063,10 +1066,12 @@ public class ChunkProviderServer extends IChunkProvider {
+                         }
+                     }
+                 }
++                iterator = this.entityTickingChunks.advanceRawIterator(iterator);
+             } // Tuinity start - optimise chunk tick iteration
+             } finally {
+-                iterator.finishedIterating();
++                this.entityTickingChunks.finishRawIterator();
+             }
++            // Airplane end
+             // Tuinity end - optimise chunk tick iteration
+             this.world.getMethodProfiler().enter("customSpawners");
+             if (flag1) {
+diff --git a/src/main/java/net/minecraft/server/level/EntityTrackerEntry.java b/src/main/java/net/minecraft/server/level/EntityTrackerEntry.java
+index 67ca28463f5add7c18f7f16b918c3f36f8feeeda..6aad662d823e0a64b8e18156b5f084399bc4f228 100644
+--- a/src/main/java/net/minecraft/server/level/EntityTrackerEntry.java
++++ b/src/main/java/net/minecraft/server/level/EntityTrackerEntry.java
+@@ -186,6 +186,7 @@ public class EntityTrackerEntry {
+                     boolean flag4 = k < -32768L || k > 32767L || l < -32768L || l > 32767L || i1 < -32768L || i1 > 32767L;
+ 
+                     if (!flag4 && this.o <= 400 && !this.q && this.r == this.tracker.isOnGround() && !(com.tuinity.tuinity.config.TuinityConfig.sendFullPosForHardCollidingEntities && this.tracker.hardCollides())) { // Tuinity - send full pos for hard colliding entities to prevent collision problems due to desync
++                        if (flag2 || flag3 || this.tracker instanceof EntityArrow) { // Airplane
+                         if ((!flag2 || !flag3) && !(this.tracker instanceof EntityArrow)) {
+                             if (flag2) {
+                                 packet1 = new PacketPlayOutEntity.PacketPlayOutRelEntityMove(this.tracker.getId(), (short) ((int) k), (short) ((int) l), (short) ((int) i1), this.tracker.isOnGround());
+@@ -195,6 +196,7 @@ public class EntityTrackerEntry {
+                         } else {
+                             packet1 = new PacketPlayOutEntity.PacketPlayOutRelEntityMoveLook(this.tracker.getId(), (short) ((int) k), (short) ((int) l), (short) ((int) i1), (byte) i, (byte) j, this.tracker.isOnGround());
+                         }
++                        } // Airplane
+                     } else {
+                         this.r = this.tracker.isOnGround();
+                         this.o = 0;
 diff --git a/src/main/java/net/minecraft/server/level/PlayerChunk.java b/src/main/java/net/minecraft/server/level/PlayerChunk.java
 index 86f156587a0939b28c5cf6f64907255c1c4f8b35..06157bb07cce3ba24087ceaca7138b5609b37b5b 100644
 --- a/src/main/java/net/minecraft/server/level/PlayerChunk.java
@@ -1741,7 +1902,7 @@ index 86f156587a0939b28c5cf6f64907255c1c4f8b35..06157bb07cce3ba24087ceaca7138b56
          this.u = playerchunk_c;
          this.players = playerchunk_d;
 diff --git a/src/main/java/net/minecraft/server/level/PlayerChunkMap.java b/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
-index 33429be7da4d4c2b2469b8140e46e66d9921652c..0b48961a18da76dd25c0930f393f0ac9f709ad78 100644
+index 33429be7da4d4c2b2469b8140e46e66d9921652c..c0d2b7fe726ea92e18871e3714ca9c249492ac93 100644
 --- a/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
 @@ -705,7 +705,9 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
@@ -1776,7 +1937,39 @@ index 33429be7da4d4c2b2469b8140e46e66d9921652c..0b48961a18da76dd25c0930f393f0ac9
  
          return Math.max(Math.abs(k), Math.abs(l));
      }
-@@ -2549,11 +2555,17 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
+@@ -2170,10 +2176,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+     private final void processTrackQueue() {
+         this.world.timings.tracker1.startTiming();
+         try {
+-            com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Chunk> iterator = this.world.getChunkProvider().entityTickingChunks.iterator();
++            // Airplane start - raw iterator
++            //com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Chunk> iterator = this.world.getChunkProvider().entityTickingChunks.iterator();
++            com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<Chunk> chunks = this.world.getChunkProvider().entityTickingChunks;
++            int iterator = chunks.createRawIterator();
+             try {
+-            while (iterator.hasNext()) {
+-                Chunk chunk = iterator.next();
++            while (iterator != -1) {
++                Chunk chunk = chunks.rawGet(iterator);
+                 Entity[] entities = chunk.entities.getRawData();
+                 for (int i = 0, len = chunk.entities.size(); i < len; ++i) {
+                     Entity entity = entities[i];
+@@ -2183,10 +2192,13 @@ public class PlayerChunkMap extends IChunkLoader implements PlayerChunk.d {
+                         tracker.trackerEntry.tick();
+                     }
+                 }
++
++                iterator = chunks.advanceRawIterator(iterator);
+             }
+             } finally {
+-                iterator.finishedIterating();
++                chunks.finishRawIterator();
+             }
++            // Airplane end
+         } finally {
+             this.world.timings.tracker1.stopTiming();
+         }
+@@ -2549,11 +2561,17 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
                      boolean flag1 = this.tracker.attachedToPlayer;
  
                      if (!flag1) {
@@ -1796,7 +1989,7 @@ index 33429be7da4d4c2b2469b8140e46e66d9921652c..0b48961a18da76dd25c0930f393f0ac9
                          }
                      }
  
-@@ -2583,8 +2595,10 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
+@@ -2583,8 +2601,10 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
          }
  
          private int b() {
@@ -1808,7 +2001,7 @@ index 33429be7da4d4c2b2469b8140e46e66d9921652c..0b48961a18da76dd25c0930f393f0ac9
              Iterator iterator = collection.iterator();
  
              while (iterator.hasNext()) {
-@@ -2596,6 +2610,8 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
+@@ -2596,6 +2616,8 @@ Sections go from 0..16. Now whenever a section is not empty, it can potentially
                      i = j;
                  }
              }
@@ -1818,10 +2011,33 @@ index 33429be7da4d4c2b2469b8140e46e66d9921652c..0b48961a18da76dd25c0930f393f0ac9
              return this.a(i);
          }
 diff --git a/src/main/java/net/minecraft/server/level/WorldServer.java b/src/main/java/net/minecraft/server/level/WorldServer.java
-index 479605b5f8660b6968027a3d7b59075a04e44521..4ed80e3bda7f984fa00320be647ac450c94fd72b 100644
+index 479605b5f8660b6968027a3d7b59075a04e44521..a7e34fc3f648ebc7b9d3f0ea5aae527680f54829 100644
 --- a/src/main/java/net/minecraft/server/level/WorldServer.java
 +++ b/src/main/java/net/minecraft/server/level/WorldServer.java
-@@ -1107,7 +1107,28 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -846,6 +846,22 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+         return result;
+     }
+ 
++    // Airplane start - skip type lookup if already completed, but still run check
++    public TileEntity getAndCheckTileEntity(IBlockData data, BlockPosition pos) {
++        TileEntity result = super.getTileEntity(pos, false);
++        Block type = data.getBlock();
++
++        // copied from above
++        if (result != null && type != Blocks.AIR) {
++            if (!result.getTileType().isValidBlock(type)) {
++                result = fixTileEntity(pos, type, result);
++            }
++        }
++
++        return result;
++    }
++    // Airplane end
++
+     private TileEntity fixTileEntity(BlockPosition pos, Block type, TileEntity found) {
+         this.getServer().getLogger().log(Level.SEVERE, "Block at {0}, {1}, {2} is {3} but has {4}" + ". "
+                 + "Bukkit will attempt to fix this, but there may be additional damage that we cannot recover.", new Object[]{pos.getX(), pos.getY(), pos.getZ(), type, found});
+@@ -1107,7 +1123,28 @@ public class WorldServer extends World implements GeneratorAccessSeed {
  
                  gameprofilerfiller.enter("tick");
                  if (!entity.dead && !(entity instanceof EntityComplexPart)) {
@@ -1850,7 +2066,7 @@ index 479605b5f8660b6968027a3d7b59075a04e44521..4ed80e3bda7f984fa00320be647ac450
                  }
  
                  gameprofilerfiller.exit();
-@@ -1202,6 +1223,8 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1202,6 +1239,8 @@ public class WorldServer extends World implements GeneratorAccessSeed {
      private final BiomeBase[] biomeBaseCache = new BiomeBase[1];
      // Tuinity end - optimise chunk ice snow ticking
  
@@ -1859,7 +2075,7 @@ index 479605b5f8660b6968027a3d7b59075a04e44521..4ed80e3bda7f984fa00320be647ac450
      public void a(Chunk chunk, int i) { final int randomTickSpeed = i; // Paper
          ChunkCoordIntPair chunkcoordintpair = chunk.getPos();
          boolean flag = this.isRaining();
-@@ -1212,7 +1235,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1212,7 +1251,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          gameprofilerfiller.enter("thunder");
          final BlockPosition.MutableBlockPosition blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
  
@@ -1868,7 +2084,7 @@ index 479605b5f8660b6968027a3d7b59075a04e44521..4ed80e3bda7f984fa00320be647ac450
              blockposition.setValues(this.a(this.a(j, 0, k, 15))); // Paper
              if (this.isRainingAt(blockposition)) {
                  DifficultyDamageScaler difficultydamagescaler = this.getDamageScaler(blockposition);
-@@ -1236,7 +1259,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1236,7 +1275,7 @@ public class WorldServer extends World implements GeneratorAccessSeed {
          }
  
          gameprofilerfiller.exitEnter("iceandsnow");
@@ -1877,7 +2093,7 @@ index 479605b5f8660b6968027a3d7b59075a04e44521..4ed80e3bda7f984fa00320be647ac450
              // Paper start - optimise chunk ticking
              // Tuinity start - optimise chunk ice snow ticking
              BiomeBase[] biomeCache = this.biomeBaseCache;
-@@ -1449,9 +1472,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
+@@ -1449,9 +1488,14 @@ public class WorldServer extends World implements GeneratorAccessSeed {
                  ++entity.ticksLived;
                  GameProfilerFiller gameprofilerfiller = this.getMethodProfiler();
  
@@ -1920,6 +2136,132 @@ index cc566784c7dd21cc2c44e0f351347f657e57ddcf..e9e7fcf2b63febe2a7d055826fabb86b
      public static int k(double d0) {
          return d0 == 0.0D ? 0 : (d0 > 0.0D ? 1 : -1);
      }
+diff --git a/src/main/java/net/minecraft/world/IInventory.java b/src/main/java/net/minecraft/world/IInventory.java
+index 774ba6a923f7e329f6af5efc17e1c46e87ed2d77..8faf3850f4c965feec42f6998563b7265a8f599e 100644
+--- a/src/main/java/net/minecraft/world/IInventory.java
++++ b/src/main/java/net/minecraft/world/IInventory.java
+@@ -1,6 +1,8 @@
+ package net.minecraft.world;
+ 
+ import java.util.Set;
++
++import net.minecraft.core.EnumDirection; // Airplane
+ import net.minecraft.world.entity.player.EntityHuman;
+ import net.minecraft.world.item.Item;
+ import net.minecraft.world.item.ItemStack;
+@@ -18,6 +20,70 @@ public interface IInventory extends Clearable {
+ 
+     ItemStack getItem(int i);
+ 
++    // Airplane start - allow the inventory to override and optimize these frequent calls
++    default boolean hasEmptySlot(EnumDirection enumdirection) { // there is a slot with 0 items in it
++        if (this instanceof IWorldInventory) {
++            for (int i : ((IWorldInventory) this).getSlotsForFace(enumdirection)) {
++                if (this.getHopperItem(i).isEmpty()) {
++                    return true;
++                }
++            }
++        } else {
++            int size = this.getSize();
++            for (int i = 0; i < size; i++) {
++                if (this.getHopperItem(i).isEmpty()) {
++                    return true;
++                }
++            }
++        }
++        return false;
++    }
++
++    default boolean isCompletelyFull(EnumDirection enumdirection) { // every stack is maxed
++        if (this instanceof IWorldInventory) {
++            for (int i : ((IWorldInventory) this).getSlotsForFace(enumdirection)) {
++                ItemStack itemStack = this.getHopperItem(i);
++                if (itemStack.getCount() < itemStack.getMaxStackSize()) {
++                    return false;
++                }
++            }
++        } else {
++            int size = this.getSize();
++            for (int i = 0; i < size; i++) {
++                ItemStack itemStack = this.getHopperItem(i);
++                if (itemStack.getCount() < itemStack.getMaxStackSize()) {
++                    return false;
++                }
++            }
++        }
++        return true;
++    }
++
++    default boolean isCompletelyEmpty(EnumDirection enumdirection) {
++        if (this instanceof IWorldInventory) {
++            for (int i : ((IWorldInventory) this).getSlotsForFace(enumdirection)) {
++                if (!this.getHopperItem(i).isEmpty()) {
++                    return false;
++                }
++            }
++        } else {
++            int size = this.getSize();
++            for (int i = 0; i < size; i++) {
++                if (!this.getHopperItem(i).isEmpty()) {
++                    return false;
++                }
++            }
++        }
++        return true;
++    }
++    // Airplane end
++
++    // Airplane start - way for inventories to know it's a hopper, skipping certain steps
++    default ItemStack getHopperItem(int index) {
++        return this.getItem(index);
++    }
++    // Airplane end
++
+     ItemStack splitStack(int i, int j);
+ 
+     ItemStack splitWithoutUpdate(int i);
+diff --git a/src/main/java/net/minecraft/world/InventoryLargeChest.java b/src/main/java/net/minecraft/world/InventoryLargeChest.java
+index 92818df3689e35b921eb04678c84d2dd4b21ddbe..f6b723062a9cd0667efcc0171df71e9df93def06 100644
+--- a/src/main/java/net/minecraft/world/InventoryLargeChest.java
++++ b/src/main/java/net/minecraft/world/InventoryLargeChest.java
+@@ -1,5 +1,6 @@
+ package net.minecraft.world;
+ 
++import net.minecraft.core.EnumDirection; // Airplane
+ import net.minecraft.world.entity.player.EntityHuman;
+ import net.minecraft.world.item.ItemStack;
+ 
+@@ -91,6 +92,30 @@ public class InventoryLargeChest implements IInventory {
+         return i >= this.left.getSize() ? this.right.getItem(i - this.left.getSize()) : this.left.getItem(i);
+     }
+ 
++    // Airplane start
++    @Override
++    public boolean hasEmptySlot(EnumDirection enumdirection) {
++        return this.left.hasEmptySlot(null) || this.right.hasEmptySlot(null);
++    }
++
++    @Override
++    public boolean isCompletelyFull(EnumDirection enumdirection) {
++        return this.left.isCompletelyFull(null) && this.right.isCompletelyFull(null);
++    }
++
++    @Override
++    public boolean isCompletelyEmpty(EnumDirection enumdirection) {
++        return this.left.isCompletelyEmpty(null) && this.right.isCompletelyEmpty(null);
++    }
++    // Airplane end
++
++    // Airplane start
++    @Override
++    public ItemStack getHopperItem(int i) {
++        return i >= this.left.getSize() ? this.right.getHopperItem(i - this.left.getSize()) : this.left.getHopperItem(i);
++    }
++    // Airplane end
++
+     @Override
+     public ItemStack splitStack(int i, int j) {
+         return i >= this.left.getSize() ? this.right.splitStack(i - this.left.getSize(), j) : this.left.splitStack(i, j);
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
 index feab0ae1930b5271fe0d06a40c180317dcbc9d1d..99c93d48726b4b92a341ba98721173df8b4ff30a 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
@@ -2780,10 +3122,19 @@ index 43418273f00f3703c7bd86586847d469af92c18f..d11e79093f9a5121c98b7da840bc79d2
          // Paper end
      }
 diff --git a/src/main/java/net/minecraft/world/level/World.java b/src/main/java/net/minecraft/world/level/World.java
-index af01f5d635eada7175b9d7fdb47a65530686a539..51e6cd6119465f9fd6385072997971449afb5f42 100644
+index 276b1f0c9c9af7db31fba9be0593ae9def540caf..15c4319920246d53be791cc3b4a4705c717a75c5 100644
 --- a/src/main/java/net/minecraft/world/level/World.java
 +++ b/src/main/java/net/minecraft/world/level/World.java
-@@ -69,6 +69,8 @@ import net.minecraft.world.level.saveddata.maps.WorldMap;
+@@ -18,6 +18,8 @@ import java.util.function.Consumer;
+ import java.util.function.Predicate;
+ import java.util.function.Supplier;
+ import javax.annotation.Nullable;
++
++import gg.airplane.AirplaneConfig;
+ import net.minecraft.CrashReport;
+ import net.minecraft.CrashReportSystemDetails;
+ import net.minecraft.ReportedException;
+@@ -69,6 +71,8 @@ import net.minecraft.world.level.saveddata.maps.WorldMap;
  import net.minecraft.world.level.storage.WorldData;
  import net.minecraft.world.level.storage.WorldDataMutable;
  import net.minecraft.world.phys.AxisAlignedBB;
@@ -2792,7 +3143,7 @@ index af01f5d635eada7175b9d7fdb47a65530686a539..51e6cd6119465f9fd638507299797144
  import net.minecraft.world.phys.shapes.OperatorBoolean;
  import net.minecraft.world.phys.shapes.VoxelShape;
  import net.minecraft.world.phys.shapes.VoxelShapeCollision;
-@@ -104,7 +106,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -104,7 +108,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
      //public final List<TileEntity> tileEntityList = Lists.newArrayList(); // Paper - remove unused list
      public final List<TileEntity> tileEntityListTick = Lists.newArrayList();
      protected final List<TileEntity> tileEntityListPending = Lists.newArrayList();
@@ -2801,7 +3152,7 @@ index af01f5d635eada7175b9d7fdb47a65530686a539..51e6cd6119465f9fd638507299797144
      public final Thread serverThread;
      private final boolean debugWorld;
      private int d;
-@@ -378,6 +380,91 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -387,6 +391,91 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          return null;
      }
  
@@ -2893,7 +3244,7 @@ index af01f5d635eada7175b9d7fdb47a65530686a539..51e6cd6119465f9fd638507299797144
      public static boolean isValidLocation(BlockPosition blockposition) {
          return blockposition.isValidLocation(); // Paper - use better/optimized check
      }
-@@ -899,12 +986,17 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -908,12 +997,17 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
          gameprofilerfiller.enter("blockEntities");
          timings.tileEntityTick.startTiming(); // Spigot
          if (!this.tileEntityListUnload.isEmpty()) {
@@ -2911,7 +3262,7 @@ index af01f5d635eada7175b9d7fdb47a65530686a539..51e6cd6119465f9fd638507299797144
              this.tileEntityListUnload.clear();
          }
  
-@@ -1016,19 +1108,19 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+@@ -1025,19 +1119,19 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
  
      public void a(Consumer<Entity> consumer, Entity entity) {
          try {
@@ -2934,6 +3285,14 @@ index af01f5d635eada7175b9d7fdb47a65530686a539..51e6cd6119465f9fd638507299797144
      }
      // Paper start - Prevent armor stands from doing entity lookups
      @Override
+@@ -1723,6 +1817,7 @@ public abstract class World implements GeneratorAccess, AutoCloseable {
+     }
+ 
+     public GameProfilerFiller getMethodProfiler() {
++        if (AirplaneConfig.disableMethodProfiler) return net.minecraft.util.profiling.GameProfilerDisabled.a; // Airplane
+         return (GameProfilerFiller) this.methodProfiler.get();
+     }
+ 
 diff --git a/src/main/java/net/minecraft/world/level/block/Block.java b/src/main/java/net/minecraft/world/level/block/Block.java
 index 7279893d599351785652279c8827fe0efbd72f12..96d7990c66bd569b1b5ee287c0238c7dbb4c503e 100644
 --- a/src/main/java/net/minecraft/world/level/block/Block.java
@@ -2987,6 +3346,246 @@ index 70c32b7a53a1107cced3491ebac19b0eaf4fec2e..3f3e241f3b24d9df9d57760c5515ff02
                  if (iblockdata == null) {
                      continue;
                  }
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/TileEntityChest.java b/src/main/java/net/minecraft/world/level/block/entity/TileEntityChest.java
+index 111f62d0e5b40e945793b8f504f2c035c0884a6a..cfabc9047cd3e972af84700725355d0fe149b221 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/TileEntityChest.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/TileEntityChest.java
+@@ -36,7 +36,7 @@ import org.bukkit.entity.HumanEntity;
+ 
+ public class TileEntityChest extends TileEntityLootable { // Paper - Remove ITickable
+ 
+-    private NonNullList<ItemStack> items;
++    private gg.airplane.structs.ItemListWithBitset items; // Airplane
+     protected float a;
+     protected float b;
+     public int viewingCount;
+@@ -75,9 +75,31 @@ public class TileEntityChest extends TileEntityLootable { // Paper - Remove ITic
+ 
+     protected TileEntityChest(TileEntityTypes<?> tileentitytypes) {
+         super(tileentitytypes);
++        // Airplane start
++        /*
+         this.items = NonNullList.a(27, ItemStack.b);
++         */
++        this.items = new gg.airplane.structs.ItemListWithBitset(27);
++        // Airplane end
+     }
+ 
++    // Airplane start
++    @Override
++    public boolean hasEmptySlot(EnumDirection enumdirection) {
++        return !this.items.hasFullStacks();
++    }
++
++    @Override
++    public boolean isCompletelyFull(EnumDirection enumdirection) {
++        return this.items.hasFullStacks() && super.isCompletelyFull(enumdirection);
++    }
++
++    @Override
++    public boolean isCompletelyEmpty(EnumDirection enumdirection) {
++        return this.items.isCompletelyEmpty() || super.isCompletelyEmpty(enumdirection);
++    }
++    // Airplane end
++
+     public TileEntityChest() {
+         this(TileEntityTypes.CHEST);
+     }
+@@ -95,7 +117,7 @@ public class TileEntityChest extends TileEntityLootable { // Paper - Remove ITic
+     @Override
+     public void load(IBlockData iblockdata, NBTTagCompound nbttagcompound) {
+         super.load(iblockdata, nbttagcompound);
+-        this.items = NonNullList.a(this.getSize(), ItemStack.b);
++        this.items = new gg.airplane.structs.ItemListWithBitset(this.getSize()); // Airplane
+         if (!this.b(nbttagcompound)) {
+             ContainerUtil.b(nbttagcompound, this.items);
+         }
+@@ -295,7 +317,7 @@ public class TileEntityChest extends TileEntityLootable { // Paper - Remove ITic
+ 
+     @Override
+     protected void a(NonNullList<ItemStack> nonnulllist) {
+-        this.items = nonnulllist;
++        this.items = gg.airplane.structs.ItemListWithBitset.fromNonNullList(nonnulllist); // Airplane
+     }
+ 
+     public static int a(IBlockAccess iblockaccess, BlockPosition blockposition) {
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/TileEntityHopper.java b/src/main/java/net/minecraft/world/level/block/entity/TileEntityHopper.java
+index 537dc52e5ff3325555ee6049bc7f277952983b76..056d280c7db6fc532d83b2a547d6a01402a49bd0 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/TileEntityHopper.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/TileEntityHopper.java
+@@ -46,7 +46,7 @@ import org.bukkit.inventory.Inventory;
+ 
+ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITickable {
+ 
+-    private NonNullList<ItemStack> items;
++    private gg.airplane.structs.ItemListWithBitset items; // Airplane
+     private int j;
+     private long k;
+ 
+@@ -82,14 +82,31 @@ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITi
+ 
+     public TileEntityHopper() {
+         super(TileEntityTypes.HOPPER);
+-        this.items = NonNullList.a(5, ItemStack.b);
++        this.items = new gg.airplane.structs.ItemListWithBitset(5); // Airplane
+         this.j = -1;
+     }
+ 
++    // Airplane start
++    @Override
++    public boolean hasEmptySlot(EnumDirection enumdirection) {
++        return !this.items.hasFullStacks();
++    }
++
++    @Override
++    public boolean isCompletelyFull(EnumDirection enumdirection) {
++        return this.items.hasFullStacks() && super.isCompletelyFull(enumdirection);
++    }
++
++    @Override
++    public boolean isCompletelyEmpty(EnumDirection enumdirection) {
++        return this.items.isCompletelyEmpty() || super.isCompletelyEmpty(enumdirection);
++    }
++    // Airplane end
++
+     @Override
+     public void load(IBlockData iblockdata, NBTTagCompound nbttagcompound) {
+         super.load(iblockdata, nbttagcompound);
+-        this.items = NonNullList.a(this.getSize(), ItemStack.b);
++        this.items = new gg.airplane.structs.ItemListWithBitset(this.getSize()); // Airplane
+         if (!this.b(nbttagcompound)) {
+             ContainerUtil.b(nbttagcompound, this.items);
+         }
+@@ -181,16 +198,19 @@ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITi
+     }
+ 
+     private boolean j() {
+-        Iterator iterator = this.items.iterator();
++        // Airplane start - no iterator
++        //Iterator iterator = this.items.iterator();
++        int i = 0;
+ 
+         ItemStack itemstack;
+ 
+         do {
+-            if (!iterator.hasNext()) {
++            if (i >= this.items.size()) {
+                 return true;
+             }
+ 
+-            itemstack = (ItemStack) iterator.next();
++            itemstack = (ItemStack) this.items.get(i++);
++            // Airplane end
+         } while (!itemstack.isEmpty() && itemstack.getCount() == itemstack.getMaxStackSize());
+ 
+         return false;
+@@ -205,7 +225,7 @@ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITi
+         skipPushModeEventFire = skipHopperEvents;
+         boolean foundItem = false;
+         for (int i = 0; i < this.getSize(); ++i) {
+-            ItemStack item = this.getItem(i);
++            ItemStack item = this.getHopperItem(i); // Airplane
+             if (!item.isEmpty()) {
+                 foundItem = true;
+                 ItemStack origItemStack = item;
+@@ -429,14 +449,14 @@ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITi
+     private static boolean anyMatch(IInventory iinventory, EnumDirection enumdirection, java.util.function.BiPredicate<ItemStack, Integer> test) {
+         if (iinventory instanceof IWorldInventory) {
+             for (int i : ((IWorldInventory) iinventory).getSlotsForFace(enumdirection)) {
+-                if (test.test(iinventory.getItem(i), i)) {
++                if (test.test(iinventory.getHopperItem(i), i)) { // Airplane
+                     return true;
+                 }
+             }
+         } else {
+             int size = iinventory.getSize();
+             for (int i = 0; i < size; i++) {
+-                if (test.test(iinventory.getItem(i), i)) {
++                if (test.test(iinventory.getHopperItem(i), i)) { // Airplane
+                     return true;
+                 }
+             }
+@@ -450,12 +470,22 @@ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITi
+ 
+     private boolean b(IInventory iinventory, EnumDirection enumdirection) {
+         // Paper start - no streams
++        // Airplane start - use direct method
++        /*
+         return allMatch(iinventory, enumdirection, STACK_SIZE_TEST);
++        */
++        return iinventory.isCompletelyFull(enumdirection);
++        // Airplane end
+         // Paper end
+     }
+ 
+     private static boolean c(IInventory iinventory, EnumDirection enumdirection) {
++        // Airplane start - use direct method
++        /*
+         return allMatch(iinventory, enumdirection, IS_EMPTY_TEST);
++         */
++        return iinventory.isCompletelyEmpty(enumdirection);
++        // Airplane end
+     }
+ 
+     public static boolean a(IHopper ihopper) {
+@@ -594,7 +624,7 @@ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITi
+ 
+         if (a(iinventory1, itemstack, i, enumdirection)) {
+             boolean flag = false;
+-            boolean flag1 = iinventory1.isEmpty();
++            boolean flag1 = iinventory1.isCompletelyEmpty(enumdirection); // Airplane
+ 
+             if (itemstack1.isEmpty()) {
+                 IGNORE_TILE_UPDATES = true; // Paper
+@@ -677,7 +707,7 @@ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITi
+         if (block instanceof IInventoryHolder) {
+             object = ((IInventoryHolder) block).a(iblockdata, world, blockposition);
+         } else if (block.isTileEntity()) {
+-            TileEntity tileentity = world.getTileEntity(blockposition);
++            TileEntity tileentity = ((net.minecraft.server.level.WorldServer) world).getAndCheckTileEntity(iblockdata, blockposition); // Airplane - skip validation check, since we already looked it up
+ 
+             if (tileentity instanceof IInventory) {
+                 object = (IInventory) tileentity;
+@@ -736,7 +766,7 @@ public class TileEntityHopper extends TileEntityLootable implements IHopper, ITi
+ 
+     @Override
+     protected void a(NonNullList<ItemStack> nonnulllist) {
+-        this.items = nonnulllist;
++        this.items = gg.airplane.structs.ItemListWithBitset.fromNonNullList(nonnulllist); // Airplane
+     }
+ 
+     public void a(Entity entity) {
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/TileEntityLootable.java b/src/main/java/net/minecraft/world/level/block/entity/TileEntityLootable.java
+index f0da819627035bed83561128a11059424d2b7e30..36ef5b11f12da1a7e3c8031ec84d28ba22d59a5c 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/TileEntityLootable.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/TileEntityLootable.java
+@@ -98,7 +98,11 @@ public abstract class TileEntityLootable extends TileEntityContainer {
+     public boolean isEmpty() {
+         this.d((EntityHuman) null);
+         // Paper start
+-        for (ItemStack itemStack : this.f()) {
++        // Airplane start - don't use abstract iterator
++        java.util.List<ItemStack> list = this.f();
++        for (int i = 0, size = list.size(); i < size; i++) {
++            ItemStack itemStack = list.get(i);
++            // Airplane end
+             if (!itemStack.isEmpty()) {
+                 return false;
+             }
+@@ -107,6 +111,13 @@ public abstract class TileEntityLootable extends TileEntityContainer {
+         return true;
+     }
+ 
++    // Airplane start - skip loot check for hoppers
++    @Override
++    public final ItemStack getHopperItem(int index) {
++        return this.f().get(index);
++    }
++    // Airplane end
++
+     @Override
+     public ItemStack getItem(int i) {
+         if (i == 0) this.d((EntityHuman) null); // Paper
 diff --git a/src/main/java/net/minecraft/world/level/chunk/Chunk.java b/src/main/java/net/minecraft/world/level/chunk/Chunk.java
 index fc07e2014e961da5d97095c4ee6f972e2ece3ec3..8f5809756b4fb358f1207c1d61c5cbe6df3fff00 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/Chunk.java
@@ -3200,20 +3799,21 @@ index 95d0c9f22d79194ca83ca6f6a8e6d91180a3c8da..20cc04be75ab202d4c4ee9a07e9876ce
  
          public LootTableInfo build(LootContextParameterSet lootcontextparameterset) {
 diff --git a/src/main/java/net/minecraft/world/phys/shapes/VoxelShapeCollisionEntity.java b/src/main/java/net/minecraft/world/phys/shapes/VoxelShapeCollisionEntity.java
-index dcb3e4b0cf34699ed77208f8122710bbdfa3d063..a51b47892c726f4b4b10d870991e9b8517f57fb7 100644
+index dcb3e4b0cf34699ed77208f8122710bbdfa3d063..dbb6a68eea01a3484f2ac862745b57d1d832b80c 100644
 --- a/src/main/java/net/minecraft/world/phys/shapes/VoxelShapeCollisionEntity.java
 +++ b/src/main/java/net/minecraft/world/phys/shapes/VoxelShapeCollisionEntity.java
-@@ -23,7 +23,8 @@ public class VoxelShapeCollisionEntity implements VoxelShapeCollision {
+@@ -23,18 +23,22 @@ public class VoxelShapeCollisionEntity implements VoxelShapeCollision {
      };
      private final boolean b;
      private final double c;
 -    private final Item d;
+-    private final Predicate<FluidType> e;
 +    private Item d; // Airplane
 +    private Entity entity; // Airplane
-     private final Predicate<FluidType> e;
++    private Predicate<FluidType> e; // Airplane
  
      protected VoxelShapeCollisionEntity(boolean flag, double d0, Item item, Predicate<FluidType> predicate) {
-@@ -31,10 +32,13 @@ public class VoxelShapeCollisionEntity implements VoxelShapeCollision {
+         this.b = flag;
          this.c = d0;
          this.d = item;
          this.e = predicate;
@@ -3227,7 +3827,7 @@ index dcb3e4b0cf34699ed77208f8122710bbdfa3d063..a51b47892c726f4b4b10d870991e9b85
          boolean flag = entity.by();
          double d0 = entity.locY();
          Item item = entity instanceof EntityLiving ? ((EntityLiving) entity).getItemInMainHand().getItem() : Items.AIR;
-@@ -50,12 +54,21 @@ public class VoxelShapeCollisionEntity implements VoxelShapeCollision {
+@@ -50,17 +54,27 @@ public class VoxelShapeCollisionEntity implements VoxelShapeCollision {
                  return false;
              };
          }
@@ -3238,7 +3838,7 @@ index dcb3e4b0cf34699ed77208f8122710bbdfa3d063..a51b47892c726f4b4b10d870991e9b85
 +            entity.by(),
 +            entity.locY(),
 +            null, //entity instanceof EntityLiving ? ((EntityLiving) entity).getItemInMainHand().getItem() : Items.AIR, // Airplane - lazy
-+            entity instanceof EntityLiving ? ((EntityLiving) entity)::a : (fluidtype) -> false
++            null //entity instanceof EntityLiving ? ((EntityLiving) entity)::a : (fluidtype) -> false
 +        );
 +        this.entity = entity;
 +        // Airplane end
@@ -3250,8 +3850,14 @@ index dcb3e4b0cf34699ed77208f8122710bbdfa3d063..a51b47892c726f4b4b10d870991e9b85
          return this.d == item;
      }
  
+     @Override
+     public boolean a(Fluid fluid, FluidTypeFlowing fluidtypeflowing) {
++        if (this.e == null) return this.entity instanceof EntityLiving && ((EntityLiving) this.entity).a(fluidtypeflowing); // Airplane
+         return this.e.test(fluidtypeflowing) && !fluid.getType().a((FluidType) fluidtypeflowing);
+     }
+ 
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index d02b8d4b7883f235894550514a6abae81651af82..3549abdc88f2708e6ccea3f152ae37770bfe951b 100644
+index 0e9819a7da160e7a5f28734c4dd3b673c8881792..e476806646c89c22da7e733d8072e0073383bd79 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -230,7 +230,7 @@ import javax.annotation.Nullable; // Paper
