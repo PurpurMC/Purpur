@@ -5,7 +5,7 @@ about: Report server crashes or scary stacktraces
 
 <!--
   Before reporting a crash here, please make sure you are on the latest version of Purpur.
-  Please do not make reports when the report says "DO NOT REPORT THIS TO PURPUR". These are simply messages informing you of lag, to find what is causing it. Ask for tips on Discord or IRC instead.
+  Please do not make reports when the report says "DO NOT REPORT THIS TO PURPUR". These are simply messages informing you of lag, to find what is causing it. Ask for tips on Discord.
 -->
 
 ## Timings link
