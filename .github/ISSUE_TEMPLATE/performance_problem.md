@@ -39,6 +39,6 @@ Please agree to the following.
 
 ## Other
 <!--
-  Please include other helpful information below. Spark report can come in handy.
+  Please include other helpful information below. A Spark report can come in handy.
   The more information we receive, the quicker and more effective we can be at finding the solution to the issue.
 -->
