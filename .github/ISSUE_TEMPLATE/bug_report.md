@@ -10,7 +10,7 @@ about: Report issues with plugin incompatibility or other behavior related issue
 ## Timings link
 <!--
   We ask that all timings are a link, not a screenshot. Screenshots inhibit our ability to figure out the real cause of the issue.
-  Example: https://timings.pl3x.net/?id=375cce33a7e84a62891cef6a0e51246c
+  Example: https://timings.pl3x.net/?id=4cd655d32ad445aa9063f2130ae3b794
 -->
 
 ## Expected behavior
