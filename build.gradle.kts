@@ -1,10 +1,7 @@
-import xyz.jpenilla.toothpick.gitCmd
-import xyz.jpenilla.toothpick.toothpick
-
 plugins {
     `java-library`
     `maven-publish`
-    id("xyz.jpenilla.toothpick") version "1.0.0-SNAPSHOT"
+    id("xyz.jpenilla.toothpick")
 }
 
 toothpick {
@@ -12,7 +9,7 @@ toothpick {
     groupId = "net.pl3x.purpur"
     forkUrl = "https://github.com/pl3xgaming/Purpur"
     val versionTag = System.getenv("BUILD_NUMBER")
-        ?: "\"${gitCmd("rev-parse", "--short", "HEAD").output}\""
+        ?: "\"${commitHash() ?: error("Could not obtain git hash")}\""
     forkVersion = "git-$forkName-$versionTag"
 
     minecraftVersion = "1.16.5"
@@ -23,11 +20,11 @@ toothpick {
     upstreamBranch = "origin/master"
 
     server {
-        project = project(":$forkNameLowercase-server")
+        project = projects.purpurServer.dependencyProject
         patchesDir = rootProject.projectDir.resolve("patches/server")
     }
     api {
-        project = project(":$forkNameLowercase-api")
+        project = projects.purpurApi.dependencyProject
         patchesDir = rootProject.projectDir.resolve("patches/api")
     }
 }
