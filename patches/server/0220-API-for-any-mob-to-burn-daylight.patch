@@ -1,0 +1,265 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ben Kerllenevich <me@notom3ga.me>
+Date: Tue, 25 May 2021 16:31:09 -0400
+Subject: [PATCH] API for any mob to burn daylight
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
+index 4f0b8d966ba38672a39f95d1f6f55f95cdc8d334..5b58fe3a6aaaf6fb4e74042e28971c56e8a51765 100644
+--- a/src/main/java/net/minecraft/world/entity/Entity.java
++++ b/src/main/java/net/minecraft/world/entity/Entity.java
+@@ -1642,7 +1642,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+         }
+     }
+ 
+-    public float aR() {
++    public float getBrightness() { return this.aR(); } public float aR() { // Purpur - OBFHELPER
+         BlockPosition.MutableBlockPosition blockposition_mutableblockposition = new BlockPosition.MutableBlockPosition(this.locX(), 0.0D, this.locZ());
+ 
+         if (this.world.isLoaded(blockposition_mutableblockposition)) {
+diff --git a/src/main/java/net/minecraft/world/entity/EntityLiving.java b/src/main/java/net/minecraft/world/entity/EntityLiving.java
+index 9e0c00bf0c1fb41d09de39d2a3831b6bc6658259..34f33ab77a799d2e87ffc6f6f48dfa0f71dc41de 100644
+--- a/src/main/java/net/minecraft/world/entity/EntityLiving.java
++++ b/src/main/java/net/minecraft/world/entity/EntityLiving.java
+@@ -238,6 +238,29 @@ public abstract class EntityLiving extends Entity {
+     public boolean canPickUpLoot;
+     public org.bukkit.craftbukkit.entity.CraftLivingEntity getBukkitLivingEntity() { return (org.bukkit.craftbukkit.entity.CraftLivingEntity) super.getBukkitEntity(); } // Paper
+     public boolean silentDeath = false; // Paper - mark entity as dying silently for cancellable death event
++    // Purpur start
++    private boolean shouldBurnInDay;
++
++    public boolean shouldBurnInDay() {
++        return this.shouldBurnInDay;
++    }
++
++    public void setShouldBurnInDay(boolean shouldBurnInDay) {
++        this.shouldBurnInDay = shouldBurnInDay;
++    }
++
++    // copied from EntityInsentient
++    public boolean isInDaylight() {
++        if (this.world.isDay() && !this.world.isClientSide) {
++            float f = this.getBrightness();
++            BlockPosition blockposition = this.getVehicle() instanceof net.minecraft.world.entity.vehicle.EntityBoat ? (new BlockPosition(this.locX(), (double) Math.round(this.locY()), this.locZ())).up() : new BlockPosition(this.locX(), (double) Math.round(this.locY()), this.locZ());
++
++            return f > 0.5F && this.random.nextFloat() * 30.0F < (f - 0.4F) * 2.0F && this.world.isSkyVisible(blockposition);
++        }
++
++        return false;
++    }
++    // Purpur end
+ 
+     @Override
+     public float getBukkitYaw() {
+@@ -276,6 +299,14 @@ public abstract class EntityLiving extends Entity {
+         DynamicOpsNBT dynamicopsnbt = DynamicOpsNBT.a;
+ 
+         this.bg = this.a(new Dynamic(dynamicopsnbt, dynamicopsnbt.createMap((Map) ImmutableMap.of(dynamicopsnbt.createString("memories"), dynamicopsnbt.emptyMap()))));
++
++        // Purpur start
++        if (this instanceof net.minecraft.world.entity.monster.EntityZombie || this instanceof net.minecraft.world.entity.monster.EntitySkeletonAbstract || this instanceof net.minecraft.world.entity.monster.EntityPhantom) {
++            this.shouldBurnInDay = true;
++        } else {
++            this.shouldBurnInDay = false;
++        }
++        // Purpur end
+     }
+ 
+     protected void initAttributes() {} // Purpur
+@@ -3017,6 +3048,31 @@ public abstract class EntityLiving extends Entity {
+             this.damageEntity(DamageSource.DROWN, 1.0F);
+         }
+ 
++        // Purpur start - copied from EntityZombie
++        if (this.isAlive()) {
++            boolean flag = this.shouldBurnInDay() && this.isInDaylight();
++
++            if (flag) {
++                ItemStack itemstack = this.getEquipment(EnumItemSlot.HEAD);
++
++                if (!itemstack.isEmpty()) {
++                    if (itemstack.e()) {
++                        itemstack.setDamage(itemstack.getDamage() + this.random.nextInt(2));
++                        if (itemstack.getDamage() >= itemstack.h()) {
++                            this.broadcastItemBreak(EnumItemSlot.HEAD);
++                            this.setSlot(EnumItemSlot.HEAD, ItemStack.b);
++                        }
++                    }
++
++                    flag = false;
++                }
++
++                if (flag) {
++                    this.setOnFire(8);
++                }
++            }
++        }
++        // Purpur end
+     }
+ 
+     public boolean isSensitiveToWater() { return dO(); } // Purpur - OBFHELPER
+diff --git a/src/main/java/net/minecraft/world/entity/monster/EntityPhantom.java b/src/main/java/net/minecraft/world/entity/monster/EntityPhantom.java
+index fe07d9798eaae670e218d25fe23256c87c41d686..9b151eaa144b5e87bad43eac49c55e729cb7a885 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/EntityPhantom.java
++++ b/src/main/java/net/minecraft/world/entity/monster/EntityPhantom.java
+@@ -231,7 +231,7 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+ 
+     @Override
+     public void movementTick() {
+-        if (this.isAlive() && !hasPurpurRider() && (((shouldBurnInDay || world.purpurConfig.phantomBurnInDaylight) && this.isInDaylight()) || (world.purpurConfig.phantomBurnInLight > 0 && world.getLightLevel(new BlockPosition(this)) >= world.purpurConfig.phantomBurnInLight))) { // Paper - Configurable Burning // Purpur
++        if (this.isAlive() && !hasPurpurRider() && (((this.shouldBurnInDay() || world.purpurConfig.phantomBurnInDaylight) && this.isInDaylight()) || (world.purpurConfig.phantomBurnInLight > 0 && world.getLightLevel(new BlockPosition(this)) >= world.purpurConfig.phantomBurnInLight))) { // Paper - Configurable Burning // Purpur
+             this.setOnFire(8);
+         }
+ 
+@@ -258,12 +258,14 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+         }
+ 
+         this.setSize(nbttagcompound.getInt("Size"));
++        /* // Purpur start - implemented in EntityLiving
+         // Paper start
+         if (nbttagcompound.hasUUID("Paper.SpawningEntity")) {
+             this.spawningEntity = nbttagcompound.getUUID("Paper.SpawningEntity");
+         }
+         this.shouldBurnInDay = nbttagcompound.getBoolean("Paper.ShouldBurnInDay");
+         // Paper end
++         */ // Purpur end
+     }
+ 
+     @Override
+@@ -273,12 +275,14 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+         nbttagcompound.setInt("AY", this.d.getY());
+         nbttagcompound.setInt("AZ", this.d.getZ());
+         nbttagcompound.setInt("Size", this.getSize());
++        /* // Purpur start - implemented in EntityLiving
+         // Paper start
+         if (this.spawningEntity != null) {
+             nbttagcompound.setUUID("Paper.SpawningEntity", this.spawningEntity);
+         }
+         nbttagcompound.setBoolean("Paper.ShouldBurnInDay", shouldBurnInDay);
+         // Paper end
++         */ // Purpur end
+     }
+ 
+     @Override
+@@ -333,9 +337,11 @@ public class EntityPhantom extends EntityFlying implements IMonster {
+     }
+     public void setSpawningEntity(java.util.UUID entity) { this.spawningEntity = entity; }
+ 
++    /*
+     private boolean shouldBurnInDay = true;
+     public boolean shouldBurnInDay() { return shouldBurnInDay; }
+     public void setShouldBurnInDay(boolean shouldBurnInDay) { this.shouldBurnInDay = shouldBurnInDay; }
++     */
+     // Paper end
+ 
+     // Purpur start
+diff --git a/src/main/java/net/minecraft/world/entity/monster/EntitySkeletonAbstract.java b/src/main/java/net/minecraft/world/entity/monster/EntitySkeletonAbstract.java
+index f4c5c7995247b182d01d9232c8060d9fdb97c0a1..6ddb79470d784de0d31817d1b84ab56e69d1f826 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/EntitySkeletonAbstract.java
++++ b/src/main/java/net/minecraft/world/entity/monster/EntitySkeletonAbstract.java
+@@ -109,6 +109,7 @@ public abstract class EntitySkeletonAbstract extends EntityMonster implements IR
+ 
+     @Override
+     public void movementTick() {
++        /* // Purpur start - implemented in EntityLiving
+         boolean flag = shouldBurnInDay && this.eG(); // Paper - Configurable Burning
+ 
+         if (flag) {
+@@ -130,6 +131,7 @@ public abstract class EntitySkeletonAbstract extends EntityMonster implements IR
+                 this.setOnFire(8);
+             }
+         }
++         */ // Purpur end
+ 
+         super.movementTick();
+     }
+diff --git a/src/main/java/net/minecraft/world/entity/monster/EntityZombie.java b/src/main/java/net/minecraft/world/entity/monster/EntityZombie.java
+index ef8f6b442304285e2b398c9143e9e98e29330220..1f5a448020e03d6eb07ca3dd7d952595b58dfbc2 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/EntityZombie.java
++++ b/src/main/java/net/minecraft/world/entity/monster/EntityZombie.java
+@@ -97,7 +97,7 @@ public class EntityZombie extends EntityMonster {
+     private int bt;
+     public int drownedConversionTime;
+     private int lastTick = MinecraftServer.currentTick; // CraftBukkit - add field
+-    private boolean shouldBurnInDay = true; // Paper
++    // private boolean shouldBurnInDay = true; // Paper // Purpur - implemented in EntityLiving
+ 
+     public EntityZombie(EntityTypes<? extends EntityZombie> entitytypes, World world) {
+         super(entitytypes, world);
+@@ -288,6 +288,7 @@ public class EntityZombie extends EntityMonster {
+ 
+     @Override
+     public void movementTick() {
++        /* // Purpur start - implemented in EntityLiving
+         if (this.isAlive()) {
+             boolean flag = this.T_() && this.eG();
+ 
+@@ -311,6 +312,7 @@ public class EntityZombie extends EntityMonster {
+                 }
+             }
+         }
++         */ // Purpur end
+ 
+         super.movementTick();
+     }
+@@ -349,16 +351,7 @@ public class EntityZombie extends EntityMonster {
+ 
+     }
+ 
+-    public boolean shouldBurnInDay() { return T_(); } // Paper - OBFHELPER
+-    protected boolean T_() {
+-        return this.shouldBurnInDay; // Paper - use api value instead
+-    }
+-
+-    // Paper start
+-    public void setShouldBurnInDay(boolean shouldBurnInDay) {
+-        this.shouldBurnInDay = shouldBurnInDay;
+-    }
+-    // Paper end
++    // Purpur - implemented in EntityLiving
+ 
+     @Override
+     public boolean damageEntity(DamageSource damagesource, float f) {
+@@ -479,7 +472,7 @@ public class EntityZombie extends EntityMonster {
+         nbttagcompound.setBoolean("CanBreakDoors", this.eU());
+         nbttagcompound.setInt("InWaterTime", this.isInWater() ? this.bt : -1);
+         nbttagcompound.setInt("DrownedConversionTime", this.isDrownConverting() ? this.drownedConversionTime : -1);
+-        nbttagcompound.setBoolean("Paper.ShouldBurnInDay", shouldBurnInDay); // Paper
++        // nbttagcompound.setBoolean("Paper.ShouldBurnInDay", shouldBurnInDay); // Paper // Purpur - implemented in EntityLiving
+     }
+ 
+     @Override
+@@ -491,11 +484,13 @@ public class EntityZombie extends EntityMonster {
+         if (nbttagcompound.hasKeyOfType("DrownedConversionTime", 99) && nbttagcompound.getInt("DrownedConversionTime") > -1) {
+             this.startDrownedConversion(nbttagcompound.getInt("DrownedConversionTime"));
+         }
++        /* // Purpur start - implemented in EntityLiving
+         // Paper start
+         if (nbttagcompound.hasKey("Paper.ShouldBurnInDay")) {
+             shouldBurnInDay = nbttagcompound.getBoolean("Paper.ShouldBurnInDay");
+         }
+         // Paper end
++         */ // Purpur end - implemented in EntityLiving
+     }
+ 
+     @Override
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
+index cf79f39fc8071d86f7455681e41b3eab1826cb35..6e9e9745e822794ff2d9e9ef4fc4cf774600d6db 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
+@@ -876,5 +876,15 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
+         if (slot == null) return;
+         getHandle().broadcastItemBreak(org.bukkit.craftbukkit.CraftEquipmentSlot.getNMS(slot));
+     }
++
++    @Override
++    public boolean shouldBurnInDay() {
++        return false;
++    }
++
++    @Override
++    public void setShouldBurnInDay(boolean shouldBurnInDay) {
++
++    }
+     // Purpur end
+ }
