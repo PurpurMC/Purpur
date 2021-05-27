@@ -1,10 +1,11 @@
 ---
-name: Behavior Bug or Plugin Incompatibility
-about: Report issues with plugin incompatibility or other behavior related issues.
+name: Server crash or Stacktrace
+about: Report server crashes or scary stacktraces
 ---
 
 <!--
   Before reporting a crash here, please make sure you are on the latest version of Purpur.
+  Please do not make reports when the report says "DO NOT REPORT THIS TO PURPUR". These are simply messages informing you of lag, to find what is causing it. Ask for tips on Discord.
 -->
 
 ## Timings link
@@ -13,19 +14,17 @@ about: Report issues with plugin incompatibility or other behavior related issue
   Example: https://timings.pl3x.net/?id=4cd655d32ad445aa9063f2130ae3b794
 -->
 
-## Expected behavior
+## Stack trace
 <!--
-  What you expected to see.
+  We need all of the stack trace! Do not cut off parts of it. Please do not use attachments.
+  If you prefer, you can use a paste site like https://paste.gg.
+
+  paste your stack trace or a paste.gg link here!
 -->
 
-## Observed/Actual behavior
+## Actions to reproduce (if known)
 <!--
-  What you actually saw.
--->
-
-## Steps/models to reproduce
-<!--
-  This may include a build schematic, a video, or detailed instructions to help reconstruct the issue.
+  This may include a build schematic, a video, or detailed instructions to help reconstruct the issue. Anything helps!
 -->
 
 ## Purpur version

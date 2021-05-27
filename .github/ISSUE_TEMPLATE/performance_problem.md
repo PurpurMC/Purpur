@@ -1,10 +1,10 @@
 ---
-name: Behavior Bug or Plugin Incompatibility
-about: Report issues with plugin incompatibility or other behavior related issues.
+name: Performance Problem
+about: Report performance related problems or other areas of concern
 ---
 
 <!--
-  Before reporting a crash here, please make sure you are on the latest version of Purpur.
+  Before reporting performance problems here, please make sure you are on the latest version of Purpur.
 -->
 
 ## Timings link
@@ -13,19 +13,9 @@ about: Report issues with plugin incompatibility or other behavior related issue
   Example: https://timings.pl3x.net/?id=4cd655d32ad445aa9063f2130ae3b794
 -->
 
-## Expected behavior
+## Description of issue
 <!--
-  What you expected to see.
--->
-
-## Observed/Actual behavior
-<!--
-  What you actually saw.
--->
-
-## Steps/models to reproduce
-<!--
-  This may include a build schematic, a video, or detailed instructions to help reconstruct the issue.
+  Please describe your issue in detail.
 -->
 
 ## Purpur version
@@ -49,6 +39,6 @@ Please agree to the following.
 
 ## Other
 <!--
-  Please include other helpful information below.
+  Please include other helpful information below. A Spark report can come in handy.
   The more information we receive, the quicker and more effective we can be at finding the solution to the issue.
 -->
