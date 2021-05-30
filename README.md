@@ -13,7 +13,7 @@
 [![Purpur Forks](https://img.shields.io/github/forks/pl3xgaming/Purpur?label=forks&logo=github)](https://github.com/pl3xgaming/Purpur/network/members)
 [![Purpur Watchers](https://img.shields.io/github/watchers/pl3xgaming/Purpur?label=watchers&logo=github)](https://github.com/pl3xgaming/Purpur/watchers)
 
-Purpur is a fork of [Paper](https://github.com/PaperMC/Paper), [Tuinity](https://github.com/Spottedleaf/Tuinity), [Airplane](https://github.com/TECHNOVE/Airplane) with the goal of providing new and interesting configuration options, which allow for creating a unique gameplay experience not seen anywhere else
+Purpur is a drop-in replacement for [Paper](https://github.com/PaperMC/Paper) servers designed for configurability, new fun and exciting gameplay features, and high performance built on top of [Tuinity](https://github.com/Spottedleaf/Tuinity) and [Airplane](https://github.com/TECHNOVE/Airplane).
 
 </div>
 
