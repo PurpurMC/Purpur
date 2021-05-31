@@ -1,0 +1,85 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DoctaEnkoda <bierquejason@gmail.com>
+Date: Mon, 31 May 2021 11:06:54 +0200
+Subject: [PATCH] Config MobEffect by world
+
+
+diff --git a/src/main/java/net/minecraft/world/effect/MobEffectList.java b/src/main/java/net/minecraft/world/effect/MobEffectList.java
+index 6dbd54c44ac88025464f78e72069c538d9f43dc3..420f6c6c2e078bb0a1ed061ced97744e234902a8 100644
+--- a/src/main/java/net/minecraft/world/effect/MobEffectList.java
++++ b/src/main/java/net/minecraft/world/effect/MobEffectList.java
+@@ -48,29 +48,29 @@ public class MobEffectList {
+         this.c = i;
+     }
+ 
+-    public void tick(EntityLiving entityliving, int i) {
++    public void tick(EntityLiving entityliving, int i) { tickMobEffects(entityliving, i); } public void tickMobEffects(EntityLiving entityliving, int amplifier) { // Purpur - OBFHELPERS
+         if (this == MobEffects.REGENERATION) {
+             if (entityliving.getHealth() < entityliving.getMaxHealth()) {
+-                entityliving.heal(1.0F, RegainReason.MAGIC_REGEN); // CraftBukkit
++                entityliving.heal(entityliving.getWorld().purpurConfig.entityHealthRegenAmount, RegainReason.MAGIC_REGEN); // CraftBukkit // Purpur
+             }
+         } else if (this == MobEffects.POISON) {
+-            if (entityliving.getHealth() > 1.0F) {
+-                entityliving.damageEntity(CraftEventFactory.POISON, 1.0F);  // CraftBukkit - DamageSource.MAGIC -> CraftEventFactory.POISON
++            if (entityliving.getHealth() > entityliving.getWorld().purpurConfig.entityMinimalHealthPoison) { // Purpur
++                entityliving.damageEntity(CraftEventFactory.POISON, entityliving.getWorld().purpurConfig.entityPoisonDegenerationAmount);  // CraftBukkit - DamageSource.MAGIC -> CraftEventFactory.POISON // Purpur
+             }
+         } else if (this == MobEffects.WITHER) {
+-            entityliving.damageEntity(DamageSource.WITHER, 1.0F);
++            entityliving.damageEntity(DamageSource.WITHER, entityliving.getWorld().purpurConfig.entityWitherDegenerationAmount);
+         } else if (this == MobEffects.HUNGER && entityliving instanceof EntityHuman) {
+-            ((EntityHuman) entityliving).applyExhaustion(0.005F * (float) (i + 1), org.bukkit.event.entity.EntityExhaustionEvent.ExhaustionReason.HUNGER_EFFECT); // CraftBukkit - EntityExhaustionEvent
++            ((EntityHuman) entityliving).applyExhaustion(entityliving.getWorld().purpurConfig.humanHungerExhaustionAmount * (float) (amplifier + 1), org.bukkit.event.entity.EntityExhaustionEvent.ExhaustionReason.HUNGER_EFFECT); // CraftBukkit - EntityExhaustionEvent // Purpur
+         } else if (this == MobEffects.SATURATION && entityliving instanceof EntityHuman) {
+             if (!entityliving.world.isClientSide) {
+                 // CraftBukkit start
+                 EntityHuman entityhuman = (EntityHuman) entityliving;
+                 int oldFoodLevel = entityhuman.getFoodData().foodLevel;
+ 
+-                org.bukkit.event.entity.FoodLevelChangeEvent event = CraftEventFactory.callFoodLevelChangeEvent(entityhuman, i + 1 + oldFoodLevel);
++                org.bukkit.event.entity.FoodLevelChangeEvent event = CraftEventFactory.callFoodLevelChangeEvent(entityhuman, amplifier + 1 + oldFoodLevel); // Purpur
+ 
+                 if (!event.isCancelled()) {
+-                    entityhuman.getFoodData().eat(event.getFoodLevel() - oldFoodLevel, 1.0F);
++                    entityhuman.getFoodData().eat(event.getFoodLevel() - oldFoodLevel, entityliving.getWorld().purpurConfig.humanSaturationRegenAmount); // Purpur
+                 }
+ 
+                 ((EntityPlayer) entityhuman).playerConnection.sendPacket(new PacketPlayOutUpdateHealth(((EntityPlayer) entityhuman).getBukkitEntity().getScaledHealth(), entityhuman.getFoodData().foodLevel, entityhuman.getFoodData().saturationLevel));
+@@ -78,10 +78,10 @@ public class MobEffectList {
+             }
+         } else if ((this != MobEffects.HEAL || entityliving.dj()) && (this != MobEffects.HARM || !entityliving.dj())) {
+             if (this == MobEffects.HARM && !entityliving.dj() || this == MobEffects.HEAL && entityliving.dj()) {
+-                entityliving.damageEntity(DamageSource.MAGIC, (float) (6 << i));
++                entityliving.damageEntity(DamageSource.MAGIC, (float) (6 << amplifier)); // Purpur
+             }
+         } else {
+-            entityliving.heal((float) Math.max(4 << i, 0), RegainReason.MAGIC); // CraftBukkit
++            entityliving.heal((float) Math.max(4 << amplifier, 0), RegainReason.MAGIC); // CraftBukkit // Purpur
+         }
+ 
+     }
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index bd72ed2da22c1d1121ea7ca04e163979baa05b27..9d413ac54ad0811914207e18d2b6202f60b280f2 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -2189,4 +2189,19 @@ public class PurpurWorldConfig {
+     private void pistonSettings() {
+         pistonBlockPushLimit = getInt("blocks.piston.block-push-limit", pistonBlockPushLimit);
+     }
++
++    public float entityHealthRegenAmount = 1.0F;
++    public float entityMinimalHealthPoison = 1.0F;
++    public float entityPoisonDegenerationAmount = 1.0F;
++    public float entityWitherDegenerationAmount = 1.0F;
++    public float humanHungerExhaustionAmount = 0.005F;
++    public float humanSaturationRegenAmount = 1.0F;
++    private void mobEffectSettings() {
++        entityHealthRegenAmount = (float) getDouble("mobs.default.effect.health-regen-amount", entityHealthRegenAmount);
++        entityMinimalHealthPoison = (float) getDouble("mobs.default.effect.minimal-health-poison-amount", entityMinimalHealthPoison);
++        entityPoisonDegenerationAmount = (float) getDouble("mobs.default.effect.poison-degeneration-amount", entityPoisonDegenerationAmount);
++        entityWitherDegenerationAmount = (float) getDouble("mobs.default.effect.wither-degeneration-amount", entityWitherDegenerationAmount);
++        humanHungerExhaustionAmount = (float) getDouble("mobs.player.effect.hunger-exhaustion-amount", (float) humanHungerExhaustionAmount);
++        humanSaturationRegenAmount = (float) getDouble("mobs.player.effect.saturation-regen-amount", humanSaturationRegenAmount);
++    }
+ }
