@@ -5659,7 +5659,7 @@ index 0000000000000000000000000000000000000000..0e4442a94559346b19a536d35ce5def6
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a30bb38144acb74f41638cc2b573e09265cde0e1
+index 0000000000000000000000000000000000000000..e1dc7c1025e19f7393a45719af8fe7aae016184d
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
 @@ -0,0 +1,415 @@
@@ -5789,7 +5789,7 @@ index 0000000000000000000000000000000000000000..a30bb38144acb74f41638cc2b573e092
 +        tickWorldsInParallel = TuinityConfig.getBoolean("tick-worlds-in-parallel", false);
 +        tickThreads = TuinityConfig.getInt("server-tick-threads", 1); // will be 4 in the future
 +    }*/
-+    
++
 +    public static int delayChunkUnloadsBy;
 +
 +    private static void delayChunkUnloadsBy() {
@@ -11627,7 +11627,7 @@ index 3644e8b24b082e17752ef52934625416130aaa08..58e14c174cdf76cdea861fd3d4d1195f
      class b extends ChunkMap {
  
 diff --git a/src/main/java/net/minecraft/server/level/ChunkProviderServer.java b/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
-index c5e54c519e1f686761faa53b5e9579c514a65332..fe040615ff03478a20cdf8376f89a6b7d100ba61 100644
+index 4a71f9a8a57ed123b31c725a8bd5f94ab0e2174d..e0ffea4f5d45a402d4ff5b4b831f2663f9d73eeb 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkProviderServer.java
 @@ -47,6 +47,12 @@ import net.minecraft.world.level.storage.WorldData;
@@ -11931,7 +11931,7 @@ index c5e54c519e1f686761faa53b5e9579c514a65332..fe040615ff03478a20cdf8376f89a6b7
          this.world.timings.doChunkUnload.stopTiming(); // Spigot
          this.world.getMethodProfiler().exit();
          this.clearCache();
-@@ -834,31 +1017,37 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -834,32 +1017,37 @@ public class ChunkProviderServer extends IChunkProvider {
                  for (EntityPlayer player : this.world.players) {
                      Arrays.fill(player.mobCounts, 0);
                  }
@@ -11951,6 +11951,7 @@ index c5e54c519e1f686761faa53b5e9579c514a65332..fe040615ff03478a20cdf8376f89a6b7
              //List<PlayerChunk> list = Lists.newArrayList(this.playerChunkMap.f()); // Paper
              //Collections.shuffle(list); // Paper
              // Paper - moved up
+-            this.world.timings.chunkTicks.startTiming(); // Paper
 -            final int[] chunksTicked = {0}; this.playerChunkMap.forEachVisibleChunk((playerchunk) -> { // Paper - safe iterator incase chunk loads, also no wrapping
 -                Optional<Chunk> optional = ((Either) playerchunk.a().getNow(PlayerChunk.UNLOADED_CHUNK)).left();
 -
@@ -11979,16 +11980,17 @@ index c5e54c519e1f686761faa53b5e9579c514a65332..fe040615ff03478a20cdf8376f89a6b7
                          ChunkCoordIntPair chunkcoordintpair = playerchunk.i();
  
                          if (!this.playerChunkMap.isOutsideOfRange(playerchunk, chunkcoordintpair, false)) { // Paper - optimise isOutsideOfRange
-@@ -870,11 +1059,15 @@ public class ChunkProviderServer extends IChunkProvider {
-                             this.world.timings.chunkTicks.startTiming(); // Spigot // Paper
+@@ -871,12 +1059,15 @@ public class ChunkProviderServer extends IChunkProvider {
+                             //this.world.timings.chunkTicks.startTiming(); // Spigot // Paper
                              this.world.a(chunk, k);
-                             this.world.timings.chunkTicks.stopTiming(); // Spigot // Paper
+                             //this.world.timings.chunkTicks.stopTiming(); // Spigot // Paper
 -                            if (chunksTicked[0]++ % 10 == 0) this.world.getMinecraftServer().midTickLoadChunks(); // Paper
 +                            if ((++ticked & 1) == 0) MinecraftServer.getServer().executeMidTickTasks(); // Tuinity - exec chunk tasks during world tick
                          }
                      }
                  }
 -            });
+-            this.world.timings.chunkTicks.stopTiming(); // Paper
 +            } // Tuinity start - optimise chunk tick iteration
 +            } finally {
 +                iterator.finishedIterating();
@@ -11997,7 +11999,7 @@ index c5e54c519e1f686761faa53b5e9579c514a65332..fe040615ff03478a20cdf8376f89a6b7
              this.world.getMethodProfiler().enter("customSpawners");
              if (flag1) {
                  try (co.aikar.timings.Timing ignored = this.world.timings.miscMobSpawning.startTiming()) { // Paper - timings
-@@ -886,7 +1079,25 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -888,7 +1079,25 @@ public class ChunkProviderServer extends IChunkProvider {
              this.world.getMethodProfiler().exit();
          }
  
@@ -12023,7 +12025,7 @@ index c5e54c519e1f686761faa53b5e9579c514a65332..fe040615ff03478a20cdf8376f89a6b7
      }
  
      private void a(long i, Consumer<Chunk> consumer) {
-@@ -1026,44 +1237,12 @@ public class ChunkProviderServer extends IChunkProvider {
+@@ -1028,44 +1237,12 @@ public class ChunkProviderServer extends IChunkProvider {
              ChunkProviderServer.this.world.getMethodProfiler().c("runTask");
              super.executeTask(runnable);
          }
@@ -12072,7 +12074,7 @@ index c5e54c519e1f686761faa53b5e9579c514a65332..fe040615ff03478a20cdf8376f89a6b7
          try {
              boolean execChunkTask = com.destroystokyo.paper.io.chunk.ChunkTaskManager.pollChunkWaitQueue() || ChunkProviderServer.this.world.asyncChunkTaskManager.pollNextChunkTask(); // Paper
 diff --git a/src/main/java/net/minecraft/server/level/EntityPlayer.java b/src/main/java/net/minecraft/server/level/EntityPlayer.java
-index 558af73ac16550ee6964c4dce681a404633b2552..32e400632ec1e61374f772c6262580f84a5b2288 100644
+index 75bcfb3a2b4a104aeebb2fe3298714b2e5b569d2..c813077455a463dd558076d1d7474829f76b905a 100644
 --- a/src/main/java/net/minecraft/server/level/EntityPlayer.java
 +++ b/src/main/java/net/minecraft/server/level/EntityPlayer.java
 @@ -262,7 +262,7 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
@@ -12288,7 +12290,7 @@ index 558af73ac16550ee6964c4dce681a404633b2552..32e400632ec1e61374f772c6262580f8
              if (this.getHealth() != this.lastHealthSent || this.lastFoodSent != this.foodData.getFoodLevel() || this.foodData.getSaturationLevel() == 0.0F != this.lastSentSaturationZero) {
                  this.playerConnection.sendPacket(new PacketPlayOutUpdateHealth(this.getBukkitEntity().getScaledHealth(), this.foodData.getFoodLevel(), this.foodData.getSaturationLevel())); // CraftBukkit
                  this.lastHealthSent = this.getHealth();
-@@ -1563,6 +1742,17 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
+@@ -1564,6 +1743,17 @@ public class EntityPlayer extends EntityHuman implements ICrafting {
          this.playerConnection.sendPacket(new PacketPlayOutCloseWindow(this.activeContainer.windowId));
          this.o();
      }
@@ -12965,7 +12967,7 @@ index a323b76f68c273a73cb3f20167a668b2100f4944..86f156587a0939b28c5cf6f64907255c
                  if (chunk != null) {
                      playerchunkmap.callbackExecutor.execute(() -> {
 diff --git a/src/main/java/net/minecraft/server/level/PlayerChunkMap.java b/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
-index 6835401bd7863bbd655502547a9fd4ae0f298da1..4df1be8091af0ed9d3403f217b481645e24020e8 100644
+index 6835401bd7863bbd655502547a9fd4ae0f298da1..d827e18d8c3b9b5869dbb1e233f415ba0efb7c1b 100644
 --- a/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
 +++ b/src/main/java/net/minecraft/server/level/PlayerChunkMap.java
 @@ -103,6 +103,7 @@ import net.minecraft.world.level.storage.WorldDataServer;
@@ -13071,7 +13073,7 @@ index 6835401bd7863bbd655502547a9fd4ae0f298da1..4df1be8091af0ed9d3403f217b481645
 +    public final com.tuinity.tuinity.chunk.PlayerChunkLoader playerChunkManager = new com.tuinity.tuinity.chunk.PlayerChunkLoader(this, this.pooledLinkedPlayerHashSets); // Tuinity - replace chunk loader
      // Paper end - no-tick view distance
 +    // Tuinity start - optimise checkDespawn
-+    public static final int GENERAL_AREA_MAP_SQUARE_RADIUS = 38;
++    public static final int GENERAL_AREA_MAP_SQUARE_RADIUS = 40;
 +    public static final double GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE = 16.0 * (GENERAL_AREA_MAP_SQUARE_RADIUS - 1);
 +    public static final double GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE_SQUARED = GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE * GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE;
 +    public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerGeneralAreaMap;
@@ -15370,7 +15372,7 @@ index dca2e9e45116df22d8c95d1be8f0a7e3c2d2b6b1..cb394ec310712cc97d65afe068284b27
  
                          try {
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dcac5a3a60 100644
+index 8ef41182056052686055b7eb88ab19c161e84ed4..d88769e13410c6469df1d118b5c340672dc816c8 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
 @@ -228,7 +228,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
@@ -15397,7 +15399,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
      // Paper start - optimise entity tracking
      final org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = org.spigotmc.TrackingRange.getTrackingRangeType(this);
  
-@@ -309,11 +317,91 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -309,11 +317,59 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
      }
  
      public final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<EntityPlayer> getPlayersInTrackRange() {
@@ -15456,42 +15458,10 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
 +    }
 +    // Tuinity end
 +
-+    // Tuinity start - make end portalling safe
-+    public BlockPosition portalBlock;
-+    public WorldServer portalWorld;
-+    public void tickEndPortal() {
-+        BlockPosition pos = this.portalBlock;
-+        WorldServer world = this.portalWorld;
-+        this.portalBlock = null;
-+        this.portalWorld = null;
-+
-+        if (pos == null || world == null || world != this.world) {
-+            return;
-+        }
-+
-+        if (this.isPassenger() || this.isVehicle() || !this.canPortal() || this.dead || !this.valid || !this.isAlive()) {
-+            return;
-+        }
-+
-+        ResourceKey<World> resourcekey = world.getTypeKey() == DimensionManager.THE_END ? World.OVERWORLD : World.THE_END; // CraftBukkit - SPIGOT-6152: send back to main overworld in custom ends
-+        WorldServer worldserver = world.getMinecraftServer().getWorldServer(resourcekey);
-+
-+        org.bukkit.event.entity.EntityPortalEnterEvent event = new org.bukkit.event.entity.EntityPortalEnterEvent(this.getBukkitEntity(), new org.bukkit.Location(world.getWorld(), pos.getX(), pos.getY(), pos.getZ()));
-+        event.callEvent();
-+
-+        if (this instanceof EntityPlayer) {
-+            ((EntityPlayer)this).b(worldserver, PlayerTeleportEvent.TeleportCause.END_PORTAL);
-+            return;
-+        }
-+        // CraftBukkit end
-+        this.b(worldserver);
-+    }
-+    // Tuinity end - make end portalling safe
-+
-     public Entity(EntityTypes<?> entitytypes, World world) {
-         this.id = Entity.entityCount.incrementAndGet();
-         this.passengers = Lists.newArrayList();
-@@ -683,7 +771,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+     // Paper start - make end portalling safe
+     public BlockPosition portalBlock;
+     public WorldServer portalWorld;
+@@ -714,7 +770,39 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
          return this.onGround;
      }
  
@@ -15531,7 +15501,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
          if (this.noclip) {
              this.a(this.getBoundingBox().c(vec3d));
              this.recalcPosition();
-@@ -711,7 +831,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -742,7 +830,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
              // Paper end
  
              vec3d = this.a(vec3d, enummovetype);
@@ -15540,7 +15510,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
  
              if (vec3d1.g() > 1.0E-7D) {
                  this.a(this.getBoundingBox().c(vec3d1));
-@@ -802,7 +922,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -833,7 +921,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
              }
  
              try {
@@ -15549,7 +15519,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
              } catch (Throwable throwable) {
                  CrashReport crashreport = CrashReport.a(throwable, "Checking entity block collision");
                  CrashReportSystemDetails crashreportsystemdetails = crashreport.a("Entity being checked for collision");
-@@ -814,11 +934,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -845,11 +933,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
              float f2 = this.getBlockSpeedFactor();
  
              this.setMot(this.getMot().d((double) f2, 1.0D, (double) f2));
@@ -15562,7 +15532,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
  
              if (this.aG() && this.isBurning()) {
                  this.playSound(SoundEffects.ENTITY_GENERIC_EXTINGUISH_FIRE, 0.7F, 1.6F + (this.random.nextFloat() - this.random.nextFloat()) * 0.4F);
-@@ -827,6 +943,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -858,6 +942,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
  
              this.world.getMethodProfiler().exit();
          }
@@ -15576,7 +15546,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
      }
  
      protected BlockPosition ap() {
-@@ -907,6 +1030,137 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -938,6 +1029,137 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
          return d0;
      }
  
@@ -15714,7 +15684,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
      private Vec3D g(Vec3D vec3d) {
          AxisAlignedBB axisalignedbb = this.getBoundingBox();
          VoxelShapeCollision voxelshapecollision = VoxelShapeCollision.a(this);
-@@ -942,6 +1196,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -973,6 +1195,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
          return vec3d1;
      }
  
@@ -15722,7 +15692,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
      public static double c(Vec3D vec3d) {
          return vec3d.x * vec3d.x + vec3d.z * vec3d.z;
      }
-@@ -1054,18 +1309,34 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -1085,18 +1308,34 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
      }
  
      protected void checkBlockCollisions() {
@@ -15760,7 +15730,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
                          try {
                              iblockdata.a(this.world, blockposition_mutableblockposition, this);
                              this.a(iblockdata);
-@@ -1079,6 +1350,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -1110,6 +1349,11 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
                      }
                  }
              }
@@ -15772,7 +15742,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
          }
  
      }
-@@ -1450,6 +1726,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -1481,6 +1725,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
          return d3 * d3 + d4 * d4 + d5 * d5;
      }
  
@@ -15780,7 +15750,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
      public double h(Entity entity) {
          return this.e(entity.getPositionVector());
      }
-@@ -2037,9 +2314,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -2068,9 +2313,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
              float f1 = this.size.width * 0.8F;
              AxisAlignedBB axisalignedbb = AxisAlignedBB.g((double) f1, 0.10000000149011612D, (double) f1).d(this.locX(), this.getHeadY(), this.locZ());
  
@@ -15792,7 +15762,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
          }
      }
  
-@@ -2047,11 +2324,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -2078,11 +2323,13 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
          return EnumInteractionResult.PASS;
      }
  
@@ -15808,15 +15778,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
          return false;
      }
  
-@@ -2294,6 +2573,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
-             }
- 
-             this.E();
-+            this.tickEndPortal(); // Tuinity - make end portalling safe
-         }
-     }
- 
-@@ -2942,7 +3222,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -2974,7 +3221,7 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
              this.recursiveStream().forEach((entity) -> {
                  worldserver.chunkCheck(entity);
                  entity.az = true;
@@ -15825,7 +15787,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
  
                  while (iterator.hasNext()) {
                      Entity entity1 = (Entity) iterator.next();
-@@ -3400,12 +3680,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -3432,12 +3679,16 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
          return this.locBlock;
      }
  
@@ -15842,7 +15804,7 @@ index 6fdcd96fd75cd63d769b012827519f554af4cf54..c3d4eda866016c4ac08d4c5d771e39dc
      }
  
      public void setMot(double d0, double d1, double d2) {
-@@ -3460,7 +3744,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
+@@ -3492,7 +3743,9 @@ public abstract class Entity implements INamableTileEntity, ICommandListener, ne
          }
          // Paper end
          if (this.loc.x != d0 || this.loc.y != d1 || this.loc.z != d2) {
@@ -15887,7 +15849,7 @@ index 85f571a791bce63989890f277857bc7bdeec0cb5..9e4137768c7d8966759324a4b368330c
                  double deltaZ = this.locZ() - player.locZ();
                  double distanceSquared = deltaX * deltaX + deltaZ * deltaZ;
 diff --git a/src/main/java/net/minecraft/world/entity/EntityLiving.java b/src/main/java/net/minecraft/world/entity/EntityLiving.java
-index 2657dd71213455e2da3a4ff4d338a33896ffe855..33f689b1c9f4c00969fbdd8ddb21901637afb81c 100644
+index b7b07b652b29e6f84f87fc92add99ce68f8bbd09..2ff3297fb8c0e4f8c969ba2727eecb7fe06525c4 100644
 --- a/src/main/java/net/minecraft/world/entity/EntityLiving.java
 +++ b/src/main/java/net/minecraft/world/entity/EntityLiving.java
 @@ -2973,7 +2973,11 @@ public abstract class EntityLiving extends Entity {
@@ -16763,7 +16725,7 @@ index c296fcf80c2f3f210fa020416973ec8d5db541ba..07160de8725787551df327c0790b2d6e
                      double deltaX = this.locX() - player.locX();
                      double deltaZ = this.locZ() - player.locZ();
 diff --git a/src/main/java/net/minecraft/world/entity/boss/wither/EntityWither.java b/src/main/java/net/minecraft/world/entity/boss/wither/EntityWither.java
-index 229eabe0510e6c3660236ed0fb3e80d41074642c..c056c4c09297602c1fb3c1040ac2ab0ec4c0139b 100644
+index 635b1493eeb6c13cc5ef489bd747ac557bc131d8..3cfe3173f710fc54ec77a47a9cbb8f5ff6a6f0b6 100644
 --- a/src/main/java/net/minecraft/world/entity/boss/wither/EntityWither.java
 +++ b/src/main/java/net/minecraft/world/entity/boss/wither/EntityWither.java
 @@ -264,9 +264,9 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
@@ -16778,15 +16740,6 @@ index 229eabe0510e6c3660236ed0fb3e80d41074642c..c056c4c09297602c1fb3c1040ac2ab0e
                          double deltaX = this.locX() - player.locX();
                          double deltaZ = this.locZ() - player.locZ();
                          double distanceSquared = deltaX * deltaX + deltaZ * deltaZ;
-@@ -603,7 +603,7 @@ public class EntityWither extends EntityMonster implements IRangedEntity {
- 
-     @Override
-     public boolean canPortal() {
--        return canPortal; // Paper
-+        return super.canPortal() && canPortal; // Paper // Tuinity - ensure super is called
-     }
- 
-     @Override
 diff --git a/src/main/java/net/minecraft/world/entity/item/EntityItem.java b/src/main/java/net/minecraft/world/entity/item/EntityItem.java
 index 8b79220c27292f9b92d9884bbbe4b16d7762343c..077990f1d95ded2c8b89c38978ec25a56df3a984 100644
 --- a/src/main/java/net/minecraft/world/entity/item/EntityItem.java
@@ -17150,7 +17103,7 @@ index 1ff9e771788a4ab52129070e355ca48df2949470..a7f2304acf8ee0a15d6eae8c42060e00
          Iterator iterator = this.getPlayers().iterator();
  
 diff --git a/src/main/java/net/minecraft/world/level/SpawnerCreature.java b/src/main/java/net/minecraft/world/level/SpawnerCreature.java
-index 24771c3522ea74ac12058591137eafc21adf3762..d497006f05f79015cd791849888832bb53f4a414 100644
+index 24771c3522ea74ac12058591137eafc21adf3762..9b55da1f4d40ae36b2d2b8e7b3b18989dc4f6006 100644
 --- a/src/main/java/net/minecraft/world/level/SpawnerCreature.java
 +++ b/src/main/java/net/minecraft/world/level/SpawnerCreature.java
 @@ -64,9 +64,9 @@ public final class SpawnerCreature {
@@ -17201,7 +17154,7 @@ index 24771c3522ea74ac12058591137eafc21adf3762..d497006f05f79015cd791849888832bb
                              double d0 = (double) l + 0.5D;
                              double d1 = (double) i1 + 0.5D;
 -                            EntityHuman entityhuman = worldserver.a(d0, (double) i, d1, -1.0D, false);
-+                            EntityHuman entityhuman = worldserver.a(d0, (double) i, d1, 576.0D, false); // Tuinity - copied from below method for range, for the love of god we do not need to fucking find the closet player outside of this range - limiting range lets us use the distance map
++                            EntityHuman entityhuman = (!(ichunkaccess instanceof Chunk)) ? worldserver.a(d0, (double) i, d1, -1.0D, false) : ((Chunk)ichunkaccess).findNearestPlayer(d0, i, d1, 576.0D, net.minecraft.world.entity.IEntitySelector.notSpectator());  // Tuinity - use chunk's player cache to optimize search in range
  
                              if (entityhuman != null) {
                                  double d2 = entityhuman.h(d0, (double) i, d1);
@@ -17639,31 +17592,6 @@ index 15096a9c2719b8b4c099f62d0a1c808e56b63a8e..9bbd175f7e20591bbefdbddcb5e998e7
                      return true;
                  }
              }
-diff --git a/src/main/java/net/minecraft/world/level/block/BlockEnderPortal.java b/src/main/java/net/minecraft/world/level/block/BlockEnderPortal.java
-index ed916f69747b44b75eb06db4cf27adaf5e47fd1e..2ad7d6809beff6b5a36b32ba29d05447139a415e 100644
---- a/src/main/java/net/minecraft/world/level/block/BlockEnderPortal.java
-+++ b/src/main/java/net/minecraft/world/level/block/BlockEnderPortal.java
-@@ -52,16 +52,10 @@ public class BlockEnderPortal extends BlockTileEntity {
-                 // return; // CraftBukkit - always fire event in case plugins wish to change it
-             }
- 
--            // CraftBukkit start - Entity in portal
--            EntityPortalEnterEvent event = new EntityPortalEnterEvent(entity.getBukkitEntity(), new org.bukkit.Location(world.getWorld(), blockposition.getX(), blockposition.getY(), blockposition.getZ()));
--            world.getServer().getPluginManager().callEvent(event);
--
--            if (entity instanceof EntityPlayer) {
--                ((EntityPlayer) entity).b(worldserver, PlayerTeleportEvent.TeleportCause.END_PORTAL);
--                return;
--            }
--            // CraftBukkit end
--            entity.b(worldserver);
-+            // Tuinity start - move all of this logic into portal tick
-+            entity.portalWorld = ((WorldServer)world);
-+            entity.portalBlock = blockposition.immutableCopy();
-+            // Tuinity end - move all of this logic into portal tick
-         }
- 
-     }
 diff --git a/src/main/java/net/minecraft/world/level/block/state/BlockBase.java b/src/main/java/net/minecraft/world/level/block/state/BlockBase.java
 index 0d26250887f80d0c250bcd6bc7de303362427d3e..1d82f719440c95765c01a588f4785d630b8b527a 100644
 --- a/src/main/java/net/minecraft/world/level/block/state/BlockBase.java
@@ -20725,7 +20653,7 @@ index cebecee640ed5a7fc2b978e00ff7eb012228267d..507c5255542ba1b958470b4db2c35b1b
          public void restart() {
              org.spigotmc.RestartCommand.restart();
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
-index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c258f4b90b 100644
+index 02198dbe9e80c2990e8a09b2b763748dae727a03..3b6b1f3229b07c84d99db652e01661bcc78368fd 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftWorld.java
 @@ -298,7 +298,7 @@ public class CraftWorld implements World {
@@ -20746,7 +20674,7 @@ index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c2
              if (chunkHolder.getChunk() != null) {
                  ++ret;
              }
-@@ -342,6 +342,14 @@ public class CraftWorld implements World {
+@@ -353,6 +353,14 @@ public class CraftWorld implements World {
          this.generator = gen;
  
          environment = env;
@@ -20761,7 +20689,7 @@ index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c2
      }
  
      @Override
-@@ -415,14 +423,7 @@ public class CraftWorld implements World {
+@@ -426,14 +434,7 @@ public class CraftWorld implements World {
  
      @Override
      public Chunk getChunkAt(int x, int z) {
@@ -20777,7 +20705,7 @@ index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c2
      }
  
      // Paper start
-@@ -470,13 +471,16 @@ public class CraftWorld implements World {
+@@ -481,13 +482,16 @@ public class CraftWorld implements World {
      public Chunk[] getLoadedChunks() {
          // Paper start
          if (Thread.currentThread() != world.getMinecraftWorld().serverThread) {
@@ -20798,7 +20726,7 @@ index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c2
          return chunks.values().stream().map(PlayerChunk::getFullChunk).filter(Objects::nonNull).map(net.minecraft.world.level.chunk.Chunk::getBukkitChunk).toArray(Chunk[]::new);
      }
  
-@@ -505,6 +509,7 @@ public class CraftWorld implements World {
+@@ -516,6 +520,7 @@ public class CraftWorld implements World {
          org.spigotmc.AsyncCatcher.catchOp("chunk unload"); // Spigot
          if (isChunkLoaded(x, z)) {
              world.getChunkProvider().removeTicket(TicketType.PLUGIN, new ChunkCoordIntPair(x, z), 0, Unit.INSTANCE); // Paper
@@ -20806,7 +20734,7 @@ index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c2
          }
  
          return true;
-@@ -718,6 +723,30 @@ public class CraftWorld implements World {
+@@ -729,6 +734,30 @@ public class CraftWorld implements World {
          return ret.entrySet().stream().collect(ImmutableMap.toImmutableMap(Map.Entry::getKey, (entry) -> entry.getValue().build()));
      }
  
@@ -20837,7 +20765,7 @@ index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c2
      @Override
      public boolean isChunkForceLoaded(int x, int z) {
          return getHandle().getForceLoadedChunks().contains(ChunkCoordIntPair.pair(x, z));
-@@ -2650,7 +2679,7 @@ public class CraftWorld implements World {
+@@ -2661,7 +2690,7 @@ public class CraftWorld implements World {
          }
          return this.world.getChunkProvider().getChunkAtAsynchronously(x, z, gen, urgent).thenComposeAsync((either) -> {
              net.minecraft.world.level.chunk.Chunk chunk = (net.minecraft.world.level.chunk.Chunk) either.left().orElse(null);
@@ -20846,7 +20774,7 @@ index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c2
              return CompletableFuture.completedFuture(chunk == null ? null : chunk.getBukkitChunk());
          }, net.minecraft.server.MinecraftServer.getServer());
      }
-@@ -2675,14 +2704,14 @@ public class CraftWorld implements World {
+@@ -2686,14 +2715,14 @@ public class CraftWorld implements World {
              throw new IllegalArgumentException("View distance " + viewDistance + " is out of range of [2, 32]");
          }
          PlayerChunkMap chunkMap = getHandle().getChunkProvider().playerChunkMap;
@@ -20863,7 +20791,7 @@ index 9d858f91828d6c2787ff1dc677a247bcab172701..4f296f09562fb269db4137efd325e2c2
      }
  
      @Override
-@@ -2691,11 +2720,22 @@ public class CraftWorld implements World {
+@@ -2702,11 +2731,22 @@ public class CraftWorld implements World {
              throw new IllegalArgumentException("View distance " + viewDistance + " is out of range of [2, 32]");
          }
          PlayerChunkMap chunkMap = getHandle().getChunkProvider().playerChunkMap;
