@@ -32,6 +32,9 @@ toothpick {
 subprojects {
     repositories {
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
+        maven("https://oss.sonatype.org/content/repositories/snapshots/") {
+            name = "sonatype-oss-snapshots"
+        }
     }
 
     java {
