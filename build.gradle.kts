@@ -1,49 +1,58 @@
 plugins {
-    `java-library`
-    `maven-publish`
-    id("xyz.jpenilla.toothpick")
+    java
+    id("com.github.johnrengelman.shadow") version "7.0.0" apply false
+    id("io.papermc.paperweight.patcher") version "1.0.0-LOCAL-SNAPSHOT"
 }
 
-toothpick {
-    forkName = "Purpur"
-    groupId = "net.pl3x.purpur"
-    forkUrl = "https://github.com/pl3xgaming/Purpur"
-    val versionTag = System.getenv("BUILD_NUMBER")
-        ?: "\"${commitHash() ?: error("Could not obtain git hash")}\""
-    forkVersion = "git-$forkName-$versionTag"
+group = "net.pl3x.purpur"
+version = providers.gradleProperty("projectVersion").forUseAtConfigurationTime().get()
 
-    minecraftVersion = "1.16.5"
-    nmsPackage = "1_16_R3"
-    nmsRevision = "R0.1-SNAPSHOT"
+allprojects {
+    apply(plugin = "java")
 
-    upstream = "Paper"
-    upstreamBranch = "origin/master"
-
-    server {
-        project = projects.purpurServer.dependencyProject
-        patchesDir = rootProject.projectDir.resolve("patches/server")
-    }
-    api {
-        project = projects.purpurApi.dependencyProject
-        patchesDir = rootProject.projectDir.resolve("patches/api")
+    java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(16))
+        }
     }
 }
 
 subprojects {
+    tasks.withType<JavaCompile>().configureEach {
+        options.encoding = "UTF-8"
+        options.release.set(16)
+    }
+
     repositories {
+        mavenCentral()
+        maven("https://repo1.maven.org/maven2/")
+        maven("https://oss.sonatype.org/content/groups/public/")
+        maven("https://papermc.io/repo/repository/maven-public/")
+        maven("https://ci.emc.gs/nexus/content/groups/aikar/")
+        maven("https://repo.aikar.co/content/groups/aikar")
+        maven("https://repo.md-5.net/content/repositories/releases/")
+        maven("https://hub.spigotmc.org/nexus/content/groups/public/")
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
         maven("https://oss.sonatype.org/content/repositories/snapshots/") {
             name = "sonatype-oss-snapshots"
         }
     }
+}
 
-    java {
-        sourceCompatibility = JavaVersion.toVersion(8)
-        targetCompatibility = JavaVersion.toVersion(8)
-    }
+dependencies {
+    implementation(gradleApi())
+}
 
-    publishing.repositories.maven {
-        url = uri("https://repo.pl3x.net/snapshots")
-        credentials(PasswordCredentials::class)
+paperweight {
+    serverProject.set(project(":Purpur-Server"))
+
+    usePaperUpstream(providers.gradleProperty("paperRef")) {
+        withPaperPatcher {
+            apiPatchDir.set(file("patches/api"))
+            apiOutputDir.set(file("Purpur-API"))
+
+            serverPatchDir.set(file("patches/server"))
+            serverOutputDir.set(file("Purpur-Server"))
+        }
     }
 }
