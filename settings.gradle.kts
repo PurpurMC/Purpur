@@ -6,5 +6,4 @@ pluginManagement {
 }
 
 rootProject.name = "Purpur"
-
 include("Purpur-API", "Purpur-Server")

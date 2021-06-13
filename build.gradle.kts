@@ -21,8 +21,8 @@ repositories {
 }
 
 dependencies {
-    remapper("org.quiltmc", "tiny-remapper", "0.4.1")
-    paperclip("io.papermc", "paperclip", "2.0.0-SNAPSHOT@jar")
+    remapper("org.quiltmc:tiny-remapper:0.4.1")
+    paperclip("io.papermc:paperclip:2.0.0-SNAPSHOT@jar")
 }
 
 subprojects {
@@ -63,6 +63,18 @@ val initSubmodules by tasks.registering {
 
 paperweight {
     serverProject.set(project(":Purpur-Server"))
+
+    /* // this is the code for without submodules in case we ever want to use it
+    usePaperUpstream(providers.gradleProperty("paperRef")) {
+        withPaperPatcher {
+            apiPatchDir.set(layout.projectDirectory.dir("patches/api"))
+            apiOutputDir.set(layout.projectDirectory.dir("Purpur-API"))
+
+            serverPatchDir.set(layout.projectDirectory.dir("patches/server"))
+            serverOutputDir.set(layout.projectDirectory.dir("Purpur-Server"))
+        }
+    }
+     */
 
     upstreams {
         register("paper") {
