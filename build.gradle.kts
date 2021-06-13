@@ -52,19 +52,68 @@ subprojects {
     }
 }
 
+/*
 val paperDir = layout.projectDirectory.dir("Paper")
+val paperBranch = "dev/1.17"
+
 val initSubmodules by tasks.registering {
+    group = "paperweight"
+
     outputs.upToDateWhen { false }
     doLast {
         paperDir.asFile.mkdirs()
-        Git(paperDir)("submodule", "update", "--init", "--recursive").executeOut()
+        Git(layout.projectDirectory)("submodule", "update", "--init", "--recursive").executeOut()
     }
 }
+
+val upstreamUpdate by tasks.registering {
+    group = "paperweight"
+
+    outputs.upToDateWhen { false }
+    finalizedBy(cleanUpstreamCaches)
+
+    doLast {
+        Git(paperDir)("fetch").executeOut()
+        Git(paperDir)("clean", "-fd").executeOut()
+        Git(paperDir)("reset", "--hard", "origin/$paperBranch").executeOut()
+        Git(layout.projectDirectory)("add", "--force", paperDir.asFile.name).executeOut()
+        Git(layout.projectDirectory)("submodule", "update", "--init", "--recursive").executeOut()
+    }
+}
+
+val cleanUpstreamCaches by tasks.registering(GradleBuild::class) {
+    dir = paperDir.asFile
+    tasks = listOf("cleanCache")
+}
+
+val upstreamCommit by tasks.registering {
+    group = "paperweight"
+
+    outputs.upToDateWhen { false }
+    doLast {
+        val old = Git(layout.projectDirectory)("ls-tree", "HEAD", paperDir.asFile.name).readText()
+            ?.substringAfter("commit ")?.substringBefore("\t")
+        val changes = Git(paperDir)("log", "--oneline", "$old...HEAD").readText()
+        changes ?: run {
+            println("No changes to commit?")
+            return@doLast
+        }
+        val commitMessage = """
+            |Updated Upstream (Paper)
+            |
+            |Upstream has released updates that appear to apply and compile correctly.
+            |
+            |Paper Changes:
+            |$changes
+        """.trimMargin()
+        Git(layout.projectDirectory)("commit", "-m", commitMessage).executeOut()
+    }
+}
+*/
 
 paperweight {
     serverProject.set(project(":Purpur-Server"))
 
-    /* // this is the code for without submodules in case we ever want to use it
     usePaperUpstream(providers.gradleProperty("paperRef")) {
         withPaperPatcher {
             apiPatchDir.set(layout.projectDirectory.dir("patches/api"))
@@ -74,8 +123,8 @@ paperweight {
             serverOutputDir.set(layout.projectDirectory.dir("Purpur-Server"))
         }
     }
-     */
 
+    /*
     upstreams {
         register("paper") {
             upstreamDataTask {
@@ -98,4 +147,5 @@ paperweight {
             }
         }
     }
+     */
 }
