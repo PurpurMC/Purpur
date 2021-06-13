@@ -6,8 +6,24 @@ plugins {
     id("io.papermc.paperweight.patcher") version "1.0.0-SNAPSHOT"
 }
 
-group = "net.pl3x.purpur"
-version = providers.gradleProperty("projectVersion").forUseAtConfigurationTime().get()
+repositories {
+    mavenCentral()
+    maven("https://wav.jfrog.io/artifactory/repo/") {
+        content {
+            onlyForConfigurations("paperclip")
+        }
+    }
+    maven("https://maven.quiltmc.org/repository/release/") {
+        content {
+            onlyForConfigurations("remapper")
+        }
+    }
+}
+
+dependencies {
+    remapper("org.quiltmc", "tiny-remapper", "0.4.1")
+    paperclip("io.papermc", "paperclip", "2.0.0-SNAPSHOT@jar")
+}
 
 subprojects {
     apply(plugin = "java")
@@ -34,10 +50,6 @@ subprojects {
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
     }
-}
-
-dependencies {
-    implementation(gradleApi())
 }
 
 val paperDir = layout.projectDirectory.dir("Paper")
