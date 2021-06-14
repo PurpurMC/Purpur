@@ -55,6 +55,8 @@ subprojects {
 
 val initMojangApi by tasks.registering {
     val paperMojangApi = project.layout.cache.resolve("paperweight/upstreams/paper/Paper-MojangAPI").toFile()
+
+    outputs.upToDateWhen { paperMojangApi.resolve(".git").exists() }
     doLast {
         Git(paperMojangApi)("init").executeOut()
         Git(paperMojangApi)("add", ".").executeOut()
