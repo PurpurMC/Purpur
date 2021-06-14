@@ -6,4 +6,4 @@ pluginManagement {
 }
 
 rootProject.name = "Purpur"
-include("Purpur-API", "Purpur-Server")
+include("Purpur-API", "Purpur-MojangAPI", "Purpur-Server")
