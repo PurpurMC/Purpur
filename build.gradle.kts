@@ -1,6 +1,3 @@
-import io.papermc.paperweight.util.cache
-import io.papermc.paperweight.util.Git
-
 plugins {
     java
     id("com.github.johnrengelman.shadow") version "7.0.0" apply false
@@ -53,17 +50,6 @@ subprojects {
     }
 }
 
-val initMojangApi by tasks.registering {
-    val paperMojangApi = project.layout.cache.resolve("paperweight/upstreams/paper/Paper-MojangAPI").toFile()
-
-    outputs.upToDateWhen { paperMojangApi.resolve(".git").exists() }
-    doLast {
-        Git(paperMojangApi)("init").executeOut()
-        Git(paperMojangApi)("add", ".").executeOut()
-        Git(paperMojangApi)("commit", "-m", "Initial Source", "--author=Initial <auto@mated.null>").executeOut()
-    }
-}
-
 paperweight {
     serverProject.set(project(":Purpur-Server"))
 
@@ -74,18 +60,6 @@ paperweight {
 
             serverPatchDir.set(layout.projectDirectory.dir("patches/server"))
             serverOutputDir.set(layout.projectDirectory.dir("Purpur-Server"))
-        }
-    }
-
-    upstreams {
-        register("Paper") {
-            upstreamDataTask.get().finalizedBy(initMojangApi)
-
-            patchTasks.register("mojangApi") {
-                sourceDir.set(project.layout.cache.resolve("paperweight/upstreams/paper/Paper-MojangAPI").toFile())
-                patchDir.set(file("patches/mojangapi"))
-                outputDir.set(file("Purpur-MojangAPI"))
-            }
         }
     }
 }
