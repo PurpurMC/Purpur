@@ -1,12 +1,12 @@
 plugins {
     java
     id("com.github.johnrengelman.shadow") version "7.0.0" apply false
-    id("io.papermc.paperweight.patcher") version "1.0.0-SNAPSHOT"
+    id("io.papermc.paperweight.patcher") version "1.0.0"
 }
 
 repositories {
     mavenCentral()
-    maven("https://wav.jfrog.io/artifactory/repo/") {
+    maven("https://papermc.io/repo/repository/maven-public/") {
         content {
             onlyForConfigurations("paperclip")
         }
@@ -20,7 +20,7 @@ repositories {
 
 dependencies {
     remapper("org.quiltmc:tiny-remapper:0.4.1")
-    paperclip("io.papermc:paperclip:2.0.0-SNAPSHOT@jar")
+    paperclip("io.papermc:paperclip:2.0.0@jar")
 }
 
 subprojects {
