@@ -65,9 +65,9 @@ paperweight {
         patchTasks {
             named("server") {
                 patchTask {
-                    sourceMcDevJar.set(layout.projectDirectory.file(".gradle/cache/paperweight/upstreams/paper/.gradle/caches/paperweight/taskCache/decompileJar.jar"))
-                    libraryImports.set(layout.projectDirectory.file("library-imports.txt"))
-                    mcdevImports.set(layout.projectDirectory.file("mcdev-imports.txt"))
+                    sourceMcDevJar.set(layout.projectDirectory.file(".gradle/caches/paperweight/upstreams/paper/.gradle/caches/paperweight/taskCache/decompileJar.jar"))
+                    libraryImports.set(layout.projectDirectory.file("build-data/library-imports.txt"))
+                    mcdevImports.set(layout.projectDirectory.file("build-data/mcdev-imports.txt"))
                 }
             }
         }
