@@ -61,5 +61,15 @@ paperweight {
             serverPatchDir.set(layout.projectDirectory.dir("patches/server"))
             serverOutputDir.set(layout.projectDirectory.dir("Purpur-Server"))
         }
+
+        patchTasks {
+            named("server") {
+                patchTask {
+                    sourceMcDevJar.set(layout.projectDirectory.file(".gradle/cache/paperweight/upstreams/paper/.gradle/caches/paperweight/taskCache/decompileJar.jar"))
+                    libraryImports.set(layout.projectDirectory.file("library-imports.txt"))
+                    mcdevImports.set(layout.projectDirectory.file("mcdev-imports.txt"))
+                }
+            }
+        }
     }
 }
