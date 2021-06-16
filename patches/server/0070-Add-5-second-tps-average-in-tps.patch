@@ -5,7 +5,7 @@ Subject: [PATCH] Add 5 second tps average in /tps
 
 
 diff --git a/src/main/java/com/destroystokyo/paper/gui/RAMDetails.java b/src/main/java/com/destroystokyo/paper/gui/RAMDetails.java
-index dc6bc1910ad0f9b27144d5750078c3ca607d03d3..e8be35f836ede2630d44902e99a21489a7bad61f 100644
+index fa56cd09102a89692b42f1d14257990508c5c720..f9251183df72ddc56662fd3f02acf21641a2200c 100644
 --- a/src/main/java/com/destroystokyo/paper/gui/RAMDetails.java
 +++ b/src/main/java/com/destroystokyo/paper/gui/RAMDetails.java
 @@ -58,7 +58,7 @@ public class RAMDetails extends JList<String> {
@@ -20,26 +20,26 @@ index dc6bc1910ad0f9b27144d5750078c3ca607d03d3..e8be35f836ede2630d44902e99a21489
 @@ -67,7 +67,7 @@ public class RAMDetails extends JList<String> {
          vector.add("Memory use: " + (data.getUsedMem() / 1024L / 1024L) + " mb (" + (data.getFree() * 100L / data.getMax()) + "% free)");
          vector.add("Heap: " + (data.getTotal() / 1024L / 1024L) + " / " + (data.getMax() / 1024L / 1024L) + " mb");
-         vector.add("Avg tick: " + DECIMAL_FORMAT.format(getAverage(server.getTickTimes())) + " ms");
+         vector.add("Avg tick: " + DECIMAL_FORMAT.format(getAverage(server.tickTimes)) + " ms");
 -        vector.add("TPS from last 1m, 5m, 15m: " + String.join(", ", tpsAvg));
 +        vector.add("TPS from last 5s, 1m, 5m, 15m: " + String.join(", ", tpsAvg)); // Purpur
  
          setListData(vector);
      }
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 41de6d447226d9a26a49fd0303344adaf7465064..6afff6ba0c59e3285c99fddf3de738d95153ed24 100644
+index 98b7ccbd1ee4d14fde0cdea2c08c432709fa6e56..e294de7b7e0753bde5a1439ecafdb5abc2ceeea4 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
-@@ -278,7 +278,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+@@ -306,7 +306,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      public static final int TPS = 20;
-     public static final int TICK_TIME = 1000000000 / TPS;
+     public static final int TICK_TIME = 1000000000 / MinecraftServer.TPS;
      private static final int SAMPLE_INTERVAL = 20; // Paper
 -    public final double[] recentTps = new double[ 3 ];
 +    public final double[] recentTps = new double[ 4 ]; // Purpur
      public boolean lagging = false; // Purpur
      public final SlackActivityAccountant slackActivityAccountant = new SlackActivityAccountant();
      // Spigot end
-@@ -1017,6 +1017,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+@@ -1066,6 +1066,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      private static final long MAX_CATCHUP_BUFFER = TICK_TIME * TPS * 60L;
      private long lastTick = 0;
      private long catchupTime = 0;
@@ -47,7 +47,7 @@ index 41de6d447226d9a26a49fd0303344adaf7465064..6afff6ba0c59e3285c99fddf3de738d9
      public final RollingAverage tps1 = new RollingAverage(60);
      public final RollingAverage tps5 = new RollingAverage(60 * 5);
      public final RollingAverage tps15 = new RollingAverage(60 * 15);
-@@ -1107,13 +1108,17 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+@@ -1155,13 +1156,17 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                      {
                          final long diff = curTime - tickSection;
                          java.math.BigDecimal currentTps = TPS_BASE.divide(new java.math.BigDecimal(diff), 30, java.math.RoundingMode.HALF_UP);
@@ -56,23 +56,23 @@ index 41de6d447226d9a26a49fd0303344adaf7465064..6afff6ba0c59e3285c99fddf3de738d9
                          tps5.add(currentTps, diff);
                          tps15.add(currentTps, diff);
                          // Backwards compat with bad plugins
--                        recentTps[0] = tps1.getAverage();
--                        recentTps[1] = tps5.getAverage();
--                        recentTps[2] = tps15.getAverage();
+-                        this.recentTps[0] = tps1.getAverage();
+-                        this.recentTps[1] = tps5.getAverage();
+-                        this.recentTps[2] = tps15.getAverage();
 +                        // Purpur start
-+                        recentTps[0] = tps5s.getAverage();
-+                        recentTps[1] = tps1.getAverage();
-+                        recentTps[2] = tps5.getAverage();
-+                        recentTps[3] = tps15.getAverage();
++                        this.recentTps[0] = tps5s.getAverage();
++                        this.recentTps[1] = tps1.getAverage();
++                        this.recentTps[2] = tps5.getAverage();
++                        this.recentTps[3] = tps15.getAverage();
 +                        // Purpur end
                          // Paper end
                          lagging = recentTps[0] < net.pl3x.purpur.PurpurConfig.laggingThreshold; // Purpur
                          tickSection = curTime;
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 8ccfb841deb6f117726a9f7f1b326fbce62d5f02..7d12462a1fe0646528e79905e9aedba8dc855406 100644
+index 47401670f1b97e6e4f8a435d6ff4eac29a5c528d..35c53c61db95ca88cfdf4db4126be1e094032296 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -2332,6 +2332,7 @@ public final class CraftServer implements Server {
+@@ -2325,6 +2325,7 @@ public final class CraftServer implements Server {
      @Override
      public double[] getTPS() {
          return new double[] {
@@ -81,12 +81,12 @@ index 8ccfb841deb6f117726a9f7f1b326fbce62d5f02..7d12462a1fe0646528e79905e9aedba8
                  net.minecraft.server.MinecraftServer.getServer().tps5.getAverage(),
                  net.minecraft.server.MinecraftServer.getServer().tps15.getAverage()
 diff --git a/src/main/java/org/spigotmc/TicksPerSecondCommand.java b/src/main/java/org/spigotmc/TicksPerSecondCommand.java
-index e62890433ffbe0b4e48942fe6c38b599a19e58fd..312248b5c6febc6a3c10940714fac7fbc3c53b7f 100644
+index 9bede6a26c08ede063c7a38f1149c811df14b258..088239d17aa8178cf8af09ec23cfd4deaaf2bbb6 100644
 --- a/src/main/java/org/spigotmc/TicksPerSecondCommand.java
 +++ b/src/main/java/org/spigotmc/TicksPerSecondCommand.java
 @@ -31,7 +31,7 @@ public class TicksPerSecondCommand extends Command
          for ( int i = 0; i < tps.length; i++) {
-             tpsAvg[i] = format( tps[i] );
+             tpsAvg[i] = TicksPerSecondCommand.format( tps[i] );
          }
 -        sender.sendMessage(ChatColor.GOLD + "TPS from last 1m, 5m, 15m: " + org.apache.commons.lang.StringUtils.join(tpsAvg, ", "));
 +        sender.sendMessage(ChatColor.GOLD + "TPS from last 5s, 1m, 5m, 15m: " + org.apache.commons.lang.StringUtils.join(tpsAvg, ", ")); // Purpur
