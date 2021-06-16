@@ -1,0 +1,169 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sun, 12 May 2019 00:43:12 -0500
+Subject: [PATCH] Giants AI settings
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+index a62d79fbd7f1974f98520c536948225c5dc53c12..3c40cec55a1195f81ce453eaebe9487e140297ae 100644
+--- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
++++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+@@ -289,6 +289,7 @@ public abstract class LivingEntity extends Entity {
+         this.useItem = ItemStack.EMPTY;
+         this.lastClimbablePos = Optional.empty();
+         this.attributes = new AttributeMap(DefaultAttributes.getSupplier(type));
++        this.initAttributes(); // Purpur
+         this.craftAttributes = new CraftAttributeMap(this.attributes); // CraftBukkit
+         // CraftBukkit - setHealth(getMaxHealth()) inlined and simplified to skip the instanceof check for EntityPlayer, as getBukkitEntity() is not initialized in constructor
+         this.entityData.set(LivingEntity.DATA_HEALTH_ID, (float) this.getAttribute(Attributes.MAX_HEALTH).getValue());
+@@ -304,6 +305,8 @@ public abstract class LivingEntity extends Entity {
+         this.brain = this.makeBrain(new Dynamic(dynamicopsnbt, (net.minecraft.nbt.Tag) dynamicopsnbt.createMap((Map) ImmutableMap.of(dynamicopsnbt.createString("memories"), (net.minecraft.nbt.Tag) dynamicopsnbt.emptyMap()))));
+     }
+ 
++    protected void initAttributes() {} // Purpur
++
+     public Brain<?> getBrain() {
+         return this.brain;
+     }
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Giant.java b/src/main/java/net/minecraft/world/entity/monster/Giant.java
+index a183226bb0cf01c5aaf7babe1d08fa9ab7388648..8f86797cd47b338a599dc053a515e16cb23e56f4 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Giant.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Giant.java
+@@ -1,19 +1,93 @@
+ package net.minecraft.world.entity.monster;
+ 
+ import net.minecraft.core.BlockPos;
+-import net.minecraft.world.entity.EntityDimensions;
+-import net.minecraft.world.entity.EntityType;
+-import net.minecraft.world.entity.Pose;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.world.Difficulty;
++import net.minecraft.world.DifficultyInstance;
++import net.minecraft.world.entity.*;
++import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+ import net.minecraft.world.entity.ai.attributes.Attributes;
++import net.minecraft.world.entity.ai.goal.FloatGoal;
++import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
++import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
++import net.minecraft.world.entity.ai.goal.MoveTowardsRestrictionGoal;
++import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
++import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
++import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
++import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
++import net.minecraft.world.entity.animal.IronGolem;
++import net.minecraft.world.entity.animal.Turtle;
++import net.minecraft.world.entity.npc.Villager;
++import net.minecraft.world.entity.player.Player;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.Items;
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.LevelReader;
++import net.minecraft.world.level.ServerLevelAccessor;
++
++import javax.annotation.Nullable;
+ 
+ public class Giant extends Monster {
+     public Giant(EntityType<? extends Giant> type, Level world) {
+         super(type, world);
+         this.safeFallDistance = 10.0F; // Purpur
++        maxUpStep = world.purpurConfig.giantStepHeight;
++    }
++
++    // Purpur start
++    @Override
++    protected void registerGoals() {
++        if (level.purpurConfig.giantHaveAI) {
++            this.goalSelector.addGoal(0, new FloatGoal(this));
++            this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0D));
++            this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 16.0F));
++            this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
++            this.goalSelector.addGoal(5, new MoveTowardsRestrictionGoal(this, 1.0D));
++            if (level.purpurConfig.giantHaveHostileAI) {
++                this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.0D, false));
++                this.targetSelector.addGoal(1, new HurtByTargetGoal(this).setAlertOthers(ZombifiedPiglin.class));
++                this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));
++                this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Villager.class, false));
++                this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, IronGolem.class, true));
++                this.targetSelector.addGoal(5, new NearestAttackableTargetGoal<>(this, Turtle.class, true));
++            }
++        }
++    }
++
++    @Override
++    protected void initAttributes() {
++        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(this.level.purpurConfig.giantMaxHealth);
++        this.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(this.level.purpurConfig.giantMovementSpeed);
++        this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(this.level.purpurConfig.giantAttackDamage);
++    }
++
++    @Override
++    public SpawnGroupData finalizeSpawn(ServerLevelAccessor world, DifficultyInstance difficulty, MobSpawnType spawnReason, @Nullable SpawnGroupData entityData, @Nullable CompoundTag entityNbt) {
++        SpawnGroupData groupData = super.finalizeSpawn(world, difficulty, spawnReason, entityData, entityNbt);
++        if (groupData == null) {
++            populateDefaultEquipmentSlots(difficulty);
++            populateDefaultEquipmentEnchantments(difficulty);
++        }
++        return groupData;
++    }
++
++    @Override
++    protected void populateDefaultEquipmentSlots(DifficultyInstance difficulty) {
++        super.populateDefaultEquipmentSlots(difficulty);
++        // TODO make configurable
++        if (random.nextFloat() < (level.getDifficulty() == Difficulty.HARD ? 0.1F : 0.05F)) {
++            this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
++        }
++    }
++
++    @Override
++    public float getJumpPower() {
++        // make giants jump as high as everything else relative to their size
++        // 1.0 makes bottom of feet about as high as their waist when they jump
++        return level.purpurConfig.giantJumpHeight;
+     }
++    // Purpur end
+ 
+     @Override
+     protected float getStandingEyeHeight(Pose pose, EntityDimensions dimensions) {
+@@ -26,6 +100,6 @@ public class Giant extends Monster {
+ 
+     @Override
+     public float getWalkTargetValue(BlockPos pos, LevelReader world) {
+-        return world.getBrightness(pos) - 0.5F;
++        return super.getWalkTargetValue(pos, world); // Purpur - fix light requirements for natural spawns
+     }
+ }
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index e778601b9a075311715d24beffaa421abb25c153..abf4d0b330ceeb1bd50b1fc17651727ec9d8d5e3 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -113,6 +113,28 @@ public class PurpurWorldConfig {
+         turtleEggsBreakFromMinecarts = getBoolean("blocks.turtle_egg.break-from-minecarts", turtleEggsBreakFromMinecarts);
+     }
+ 
++    public float giantStepHeight = 2.0F;
++    public float giantJumpHeight = 1.0F;
++    public double giantMovementSpeed = 0.5D;
++    public double giantAttackDamage = 50.0D;
++    public boolean giantHaveAI = false;
++    public boolean giantHaveHostileAI = false;
++    public double giantMaxHealth = 100.0D;
++    private void giantSettings() {
++        giantStepHeight = (float) getDouble("mobs.giant.step-height", giantStepHeight);
++        giantJumpHeight = (float) getDouble("mobs.giant.jump-height", giantJumpHeight);
++        giantMovementSpeed = getDouble("mobs.giant.movement-speed", giantMovementSpeed);
++        giantAttackDamage = getDouble("mobs.giant.attack-damage", giantAttackDamage);
++        giantHaveAI = getBoolean("mobs.giant.have-ai", giantHaveAI);
++        giantHaveHostileAI = getBoolean("mobs.giant.have-hostile-ai", giantHaveHostileAI);
++        if (PurpurConfig.version < 8) {
++            double oldValue = getDouble("mobs.giant.max-health", giantMaxHealth);
++            set("mobs.giant.attributes.max-health", oldValue);
++            set("mobs.giant.max-health", null);
++        }
++        giantMaxHealth = getDouble("mobs.giant.attributes.max-health", giantMaxHealth);
++    }
++
+     public int villagerBrainTicks = 1;
+     public boolean villagerUseBrainTicksOnlyWhenLagging = true;
+     private void villagerSettings() {
