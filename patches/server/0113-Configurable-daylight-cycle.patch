@@ -1,0 +1,99 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Sat, 10 Oct 2020 14:29:55 -0500
+Subject: [PATCH] Configurable daylight cycle
+
+
+diff --git a/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java b/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
+index 689ad22925b2561f7c8db961743eb1f821dbb25f..fa3c960992cc240161817e54659d83fed259f2fe 100644
+--- a/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
++++ b/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
+@@ -5,7 +5,7 @@ import net.minecraft.network.protocol.Packet;
+ 
+ public class ClientboundSetTimePacket implements Packet<ClientGamePacketListener> {
+     private final long gameTime;
+-    private final long dayTime;
++    private long dayTime; public void setDayTime(long dayTime) { this.dayTime = dayTime; } // Purpur
+ 
+     public ClientboundSetTimePacket(long time, long timeOfDay, boolean doDaylightCycle) {
+         this.gameTime = time % 192000; // Paper - fix guardian beam
+diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
+index dc968864cef387d362b116a9e733859b7460f967..52f5429b8ba95968da28226d75ba47618e1b99f4 100644
+--- a/src/main/java/net/minecraft/server/level/ServerLevel.java
++++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
+@@ -55,6 +55,7 @@ import net.minecraft.network.protocol.game.ClientboundExplodePacket;
+ import net.minecraft.network.protocol.game.ClientboundLevelEventPacket;
+ import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
+ import net.minecraft.network.protocol.game.ClientboundSetDefaultSpawnPositionPacket;
++import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
+ import net.minecraft.network.protocol.game.ClientboundSoundEntityPacket;
+ import net.minecraft.network.protocol.game.ClientboundSoundPacket;
+ import net.minecraft.network.protocol.game.DebugPackets;
+@@ -199,6 +200,7 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+     final Int2ObjectMap<EnderDragonPart> dragonParts;
+     private final StructureFeatureManager structureFeatureManager;
+     private final boolean tickTime;
++    private double fakeTime; // Purpur
+ 
+ 
+     // CraftBukkit start
+@@ -408,6 +410,7 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+         this.getCraftServer().addWorld(this.getWorld()); // CraftBukkit
+ 
+         this.asyncChunkTaskManager = new com.destroystokyo.paper.io.chunk.ChunkTaskManager(this); // Paper
++        this.fakeTime = this.serverLevelData.getDayTime();
+     }
+ 
+     // CraftBukkit start
+@@ -581,9 +584,20 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+             // CraftBukkit start
+             long l = this.levelData.getDayTime() + 24000L;
+             TimeSkipEvent event = new TimeSkipEvent(this.getWorld(), TimeSkipEvent.SkipReason.NIGHT_SKIP, (l - l % 24000L) - this.getDayTime());
++            ServerLevel level = this.serverLevelData.world;
+             if (this.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
+                 getCraftServer().getPluginManager().callEvent(event);
+                 if (!event.isCancelled()) {
++                    double incrementTimeBy = 12000.0D / (double) (level.isDay() ? level.purpurConfig.daytimeTicks : level.purpurConfig.nighttimeTicks);
++                    if (incrementTimeBy != 1.0D) {
++                        this.fakeTime += incrementTimeBy;
++                        this.setDayTime(this.fakeTime);
++                        ClientboundSetTimePacket packet = new ClientboundSetTimePacket(level.getGameTime(), level.getDayTime(), true);
++                        for (ServerPlayer player : level.players) {
++                            packet.setDayTime(player.getPlayerTime());
++                            player.connection.send(packet);
++                        }
++                    } else
+                     this.setDayTime(this.getDayTime() + event.getSkipAmount());
+                 }
+ 
+@@ -695,6 +709,12 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+ 
+     public void setDayTime(long timeOfDay) {
+         this.serverLevelData.setDayTime(timeOfDay);
++        // Purpur start
++        this.fakeTime = timeOfDay;
++    }
++    public void setDayTime(double i) {
++        this.serverLevelData.setDayTime((long) i);
++        // Purpur end
+     }
+ 
+     public void tickCustomSpawners(boolean spawnMonsters, boolean spawnAnimals) {
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 192896f331967b057c56bd3deeca1c4f740f7dff..d1472eb116e82bbb7c0c6aec814371a9935d40b3 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -171,6 +171,13 @@ public class PurpurWorldConfig {
+         elytraDamagePerTridentBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.trident", elytraDamagePerTridentBoost);
+     }
+ 
++    public int daytimeTicks = 12000;
++    public int nighttimeTicks = 12000;
++    private void daytimeCycleSettings() {
++        daytimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.daytime", daytimeTicks);
++        nighttimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.nighttime", nighttimeTicks);
++    }
++
+     public int entityLifeSpan = 0;
+     private void entitySettings() {
+         entityLifeSpan = getInt("gameplay-mechanics.entity-lifespan", entityLifeSpan);
