@@ -1,0 +1,232 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Fri, 3 Jul 2020 00:03:52 -0500
+Subject: [PATCH] Add phantom spawning options
+
+
+diff --git a/src/main/java/net/minecraft/world/level/levelgen/PhantomSpawner.java b/src/main/java/net/minecraft/world/level/levelgen/PhantomSpawner.java
+index 79504dc3448402e73b09c4232b1fd0488872cf68..5c7683058b79953aa4f7427d7654b7e4823dbf09 100644
+--- a/src/main/java/net/minecraft/world/level/levelgen/PhantomSpawner.java
++++ b/src/main/java/net/minecraft/world/level/levelgen/PhantomSpawner.java
+@@ -2,12 +2,15 @@ package net.minecraft.world.level.levelgen;
+ 
+ import java.util.Iterator;
+ import java.util.Random;
++
++import com.destroystokyo.paper.event.entity.PhantomPreSpawnEvent;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.nbt.CompoundTag;
+ import net.minecraft.server.MCUtil;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.server.level.ServerPlayer;
+ import net.minecraft.stats.ServerStatsCounter;
++import net.minecraft.stats.Stat;
+ import net.minecraft.stats.Stats;
+ import net.minecraft.util.Mth;
+ import net.minecraft.world.DifficultyInstance;
+@@ -23,84 +26,100 @@ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.NaturalSpawner;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.material.FluidState;
++import org.bukkit.event.entity.CreatureSpawnEvent;
+ 
+ public class PhantomSpawner implements CustomSpawner {
+ 
+-    private int nextTick;
++    private int spawnDelay; // Purpur
+ 
+     public PhantomSpawner() {}
+ 
+     @Override
+     public int tick(ServerLevel world, boolean spawnMonsters, boolean spawnAnimals) {
++        // Purpur start - rewrite entire thing
+         if (!spawnMonsters) {
+             return 0;
+-        } else if (!world.getGameRules().getBoolean(GameRules.RULE_DOINSOMNIA)) {
++        }
++
++        if (!world.getGameRules().getBoolean(GameRules.RULE_DOINSOMNIA)) {
++            return 0;
++        }
++
++        --this.spawnDelay;
++        if (this.spawnDelay > 0) {
+             return 0;
+-        } else {
+-            Random random = world.random;
+-
+-            --this.nextTick;
+-            if (this.nextTick > 0) {
+-                return 0;
+-            } else {
+-                this.nextTick += (60 + random.nextInt(60)) * 20;
+-                if (world.getSkyDarken() < 5 && world.dimensionType().hasSkyLight()) {
+-                    return 0;
+-                } else {
+-                    int i = 0;
+-                    Iterator iterator = world.players().iterator();
+-
+-                    while (iterator.hasNext()) {
+-                        Player entityhuman = (Player) iterator.next();
+-
+-                        if (!entityhuman.isSpectator() && (!world.paperConfig.phantomIgnoreCreative || !entityhuman.isCreative())) { // Paper
+-                            BlockPos blockposition = entityhuman.blockPosition();
+-
+-                            if (!world.dimensionType().hasSkyLight() || blockposition.getY() >= world.getSeaLevel() && world.canSeeSky(blockposition)) {
+-                                DifficultyInstance difficultydamagescaler = world.getCurrentDifficultyAt(blockposition);
+-
+-                                if (difficultydamagescaler.isHarderThan(random.nextFloat() * 3.0F)) {
+-                                    ServerStatsCounter serverstatisticmanager = ((ServerPlayer) entityhuman).getStats();
+-                                    int j = Mth.clamp(serverstatisticmanager.getValue(Stats.CUSTOM.get(Stats.TIME_SINCE_REST)), 1, Integer.MAX_VALUE);
+-                                    boolean flag2 = true;
+-
+-                                    if (random.nextInt(j) >= 72000) {
+-                                        BlockPos blockposition1 = blockposition.above(20 + random.nextInt(15)).east(-10 + random.nextInt(21)).south(-10 + random.nextInt(21));
+-                                        BlockState iblockdata = world.getBlockState(blockposition1);
+-                                        FluidState fluid = world.getFluidState(blockposition1);
+-
+-                                        if (NaturalSpawner.isValidEmptySpawnBlock((BlockGetter) world, blockposition1, iblockdata, fluid, EntityType.PHANTOM)) {
+-                                            SpawnGroupData groupdataentity = null;
+-                                            int k = 1 + random.nextInt(difficultydamagescaler.getDifficulty().getId() + 1);
+-
+-                                            for (int l = 0; l < k; ++l) {
+-                                                // Paper start
+-                                                com.destroystokyo.paper.event.entity.PhantomPreSpawnEvent event = new com.destroystokyo.paper.event.entity.PhantomPreSpawnEvent(MCUtil.toLocation(world, blockposition1), ((ServerPlayer) entityhuman).getBukkitEntity(), org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL);
+-                                                if (!event.callEvent()) {
+-                                                    if (event.shouldAbortSpawn()) {
+-                                                        break;
+-                                                    }
+-                                                    continue;
+-                                                }
+-                                                // Paper end
+-                                                Phantom entityphantom = (Phantom) EntityType.PHANTOM.create((Level) world);
+-                                                entityphantom.setSpawningEntity(entityhuman.getUUID()); // Paper
+-                                                entityphantom.moveTo(blockposition1, 0.0F, 0.0F);
+-                                                groupdataentity = entityphantom.finalizeSpawn(world, difficultydamagescaler, MobSpawnType.NATURAL, groupdataentity, (CompoundTag) null);
+-                                                world.addAllEntities(entityphantom, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL); // CraftBukkit
+-                                            }
+-
+-                                            i += k;
+-                                        }
+-                                    }
+-                                }
+-                            }
+-                        }
++        }
++        this.spawnDelay += world.purpurConfig.phantomSpawnDelayMin + world.random.nextInt(world.purpurConfig.phantomSpawnDelayMax - world.purpurConfig.phantomSpawnDelayMin);
++
++        if (!world.dimensionType().hasSkyLight() || world.getSkyDarken() < world.purpurConfig.phantomSpawnMinSkyDarkness) {
++            return 0;
++        }
++
++        int numberSpawnsAttempted = 0;
++        for (ServerPlayer player : world.players()) {
++            if (player.isSpectator() || (player.isCreative() && world.paperConfig.phantomIgnoreCreative)) {
++                continue;
++            }
++
++            BlockPos playerPos = player.blockPosition();
++            if (playerPos.getY() < world.getSeaLevel() && world.purpurConfig.phantomSpawnOnlyAboveSeaLevel) {
++                continue;
++            }
++
++            if (!world.canSeeSky(playerPos) && world.purpurConfig.phantomSpawnOnlyWithVisibleSky) {
++                continue;
++            }
++
++            DifficultyInstance difficultyInstance = world.getCurrentDifficultyAt(playerPos);
++            if (!difficultyInstance.isHarderThan(world.random.nextFloat() * (float) world.purpurConfig.phantomSpawnLocalDifficultyChance)) {
++                continue;
++            }
++
++            ServerStatsCounter stats = player.getStats();
++            int timeSinceRest = Mth.clamp(stats.getValue(Stats.CUSTOM.get(Stats.TIME_SINCE_REST)), 1, Integer.MAX_VALUE);
++            if (world.random.nextInt(timeSinceRest) < world.purpurConfig.phantomSpawnMinTimeSinceSlept) {
++                continue;
++            }
++
++            BlockPos spawnPos = playerPos
++                    .above(world.purpurConfig.phantomSpawnMinOverhead + world.random.nextInt(world.purpurConfig.phantomSpawnMaxOverhead - world.purpurConfig.phantomSpawnMinOverhead))
++                    .east(-world.purpurConfig.phantomSpawnOverheadRadius + world.random.nextInt(world.purpurConfig.phantomSpawnOverheadRadius + 1))
++                    .south(-world.purpurConfig.phantomSpawnOverheadRadius + world.random.nextInt(world.purpurConfig.phantomSpawnOverheadRadius + 1));
++
++            if (!NaturalSpawner.isValidEmptySpawnBlock(world, spawnPos, world.getTypeIfLoaded(spawnPos), world.getFluidState(spawnPos), EntityType.PHANTOM)) {
++                continue;
++            }
++
++            int difficulty = difficultyInstance.getDifficulty().getId();
++            int spawnAttempts = world.purpurConfig.phantomSpawnMinPerAttempt + world.random.nextInt((world.purpurConfig.phantomSpawnMaxPerAttempt < 0 ? difficulty : world.purpurConfig.phantomSpawnMaxPerAttempt) + world.purpurConfig.phantomSpawnMinPerAttempt);
++
++            SpawnGroupData groupData = null;
++            for (int count = 0; count < spawnAttempts; ++count) {
++                // Paper start
++                PhantomPreSpawnEvent event = new PhantomPreSpawnEvent(MCUtil.toLocation(world, spawnPos), player.getBukkitEntity(), CreatureSpawnEvent.SpawnReason.NATURAL);
++                if (!event.callEvent()) {
++                    if (event.shouldAbortSpawn()) {
++                        break;
+                     }
++                    continue;
++                }
++                // Paper end
+ 
+-                    return i;
++                Phantom phantom = EntityType.PHANTOM.create(world);
++                if (phantom == null) {
++                    continue;
+                 }
++
++                phantom.setSpawningEntity(player.getUUID());
++                phantom.moveTo(playerPos, 0.0F, 0.0F);
++                groupData = phantom.finalizeSpawn(world, difficultyInstance, MobSpawnType.NATURAL, groupData, null);
++                world.addEntity(phantom, CreatureSpawnEvent.SpawnReason.NATURAL); // CraftBukkit
+             }
++
++            numberSpawnsAttempted += spawnAttempts;
+         }
++
++        return numberSpawnsAttempted;
++        // Purpur end - rewrite entire thing
+     }
+ }
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 99803a6bc3d63b31ddb2c137ba9ea311f955b9c9..7eda42e4ffd91e1619dc59acdb60b9a7ef83f0c9 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -915,6 +915,18 @@ public class PurpurWorldConfig {
+     public double phantomAttackedByCrystalRadius = 0.0D;
+     public float phantomAttackedByCrystalDamage = 1.0F;
+     public double phantomOrbitCrystalRadius = 0.0D;
++    public int phantomSpawnDelayMin = 1200;
++    public int phantomSpawnDelayMax = 2400;
++    public int phantomSpawnMinSkyDarkness = 5;
++    public boolean phantomSpawnOnlyAboveSeaLevel = true;
++    public boolean phantomSpawnOnlyWithVisibleSky = true;
++    public double phantomSpawnLocalDifficultyChance = 3.0D;
++    public int phantomSpawnMinTimeSinceSlept = 72000;
++    public int phantomSpawnMinOverhead = 20;
++    public int phantomSpawnMaxOverhead = 35;
++    public int phantomSpawnOverheadRadius = 10;
++    public int phantomSpawnMinPerAttempt = 1;
++    public int phantomSpawnMaxPerAttempt = -1;
+     private void phantomSettings() {
+         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
+         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
+@@ -931,6 +943,18 @@ public class PurpurWorldConfig {
+         phantomAttackedByCrystalRadius = getDouble("mobs.phantom.attacked-by-crystal-range", phantomAttackedByCrystalRadius);
+         phantomAttackedByCrystalDamage = (float) getDouble("mobs.phantom.attacked-by-crystal-damage", phantomAttackedByCrystalDamage);
+         phantomOrbitCrystalRadius = getDouble("mobs.phantom.orbit-crystal-radius", phantomOrbitCrystalRadius);
++        phantomSpawnDelayMin = getInt("mobs.phantom.spawn.delay.min", phantomSpawnDelayMin);
++        phantomSpawnDelayMax = getInt("mobs.phantom.spawn.delay.max", phantomSpawnDelayMax);
++        phantomSpawnMinSkyDarkness = getInt("mobs.phantom.spawn.min-sky-darkness", phantomSpawnMinSkyDarkness);
++        phantomSpawnOnlyAboveSeaLevel = getBoolean("mobs.phantom.spawn.only-above-sea-level", phantomSpawnOnlyAboveSeaLevel);
++        phantomSpawnOnlyWithVisibleSky = getBoolean("mobs.phantom.spawn.only-with-visible-sky", phantomSpawnOnlyWithVisibleSky);
++        phantomSpawnLocalDifficultyChance = getDouble("mobs.phantom.spawn.local-difficulty-chance", phantomSpawnLocalDifficultyChance);
++        phantomSpawnMinTimeSinceSlept = getInt("mobs.phantom.spawn.min-time-since-slept", phantomSpawnMinTimeSinceSlept);
++        phantomSpawnMinOverhead = getInt("mobs.phantom.spawn.overhead.min", phantomSpawnMinOverhead);
++        phantomSpawnMaxOverhead = getInt("mobs.phantom.spawn.overhead.max", phantomSpawnMaxOverhead);
++        phantomSpawnOverheadRadius = getInt("mobs.phantom.spawn.overhead.radius", phantomSpawnOverheadRadius);
++        phantomSpawnMinPerAttempt = getInt("mobs.phantom.spawn.per-attempt.min", phantomSpawnMinPerAttempt);
++        phantomSpawnMaxPerAttempt = getInt("mobs.phantom.spawn.per-attempt.max", phantomSpawnMaxPerAttempt);
+     }
+ 
+     public boolean pigRidable = false;
