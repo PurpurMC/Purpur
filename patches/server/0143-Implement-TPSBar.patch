@@ -4,36 +4,36 @@ Date: Sat, 12 Dec 2020 21:19:05 -0600
 Subject: [PATCH] Implement TPSBar
 
 
-diff --git a/src/main/java/net/minecraft/commands/CommandDispatcher.java b/src/main/java/net/minecraft/commands/CommandDispatcher.java
-index 0ea56c863a9a1019b36f7f9f9164301aef12637b..4338b459011bf7a083790b7bb76cf1b24471fd19 100644
---- a/src/main/java/net/minecraft/commands/CommandDispatcher.java
-+++ b/src/main/java/net/minecraft/commands/CommandDispatcher.java
-@@ -193,6 +193,7 @@ public class CommandDispatcher {
-             CommandWhitelist.a(this.b);
-             net.pl3x.purpur.command.DemoCommand.register(getDispatcher()); // Purpur
-             net.pl3x.purpur.command.PingCommand.register(getDispatcher()); // Purpur
-+            net.pl3x.purpur.command.TPSBarCommand.register(getDispatcher()); // Purpur
+diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
+index 9cbaaf4cd138e6c1d2d51afcef24a81a3f2973c5..13e90bf9506862a4830b50dcce06cc95a6ada5e3 100644
+--- a/src/main/java/net/minecraft/commands/Commands.java
++++ b/src/main/java/net/minecraft/commands/Commands.java
+@@ -200,6 +200,7 @@ public class Commands {
+             WhitelistCommand.register(this.dispatcher);
+             net.pl3x.purpur.command.DemoCommand.register(this.dispatcher); // Purpur
+             net.pl3x.purpur.command.PingCommand.register(this.dispatcher); // Purpur
++            net.pl3x.purpur.command.TPSBarCommand.register(this.dispatcher); // Purpur
          }
  
-         if (commanddispatcher_servertype.d) {
+         if (environment.includeIntegrated) {
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 5c5da6e2be6d3a0ca2fee4e0a5510ccb15fa8020..ab49314a0b2fb70bab879be2adcf938bb43c5dcb 100644
+index 91e6d0b6560ffa8e870eca9707d5cd117fcb2347..d525bd371bedf75c24afd4a8a1240b31f91aa9da 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
-@@ -991,6 +991,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+@@ -1040,6 +1040,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
          this.safeShutdown(flag, false);
      }
      public void safeShutdown(boolean flag, boolean isRestarting) {
 +        net.pl3x.purpur.task.TPSBarTask.stop(); // Purpur
-         this.isRunning = false;
          this.isRestarting = isRestarting;
          this.hasLoggedStop = true; // Paper
+         if (isDebugging()) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper
 diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
-index f9a9bf683bad6957fe1e7987b83c0278ba5379f8..ee257bdbded60f6e119ce3349f75a7603ff49e8d 100644
+index 5fa2723c9899c69ac326f95acf49cd47406378f9..a9098119009b60ea8dbdb4c118cfc20b112d44e0 100644
 --- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
 +++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
-@@ -339,6 +339,8 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
-                 MinecraftServerBeans.a((MinecraftServer) this);
+@@ -345,6 +345,8 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
+                 DedicatedServer.LOGGER.info("JMX monitoring enabled");
              }
  
 +            net.pl3x.purpur.task.TPSBarTask.start(); // Purpur
@@ -42,44 +42,41 @@ index f9a9bf683bad6957fe1e7987b83c0278ba5379f8..ee257bdbded60f6e119ce3349f75a760
          }
      }
 diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
-index 9a41d4ae2a64ba542dd9b6b98b01dd660a43b2dc..659c178684464787c73471ad960d5b37f9dbe2ec 100644
+index 7bab62ac11d31f9eb0936f8c8540ad19685b49ee..f71097f1386de7ba6aaaffe8728e9ac18c5270c5 100644
 --- a/src/main/java/net/minecraft/server/players/PlayerList.java
 +++ b/src/main/java/net/minecraft/server/players/PlayerList.java
-@@ -597,6 +597,8 @@ public abstract class PlayerList {
-         if (entityplayer.didPlayerJoinEvent) cserver.getPluginManager().callEvent(playerQuitEvent); // Paper - if we disconnected before join ever fired, don't fire quit
+@@ -593,6 +593,8 @@ public abstract class PlayerList {
+         if (entityplayer.didPlayerJoinEvent) this.cserver.getPluginManager().callEvent(playerQuitEvent); // Paper - if we disconnected before join ever fired, don't fire quit
          entityplayer.getBukkitEntity().disconnect(playerQuitEvent.getQuitMessage());
  
 +        net.pl3x.purpur.task.TPSBarTask.removePlayer(cserver.getPlayer(entityplayer)); // Purpur
 +
-         if (server.isMainThread()) entityplayer.playerTick(); // SPIGOT-924 // Paper - don't tick during emergency shutdowns (Watchdog)
+         if (server.isSameThread()) entityplayer.doTick(); // SPIGOT-924 // Paper - don't tick during emergency shutdowns (Watchdog)
          // CraftBukkit end
  
 diff --git a/src/main/java/net/pl3x/purpur/command/TPSBarCommand.java b/src/main/java/net/pl3x/purpur/command/TPSBarCommand.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..807f5709af7fd9497633ecfc9e932f0dfd4df231
+index 0000000000000000000000000000000000000000..2803a1b95121fbff3066fd2d1abaf8723386781f
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/command/TPSBarCommand.java
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,24 @@
 +package net.pl3x.purpur.command;
 +
-+import net.minecraft.commands.CommandDispatcher;
-+import net.minecraft.commands.CommandListenerWrapper;
-+import net.minecraft.server.level.EntityPlayer;
++import com.mojang.brigadier.CommandDispatcher;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.server.level.ServerPlayer;
 +import net.pl3x.purpur.task.TPSBarTask;
 +
 +public class TPSBarCommand {
-+    public static void register(com.mojang.brigadier.CommandDispatcher<CommandListenerWrapper> dispatcher) {
-+        dispatcher.register(CommandDispatcher.literal("tpsbar")
-+                .requires((listener) -> {
-+                    return listener.hasPermission(2);
-+                })
-+                .executes((context) -> {
-+                    return execute(context.getSource(), context.getSource().getPlayerOrException());
-+                })
++    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++        dispatcher.register(Commands.literal("tpsbar")
++                .requires(listener -> listener.hasPermission(2))
++                .executes(context -> execute(context.getSource(), context.getSource().getPlayerOrException()))
 +        ).setPermission("bukkit.command.tpsbar");
 +    }
 +
-+    private static int execute(CommandListenerWrapper sender, EntityPlayer player) {
++    private static int execute(CommandSourceStack source, ServerPlayer player) {
 +        if (player != null) {
 +            TPSBarTask.togglePlayer(player.getBukkitEntity());
 +            return 1;
@@ -89,7 +86,7 @@ index 0000000000000000000000000000000000000000..807f5709af7fd9497633ecfc9e932f0d
 +}
 diff --git a/src/main/java/net/pl3x/purpur/task/TPSBarTask.java b/src/main/java/net/pl3x/purpur/task/TPSBarTask.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a9d71d2b769b8e4e0f5039e997fc5ebc1cc9bfbb
+index 0000000000000000000000000000000000000000..11791bbd4dbe4037f7a5b630be2ff1fa4d599513
 --- /dev/null
 +++ b/src/main/java/net/pl3x/purpur/task/TPSBarTask.java
 @@ -0,0 +1,116 @@
@@ -140,7 +137,7 @@ index 0000000000000000000000000000000000000000..a9d71d2b769b8e4e0f5039e997fc5ebc
 +            return;
 +        }
 +
-+        double tps = Bukkit.getTPS()[0];
++        double tps =  Bukkit.getTPS()[0];
 +        if (tps > 20.0D) {
 +            tps = 20.0D;
 +        } else if (tps < 0.0D) {
