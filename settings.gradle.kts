@@ -1,7 +1,7 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
-        maven("https://repo.pl3x.net/snapshots/")
+        maven("https://papermc.io/repo/repository/maven-public/")
     }
 }
 
