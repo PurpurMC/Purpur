@@ -25,6 +25,7 @@ dependencies {
 
 subprojects {
     apply(plugin = "java")
+    apply(plugin = "maven-publish")
 
     java {
         toolchain {
@@ -47,6 +48,14 @@ subprojects {
         maven("https://hub.spigotmc.org/nexus/content/groups/public/")
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
+    }
+
+    configure<PublishingExtension> {
+        repositories.maven {
+            name = "maven"
+            url = uri("https://repo.pl3x.net/snapshots")
+            credentials(PasswordCredentials::class)
+        }
     }
 }
 
