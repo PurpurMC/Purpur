@@ -20,7 +20,7 @@ repositories {
 
 dependencies {
     remapper("org.quiltmc:tiny-remapper:0.4.1")
-    paperclip("io.papermc:paperclip:2.0.0@jar")
+    paperclip("io.papermc:paperclip:2.0.1")
 }
 
 subprojects {
