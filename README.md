@@ -28,7 +28,7 @@ Join us on [Discord](https://discord.gg/mtAAnkk)
 Downloads can be obtained from the [downloads page](https://purpur.pl3x.net/downloads/), the downloads API, or alternatively, from Pl3x's [Jenkins CI Server](https://ci.pl3x.net/job/Purpur/).
 
 Latest build shortcut links:
-* [1.17](https://purpur.pl3x.net/api/v1/purpur/1.17/latest/download) build 1172+
+* [1.17](https://purpur.pl3x.net/api/v1/purpur/1.17/latest/download) builds 1172+
 * [1.16.5](https://purpur.pl3x.net/api/v1/purpur/1.16.5/latest/download) builds 957-1171
 * [1.16.4](https://purpur.pl3x.net/api/v1/purpur/1.16.4/latest/download) builds 809-956
 * [1.16.3](https://purpur.pl3x.net/api/v1/purpur/1.16.3/latest/download) builds 751-808
