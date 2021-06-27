@@ -1,478 +1,20 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Initial Source <auto@mated.null>
-Date: Sat, 26 Jun 2021 23:30:38 -0500
+From: Spottedleaf <Spottedleaf@users.noreply.github.com>
+Date: Sat, 12 Jun 2021 16:40:34 +0200
 Subject: [PATCH] Tuinity Server Changes
 
-Build changes
-
-Update version fetcher repo
-
-Sets the target github repo to Tuinity in the version checker. Also disables the jenkins build lookups.
-
-This patch is licensed under the MIT license. See /licenses/MIT.md.
-
-MC-Dev fixes
-
-Util patch
-
-Tuinity Server Config
-
-Fix incorrect isRealPlayer init
-
-Some plugins, namely ProtocolSupport, don't route to where
-paper placed their logic. So it wont correctly set in this case.
-
-Fix by moving it to a different place.
-
-Allow controlled flushing for network manager
-
-Only make one flush call when emptying the packet queue too
-
-This patch will be used to optimise out flush calls in later
-patches.
-
-Not implemeneted
-
-Currently a placeholder patch.
-
-Rewrite the light engine
-
-The standard vanilla light engine is plagued by
-awful performance. Paper's changes to the light engine
-help a bit, however they appear to cause some lighting
-errors - most easily noticed in coral generation.
-
-The vanilla light engine's is too abstract to be modified -
-so an entirely new implementation is required to fix the
-performance and lighting errors.
-
-The new implementation is designed primarily to optimise
-light level propagations (increase and decrease). Unlike
-the vanilla light engine, this implementation tracks more
-information per queued value when performing a
-breadth first search. Vanilla just tracks coordinate, which
-means every time they handle a queued value, they must
-also determine the coordinate's target light level
-from its neighbours - very wasteful, especially considering
-these checks read neighbour block data.
-The new light engine tracks both position and target level,
-as well as whether the target block needs to be read at all
-(for checking sided propagation). So, the work done per coordinate
-is significantly reduced because no work is done for calculating
-the target level.
-In my testing, the block get calls were reduced by approximately
-an order of magnitude. However, the light read checks were only
-reduced by approximately 2x - but this is fine, light read checks
-are extremely cheap compared to block gets.
-
-Generation testing showed that the new light engine improved
-total generation (not lighting itself, but the whole generation process)
-by 2x. According to cpu time, the light engine itself spent 10x less time
-lighting chunks for generation.
-
-Rewrite entity bounding box lookup calls
-
-For whatever reason, Mojang thought it was OK to make this system
-scale logn relative to the number of entity sections loaded.
-On top of that, they do a hashtable lookup per section - before
-this was just a basic array access.
-
-This patch brings back entity slices for lookup only.
-
-Highly optimise single and multi-AABB VoxelShapes and collisions
-
-Optimise chunk tick iteration
-
-Use a dedicated list of entity ticking chunks to reduce the cost
-
-Execute chunk tasks mid-tick
-
-This will help the server load chunks if tick times are high.
-
-Change writes to use NORMAL priority rather than LOW
-
-Should limit build up of I/O tasks, or at least properly
-indicate to server owners that I/O is falling behind
-
-Per World Spawn Limits
-
-This patch is licensed under the MIT license. See /licenses/MIT.md.
-
-Make CallbackExecutor strict again
-
-The correct fix for double scheduling is to avoid it. The reason
-this class is used is because double scheduling causes issues
-elsewhere, and it acts as an explicit detector of what double
-schedules. Effectively, use the callback executor as a tool of
-finding issues rather than hiding these issues.
-
-This patch also reverts incorrect use(s) of the class by paper.
-
-- getChunkFutureAsynchronously
-  There is no risk at all of recursion. The future is executed on
-  the chunk provider's thread queue, the same place general plugin
-  load callbacks are executed on. Forcing the task execution into
-  the callback executor also prevents the future from catching
-  any exception thrown from it.
-
-Improve async tp to not load chunks when crossing worlds
-
-Fixes an issue where a getCubes call would load neighbouring chunks.
-Loads less chunks than paper's implementation
-
-Revert getChunkAt(Async) retaining chunks for long periods of time
-
-Rework PlayerChunk main thread checks
-
-These need to fail instead of continuing, as hiding these errors
-the way paper has is just going to allow unexpected reordering
-of callbacks.
-
-For example, thanks to this patch incorrect future
-completion (completion of the world gen future,
-PlayerChunkMap#b(PlayerChunk, ChunkStatus)) was detected and fixed.
-
-Prevent unload() calls removing tickets for sync loads
-
-Do not allow ticket level changes while unloading playerchunks
-
-Sync loading the chunk at this stage would cause it to load
-older data, as well as screwing our region state.
-
-Revert MC-4 fix
-
-When messing around with collisions, I ran into problems where
-entity position was off by ULP and that caused clipping problems.
-Now, the collision epsilon is 1.0e-7 to account for those errors.
-
-But this patch is going to cause problems on the order of 1.0e-4.
-
-I do not want to deal with clipping problems. The very fact it works
-shows it's causing the clipping to occur serverside.
-
-Don't allow StructureLocateEvent to change worlds
-
-Callers and even the function itself aren't expecting
-this to happen
-
-Do not allow the server to unload chunks at request of plugins
-
-In general the chunk system is not well suited for this behavior,
-especially if it is called during a chunk load. The chunks pushed
-to be unloaded will simply be unloaded next tick, rather than
-immediately.
-
-Do not run close logic for inventories on chunk unload
-
-Still call the event and change the active container though. We
-want to avoid close logic because it's possible to load the
-chunk through it. This should also be OK from a leak prevention/
-state desync POV because the TE is getting unloaded anyways.
-
-Correctly handle recursion for chunkholder updates
-
-If a chunk ticket level is brought up while unloading it would
-cause a recursive call which would handle the increase but then
-the caller would think the chunk would be unloaded.
-
-Don't read neighbour chunk data off disk when converting chunks
-
-Lighting is purged on update anyways, so let's not add more
-into the conversion process
-
-Do not copy visible chunks
-
-For servers with a lot of chunk holders, copying for each
-tickDistanceManager call can take up quite a bit in
-the function. I saw approximately 1/3rd of the function
-on the copy.
-
-Replace player chunk loader system
-
-The old one has undebuggable problems. Rewriting seems
-the most sensible option.
-
-This new player chunk manager will also strictly rate limit
-chunk sends so that netty threads do not get overloaded, whether
-it be from the anti-xray logic or the compression itself.
-
-Chunk loading is also rate limited in the same manner, so this
-will result in a maximum responsiveness for change.
-
-Config:
-```
-player-chunks:
-  autoconfig-send-distance: true
-  min-load-radius: 3
-  max-concurrent-sends: 12.0
-  max-concurrent-loads: 5.0
-```
-
-autoconfig-send-distance - Whether to try to use the client's
-view distance for the send view distance in the server. In the
-case that no plugin has explicitly set the send distance and
-the client view distance is less-than the server's send distance,
-the client's view distance will be used. This will not affect
-tick view distance or no-tick view distance.
-
-min-load-radius - The radius of chunks around a player that
-are not throttled for loading. The number of chunks
-affected is actually the configured value plus one as this
-config controls the chunks the client will be able to render.
-
-max-concurrent-sends - The maximum number of chunks that
-can be queued to send at any given time. Low values
-are generally going to solve server-sided networking
-bottlenecks like anti-xray and chunk compression. Client
-side networking is unlikely to be helped (i.e this wont help
-people running off McDonald's wifi). Setting this
-value to negative will make the server dynamically scale it
-with players. i.e -5 will use 5 * online players for the max sends.
-
-max-concurrent-loads - The maxmium number of chunks
-that can be queued to be loaded at any given time. Lower
-values help the responsitivity to player movement and
-higher values help loading when the server is at a low TPS.
-
-Replace ticket level propagator
-
-Mojang's propagator is slow, and this isn't surprising
-given it's built on the same utilities the vanilla light engine
-is built on. The simple propagator I wrote is approximately 4x
-faster when simulating player movement. For a long time timing
-reports have shown this function take up significant tick, (
-approx 10% or more), and async sampling data shows the level
-propagation alone takes up a significant amount. So this
-should help with that. A big side effect is that mid-tick
-will be more effective, since more time will be allocated
-to actually processing chunk tasks vs the ticket level updates.
-
-Attempt to recalculate regionfile header if it is corrupt
-
-Instead of trying to relocate the chunk, which is seems to never
-be the correct choice, so we end up duplicating or swapping chunks,
-we instead drop the current regionfile header and recalculate -
-hoping that at least then we don't swap chunks, and maybe recover
-them all.
-
-Custom table implementation for blockstate state lookups
-
-Testing some redstone intensive machines showed to bring about a 10%
-improvement.
-
-Detail more information in watchdog dumps
-
-- Dump position, world, velocity, and uuid for currently ticking entities
-- Dump player name, player uuid, position, and world for packet handling
-
-Optimise collision checking in player move packet handling
-
-Move collision logic to just the hasNewCollision call instead of getCubes + hasNewCollision
-
-Manually inline methods in BlockPosition
-
-Separate lookup locking from state access in UserCache
-
-Prevent lookups from stalling simple state access/write calls
-
-Distance manager tick timings
-
-Recently this has been taking up more time, so add a timings to
-really figure out how much.
-
-Name craft scheduler threads according to the plugin using them
-
-Provides quick access to culprits running far more threads than
-they should be
-
-Make sure inlined getChunkAt has inlined logic for loaded chunks
-
-Tux did some profiling some time ago and showed that the
-previous getChunkAt method which had inlined logic for loaded
-chunks did get inlined, but the standard CPS.getChunkAt
-method was not inlined.
-
-Paper recently reverted this optimisation, so it's been reintroduced
-here.
-
-Add packet limiter config
-
-Example config:
-packet-limiter:
-  kick-message: '&cSent too many packets'
-  limits:
-    all:
-      interval: 7.0
-      max-packet-rate: 500.0
-    PacketPlayInAutoRecipe:
-      interval: 4.0
-      max-packet-rate: 5.0
-      action: DROP
-
-all section refers to all incoming packets, the action for all is
-hard coded to KICK.
-
-For specific limits, the section name is the class's name,
-and an action can be defined: DROP or KICK
-
-If interval or rate are less-than 0, the limit is ignored
-
-Lag compensate block breaking
-
-Use time instead of ticks if ticks fall behind
-
-Fix chunks refusing to unload at low TPS
-
-The full chunk future is appended to the chunk save future, but
-when moving to unloaded ticket level it is not being completed with
-the empty chunk access, so the chunk save must wait for the full
-chunk future to complete. We can simply schedule to the immediate
-executor to get this effect, rather than the main mailbox.
-
-Use hash table for maintaing changed block set
-
-When a lot of block changes occur the iteration for checking can
-add up a bit and cause a small performance impact.
-
-Consolidate flush calls for entity tracker packets
-
-Most server packets seem to be sent from here, so try to avoid
-expensive flush calls from them.
-
-This change was motivated due to local testing:
-
-- My server spawn has 130 cows in it (for testing a prev. patch)
-- Try to let 200 players join spawn
-
-Without this change, I could only get 20 players on before they
-all started timing out due to the load put on the Netty I/O threads.
-
-With this change I could get all 200 on at 0ms ping.
-
-(one of the primary issues is that my CPU is kinda trash, and having
-4 extra threads at 100% is just too much for it).
-
-So in general this patch should reduce Netty I/O thread load.
-
-Don't lookup fluid state when raytracing
-
-Just use the iblockdata already retrieved, removes a getType call.
-
-Time scoreboard search
-
-Plugins leaking scoreboards will make this very expensive,
-let server owners debug it easily
-
-Send full pos packets for hard colliding entities
-
-Prevent collision problems due to desync (i.e boats)
-
-Configurable under
-`send-full-pos-for-hard-colliding-entities`
-
-Do not run raytrace logic for AIR
-
-Saves approx. 5% for the raytrace call, as most (expensive)
-raytracing tends to go through air and returning early is an
-easy win. The remaining problems with this function
-are mostly with the block getting itself.
-
-Make entity tracker use highest range of passengers
-
-This should prevent people from having to up their animal range
-just so players riding horses or whatever can be seen at the
-configured player range.
-
-Oprimise map impl for tracked players
-
-Reference2BooleanOpenHashMap is going to have
-better lookups than HashMap.
-
-Stop large move vectors in player packet handling from killing the server
-
-Looks like we need to check three vectors, not two. fun.
-
-Optimise BlockSoil nearby water lookup
-
-Apparently the abstract block iteration was taking about
-75% of the method call.
-
-Fix BlockPos reobf problem
-
-Non-reobf'd fields don't conflict, but reobf'd do! So
-explicitly cast on field access to avoid.
-
-Allow removal/addition of entities to entity ticklist during tick
-
-It really doesn't make any sense that we would iterate over removed
-entities during tick. Sure - tick entity checks removed, but
-does it check if the entity is in an entity ticking chunk?
-No it doesn't. So, allowing removal while iteration
-ENSURES only entities MARKED TO TICK are ticked.
-
-Do not allow ticket level changes when updating chunk ticking state
-
-This WILL cause state corruption if it happens. So, don't
-allow it.
-
-Optimise CraftChunk#getEntities
-
-Why the fuck was it iterating over every single entity
-in the world
-
-Optimise random block ticking
-
-Massive performance improvement for random block ticking.
-The performance increase comes from the fact that the vast
-majority of attempted block ticks (~95% in my testing) fail
-because the randomly selected block is not tickable.
-
-Now only tickable blocks are targeted, however this means that
-the maximum number of block ticks occurs per chunk. However,
-not all chunks are going to be targeted. The percent chance
-of a chunk being targeted is based on how many tickable blocks
-are in the chunk.
-This means that while block ticks are spread out less, the
-total number of blocks ticked per world tick remains the same.
-Therefore, the chance of a random tickable block being ticked
-remains the same.
-
-Optimise non-flush packet sending
-
-Places like entity tracking make heavy use of packet sending,
-and internally netty will use some very expensive thread wakeup
-calls when scheduling.
-
-Thanks to various hacks in ProtocolLib as well as other
-plugins, we cannot simply use a queue of packets to group
-send on execute. We have to call execute for each packet.
-
-Tux's suggestion here is exactly what was needed - tag
-the Runnable indicating it should not make a wakeup call.
-
-Big thanks to Tux for making this possible as I had given
-up on this optimisation before he came along.
-
-Locally this patch drops the entity tracker tick by a full 1.5x.
-
-Optimise nearby player lookups
-
-Use a distance map to map out close players.
-Note that it's important that we cache the distance map value per chunk
-since the penalty of a map lookup could outweigh the benefits of
-searching less players (as it basically did in the outside range patch).
-
-Fix Codec log spam
-
-Mojang did NOT add dataconverters for world gen configurations
-that they CHANGED. So, the codec fails to parse old data.
-
-This fixes two instances:
-- IntProvider is new and Mojang did not account for old data.
-  Thankfully, only ColumnPlace needed to be special cased.
-- TreeConfiguration had changes. Thankfully, they were
-  only renames for one value and thankfully defaults could
-  be provided for two new values (WITHOUT changing behavior).
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
 index 5540da58e66f83b283863d3158a9b4ab5ba636db..f766183883f009368b79e1201553c184a373e2cf 100644
@@ -13280,6 +12822,315 @@ index e572088cad8b9e09b1d64f7971bacac2f10c5b17..b2c8cae1a777cd63a35ed1340caf205b
          } else {
              this.player.connection.send(new ClientboundBlockUpdatePacket(this.level, pos)); // CraftBukkit - SPIGOT-5196
          }
+diff --git a/src/main/java/net/minecraft/server/level/ThreadedLevelLightEngine.java b/src/main/java/net/minecraft/server/level/ThreadedLevelLightEngine.java
+index de228b677810ce49c4e953ca0b4e590413b20e45..580165d0a728a4558031dac11f5edaf2923b5ad0 100644
+--- a/src/main/java/net/minecraft/server/level/ThreadedLevelLightEngine.java
++++ b/src/main/java/net/minecraft/server/level/ThreadedLevelLightEngine.java
+@@ -23,6 +23,17 @@ import net.minecraft.world.level.lighting.LevelLightEngine;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
+ 
++// Tuinity start
++import ca.spottedleaf.starlight.light.StarLightEngine;
++import com.tuinity.tuinity.util.CoordinateUtils;
++import java.util.function.Supplier;
++import net.minecraft.world.level.lighting.LayerLightEventListener;
++import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
++import it.unimi.dsi.fastutil.longs.LongArrayList;
++import it.unimi.dsi.fastutil.longs.LongIterator;
++import net.minecraft.world.level.chunk.ChunkStatus;
++// Tuinity end
++
+ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCloseable {
+     private static final Logger LOGGER = LogManager.getLogger();
+     private final ProcessorMailbox<Runnable> taskMailbox;
+@@ -32,13 +43,166 @@ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCl
+     private volatile int taskPerBatch = 5;
+     private final AtomicBoolean scheduled = new AtomicBoolean();
+ 
++    // Tuinity start - replace light engine impl
++    protected final ca.spottedleaf.starlight.light.StarLightInterface theLightEngine;
++    public final boolean hasBlockLight;
++    public final boolean hasSkyLight;
++    // Tuinity end - replace light engine impl
++
+     public ThreadedLevelLightEngine(LightChunkGetter chunkProvider, ChunkMap chunkStorage, boolean hasBlockLight, ProcessorMailbox<Runnable> processor, ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> executor) {
+-        super(chunkProvider, true, hasBlockLight);
++        super(chunkProvider, false, false); // Tuinity - destroy vanilla light engine state
+         this.chunkMap = chunkStorage;
+         this.sorterMailbox = executor;
+         this.taskMailbox = processor;
++        // Tuinity start - replace light engine impl
++        this.hasBlockLight = true;
++        this.hasSkyLight = hasBlockLight; // Nice variable name.
++        this.theLightEngine = new ca.spottedleaf.starlight.light.StarLightInterface(chunkProvider, this.hasSkyLight, this.hasBlockLight, this);
++        // Tuinity end - replace light engine impl
++    }
++
++    // Tuinity start - replace light engine impl
++    protected final ChunkAccess getChunk(final int chunkX, final int chunkZ) {
++        return ((ServerLevel)this.theLightEngine.getWorld()).getChunkSource().getChunkAtImmediately(chunkX, chunkZ);
++    }
++
++    protected long relightCounter;
++
++    public int relight(java.util.Set<ChunkPos> chunks_param,
++                        java.util.function.Consumer<ChunkPos> chunkLightCallback,
++                        java.util.function.IntConsumer onComplete) {
++        if (!org.bukkit.Bukkit.isPrimaryThread()) {
++            throw new IllegalStateException("Must only be called on the main thread");
++        }
++
++        java.util.Set<ChunkPos> chunks = new java.util.LinkedHashSet<>(chunks_param);
++        // add tickets
++        java.util.Map<ChunkPos, Long> ticketIds = new java.util.HashMap<>();
++        int totalChunks = 0;
++        for (java.util.Iterator<ChunkPos> iterator = chunks.iterator(); iterator.hasNext();) {
++            final ChunkPos chunkPos = iterator.next();
++
++            final ChunkAccess chunk = ((ServerLevel)this.theLightEngine.getWorld()).getChunkSource().getChunkAtImmediately(chunkPos.x, chunkPos.z);
++            if (chunk == null || !chunk.isLightCorrect() || !chunk.getStatus().isOrAfter(ChunkStatus.LIGHT)) {
++                // cannot relight this chunk
++                iterator.remove();
++                continue;
++            }
++
++            final Long id = Long.valueOf(this.relightCounter++);
++
++            ((ServerLevel)this.theLightEngine.getWorld()).getChunkSource().addTicketAtLevel(TicketType.CHUNK_RELIGHT, chunkPos, net.minecraft.server.MCUtil.getTicketLevelFor(ChunkStatus.LIGHT), id);
++            ticketIds.put(chunkPos, id);
++
++            ++totalChunks;
++        }
++
++        this.taskMailbox.tell(() -> {
++            this.theLightEngine.relightChunks(chunks, (ChunkPos chunkPos) -> {
++                chunkLightCallback.accept(chunkPos);
++                ((java.util.concurrent.Executor)((ServerLevel)this.theLightEngine.getWorld()).getChunkSource().mainThreadProcessor).execute(() -> {
++                    ((ServerLevel)this.theLightEngine.getWorld()).getChunkSource().chunkMap.getUpdatingChunkIfPresent(chunkPos.toLong()).broadcast(new net.minecraft.network.protocol.game.ClientboundLightUpdatePacket(chunkPos, ThreadedLevelLightEngine.this, null, null, true), false);
++                    ((ServerLevel)this.theLightEngine.getWorld()).getChunkSource().removeTicketAtLevel(TicketType.CHUNK_RELIGHT, chunkPos, net.minecraft.server.MCUtil.getTicketLevelFor(ChunkStatus.LIGHT), ticketIds.get(chunkPos));
++                });
++            }, onComplete);
++        });
++        this.tryScheduleUpdate();
++
++        return totalChunks;
++    }
++
++    private final Long2IntOpenHashMap chunksBeingWorkedOn = new Long2IntOpenHashMap();
++
++    private void queueTaskForSection(final int chunkX, final int chunkY, final int chunkZ, final Supplier<CompletableFuture<Void>> runnable) {
++        final ServerLevel world = (ServerLevel)this.theLightEngine.getWorld();
++
++        final ChunkAccess center = this.theLightEngine.getAnyChunkNow(chunkX, chunkZ);
++        if (center == null || !center.getStatus().isOrAfter(ChunkStatus.LIGHT)) {
++            // do not accept updates in unlit chunks, unless we might be generating a chunk. thanks to the amazing
++            // chunk scheduling, we could be lighting and generating a chunk at the same time
++            return;
++        }
++
++        if (center.getStatus() != ChunkStatus.FULL) {
++            // do not keep chunk loaded, we are probably in a gen thread
++            // if we proceed to add a ticket the chunk will be loaded, which is not what we want (avoid cascading gen)
++            runnable.get();
++            return;
++        }
++
++        if (!world.getChunkSource().chunkMap.mainThreadExecutor.isSameThread()) {
++            // ticket logic is not safe to run off-main, re-schedule
++            world.getChunkSource().chunkMap.mainThreadExecutor.execute(() -> {
++                this.queueTaskForSection(chunkX, chunkY, chunkZ, runnable);
++            });
++            return;
++        }
++
++        final long key = CoordinateUtils.getChunkKey(chunkX, chunkZ);
++
++        final CompletableFuture<Void> updateFuture = runnable.get();
++
++        if (updateFuture == null) {
++            // not scheduled
++            return;
++        }
++
++        final int references = this.chunksBeingWorkedOn.addTo(key, 1);
++        if (references == 0) {
++            final ChunkPos pos = new ChunkPos(chunkX, chunkZ);
++            world.getChunkSource().addRegionTicket(ca.spottedleaf.starlight.light.StarLightInterface.CHUNK_WORK_TICKET, pos, 0, pos);
++        }
++
++        // append future to this chunk and 1 radius neighbours chunk save futures
++        // this prevents us from saving the world without first waiting for the light engine
++
++        for (int dx = -1; dx <= 1; ++dx) {
++            for (int dz = -1; dz <= 1; ++dz) {
++                ChunkHolder neighbour = world.getChunkSource().chunkMap.getUpdatingChunkIfPresent(CoordinateUtils.getChunkKey(dx + chunkX, dz + chunkZ));
++                if (neighbour != null) {
++                    neighbour.chunkToSave = neighbour.chunkToSave.thenCombine(updateFuture, (final ChunkAccess curr, final Void ignore) -> {
++                        return curr;
++                    });
++                }
++            }
++        }
++
++        updateFuture.thenAcceptAsync((final Void ignore) -> {
++            final int newReferences = this.chunksBeingWorkedOn.get(key);
++            if (newReferences == 1) {
++                this.chunksBeingWorkedOn.remove(key);
++                final ChunkPos pos = new ChunkPos(chunkX, chunkZ);
++                world.getChunkSource().removeRegionTicket(ca.spottedleaf.starlight.light.StarLightInterface.CHUNK_WORK_TICKET, pos, 0, pos);
++            } else {
++                this.chunksBeingWorkedOn.put(key, newReferences - 1);
++            }
++        }, world.getChunkSource().chunkMap.mainThreadExecutor).whenComplete((final Void ignore, final Throwable thr) -> {
++            if (thr != null) {
++                LOGGER.fatal("Failed to remove ticket level for post chunk task " + new ChunkPos(chunkX, chunkZ), thr);
++            }
++        });
++    }
++
++    @Override
++    public boolean hasLightWork() {
++        // route to new light engine
++        return this.theLightEngine.hasUpdates() || !this.lightTasks.isEmpty();
+     }
+ 
++    @Override
++    public LayerLightEventListener getLayerListener(final LightLayer lightType) {
++        return lightType == LightLayer.BLOCK ? this.theLightEngine.getBlockReader() : this.theLightEngine.getSkyReader();
++    }
++
++    @Override
++    public int getRawBrightness(final BlockPos pos, final int ambientDarkness) {
++        // need to use new light hooks for this
++        final int sky = this.theLightEngine.getSkyReader().getLightValue(pos) - ambientDarkness;
++        final int block = this.theLightEngine.getBlockReader().getLightValue(pos);
++        return Math.max(sky, block);
++    }
++    // Tuinity end - replace light engine impl
++
+     @Override
+     public void close() {
+     }
+@@ -55,15 +219,16 @@ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCl
+ 
+     @Override
+     public void checkBlock(BlockPos pos) {
+-        BlockPos blockPos = pos.immutable();
+-        this.addTask(SectionPos.blockToSectionCoord(pos.getX()), SectionPos.blockToSectionCoord(pos.getZ()), ThreadedLevelLightEngine.TaskType.POST_UPDATE, Util.name(() -> {
+-            super.checkBlock(blockPos);
+-        }, () -> {
+-            return "checkBlock " + blockPos;
+-        }));
++        // Tuinity start - replace light engine impl
++        final BlockPos posCopy = pos.immutable();
++        this.queueTaskForSection(posCopy.getX() >> 4, posCopy.getY() >> 4, posCopy.getZ() >> 4, () -> {
++            return this.theLightEngine.blockChange(posCopy);
++        });
++        // Tuinity end - replace light engine impl
+     }
+ 
+     protected void updateChunkStatus(ChunkPos pos) {
++        if (true) return; // Tuinity - replace light engine impl
+         this.addTask(pos.x, pos.z, () -> {
+             return 0;
+         }, ThreadedLevelLightEngine.TaskType.PRE_UPDATE, Util.name(() -> {
+@@ -86,17 +251,16 @@ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCl
+ 
+     @Override
+     public void updateSectionStatus(SectionPos pos, boolean notReady) {
+-        this.addTask(pos.x(), pos.z(), () -> {
+-            return 0;
+-        }, ThreadedLevelLightEngine.TaskType.PRE_UPDATE, Util.name(() -> {
+-            super.updateSectionStatus(pos, notReady);
+-        }, () -> {
+-            return "updateSectionStatus " + pos + " " + notReady;
+-        }));
++        // Tuinity start - replace light engine impl
++        this.queueTaskForSection(pos.getX(), pos.getY(), pos.getZ(), () -> {
++            return this.theLightEngine.sectionChange(pos, notReady);
++        });
++        // Tuinity end - replace light engine impl
+     }
+ 
+     @Override
+     public void enableLightSources(ChunkPos chunkPos, boolean bl) {
++        if (true) return; // Tuinity - replace light engine impl
+         this.addTask(chunkPos.x, chunkPos.z, ThreadedLevelLightEngine.TaskType.PRE_UPDATE, Util.name(() -> {
+             super.enableLightSources(chunkPos, bl);
+         }, () -> {
+@@ -106,6 +270,7 @@ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCl
+ 
+     @Override
+     public void queueSectionData(LightLayer lightType, SectionPos pos, @Nullable DataLayer nibbles, boolean bl) {
++        if (true) return; // Tuinity - replace light engine impl
+         this.addTask(pos.x(), pos.z(), () -> {
+             return 0;
+         }, ThreadedLevelLightEngine.TaskType.PRE_UPDATE, Util.name(() -> {
+@@ -131,6 +296,7 @@ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCl
+ 
+     @Override
+     public void retainData(ChunkPos pos, boolean retainData) {
++        if (true) return; // Tuinity - replace light engine impl
+         this.addTask(pos.x, pos.z, () -> {
+             return 0;
+         }, ThreadedLevelLightEngine.TaskType.PRE_UPDATE, Util.name(() -> {
+@@ -141,6 +307,37 @@ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCl
+     }
+ 
+     public CompletableFuture<ChunkAccess> lightChunk(ChunkAccess chunk, boolean excludeBlocks) {
++        // Tuinity start - replace light engine impl
++        if (true) {
++            boolean lit = excludeBlocks;
++            final ChunkPos chunkPos = chunk.getPos();
++
++            return CompletableFuture.supplyAsync(() -> {
++                final Boolean[] emptySections = StarLightEngine.getEmptySectionsForChunk(chunk);
++                if (!lit) {
++                    chunk.setLightCorrect(false);
++                    this.theLightEngine.lightChunk(chunk, emptySections);
++                    chunk.setLightCorrect(true);
++                } else {
++                    this.theLightEngine.forceLoadInChunk(chunk, emptySections);
++                    // can't really force the chunk to be edged checked, as we need neighbouring chunks - but we don't have
++                    // them, so if it's not loaded then i guess we can't do edge checks. later loads of the chunk should
++                    // catch what we miss here.
++                    this.theLightEngine.checkChunkEdges(chunkPos.x, chunkPos.z);
++                }
++
++                this.chunkMap.releaseLightTicket(chunkPos);
++                return chunk;
++            }, (runnable) -> {
++                this.theLightEngine.scheduleChunkLight(chunkPos, runnable);
++                this.tryScheduleUpdate();
++            }).whenComplete((final ChunkAccess c, final Throwable throwable) -> {
++                if (throwable != null) {
++                    LOGGER.fatal("Failed to light chunk " + chunkPos, throwable);
++                }
++            });
++        }
++        // Tuinity end - replace light engine impl
+         ChunkPos chunkPos = chunk.getPos();
+         chunk.setLightCorrect(false);
+         this.addTask(chunkPos.x, chunkPos.z, ThreadedLevelLightEngine.TaskType.PRE_UPDATE, Util.name(() -> {
+@@ -175,7 +372,7 @@ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCl
+     }
+ 
+     public void tryScheduleUpdate() {
+-        if ((!this.lightTasks.isEmpty() || super.hasLightWork()) && this.scheduled.compareAndSet(false, true)) {
++        if (this.hasLightWork() && this.scheduled.compareAndSet(false, true)) { // Tuinity - rewrite light engine
+             this.taskMailbox.tell(() -> {
+                 this.runUpdate();
+                 this.scheduled.set(false);
+@@ -197,7 +394,7 @@ public class ThreadedLevelLightEngine extends LevelLightEngine implements AutoCl
+         }
+ 
+         objectListIterator.back(j);
+-        super.runUpdates(Integer.MAX_VALUE, true, true);
++        this.theLightEngine.propagateChanges(); // Tuinity - rewrite light engine
+ 
+         for(int var5 = 0; objectListIterator.hasNext() && var5 < i; ++var5) {
+             Pair<ThreadedLevelLightEngine.TaskType, Runnable> pair2 = objectListIterator.next();
 diff --git a/src/main/java/net/minecraft/server/level/TicketType.java b/src/main/java/net/minecraft/server/level/TicketType.java
 index 3c1698ba0d3bc412ab957777d9b5211dbc555208..c438cbfa1f964a5bea98bca85e688d8019e1c4fb 100644
 --- a/src/main/java/net/minecraft/server/level/TicketType.java
@@ -13695,6 +13546,56 @@ index 07e1374ac3430662edd9f585e59b785e329f0820..9f9c0b56f0891e9c423d79f8ae4c3643
 +    }
 +    // Paper end
  }
+diff --git a/src/main/java/net/minecraft/util/valueproviders/IntProvider.java b/src/main/java/net/minecraft/util/valueproviders/IntProvider.java
+index 020a19cd683dd3779c5116d12b3cdcd3b3ca69b4..17d209c347b07acef451180c97835f41b8bf8433 100644
+--- a/src/main/java/net/minecraft/util/valueproviders/IntProvider.java
++++ b/src/main/java/net/minecraft/util/valueproviders/IntProvider.java
+@@ -9,13 +9,44 @@ import net.minecraft.core.Registry;
+ 
+ public abstract class IntProvider {
+     private static final Codec<Either<Integer, IntProvider>> CONSTANT_OR_DISPATCH_CODEC = Codec.either(Codec.INT, Registry.INT_PROVIDER_TYPES.dispatch(IntProvider::getType, IntProviderType::codec));
+-    public static final Codec<IntProvider> CODEC = CONSTANT_OR_DISPATCH_CODEC.xmap((either) -> {
++    public static final Codec<IntProvider> CODEC_REAL = CONSTANT_OR_DISPATCH_CODEC.xmap((either) -> { // Paper - used by CODEC below
+         return either.map(ConstantInt::of, (intProvider) -> {
+             return intProvider;
+         });
+     }, (intProvider) -> {
+         return intProvider.getType() == IntProviderType.CONSTANT ? Either.left(((ConstantInt)intProvider).getValue()) : Either.right(intProvider);
+     });
++    // Tuinity start
++    public static final Codec<IntProvider> CODEC = new Codec<>() {
++        @Override
++        public <T> DataResult<com.mojang.datafixers.util.Pair<IntProvider, T>> decode(com.mojang.serialization.DynamicOps<T> ops, T input) {
++            /*
++            UniformInt:
++            count -> { (old format)
++                base, spread
++            } -> {UniformInt} { (new format & type)
++                base, base + spread
++            } */
++
++
++            if (ops.get(input, "base").result().isPresent() && ops.get(input, "spread").result().isPresent()) {
++                // detected old format
++                int base = ops.getNumberValue(ops.get(input, "base").result().get()).result().get().intValue();
++                int spread = ops.getNumberValue(ops.get(input, "spread").result().get()).result().get().intValue();
++                return DataResult.success(new com.mojang.datafixers.util.Pair<>(UniformInt.of(base, base + spread), input));
++            }
++
++            // not old format, forward to real codec
++            return CODEC_REAL.decode(ops, input);
++        }
++
++        @Override
++        public <T> DataResult<T> encode(IntProvider input, com.mojang.serialization.DynamicOps<T> ops, T prefix) {
++            // forward to real codec
++            return CODEC_REAL.encode(input, ops, prefix);
++        }
++    };
++    // Tuinity end
+     public static final Codec<IntProvider> NON_NEGATIVE_CODEC = codec(0, Integer.MAX_VALUE);
+     public static final Codec<IntProvider> POSITIVE_CODEC = codec(1, Integer.MAX_VALUE);
+ 
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
 index 4fd030ef9537d9b31c6167d73349f4c4a6b33a15..ca7718053a6a2eb715ea3671bd4bc15304ede420 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
@@ -14679,6 +14580,79 @@ index 1179c62695da4dcf02590c97d8da3c6fcdbee9ef..04d5ef90cd4171f9360017ac0c01ce48
          }
  
          public final boolean useShapeForLightOcclusion() { // Paper
+diff --git a/src/main/java/net/minecraft/world/level/block/state/StateHolder.java b/src/main/java/net/minecraft/world/level/block/state/StateHolder.java
+index baf1cb77eb170a44d821eae572d059f18ea46d7e..5d25223cb2f31e78b1608bd2846effba5b4301a4 100644
+--- a/src/main/java/net/minecraft/world/level/block/state/StateHolder.java
++++ b/src/main/java/net/minecraft/world/level/block/state/StateHolder.java
+@@ -40,11 +40,13 @@ public abstract class StateHolder<O, S> {
+     private final ImmutableMap<Property<?>, Comparable<?>> values;
+     private Table<Property<?>, Comparable<?>, S> neighbours;
+     protected final MapCodec<S> propertiesCodec;
++    protected final com.tuinity.tuinity.util.table.ZeroCollidingReferenceStateTable optimisedTable; // Tuinity - optimise state lookup
+ 
+     protected StateHolder(O owner, ImmutableMap<Property<?>, Comparable<?>> entries, MapCodec<S> codec) {
+         this.owner = owner;
+         this.values = entries;
+         this.propertiesCodec = codec;
++        this.optimisedTable = new com.tuinity.tuinity.util.table.ZeroCollidingReferenceStateTable(this, entries); // Tuinity - optimise state lookup
+     }
+ 
+     public <T extends Comparable<T>> S cycle(Property<T> property) {
+@@ -85,11 +87,11 @@ public abstract class StateHolder<O, S> {
+     }
+ 
+     public <T extends Comparable<T>> boolean hasProperty(Property<T> property) {
+-        return this.values.containsKey(property);
++        return this.optimisedTable.get(property) != null; // Tuinity - optimise state lookup
+     }
+ 
+     public <T extends Comparable<T>> T getValue(Property<T> property) {
+-        Comparable<?> comparable = this.values.get(property);
++        Comparable<?> comparable = this.optimisedTable.get(property); // Tuinity - optimise state lookup
+         if (comparable == null) {
+             throw new IllegalArgumentException("Cannot get property " + property + " as it does not exist in " + this.owner);
+         } else {
+@@ -98,24 +100,18 @@ public abstract class StateHolder<O, S> {
+     }
+ 
+     public <T extends Comparable<T>> Optional<T> getOptionalValue(Property<T> property) {
+-        Comparable<?> comparable = this.values.get(property);
++        Comparable<?> comparable = this.optimisedTable.get(property); // Tuinity - optimise state lookup
+         return comparable == null ? Optional.empty() : Optional.of(property.getValueClass().cast(comparable));
+     }
+ 
+     public <T extends Comparable<T>, V extends T> S setValue(Property<T> property, V value) {
+-        Comparable<?> comparable = this.values.get(property);
+-        if (comparable == null) {
+-            throw new IllegalArgumentException("Cannot set property " + property + " as it does not exist in " + this.owner);
+-        } else if (comparable == value) {
+-            return (S)this;
+-        } else {
+-            S object = this.neighbours.get(property, value);
+-            if (object == null) {
+-                throw new IllegalArgumentException("Cannot set property " + property + " to " + value + " on " + this.owner + ", it is not an allowed value");
+-            } else {
+-                return object;
+-            }
++        // Tuinity start - optimise state lookup
++        final S ret = (S)this.optimisedTable.get(property, value);
++        if (ret == null) {
++            throw new IllegalArgumentException("Cannot set property " + property + " to " + value + " on " + this.owner + ", it is not an allowed value");
+         }
++        return ret;
++        // Tuinity end - optimise state lookup
+     }
+ 
+     public void populateNeighbours(Map<Map<Property<?>, Comparable<?>>, S> states) {
+@@ -134,7 +130,7 @@ public abstract class StateHolder<O, S> {
+                 }
+             }
+ 
+-            this.neighbours = (Table<Property<?>, Comparable<?>, S>)(table.isEmpty() ? table : ArrayTable.create(table));
++            this.neighbours = (Table<Property<?>, Comparable<?>, S>)(table.isEmpty() ? table : ArrayTable.create(table)); this.optimisedTable.loadInTable((Table)this.neighbours, this.values); // Tuinity - optimise state lookup
+         }
+     }
+ 
 diff --git a/src/main/java/net/minecraft/world/level/block/state/properties/BooleanProperty.java b/src/main/java/net/minecraft/world/level/block/state/properties/BooleanProperty.java
 index ff1a0d125edd2ea10c870cbb62ae9aa23644b6dc..90c5d20d92dd0dba3503c0f8bc16ed533ca59869 100644
 --- a/src/main/java/net/minecraft/world/level/block/state/properties/BooleanProperty.java
@@ -15635,6 +15609,38 @@ index 176610b31f66b890afe61f4de46c412382bb8d22..70ec2feef1553afca2c8cca3a7f19498
          ChunkPos pos = new ChunkPos(x, z);
          if (cps != null) {
              //com.google.common.base.Preconditions.checkState(org.bukkit.Bukkit.isPrimaryThread(), "primary thread"); // Paper - this function is now MT-Safe
+diff --git a/src/main/java/net/minecraft/world/level/chunk/storage/RegionBitmap.java b/src/main/java/net/minecraft/world/level/chunk/storage/RegionBitmap.java
+index c8298a597818227de33a4afce4698ec0666cf758..b49b0c4cac8aec09ffe970c92e5a75047c0e1f1d 100644
+--- a/src/main/java/net/minecraft/world/level/chunk/storage/RegionBitmap.java
++++ b/src/main/java/net/minecraft/world/level/chunk/storage/RegionBitmap.java
+@@ -9,6 +9,27 @@ import java.util.BitSet;
+ public class RegionBitmap {
+     private final BitSet used = new BitSet();
+ 
++    // Tuinity start
++    public final void copyFrom(RegionBitmap other) {
++        BitSet thisBitset = this.used;
++        BitSet otherBitset = other.used;
++
++        for (int i = 0; i < Math.max(thisBitset.size(), otherBitset.size()); ++i) {
++            thisBitset.set(i, otherBitset.get(i));
++        }
++    }
++
++    public final boolean tryAllocate(int from, int length) {
++        BitSet bitset = this.used;
++        int firstSet = bitset.nextSetBit(from);
++        if (firstSet > 0 && firstSet < (from + length)) {
++            return false;
++        }
++        bitset.set(from, from + length);
++        return true;
++    }
++    // Tuinity end
++
+     public void force(int start, int size) {
+         this.used.set(start, start + size);
+     }
 diff --git a/src/main/java/net/minecraft/world/level/chunk/storage/RegionFile.java b/src/main/java/net/minecraft/world/level/chunk/storage/RegionFile.java
 index c22391a0d4b7db49bd3994b0887939a7d8019391..118adb6fbdc56ca03652f114c1b7ced0ef26a628 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/storage/RegionFile.java
@@ -16289,6 +16295,94 @@ index 6496108953effae82391b5c1ea6fdec8482731cd..a6f831fea2245e2d1f44ffa60f96b6f1
                      break label43;
                  }
  
+diff --git a/src/main/java/net/minecraft/world/level/chunk/storage/RegionFileVersion.java b/src/main/java/net/minecraft/world/level/chunk/storage/RegionFileVersion.java
+index b7835b9b904e7d4bff64f7189049e334f5ab4d6f..ae638ac0a0557de204471fef4b03bdb0ad310b2b 100644
+--- a/src/main/java/net/minecraft/world/level/chunk/storage/RegionFileVersion.java
++++ b/src/main/java/net/minecraft/world/level/chunk/storage/RegionFileVersion.java
+@@ -12,7 +12,7 @@ import java.util.zip.InflaterInputStream;
+ import javax.annotation.Nullable;
+ 
+ public class RegionFileVersion {
+-    private static final Int2ObjectMap<RegionFileVersion> VERSIONS = new Int2ObjectOpenHashMap<>();
++    public static final Int2ObjectMap<RegionFileVersion> VERSIONS = new Int2ObjectOpenHashMap<>(); // Tuinity - public
+     public static final RegionFileVersion VERSION_GZIP = register(new RegionFileVersion(1, GZIPInputStream::new, GZIPOutputStream::new));
+     public static final RegionFileVersion VERSION_DEFLATE = register(new RegionFileVersion(2, InflaterInputStream::new, DeflaterOutputStream::new));
+     public static final RegionFileVersion VERSION_NONE = register(new RegionFileVersion(3, (inputStream) -> {
+diff --git a/src/main/java/net/minecraft/world/level/entity/EntityTickList.java b/src/main/java/net/minecraft/world/level/entity/EntityTickList.java
+index f01182a0ac8a14bcd5b1deb778306e7bf1bf70ed..2cfc54a577d0a63a504e24bc54fd763fe51083e5 100644
+--- a/src/main/java/net/minecraft/world/level/entity/EntityTickList.java
++++ b/src/main/java/net/minecraft/world/level/entity/EntityTickList.java
+@@ -9,54 +9,40 @@ import javax.annotation.Nullable;
+ import net.minecraft.world.entity.Entity;
+ 
+ public class EntityTickList {
+-    private Int2ObjectMap<Entity> active = new Int2ObjectLinkedOpenHashMap<>();
+-    private Int2ObjectMap<Entity> passive = new Int2ObjectLinkedOpenHashMap<>();
+-    @Nullable
+-    private Int2ObjectMap<Entity> iterated;
++    private final com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<Entity> entities = new com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet<>(true); // Tuinity - rewrite this, always keep this updated - why would we EVER tick an entity that's not ticking?
+ 
+     private void ensureActiveIsNotIterated() {
+-        if (this.iterated == this.active) {
+-            this.passive.clear();
+-
+-            for(Entry<Entity> entry : Int2ObjectMaps.fastIterable(this.active)) {
+-                this.passive.put(entry.getIntKey(), entry.getValue());
+-            }
+-
+-            Int2ObjectMap<Entity> int2ObjectMap = this.active;
+-            this.active = this.passive;
+-            this.passive = int2ObjectMap;
+-        }
++        // Tuinity - replace with better logic, do not delay removals
+ 
+     }
+ 
+     public void add(Entity entity) {
+         this.ensureActiveIsNotIterated();
+-        this.active.put(entity.getId(), entity);
++        this.entities.add(entity); // Tuinity - replace with better logic, do not delay removals/additions
+     }
+ 
+     public void remove(Entity entity) {
+         this.ensureActiveIsNotIterated();
+-        this.active.remove(entity.getId());
++        this.entities.remove(entity); // Tuinity - replace with better logic, do not delay removals/additions
+     }
+ 
+     public boolean contains(Entity entity) {
+-        return this.active.containsKey(entity.getId());
++        return this.entities.contains(entity); // Tuinity - replace with better logic, do not delay removals/additions
+     }
+ 
+     public void forEach(Consumer<Entity> action) {
+-        if (this.iterated != null) {
+-            throw new UnsupportedOperationException("Only one concurrent iteration supported");
+-        } else {
+-            this.iterated = this.active;
+-
+-            try {
+-                for(Entity entity : this.active.values()) {
+-                    action.accept(entity);
+-                }
+-            } finally {
+-                this.iterated = null;
++        // Tuinity start - replace with better logic, do not delay removals/additions
++        // To ensure nothing weird happens with dimension travelling, do not iterate over new entries...
++        // (by dfl iterator() is configured to not iterate over new entries)
++        com.tuinity.tuinity.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Entity> iterator = this.entities.iterator();
++        try {
++            while (iterator.hasNext()) {
++                action.accept(iterator.next());
+             }
+-
++        } finally {
++            iterator.finishedIterating();
+         }
++
++        // Tuinity end - replace with better logic, do not delay removals/additions
+     }
+ }
 diff --git a/src/main/java/net/minecraft/world/level/entity/PersistentEntitySectionManager.java b/src/main/java/net/minecraft/world/level/entity/PersistentEntitySectionManager.java
 index e94b5a7fe47831e2c3e0935e316737a2422e4250..265343f8663e0c9551ed286d954889ad08043b16 100644
 --- a/src/main/java/net/minecraft/world/level/entity/PersistentEntitySectionManager.java
@@ -16337,6 +16431,277 @@ index e94b5a7fe47831e2c3e0935e316737a2422e4250..265343f8663e0c9551ed286d954889ad
  
              Visibility visibility = PersistentEntitySectionManager.getEffectiveStatus(this.entity, this.currentSection.getStatus());
              if (visibility.isTicking()) {
+diff --git a/src/main/java/net/minecraft/world/level/levelgen/feature/blockplacers/ColumnPlacer.java b/src/main/java/net/minecraft/world/level/levelgen/feature/blockplacers/ColumnPlacer.java
+index 05bba5410fbd9f8e333584ccbd65a909f3040322..de3122f450edacaf2eed6f60b0680ebe64f7d214 100644
+--- a/src/main/java/net/minecraft/world/level/levelgen/feature/blockplacers/ColumnPlacer.java
++++ b/src/main/java/net/minecraft/world/level/levelgen/feature/blockplacers/ColumnPlacer.java
+@@ -10,11 +10,28 @@ import net.minecraft.world.level.LevelAccessor;
+ import net.minecraft.world.level.block.state.BlockState;
+ 
+ public class ColumnPlacer extends BlockPlacer {
++    // Tuinity start
+     public static final Codec<ColumnPlacer> CODEC = RecordCodecBuilder.create((instance) -> {
+-        return instance.group(IntProvider.NON_NEGATIVE_CODEC.fieldOf("size").forGetter((columnPlacer) -> {
+-            return columnPlacer.size;
+-        })).apply(instance, ColumnPlacer::new);
++        return instance.group(
++            IntProvider.NON_NEGATIVE_CODEC.optionalFieldOf("size").forGetter((columnPlacer) -> {
++                return java.util.Optional.of(columnPlacer.size);
++            }),
++            Codec.INT.optionalFieldOf("min_size").forGetter((columnPlacer) -> {
++                return java.util.Optional.empty();
++            }),
++            Codec.INT.optionalFieldOf("extra_size").forGetter((columnPlacer) -> {
++                return java.util.Optional.empty();
++            })
++        ).apply(instance, ColumnPlacer::new);
+     });
++    public ColumnPlacer(java.util.Optional<IntProvider> size, java.util.Optional<Integer> minSize, java.util.Optional<Integer> extraSize) {
++        if (size.isPresent()) {
++            this.size = size.get();
++        } else {
++            this.size = net.minecraft.util.valueproviders.BiasedToBottomInt.of(minSize.get().intValue(), minSize.get().intValue() + extraSize.get().intValue());
++        }
++    }
++    // Tuinity end
+     private final IntProvider size;
+ 
+     public ColumnPlacer(IntProvider size) {
+diff --git a/src/main/java/net/minecraft/world/level/levelgen/feature/configurations/TreeConfiguration.java b/src/main/java/net/minecraft/world/level/levelgen/feature/configurations/TreeConfiguration.java
+index 5da68897148192905c2747676c1ee2ee649f923f..b990099cf274f8cb0d96c139345cf0bf328affd6 100644
+--- a/src/main/java/net/minecraft/world/level/levelgen/feature/configurations/TreeConfiguration.java
++++ b/src/main/java/net/minecraft/world/level/levelgen/feature/configurations/TreeConfiguration.java
+@@ -18,13 +18,13 @@ public class TreeConfiguration implements FeatureConfiguration {
+             return treeConfiguration.trunkProvider;
+         }), TrunkPlacer.CODEC.fieldOf("trunk_placer").forGetter((treeConfiguration) -> {
+             return treeConfiguration.trunkPlacer;
+-        }), BlockStateProvider.CODEC.fieldOf("foliage_provider").forGetter((treeConfiguration) -> {
++        }), net.minecraft.server.MCUtil.fieldWithFallbacks(BlockStateProvider.CODEC, "foliage_provider", "leaves_provider").forGetter((treeConfiguration) -> { // Paper - provide fallback for rename
+             return treeConfiguration.foliageProvider;
+-        }), BlockStateProvider.CODEC.fieldOf("sapling_provider").forGetter((treeConfiguration) -> {
++        }), BlockStateProvider.CODEC.optionalFieldOf("sapling_provider", new SimpleStateProvider(Blocks.OAK_SAPLING.defaultBlockState())).forGetter((treeConfiguration) -> { // Paper - provide default - it looks like for now this is OK because it's just used to check canSurvive. Same check happens in 1.16.5 for the default we provide - so it should retain behavior...
+             return treeConfiguration.saplingProvider;
+         }), FoliagePlacer.CODEC.fieldOf("foliage_placer").forGetter((treeConfiguration) -> {
+             return treeConfiguration.foliagePlacer;
+-        }), BlockStateProvider.CODEC.fieldOf("dirt_provider").forGetter((treeConfiguration) -> {
++        }), BlockStateProvider.CODEC.optionalFieldOf("dirt_provider", new SimpleStateProvider(Blocks.DIRT.defaultBlockState())).forGetter((treeConfiguration) -> { // Paper - provide defaults, old data DOES NOT have this key (thankfully ALL OLD DATA used DIRT)
+             return treeConfiguration.dirtProvider;
+         }), FeatureSize.CODEC.fieldOf("minimum_size").forGetter((treeConfiguration) -> {
+             return treeConfiguration.minimumSize;
+diff --git a/src/main/java/net/minecraft/world/phys/AABB.java b/src/main/java/net/minecraft/world/phys/AABB.java
+index 120498a39b7ca7aee9763084507508d4a1c425aa..6f7e6429c35eea346517cbf08cf223fc6d838a8c 100644
+--- a/src/main/java/net/minecraft/world/phys/AABB.java
++++ b/src/main/java/net/minecraft/world/phys/AABB.java
+@@ -25,6 +25,17 @@ public class AABB {
+         this.maxZ = Math.max(z1, z2);
+     }
+ 
++    // Tuinity start
++    public AABB(double minX, double minY, double minZ, double maxX, double maxY, double maxZ, boolean dummy) {
++        this.minX = minX;
++        this.minY = minY;
++        this.minZ = minZ;
++        this.maxX = maxX;
++        this.maxY = maxY;
++        this.maxZ = maxZ;
++    }
++    // Tuinity end
++
+     public AABB(BlockPos pos) {
+         this((double)pos.getX(), (double)pos.getY(), (double)pos.getZ(), (double)(pos.getX() + 1), (double)(pos.getY() + 1), (double)(pos.getZ() + 1));
+     }
+diff --git a/src/main/java/net/minecraft/world/phys/shapes/ArrayVoxelShape.java b/src/main/java/net/minecraft/world/phys/shapes/ArrayVoxelShape.java
+index 99427b6130895ddecee8bcf77db72d809c24c375..af1ef430e81cb9bdd749aa235577c63fa381f4c5 100644
+--- a/src/main/java/net/minecraft/world/phys/shapes/ArrayVoxelShape.java
++++ b/src/main/java/net/minecraft/world/phys/shapes/ArrayVoxelShape.java
+@@ -6,6 +6,9 @@ import java.util.Arrays;
+ import net.minecraft.Util;
+ import net.minecraft.core.Direction;
+ 
++// Tuinity start
++import it.unimi.dsi.fastutil.doubles.AbstractDoubleList;
++// Tuinity end
+ public class ArrayVoxelShape extends VoxelShape {
+     private final DoubleList xs;
+     private final DoubleList ys;
+@@ -16,6 +19,11 @@ public class ArrayVoxelShape extends VoxelShape {
+     }
+ 
+     ArrayVoxelShape(DiscreteVoxelShape shape, DoubleList xPoints, DoubleList yPoints, DoubleList zPoints) {
++        // Tuinity start - optimise multi-aabb shapes
++        this(shape, xPoints, yPoints, zPoints, null, 0.0, 0.0, 0.0);
++    }
++    ArrayVoxelShape(DiscreteVoxelShape shape, DoubleList xPoints, DoubleList yPoints, DoubleList zPoints, net.minecraft.world.phys.AABB[] boundingBoxesRepresentation, double offsetX, double offsetY, double offsetZ) {
++        // Tuinity end - optimise multi-aabb shapes
+         super(shape);
+         int i = shape.getXSize() + 1;
+         int j = shape.getYSize() + 1;
+@@ -27,6 +35,12 @@ public class ArrayVoxelShape extends VoxelShape {
+         } else {
+             throw (IllegalArgumentException)Util.pauseInIde(new IllegalArgumentException("Lengths of point arrays must be consistent with the size of the VoxelShape."));
+         }
++        // Tuinity start - optimise multi-aabb shapes
++        this.boundingBoxesRepresentation = boundingBoxesRepresentation == null ? this.toAabbs().toArray(EMPTY) : boundingBoxesRepresentation;
++        this.offsetX = offsetX;
++        this.offsetY = offsetY;
++        this.offsetZ = offsetZ;
++        // Tuinity end - optimise multi-aabb shapes
+     }
+ 
+     @Override
+@@ -42,4 +56,152 @@ public class ArrayVoxelShape extends VoxelShape {
+             throw new IllegalArgumentException();
+         }
+     }
++
++    // Tuinity start
++    public static final class DoubleListOffsetExposed extends AbstractDoubleList {
++
++        public final DoubleArrayList list;
++        public final double offset;
++
++        public DoubleListOffsetExposed(final DoubleArrayList list, final double offset) {
++            this.list = list;
++            this.offset = offset;
++        }
++
++        @Override
++        public double getDouble(final int index) {
++            return this.list.getDouble(index) + this.offset;
++        }
++
++        @Override
++        public int size() {
++            return this.list.size();
++        }
++    }
++
++    static final net.minecraft.world.phys.AABB[] EMPTY = new net.minecraft.world.phys.AABB[0];
++    final net.minecraft.world.phys.AABB[] boundingBoxesRepresentation;
++
++    final double offsetX;
++    final double offsetY;
++    final double offsetZ;
++
++    public final net.minecraft.world.phys.AABB[] getBoundingBoxesRepresentation() {
++        return this.boundingBoxesRepresentation;
++    }
++
++    public final double getOffsetX() {
++        return this.offsetX;
++    }
++
++    public final double getOffsetY() {
++        return this.offsetY;
++    }
++
++    public final double getOffsetZ() {
++        return this.offsetZ;
++    }
++
++    @Override
++    public java.util.List<net.minecraft.world.phys.AABB> toAabbs() {
++        if (this.boundingBoxesRepresentation == null) {
++            return super.toAabbs();
++        }
++        java.util.List<net.minecraft.world.phys.AABB> ret = new java.util.ArrayList<>(this.boundingBoxesRepresentation.length);
++
++        double offX = this.offsetX;
++        double offY = this.offsetY;
++        double offZ = this.offsetZ;
++
++        for (net.minecraft.world.phys.AABB boundingBox : this.boundingBoxesRepresentation) {
++            ret.add(boundingBox.move(offX, offY, offZ));
++        }
++
++        return ret;
++    }
++
++    protected static DoubleArrayList getList(DoubleList from) {
++        if (from instanceof DoubleArrayList) {
++            return (DoubleArrayList)from;
++        } else {
++            return DoubleArrayList.wrap(from.toDoubleArray());
++        }
++    }
++
++    @Override
++    public VoxelShape move(double x, double y, double z) {
++        if (x == 0.0 && y == 0.0 && z == 0.0) {
++            return this;
++        }
++        DoubleListOffsetExposed xPoints, yPoints, zPoints;
++        double offsetX, offsetY, offsetZ;
++
++        if (this.xs instanceof DoubleListOffsetExposed) {
++            xPoints = new DoubleListOffsetExposed(((DoubleListOffsetExposed)this.xs).list, offsetX = this.offsetX + x);
++            yPoints = new DoubleListOffsetExposed(((DoubleListOffsetExposed)this.ys).list, offsetY = this.offsetY + y);
++            zPoints = new DoubleListOffsetExposed(((DoubleListOffsetExposed)this.zs).list, offsetZ = this.offsetZ + z);
++        } else {
++            xPoints = new DoubleListOffsetExposed(getList(this.xs), offsetX = x);
++            yPoints = new DoubleListOffsetExposed(getList(this.ys), offsetY = y);
++            zPoints = new DoubleListOffsetExposed(getList(this.zs), offsetZ = z);
++        }
++
++        return new ArrayVoxelShape(this.shape, xPoints, yPoints, zPoints, this.boundingBoxesRepresentation, offsetX, offsetY, offsetZ);
++    }
++
++    @Override
++    public final boolean intersects(net.minecraft.world.phys.AABB axisalingedbb) {
++        // this can be optimised by checking an "overall shape" first, but not needed
++        double offX = this.offsetX;
++        double offY = this.offsetY;
++        double offZ = this.offsetZ;
++
++        for (net.minecraft.world.phys.AABB boundingBox : this.boundingBoxesRepresentation) {
++            if (com.tuinity.tuinity.util.CollisionUtil.voxelShapeIntersect(axisalingedbb, boundingBox.minX + offX, boundingBox.minY + offY, boundingBox.minZ + offZ,
++                    boundingBox.maxX + offX, boundingBox.maxY + offY, boundingBox.maxZ + offZ)) {
++                return true;
++            }
++        }
++
++        return false;
++    }
++
++    @Override
++    public void forAllBoxes(Shapes.DoubleLineConsumer doubleLineConsumer) {
++        if (this.boundingBoxesRepresentation == null) {
++            super.forAllBoxes(doubleLineConsumer);
++            return;
++        }
++        for (final net.minecraft.world.phys.AABB boundingBox : this.boundingBoxesRepresentation) {
++            doubleLineConsumer.consume(boundingBox.minX + this.offsetX, boundingBox.minY + this.offsetY, boundingBox.minZ + this.offsetZ,
++                boundingBox.maxX + this.offsetX, boundingBox.maxY + this.offsetY, boundingBox.maxZ + this.offsetZ);
++        }
++    }
++
++    @Override
++    public VoxelShape optimize() {
++        if (this == Shapes.empty() || this.boundingBoxesRepresentation.length == 0) {
++            return this;
++        }
++
++        VoxelShape simplified = Shapes.empty();
++        for (final net.minecraft.world.phys.AABB boundingBox : this.boundingBoxesRepresentation) {
++            simplified = Shapes.joinUnoptimized(simplified, Shapes.box(boundingBox.minX + this.offsetX, boundingBox.minY + this.offsetY, boundingBox.minZ + this.offsetZ,
++                    boundingBox.maxX + this.offsetX, boundingBox.maxY + this.offsetY, boundingBox.maxZ + this.offsetZ), BooleanOp.OR);
++        }
++
++        if (!(simplified instanceof ArrayVoxelShape)) {
++            return simplified;
++        }
++
++        final net.minecraft.world.phys.AABB[] boundingBoxesRepresentation = ((ArrayVoxelShape)simplified).getBoundingBoxesRepresentation();
++
++        if (boundingBoxesRepresentation.length == 1) {
++            return new com.tuinity.tuinity.voxel.AABBVoxelShape(boundingBoxesRepresentation[0]).optimize();
++        }
++
++        return simplified;
++    }
++    // Tuinity end
++
+ }
 diff --git a/src/main/java/net/minecraft/world/phys/shapes/Shapes.java b/src/main/java/net/minecraft/world/phys/shapes/Shapes.java
 index 16bc18cacbf7a23fb744c8a12e7fd8da699b2fea..472c47a585da7d95b3f4774d3caef1d864b6337a 100644
 --- a/src/main/java/net/minecraft/world/phys/shapes/Shapes.java
@@ -16522,6 +16887,39 @@ index 16bc18cacbf7a23fb744c8a12e7fd8da699b2fea..472c47a585da7d95b3f4774d3caef1d8
          if (one != block() && two != block()) {
              if (one.isEmpty() && two.isEmpty()) {
                  return false;
+diff --git a/src/main/java/net/minecraft/world/phys/shapes/VoxelShape.java b/src/main/java/net/minecraft/world/phys/shapes/VoxelShape.java
+index f325d76c79d63629200262a77eab7cdcc9beedfa..ad23eafd6d9e7901f726977ad8404fa34dc0874e 100644
+--- a/src/main/java/net/minecraft/world/phys/shapes/VoxelShape.java
++++ b/src/main/java/net/minecraft/world/phys/shapes/VoxelShape.java
+@@ -16,11 +16,17 @@ import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.Vec3;
+ 
+ public abstract class VoxelShape {
+-    protected final DiscreteVoxelShape shape;
++    public final DiscreteVoxelShape shape; // Tuinity - public
+     @Nullable
+     private VoxelShape[] faces;
+ 
+-    VoxelShape(DiscreteVoxelShape voxels) {
++    // Tuinity start
++    public boolean intersects(AABB shape) {
++        return Shapes.joinIsNotEmpty(this, new com.tuinity.tuinity.voxel.AABBVoxelShape(shape), BooleanOp.AND);
++    }
++    // Tuinity end
++
++    protected VoxelShape(DiscreteVoxelShape voxels) { // Tuinity - protected
+         this.shape = voxels;
+     }
+ 
+@@ -163,7 +169,7 @@ public abstract class VoxelShape {
+         }
+     }
+ 
+-    private VoxelShape calculateFace(Direction direction) {
++    protected VoxelShape calculateFace(Direction direction) { // Tuinity
+         Direction.Axis axis = direction.getAxis();
+         DoubleList doubleList = this.getCoords(axis);
+         if (doubleList.size() == 2 && DoubleMath.fuzzyEquals(doubleList.getDouble(0), 0.0D, 1.0E-7D) && DoubleMath.fuzzyEquals(doubleList.getDouble(1), 1.0D, 1.0E-7D)) {
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftChunk.java b/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
 index 08a5fabb1d13db26014bb5751aa271c0a0bdcb7a..05dae6fae8482dba551974f3a348d86b30c47c96 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
