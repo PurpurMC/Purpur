@@ -1,7 +1,7 @@
 plugins {
     java
     id("com.github.johnrengelman.shadow") version "7.0.0" apply false
-    id("io.papermc.paperweight.patcher") version "1.1.6"
+    id("io.papermc.paperweight.patcher") version "1.1.7"
 }
 
 repositories {
@@ -64,21 +64,6 @@ paperweight {
 
     usePaperUpstream(providers.gradleProperty("paperCommit")) {
         withPaperPatcher {
-            apiPatchDir.set(layout.projectDirectory.dir("patches/api"))
-            apiOutputDir.set(layout.projectDirectory.dir("Purpur-API"))
-
-            serverPatchDir.set(layout.projectDirectory.dir("patches/server"))
-            serverOutputDir.set(layout.projectDirectory.dir("Purpur-Server"))
-        }
-    }
-
-    useStandardUpstream("tuinity") {
-        url.set(github("pl3xgaming", "Tuinity"))
-        ref.set(providers.gradleProperty("tuinityCommit"))
-
-        withStandardPatcher {
-            baseName("Tuinity")
-
             apiPatchDir.set(layout.projectDirectory.dir("patches/api"))
             apiOutputDir.set(layout.projectDirectory.dir("Purpur-API"))
 
