@@ -18,56 +18,45 @@ index 689ad22925b2561f7c8db961743eb1f821dbb25f..fa3c960992cc240161817e54659d83fe
      public ClientboundSetTimePacket(long time, long timeOfDay, boolean doDaylightCycle) {
          this.gameTime = time % 192000; // Paper - fix guardian beam
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
-index 13bee6ce45fd718484a9cf08645556717c9934e8..dbdaadfaeea555904556136a7cca02aa59b85369 100644
+index 13bee6ce45fd718484a9cf08645556717c9934e8..07e6d7b7a6d275010797c991be977d6136478c8b 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
 +++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
-@@ -55,6 +55,7 @@ import net.minecraft.network.protocol.game.ClientboundExplodePacket;
- import net.minecraft.network.protocol.game.ClientboundLevelEventPacket;
- import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
- import net.minecraft.network.protocol.game.ClientboundSetDefaultSpawnPositionPacket;
-+import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
- import net.minecraft.network.protocol.game.ClientboundSoundEntityPacket;
- import net.minecraft.network.protocol.game.ClientboundSoundPacket;
- import net.minecraft.network.protocol.game.DebugPackets;
-@@ -205,6 +206,8 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+@@ -201,6 +201,7 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+     final Int2ObjectMap<EnderDragonPart> dragonParts;
+     private final StructureFeatureManager structureFeatureManager;
+     private final boolean tickTime;
++    private double fakeTime; // Purpur
+     // Tuinity start - execute chunk tasks mid tick
      public long lastMidTickExecuteFailure;
      // Tuinity end - execute chunk tasks mid tick
- 
-+    private double fakeTime; // Purpur
-+
-     // CraftBukkit start
-     private int tickPosition;
-     public final LevelStorageSource.LevelStorageAccess convertable;
-@@ -578,6 +581,7 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+@@ -578,6 +579,7 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
          this.getCraftServer().addWorld(this.getWorld()); // CraftBukkit
  
          this.asyncChunkTaskManager = new com.destroystokyo.paper.io.chunk.ChunkTaskManager(this); // Paper
-+        this.fakeTime = this.serverLevelData.getDayTime();
++        this.fakeTime = this.serverLevelData.getDayTime(); // Purpur
      }
  
      // Tuinity start - optimise collision
-@@ -763,9 +767,20 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
-             // CraftBukkit start
-             long l = this.levelData.getDayTime() + 24000L;
-             TimeSkipEvent event = new TimeSkipEvent(this.getWorld(), TimeSkipEvent.SkipReason.NIGHT_SKIP, (l - l % 24000L) - this.getDayTime());
-+            ServerLevel level = this.serverLevelData.world;
-             if (this.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
-                 getCraftServer().getPluginManager().callEvent(event);
-                 if (!event.isCancelled()) {
-+                    double incrementTimeBy = 12000.0D / (double) (level.isDay() ? level.purpurConfig.daytimeTicks : level.purpurConfig.nighttimeTicks);
-+                    if (incrementTimeBy != 1.0D) {
-+                        this.fakeTime += incrementTimeBy;
-+                        this.setDayTime(this.fakeTime);
-+                        ClientboundSetTimePacket packet = new ClientboundSetTimePacket(level.getGameTime(), level.getDayTime(), true);
-+                        for (ServerPlayer player : level.players) {
-+                            packet.setDayTime(player.getPlayerTime());
-+                            player.connection.send(packet);
-+                        }
-+                    } else
-                     this.setDayTime(this.getDayTime() + event.getSkipAmount());
-                 }
+@@ -869,6 +871,18 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+             this.liquidTicks.nextTick(); // Paper
+             this.serverLevelData.getScheduledEvents().tick(this.server, i);
+             if (this.levelData.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
++                // Purpur start
++                double incrementTimeBy = 12000.0D / (double) (isDay() ? this.purpurConfig.daytimeTicks : this.purpurConfig.nighttimeTicks);
++                if (incrementTimeBy != 1.0D) {
++                    this.fakeTime += incrementTimeBy;
++                    this.setDayTime(this.fakeTime);
++                    net.minecraft.network.protocol.game.ClientboundSetTimePacket packet = new net.minecraft.network.protocol.game.ClientboundSetTimePacket(getGameTime(), getDayTime(), true);
++                    for (ServerPlayer player : this.players) {
++                        packet.setDayTime(player.getPlayerTime());
++                        player.connection.send(packet);
++                    }
++                } else
++                // Purpur end
+                 this.setDayTime(this.levelData.getDayTime() + 1L);
+             }
  
-@@ -877,6 +892,12 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
+@@ -877,6 +891,12 @@ public class ServerLevel extends net.minecraft.world.level.Level implements Worl
  
      public void setDayTime(long timeOfDay) {
          this.serverLevelData.setDayTime(timeOfDay);
