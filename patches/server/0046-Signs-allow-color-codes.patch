@@ -5,7 +5,7 @@ Subject: [PATCH] Signs allow color codes
 
 
 diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-index 9149f496c163834bf0e9c40086ba3ee9d38177c2..373a0e9cb219a9ec3236771a28ba522a9cc452c3 100644
+index bc7c87bf1d2f4e6eac9b094bfe111d289bea83f6..eeec7eeb8c4ae0152e028e7a9859310f7351c313 100644
 --- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
 +++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
 @@ -1459,6 +1459,7 @@ public class ServerPlayer extends Player {
@@ -17,47 +17,49 @@ index 9149f496c163834bf0e9c40086ba3ee9d38177c2..373a0e9cb219a9ec3236771a28ba522a
          this.connection.send(new ClientboundBlockUpdatePacket(this.level, sign.getBlockPos()));
          this.connection.send(new ClientboundOpenSignEditorPacket(sign.getBlockPos()));
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index db8a8e81054e91161d43515fb19ab0106e9da1d0..857ec4fe7f0bc721cd8649062a14fa58331db3c0 100644
+index db8a8e81054e91161d43515fb19ab0106e9da1d0..3def323a4beabae4fffeda80d44c8f6fbc0535ae 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -3079,9 +3079,21 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
+@@ -3078,11 +3078,16 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
+                     }
                  }
                  // Paper end
-                 if (this.player.isTextFilteringEnabled()) {
+-                if (this.player.isTextFilteringEnabled()) {
 -                    lines.add(net.kyori.adventure.text.Component.text(SharedConstants.filterText(currentLine.getFiltered())));
-+                    String filtered = currentLine.getFiltered();
-+                    if (worldserver.purpurConfig.signAllowColors) {
-+                        if (player.hasPermission("purpur.sign.color")) filtered = filtered.replaceAll("(?i)&([0-9a-fr])", "\u00a7$1");
-+                        if (player.hasPermission("purpur.sign.style")) filtered = filtered.replaceAll("(?i)&([l-or])", "\u00a7$1");
-+                        if (player.hasPermission("purpur.sign.magic")) filtered = filtered.replaceAll("(?i)&([kr])", "\u00a7$1");
-+                    }
-+                    lines.add(net.kyori.adventure.text.Component.text(SharedConstants.filterText(filtered)));
-                 } else {
+-                } else {
 -                    lines.add(net.kyori.adventure.text.Component.text(SharedConstants.filterText(currentLine.getRaw())));
-+                    String raw = currentLine.getRaw();
-+                    if (worldserver.purpurConfig.signAllowColors) {
-+                        if (player.hasPermission("purpur.sign.color")) raw = raw.replaceAll("(?i)&([0-9a-fr])", "\u00a7$1");
-+                        if (player.hasPermission("purpur.sign.style")) raw = raw.replaceAll("(?i)&([l-or])", "\u00a7$1");
-+                        if (player.hasPermission("purpur.sign.magic")) raw = raw.replaceAll("(?i)&([kr])", "\u00a7$1");
-+                    }
-+                    lines.add(net.kyori.adventure.text.Component.text(SharedConstants.filterText(raw)));
-                 }
+-                }
++                // Purpur start
++                String line = SharedConstants.filterText(this.player.isTextFilteringEnabled() ? currentLine.getFiltered() : currentLine.getRaw());
++                if (worldserver.purpurConfig.signAllowColors) {
++                    if (player.hasPermission("purpur.sign.color")) line = line.replaceAll("(?i)&([0-9a-fr])", "\u00a7$1");
++                    if (player.hasPermission("purpur.sign.style")) line = line.replaceAll("(?i)&([l-or])", "\u00a7$1");
++                    if (player.hasPermission("purpur.sign.magic")) line = line.replaceAll("(?i)&([kr])", "\u00a7$1");
++                    lines.add(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(line));
++                } else
++                lines.add(net.kyori.adventure.text.Component.text(line));
++                // Purpur end
              }
              SignChangeEvent event = new SignChangeEvent((org.bukkit.craftbukkit.block.CraftBlock) player.getWorld().getBlockAt(x, y, z), this.player.getBukkitEntity(), lines);
+             this.cserver.getPluginManager().callEvent(event);
 diff --git a/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
-index 9b5d11ece006d7aa893360a84ba652c666517ac1..2519e8946064a2326ef9acde1e66d0671a62daed 100644
+index 9b5d11ece006d7aa893360a84ba652c666517ac1..bdd6d8201ac078635d637081a37f353c6f8fd6fe 100644
 --- a/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
 +++ b/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
-@@ -180,6 +180,18 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
+@@ -180,6 +180,22 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
          return filtered ? this.filteredMessages : this.messages;
      }
  
 +    // Purpur start
 +    public ClientboundBlockEntityDataPacket getTranslatedUpdatePacket(boolean filtered) {
-+        CompoundTag nbt = save(new CompoundTag());
++        final CompoundTag nbt = save(new CompoundTag());
++        final Component[] lines = getMessages(filtered);
 +        for (int i = 0; i < 4; ++i) {
-+            String line = io.papermc.paper.adventure.PaperAdventure.LEGACY_AMPERSAND.serialize(io.papermc.paper.adventure.PaperAdventure.asAdventure(getMessages(filtered)[i]));
-+            nbt.putString("Text" + (i + 1), net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson().serialize(net.kyori.adventure.text.Component.text(line)));
++            final var component = io.papermc.paper.adventure.PaperAdventure.asAdventure(lines[i]);
++            final String line = io.papermc.paper.adventure.PaperAdventure.LEGACY_AMPERSAND.serialize(component);
++            final var text = net.kyori.adventure.text.Component.text(line);
++            final String json = net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson().serialize(text);
++            nbt.putString("Text" + (i + 1), json);
 +        }
 +        nbt.putString("PurpurEditor", "true");
 +        return new ClientboundBlockEntityDataPacket(worldPosition, 9, nbt);
