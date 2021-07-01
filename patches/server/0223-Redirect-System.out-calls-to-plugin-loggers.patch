@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Mon, 28 Jun 2021 13:33:12 -0500
+Subject: [PATCH] Redirect System.out calls to plugin loggers
+
+
+diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+index 66d2559e5bd8630c6cbca0fe8d0eb1f756c388df..cb4226abf377e0edb4512dc762bb8e487b1b29ad 100644
+--- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -177,8 +177,8 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
+         */
+         // Paper end
+ 
+-        System.setOut(IoBuilder.forLogger(logger).setLevel(Level.INFO).buildPrintStream());
+-        System.setErr(IoBuilder.forLogger(logger).setLevel(Level.WARN).buildPrintStream());
++        System.setOut(new net.pl3x.purpur.PurpurPrintStream(IoBuilder.forLogger(logger).setLevel(Level.INFO).buildPrintStream())); // Purpur
++        System.setErr(new net.pl3x.purpur.PurpurPrintStream(IoBuilder.forLogger(logger).setLevel(Level.WARN).buildPrintStream())); // Purpur
+         // CraftBukkit end
+ 
+         thread.setDaemon(true);
+diff --git a/src/main/java/net/pl3x/purpur/PurpurPrintStream.java b/src/main/java/net/pl3x/purpur/PurpurPrintStream.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..bfed147052492789350107f069fe38a3cb7531cb
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/PurpurPrintStream.java
+@@ -0,0 +1,60 @@
++/*
++ * MIT License
++ *
++ * Copyright (c) 2020 Josh (Vicarious)
++ *
++ * Permission is hereby granted, free of charge, to any person obtaining a copy
++ * of this software and associated documentation files (the "Software"), to deal
++ * in the Software without restriction, including without limitation the rights
++ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++ * copies of the Software, and to permit persons to whom the Software is
++ * furnished to do so, subject to the following conditions:
++ *
++ * The above copyright notice and this permission notice shall be included in all
++ * copies or substantial portions of the Software.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++ * SOFTWARE.
++ */
++package net.pl3x.purpur;
++
++import org.bukkit.plugin.java.JavaPlugin;
++import org.jetbrains.annotations.NotNull;
++
++import java.io.OutputStream;
++import java.io.PrintStream;
++
++/**
++ * Logic borrowed from SysoutCatcher
++ *
++ * https://www.spigotmc.org/resources/sysoutcatcher.79076/
++ */
++
++public class PurpurPrintStream extends PrintStream {
++    public PurpurPrintStream(@NotNull OutputStream out) {
++        super(out);
++    }
++
++    @Override
++    public void println(String line) {
++        // Get the current stack trace and the calling method (index 2)
++        StackTraceElement element = Thread.currentThread().getStackTrace()[2];
++        try {
++            // Get the class name at that index and the JavaPlugin that "owns" it
++            Class<?> clazz = Class.forName(element.getClassName());
++            JavaPlugin plugin = JavaPlugin.getProvidingPlugin(clazz);
++
++            // Instead of just printing the message, send it to the plugin's logger
++            plugin.getLogger().info(line);
++        } catch (ClassNotFoundException | IllegalArgumentException e) {
++            // If anything happens, the calling class doesn't exist, there is no JavaPlugin that "owns" the calling class, etc
++            // Just print out normally, with some added information
++            super.printf("(%s:%d) %s\n", element.getClassName(), element.getLineNumber(), line);
++        }
++    }
++}
