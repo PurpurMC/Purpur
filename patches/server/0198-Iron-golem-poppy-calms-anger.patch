@@ -1,0 +1,122 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Thu, 13 May 2021 21:22:51 -0500
+Subject: [PATCH] Iron golem poppy calms anger
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/animal/IronGolem.java b/src/main/java/net/minecraft/world/entity/animal/IronGolem.java
+index f4e983da7206923ee0b0f984e65a6c2b3a6a8aeb..cea3725009af1bc746a593c4db63ed630889cd21 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/IronGolem.java
++++ b/src/main/java/net/minecraft/world/entity/animal/IronGolem.java
+@@ -91,6 +91,7 @@ public class IronGolem extends AbstractGolem implements NeutralMob {
+     protected void registerGoals() {
+         if (level.purpurConfig.ironGolemCanSwim) this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this)); // Purpur
+         this.goalSelector.addGoal(0, new net.pl3x.purpur.entity.ai.HasRider(this)); // Purpur
++        if (this.level.purpurConfig.ironGolemPoppyCalm) this.goalSelector.addGoal(0, new net.pl3x.purpur.entity.ai.ReceiveFlower(this)); // Purpur
+         this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.0D, true));
+         this.goalSelector.addGoal(2, new MoveTowardsTargetGoal(this, 0.9D, 32.0F));
+         this.goalSelector.addGoal(2, new MoveBackToVillageGoal(this, 0.6D, false));
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 78d9845d53a3af8d8bd20389590e9250cd418e36..2ec81e3523c0ecc80e57dfb0b9985985a4d48265 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -1245,6 +1245,7 @@ public class PurpurWorldConfig {
+     public boolean ironGolemRidableInWater = false;
+     public boolean ironGolemCanSwim = false;
+     public double ironGolemMaxHealth = 100.0D;
++    public boolean ironGolemPoppyCalm = false;
+     private void ironGolemSettings() {
+         ironGolemRidable = getBoolean("mobs.iron_golem.ridable", ironGolemRidable);
+         ironGolemRidableInWater = getBoolean("mobs.iron_golem.ridable-in-water", ironGolemRidableInWater);
+@@ -1255,6 +1256,7 @@ public class PurpurWorldConfig {
+             set("mobs.iron_golem.attributes.max_health", oldValue);
+         }
+         ironGolemMaxHealth = getDouble("mobs.iron_golem.attributes.max_health", ironGolemMaxHealth);
++        ironGolemPoppyCalm = getBoolean("mobs.iron_golem.poppy-calms-anger", ironGolemPoppyCalm);
+     }
+ 
+     public boolean llamaRidable = false;
+diff --git a/src/main/java/net/pl3x/purpur/entity/ai/ReceiveFlower.java b/src/main/java/net/pl3x/purpur/entity/ai/ReceiveFlower.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..f2f04547509b48c4c13b21e35d77c0ed36086f6b
+--- /dev/null
++++ b/src/main/java/net/pl3x/purpur/entity/ai/ReceiveFlower.java
+@@ -0,0 +1,78 @@
++package net.pl3x.purpur.entity.ai;
++
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.entity.ai.goal.Goal;
++import net.minecraft.world.entity.animal.IronGolem;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.level.block.Blocks;
++
++import java.util.EnumSet;
++import java.util.UUID;
++
++public class ReceiveFlower extends Goal {
++    private final IronGolem irongolem;
++    private ServerPlayer target;
++    private int cooldown;
++
++    public ReceiveFlower(IronGolem entity) {
++        this.irongolem = entity;
++        setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
++    }
++
++    @Override
++    public boolean canUse() {
++        if (this.irongolem.getOfferFlowerTick() > 0) {
++            return false;
++        }
++        if (!this.irongolem.isAngry()) {
++            return false;
++        }
++        UUID uuid = this.irongolem.getPersistentAngerTarget();
++        if (uuid == null) {
++            return false;
++        }
++        Entity target = ((ServerLevel) this.irongolem.level).getEntity(uuid);
++        if (!(target instanceof ServerPlayer player)) {
++            return false;
++        }
++        if (!isOfferingFlower(player)) {
++            return false;
++        }
++        this.target = player;
++        return true;
++    }
++
++    @Override
++    public boolean canContinueToUse() {
++        return this.cooldown > 0;
++    }
++
++    @Override
++    public void start() {
++        this.cooldown = 100;
++        this.irongolem.stopBeingAngry();
++        this.irongolem.offerFlower(true);
++    }
++
++    @Override
++    public void stop() {
++        this.irongolem.offerFlower(false);
++        this.target = null;
++    }
++
++    @Override
++    public void tick() {
++        this.irongolem.getLookControl().setLookAt(this.target, 30.0F, 30.0F);
++        --this.cooldown;
++    }
++
++    private boolean isOfferingFlower(ServerPlayer player) {
++        return isPoppy(player.getMainHandItem()) || isPoppy(player.getOffhandItem());
++    }
++
++    private boolean isPoppy(ItemStack item) {
++        return item.getItem() == Blocks.POPPY.asItem();
++    }
++}
