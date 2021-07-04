@@ -17,10 +17,27 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 5540da58e66f83b283863d3158a9b4ab5ba636db..f766183883f009368b79e1201553c184a373e2cf 100644
+index 5540da58e66f83b283863d3158a9b4ab5ba636db..ab8de6c4e3c0bea2b9f498da00adf88e987d2364 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -30,8 +30,8 @@ repositories {
+@@ -1,10 +1,16 @@
+ import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer
+ import com.github.jengelman.gradle.plugins.shadow.transformers.Transformer
+ import io.papermc.paperweight.tasks.BaseTask
++import io.papermc.paperweight.tasks.GenerateReobfMappings
++import io.papermc.paperweight.tasks.PatchMappings
++import io.papermc.paperweight.util.Constants
+ import io.papermc.paperweight.util.Git
++import io.papermc.paperweight.util.cache
+ import io.papermc.paperweight.util.defaultOutput
+ import io.papermc.paperweight.util.openZip
+ import io.papermc.paperweight.util.path
++import io.papermc.paperweight.util.registering
++import io.papermc.paperweight.util.set
+ import shadow.org.apache.logging.log4j.core.config.plugins.processor.PluginProcessor.PLUGIN_CACHE_FILE
+ import java.nio.file.Files
+ import java.text.SimpleDateFormat
+@@ -30,8 +36,8 @@ repositories {
  }
  
  dependencies {
@@ -31,7 +48,7 @@ index 5540da58e66f83b283863d3158a9b4ab5ba636db..f766183883f009368b79e1201553c184
      // Paper start
      implementation("org.jline:jline-terminal-jansi:3.12.1")
      implementation("net.minecrell:terminalconsoleappender:1.2.0")
-@@ -82,7 +82,7 @@ tasks.jar {
+@@ -82,7 +88,7 @@ tasks.jar {
          attributes(
              "Main-Class" to "org.bukkit.craftbukkit.Main",
              "Implementation-Title" to "CraftBukkit",
@@ -40,7 +57,30 @@ index 5540da58e66f83b283863d3158a9b4ab5ba636db..f766183883f009368b79e1201553c184
              "Implementation-Vendor" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(Date()), // Paper
              "Specification-Title" to "Bukkit",
              "Specification-Version" to project.version,
-@@ -178,7 +178,7 @@ tasks.test {
+@@ -107,6 +113,22 @@ publishing {
+     }
+ }
+ 
++val generateReobfMappings = rootProject.tasks.named<GenerateReobfMappings>("generateReobfMappings")
++
++val patchReobfMappings by tasks.registering<PatchMappings> {
++    inputMappings.set(generateReobfMappings.flatMap { it.reobfMappings })
++    patch.set(rootProject.layout.cache.resolve("paperweight/upstreams/paper/build-data/reobf-mappings-patch.tiny"))
++
++    fromNamespace.set(Constants.DEOBF_NAMESPACE)
++    toNamespace.set(Constants.SPIGOT_NAMESPACE)
++
++    outputMappings.set(layout.cache.resolve("paperweight/mappings/reobf-patched.tiny"))
++}
++
++tasks.reobfJar {
++    mappingsFile.set(patchReobfMappings.flatMap { it.outputMappings })
++}
++
+ val generatePom = tasks.named<GenerateMavenPom>("generatePomFileForMavenPublication")
+ 
+ tasks.shadowJar {
+@@ -178,7 +200,7 @@ tasks.test {
  fun TaskContainer.registerRunTask(
      name: String, block: JavaExec.() -> Unit
  ): TaskProvider<JavaExec> = register<JavaExec>(name) {
@@ -9735,7 +9775,7 @@ index 0000000000000000000000000000000000000000..f188ff6b08abddd06a3120fb15825e0f
 +    }
 +}
 diff --git a/src/main/java/net/minecraft/core/BlockPos.java b/src/main/java/net/minecraft/core/BlockPos.java
-index b70aa66732fb5e957aed0901f4c76358b2c56f8e..009febf8fccbfc9a638f018f921ebd9ec9068196 100644
+index b70aa66732fb5e957aed0901f4c76358b2c56f8e..b01d7da333bac7820e42b6f645634a15ef88ae4f 100644
 --- a/src/main/java/net/minecraft/core/BlockPos.java
 +++ b/src/main/java/net/minecraft/core/BlockPos.java
 @@ -478,9 +478,9 @@ public class BlockPos extends Vec3i {
@@ -9745,9 +9785,9 @@ index b70aa66732fb5e957aed0901f4c76358b2c56f8e..009febf8fccbfc9a638f018f921ebd9e
 -            this.setX(x);
 -            this.setY(y);
 -            this.setZ(z);
-+            ((Vec3i)this).x = x; // Tuinity - force inline
-+            ((Vec3i)this).y = y; // Tuinity - force inline
-+            ((Vec3i)this).z = z; // Tuinity - force inline
++            this.x = x; // Tuinity - force inline
++            this.y = y; // Tuinity - force inline
++            this.z = z; // Tuinity - force inline
              return this;
          }
  
@@ -9756,21 +9796,21 @@ index b70aa66732fb5e957aed0901f4c76358b2c56f8e..009febf8fccbfc9a638f018f921ebd9e
          @Override
          public BlockPos.MutableBlockPos setX(int i) {
 -            super.setX(i);
-+            ((Vec3i)this).x = i; // Tuinity
++            this.x = i; // Tuinity
              return this;
          }
  
          @Override
          public BlockPos.MutableBlockPos setY(int i) {
 -            super.setY(i);
-+            ((Vec3i)this).y = i; // Tuinity
++            this.y = i; // Tuinity
              return this;
          }
  
          @Override
          public BlockPos.MutableBlockPos setZ(int i) {
 -            super.setZ(i);
-+            ((Vec3i)this).z = i; // Tuinity
++            this.z = i; // Tuinity
              return this;
          }
          // Paper end
@@ -14178,7 +14218,7 @@ index 325e244c46ec208a2e7e18d71ccbbfcc25fc1bce..6a4e44dd8935018d1b5283761dfb8e85
      }
  
 diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
-index 17281575ff83bbf1e720335619a78a6d0a0e5077..8196be52af4a5ea1bf280d646dc2db15d9ad6ea2 100644
+index 17281575ff83bbf1e720335619a78a6d0a0e5077..38753e10b1597a2f3bd2cde208c6e30b26a03b43 100644
 --- a/src/main/java/net/minecraft/world/level/Level.java
 +++ b/src/main/java/net/minecraft/world/level/Level.java
 @@ -166,6 +166,8 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
@@ -14221,7 +14261,7 @@ index 17281575ff83bbf1e720335619a78a6d0a0e5077..8196be52af4a5ea1bf280d646dc2db15
 +
 +    @Override
 +    public void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {
-+        this.entitySliceManager.getEntities(except, box, into, predicate);
++        this.entitySliceManager.getHardCollidingEntities(except, box, into, predicate);
 +    }
 +
 +    @Override
