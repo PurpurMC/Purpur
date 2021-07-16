@@ -36,6 +36,101 @@ index 8ccb5183af4a10a92d17570833e21dfffb5b03ea..16f8f8dd9ddc105dde4401fa25820768
              "Implementation-Vendor" to date, // Paper
              "Specification-Title" to "Bukkit",
              "Specification-Version" to project.version,
+diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
+index d50b61876f15d95b836b3dd81d9c3492c91a8448..128b268539e956d0f78084b62c10138e6eb4c22a 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
++++ b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
+@@ -18,7 +18,7 @@ import java.util.stream.StreamSupport;
+ 
+ public class PaperVersionFetcher implements VersionFetcher {
+     private static final java.util.regex.Pattern VER_PATTERN = java.util.regex.Pattern.compile("^([0-9\\.]*)\\-.*R"); // R is an anchor, will always give '-R' at end
+-    private static final String GITHUB_BRANCH_NAME = "master";
++    private static final String JENKINS_URL = "https://ci.pl3x.net/job/Purpur/lastSuccessfulBuild/buildNumber"; // Purpur
+     private static @Nullable String mcVer;
+ 
+     @Override
+@@ -29,8 +29,8 @@ public class PaperVersionFetcher implements VersionFetcher {
+     @Nonnull
+     @Override
+     public Component getVersionMessage(@Nonnull String serverVersion) {
+-        String[] parts = serverVersion.substring("git-Tuinity-".length()).split("[-\\s]"); // Tuinity
+-        final Component updateMessage = getUpdateStatusMessage("Spottedleaf/Tuinity", GITHUB_BRANCH_NAME, parts[0]); // Tuinity
++        String[] parts = serverVersion.substring("git-Purpur-".length()).split("[-\\s]"); // Tuinity // Purpur
++        final Component updateMessage = getUpdateStatusMessage("pl3xgaming/Purpur", "ver/" + getMinecraftVersion(), parts[0]); // Tuinity // Purpur
+         final Component history = getHistory();
+ 
+         return history != null ? TextComponent.ofChildren(updateMessage, Component.newline(), history) : updateMessage;
+@@ -43,7 +43,7 @@ public class PaperVersionFetcher implements VersionFetcher {
+                 String result = matcher.group();
+                 mcVer = result.substring(0, result.length() - 2); // strip 'R' anchor and trailing '-'
+             } else {
+-                org.bukkit.Bukkit.getLogger().warning("Unable to match version to pattern! Report to PaperMC!");
++                org.bukkit.Bukkit.getLogger().warning("Unable to match version to pattern! Report to Purpur!"); // Purpur
+                 org.bukkit.Bukkit.getLogger().warning("Pattern: " + VER_PATTERN.toString());
+                 org.bukkit.Bukkit.getLogger().warning("Version: " + org.bukkit.Bukkit.getBukkitVersion());
+             }
+@@ -54,10 +54,18 @@ public class PaperVersionFetcher implements VersionFetcher {
+ 
+     private static Component getUpdateStatusMessage(@Nonnull String repo, @Nonnull String branch, @Nonnull String versionInfo) {
+         int distance;
+-        // Tuinity - we don't have jenkins setup
++        // Purpur start - put this back...
++        try {
++            int build = Integer.parseInt(versionInfo);
++            distance = fetchDistanceFromSiteApi(build, getMinecraftVersion());
++            if (distance < 0) {
++                distance = fetchDistanceFromJenkins(build);
++            }
++        } catch (NumberFormatException ignored) {
+             versionInfo = versionInfo.replace("\"", "");
+             distance = fetchDistanceFromGitHub(repo, branch, versionInfo);
+-        // Tuinity - we don't have jenkins setup
++        }
++        // Purpur end
+ 
+         switch (distance) {
+             case -1:
+@@ -75,15 +83,11 @@ public class PaperVersionFetcher implements VersionFetcher {
+         if (siteApiVersion == null) { return -1; }
+         try {
+             try (BufferedReader reader = Resources.asCharSource(
+-                new URL("https://papermc.io/api/v2/projects/paper/versions/" + siteApiVersion),
++                new URL("https://api.pl3x.net/v2/purpur/" + siteApiVersion), // Purpur
+                 Charsets.UTF_8
+             ).openBufferedStream()) {
+                 JsonObject json = new Gson().fromJson(reader, JsonObject.class);
+-                JsonArray builds = json.getAsJsonArray("builds");
+-                int latest = StreamSupport.stream(builds.spliterator(), false)
+-                    .mapToInt(e -> e.getAsInt())
+-                    .max()
+-                    .getAsInt();
++                int latest = json.getAsJsonObject("builds").getAsJsonPrimitive("latest").getAsInt(); // Purpur
+                 return latest - jenkinsBuild;
+             } catch (JsonSyntaxException ex) {
+                 ex.printStackTrace();
+@@ -95,6 +99,22 @@ public class PaperVersionFetcher implements VersionFetcher {
+         }
+     }
+ 
++    // Purpur start
++    private static int fetchDistanceFromJenkins(int jenkinsBuild) {
++        try {
++            try (BufferedReader reader = Resources.asCharSource(new URL(JENKINS_URL), Charsets.UTF_8).openBufferedStream()) {
++                return Integer.decode(reader.readLine()) - jenkinsBuild;
++            } catch (NumberFormatException ex) {
++                ex.printStackTrace();
++                return -2;
++            }
++        } catch (IOException e) {
++            e.printStackTrace();
++            return -1;
++        }
++    }
++    // Purpur end
++
+     // Contributed by Techcable <Techcable@outlook.com> in GH-65
+     private static int fetchDistanceFromGitHub(@Nonnull String repo, @Nonnull String branch, @Nonnull String hash) {
+         try {
 diff --git a/src/main/java/com/destroystokyo/paper/console/PaperConsole.java b/src/main/java/com/destroystokyo/paper/console/PaperConsole.java
 index e0b1f0671d16ddddcb6725acd25a1d1d69e42701..8c3c68465197fafc14849dc38a572e309931e2a2 100644
 --- a/src/main/java/com/destroystokyo/paper/console/PaperConsole.java
@@ -94,131 +189,6 @@ index 9667a74c9b77ea6acd9d2ebce30c685ed4b53e59..1749d134260adcb33d1757630c6ba2fd
              }
              // Spigot end
              DedicatedServer.LOGGER.warn("To change this, set \"online-mode\" to \"true\" in the server.properties file.");
-diff --git a/src/main/java/net/pl3x/purpur/PurpurVersionFetcher.java b/src/main/java/net/pl3x/purpur/PurpurVersionFetcher.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..cabfcebf9f944f7a2a2a1cffc7401435803a8741
---- /dev/null
-+++ b/src/main/java/net/pl3x/purpur/PurpurVersionFetcher.java
-@@ -0,0 +1,119 @@
-+package net.pl3x.purpur;
-+
-+import com.destroystokyo.paper.VersionHistoryManager;
-+import com.destroystokyo.paper.util.VersionFetcher;
-+import com.google.common.base.Charsets;
-+import com.google.common.io.Resources;
-+import com.google.gson.Gson;
-+import com.google.gson.JsonObject;
-+import com.google.gson.JsonSyntaxException;
-+import net.kyori.adventure.text.Component;
-+import net.kyori.adventure.text.TextComponent;
-+import net.kyori.adventure.text.format.NamedTextColor;
-+import net.kyori.adventure.text.format.TextDecoration;
-+
-+import javax.annotation.Nonnull;
-+import javax.annotation.Nullable;
-+import java.io.BufferedReader;
-+import java.io.IOException;
-+import java.io.InputStreamReader;
-+import java.net.HttpURLConnection;
-+import java.net.URL;
-+
-+public class PurpurVersionFetcher implements VersionFetcher {
-+    private static final String JENKINS_URL = "https://ci.pl3x.net/job/Purpur/lastSuccessfulBuild/buildNumber";
-+    private static final String GITHUB_BRANCH_NAME = "master";
-+
-+    @Override
-+    public long getCacheTime() {
-+        return 720000;
-+    }
-+
-+    @Nonnull
-+    @Override
-+    public Component getVersionMessage(@Nonnull String serverVersion) {
-+        String[] parts = serverVersion.substring("git-Purpur-".length()).split("[-\\s]");
-+        final Component updateMessage = getUpdateStatusMessage("pl3xgaming/Purpur", GITHUB_BRANCH_NAME, parts[0]);
-+        final Component history = getHistory();
-+
-+        return history != null ? TextComponent.ofChildren(updateMessage, Component.newline(), history) : updateMessage;
-+    }
-+
-+    private static Component getUpdateStatusMessage(@Nonnull String repo, @Nonnull String branch, @Nonnull String versionInfo) {
-+        int distance;
-+        try {
-+            int jenkinsBuild = Integer.parseInt(versionInfo);
-+            distance = fetchDistanceFromJenkins(jenkinsBuild);
-+        } catch (NumberFormatException ignored) {
-+            versionInfo = versionInfo.replace("\"", "");
-+            distance = fetchDistanceFromGitHub(repo, branch, versionInfo);
-+        }
-+
-+        switch (distance) {
-+            case -1:
-+                return Component.text("Error obtaining version information", NamedTextColor.YELLOW);
-+            case 0:
-+                return Component.text("You are running the latest version", NamedTextColor.GREEN);
-+            case -2:
-+                return Component.text("Unknown version", NamedTextColor.YELLOW);
-+            default:
-+                return Component.text("You are " + distance + " version(s) behind", NamedTextColor.YELLOW);
-+        }
-+    }
-+
-+    private static int fetchDistanceFromJenkins(int jenkinsBuild) {
-+        try {
-+            try (BufferedReader reader = Resources.asCharSource(new URL(JENKINS_URL), Charsets.UTF_8).openBufferedStream()) {
-+                return Integer.decode(reader.readLine()) - jenkinsBuild;
-+            } catch (NumberFormatException ex) {
-+                ex.printStackTrace();
-+                return -2;
-+            }
-+        } catch (IOException e) {
-+            e.printStackTrace();
-+            return -1;
-+        }
-+    }
-+
-+    // Contributed by Techcable <Techcable@outlook.com> in GH-65
-+    private static int fetchDistanceFromGitHub(@Nonnull String repo, @Nonnull String branch, @Nonnull String hash) {
-+        try {
-+            HttpURLConnection connection = (HttpURLConnection) new URL("https://api.github.com/repos/" + repo + "/compare/" + branch + "..." + hash).openConnection();
-+            connection.connect();
-+            if (connection.getResponseCode() == HttpURLConnection.HTTP_NOT_FOUND) return -2; // Unknown commit
-+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), Charsets.UTF_8))) {
-+                JsonObject obj = new Gson().fromJson(reader, JsonObject.class);
-+                String status = obj.get("status").getAsString();
-+                switch (status) {
-+                    case "identical":
-+                        return 0;
-+                    case "behind":
-+                        return obj.get("behind_by").getAsInt();
-+                    default:
-+                        return -1;
-+                }
-+            } catch (JsonSyntaxException | NumberFormatException e) {
-+                e.printStackTrace();
-+                return -1;
-+            }
-+        } catch (IOException e) {
-+            e.printStackTrace();
-+            return -1;
-+        }
-+    }
-+
-+    @Nullable
-+    private Component getHistory() {
-+        final VersionHistoryManager.VersionData data = VersionHistoryManager.INSTANCE.getVersionData();
-+        if (data == null) {
-+            return null;
-+        }
-+
-+        final String oldVersion = data.getOldVersion();
-+        if (oldVersion == null) {
-+            return null;
-+        }
-+
-+        return Component.text("Previous version: " + oldVersion, NamedTextColor.GRAY, TextDecoration.ITALIC);
-+    }
-+}
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 index f243dbdf7673c06b0e2d36fe9af43234a5304ed6..a173b6b0e49bec5d0b0d15384526cb261000bf33 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
@@ -232,19 +202,6 @@ index f243dbdf7673c06b0e2d36fe9af43234a5304ed6..a173b6b0e49bec5d0b0d15384526cb26
      private final String serverVersion;
      private final String bukkitVersion = Versioning.getBukkitVersion();
      private final Logger logger = Logger.getLogger("Minecraft");
-diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-index 7a8db8d481e9487ea83a640af208242f4987ad28..82d56d8c4616f1012e70697dae8d1d31d7d53f2f 100644
---- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-+++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
-@@ -395,7 +395,7 @@ public final class CraftMagicNumbers implements UnsafeValues {
- 
-     @Override
-     public com.destroystokyo.paper.util.VersionFetcher getVersionFetcher() {
--        return new com.destroystokyo.paper.PaperVersionFetcher();
-+        return new net.pl3x.purpur.PurpurVersionFetcher(); // Purpur
-     }
- 
-     @Override
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/Versioning.java b/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
 index 001b1e5197eaa51bfff9031aa6c69876c9a47960..13b98439320ac1401a920c01d7cf5a4b3a23deff 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
