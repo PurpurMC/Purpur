@@ -58,6 +58,28 @@ index cd26d6c8ba2d5d6b3b56e484e6e642ab646341e1..11786d686ed1734f8f41f6127b3499cb
 +    }
      // Purpur end
  }
+diff --git a/src/main/java/net/minecraft/world/item/CompassItem.java b/src/main/java/net/minecraft/world/item/CompassItem.java
+index 9d541c9e53f3f8db871f01f8d083e4cfc0de0de1..046bf9cbf02b002e89f7d39b616dd0f5a9539ed7 100644
+--- a/src/main/java/net/minecraft/world/item/CompassItem.java
++++ b/src/main/java/net/minecraft/world/item/CompassItem.java
+@@ -46,6 +46,17 @@ public class CompassItem extends Item implements Vanishable {
+     @Override
+     public void inventoryTick(ItemStack stack, Level world, Entity entity, int slot, boolean selected) {
+         if (!world.isClientSide) {
++            // Purpur start
++            if (world.purpurConfig.compassItemShowsBossBar && entity instanceof net.minecraft.server.level.ServerPlayer player && !player.compassBar()) {
++                net.pl3x.purpur.task.CompassTask task = net.pl3x.purpur.task.CompassTask.instance();
++                boolean hasTask = task.hasPlayer(player.getUUID());
++                if (selected && !hasTask) {
++                    task.addPlayer(player.getBukkitEntity());
++                } else if (!selected && hasTask) {
++                    task.removePlayer(player.getBukkitEntity());
++                }
++            }
++            // Purpur end
+             if (isLodestoneCompass(stack)) {
+                 CompoundTag compoundTag = stack.getOrCreateTag();
+                 if (compoundTag.contains("LodestoneTracked") && !compoundTag.getBoolean("LodestoneTracked")) {
 diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
 index 8244f362f551ed2bdef4df8e6b83cb176b4a4e59..11e20b7ab11dfc2549eec53e4e0829f14f261a8e 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
@@ -88,6 +110,26 @@ index 8244f362f551ed2bdef4df8e6b83cb176b4a4e59..11e20b7ab11dfc2549eec53e4e0829f1
          commandGamemodeRequiresPermission = getBoolean("settings.command.gamemode.requires-specific-permission", commandGamemodeRequiresPermission);
          hideHiddenPlayersFromEntitySelector = getBoolean("settings.command.hide-hidden-players-from-entity-selector", hideHiddenPlayersFromEntitySelector);
          uptimeFormat = getString("settings.command.uptime.format", uptimeFormat);
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 35472374f55c5fa7e76626ea423a3a1a93f09dcd..35ec2183e4f05020e9370f7e24f9dadc43119a1d 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -175,6 +175,7 @@ public class PurpurWorldConfig {
+     public float enderPearlEndermiteChance = 0.05F;
+     public int glowBerriesEatGlowDuration = 0;
+     public boolean shulkerBoxItemDropContentsWhenDestroyed = true;
++    public boolean compassItemShowsBossBar = false;
+     private void itemSettings() {
+         itemImmuneToCactus.clear();
+         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
+@@ -220,6 +221,7 @@ public class PurpurWorldConfig {
+         enderPearlEndermiteChance = (float) getDouble("gameplay-mechanics.item.ender-pearl.endermite-spawn-chance", enderPearlEndermiteChance);
+         glowBerriesEatGlowDuration = getInt("gameplay-mechanics.item.glow_berries.eat-glow-duration", glowBerriesEatGlowDuration);
+         shulkerBoxItemDropContentsWhenDestroyed = getBoolean("gameplay-mechanics.item.shulker_box.drop-contents-when-destroyed", shulkerBoxItemDropContentsWhenDestroyed);
++        compassItemShowsBossBar = getBoolean("gameplay-mechanics.item.compass.holding-shows-bossbar", compassItemShowsBossBar);
+     }
+ 
+     public double minecartMaxSpeed = 0.4D;
 diff --git a/src/main/java/net/pl3x/purpur/command/CompassCommand.java b/src/main/java/net/pl3x/purpur/command/CompassCommand.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..5381dfa162dae02c93afcf28d7c6dfb2170ab175
@@ -116,10 +158,10 @@ index 0000000000000000000000000000000000000000..5381dfa162dae02c93afcf28d7c6dfb2
 +    }
 +}
 diff --git a/src/main/java/net/pl3x/purpur/task/BossBarTask.java b/src/main/java/net/pl3x/purpur/task/BossBarTask.java
-index 1f55902eb8367b4d980a66f23ac2b57709ae78cf..173805ec9beae96a120d3501d1cf597c93aa6bd9 100644
+index 89122d7bcfd037a22d277e562f5300f2f3eab2db..d4d08946f38e6e29943a310c4b9385d2e092c803 100644
 --- a/src/main/java/net/pl3x/purpur/task/BossBarTask.java
 +++ b/src/main/java/net/pl3x/purpur/task/BossBarTask.java
-@@ -86,10 +86,12 @@ public abstract class BossBarTask extends BukkitRunnable {
+@@ -90,10 +90,12 @@ public abstract class BossBarTask extends BukkitRunnable {
  
      public static void startAll() {
          TPSBarTask.instance().start();
@@ -132,7 +174,7 @@ index 1f55902eb8367b4d980a66f23ac2b57709ae78cf..173805ec9beae96a120d3501d1cf597c
      }
  
      public static void addToAll(ServerPlayer player) {
-@@ -97,9 +99,13 @@ public abstract class BossBarTask extends BukkitRunnable {
+@@ -101,9 +103,13 @@ public abstract class BossBarTask extends BukkitRunnable {
          if (player.tpsBar()) {
              TPSBarTask.instance().addPlayer(bukkit);
          }
