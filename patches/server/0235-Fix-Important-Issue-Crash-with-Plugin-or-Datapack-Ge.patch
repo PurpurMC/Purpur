@@ -5,17 +5,34 @@ Subject: [PATCH] Fix Important Issue Crash with Plugin or Datapack Generation
 
 
 diff --git a/src/main/java/net/minecraft/world/level/levelgen/feature/DecoratedFeature.java b/src/main/java/net/minecraft/world/level/levelgen/feature/DecoratedFeature.java
-index 2d102ea80d3f8e8aad0d57626450a7f30bb6c346..4ebfe25296459bf7cb76061262c67365a93d219b 100644
+index 2d102ea80d3f8e8aad0d57626450a7f30bb6c346..b82043e2ca35d28c823a0c977f7284f220ce04e9 100644
 --- a/src/main/java/net/minecraft/world/level/levelgen/feature/DecoratedFeature.java
 +++ b/src/main/java/net/minecraft/world/level/levelgen/feature/DecoratedFeature.java
-@@ -24,6 +24,7 @@ public class DecoratedFeature extends Feature<DecoratedFeatureConfiguration> {
+@@ -24,12 +24,20 @@ public class DecoratedFeature extends Feature<DecoratedFeatureConfiguration> {
          Random random = getRnd(context.random(), net.pl3x.purpur.PurpurConfig.seedFeatureDecorated); // Purpur
          BlockPos blockPos = context.origin();
          ConfiguredFeature<?, ?> configuredFeature = decoratedFeatureConfiguration.feature.get();
-+        if (configuredFeature == null) return false; // Fix Feature Placement - We are asking a region for a chunk out of bound
-         decoratedFeatureConfiguration.decorator.getPositions(new DecorationContext(worldGenLevel, chunkGenerator), random, blockPos).forEach((blockPosx) -> {
-             if (configuredFeature.place(worldGenLevel, chunkGenerator, random, blockPosx)) {
-                 mutableBoolean.setTrue();
+-        decoratedFeatureConfiguration.decorator.getPositions(new DecorationContext(worldGenLevel, chunkGenerator), random, blockPos).forEach((blockPosx) -> {
+-            if (configuredFeature.place(worldGenLevel, chunkGenerator, random, blockPosx)) {
+-                mutableBoolean.setTrue();
++        // Purpur Start - Change forEach to Iterator for check with trycatch error with caves 1.18
++        if (configuredFeature == null) return false; // First fix because configuredFeature can be null.
++        java.util.Iterator<BlockPos> blockPosIterator = decoratedFeatureConfiguration.decorator.getPositions(new DecorationContext(worldGenLevel, chunkGenerator), random, blockPos).iterator();
++        while (blockPosIterator.hasNext()) {
++            try {
++                if (configuredFeature.place(worldGenLevel, chunkGenerator, random, blockPosIterator.next())) {
++                    mutableBoolean.setTrue();
++                }
++            } catch (Exception ignored) { // ichunkaccess in WorldGenRegion is null.
++                mutableBoolean.setFalse(); // Return false for no crash server
+             }
+ 
+-        });
++        }
++        // Purpur End
+         return mutableBoolean.isTrue();
+     }
+ 
 diff --git a/src/main/java/net/minecraft/world/level/levelgen/feature/TreeFeature.java b/src/main/java/net/minecraft/world/level/levelgen/feature/TreeFeature.java
 index 2f71e80f6c9d37a97d1d03b7a1d893c825b315fa..ba36676977cc3665a4ea20c556133d4faf06af3e 100644
 --- a/src/main/java/net/minecraft/world/level/levelgen/feature/TreeFeature.java
