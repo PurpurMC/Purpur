@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index b50463c2356301a1b47a0bf4f50dc1f121d363a1..66f5e6edc2bac290664c534df213058eaeab3b4e 100644
+index b50463c2356301a1b47a0bf4f50dc1f121d363a1..f5a9c41fdbaede65cf4607737421571f0c344c1f 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -1,10 +1,16 @@
@@ -48,7 +48,7 @@ index b50463c2356301a1b47a0bf4f50dc1f121d363a1..66f5e6edc2bac290664c534df213058e
 -    implementation(project(":Paper-API"))
 -    implementation(project(":Paper-MojangAPI"))
 +    implementation(project(":Tuinity-API")) // Tuinity
-+    implementation("com.destroystokyo.paper:paper-mojangapi:1.16.5-R0.1-SNAPSHOT") // Tuinity
++    implementation("io.papermc.paper:paper-mojangapi:1.17.1-R0.1-SNAPSHOT") // Tuinity
      // Paper start
      implementation("org.jline:jline-terminal-jansi:3.12.1")
      implementation("net.minecrell:terminalconsoleappender:1.2.0")
@@ -60,7 +60,14 @@ index b50463c2356301a1b47a0bf4f50dc1f121d363a1..66f5e6edc2bac290664c534df213058e
  
      testImplementation("io.github.classgraph:classgraph:4.8.47") // Paper - mob goal test
      testImplementation("junit:junit:4.13.1")
-@@ -80,7 +88,7 @@ tasks.jar {
+@@ -74,13 +82,13 @@ tasks.jar {
+     manifest {
+         val git = Git(rootProject.layout.projectDirectory.path)
+         val gitHash = git("rev-parse", "--short=7", "HEAD").getText().trim()
+-        val implementationVersion = System.getenv("BUILD_NUMBER") ?: "\"$gitHash\""
++        val implementationVersion = /* System.getenv("BUILD_NUMBER") ?: */ "\"$gitHash\"" // Tuinity - Do not use CI build number for implementation version (always use git hash)
+         val date = git("show", "-s", "--format=%ci", gitHash).getText().trim() // Paper
+         val gitBranch = git("rev-parse", "--abbrev-ref", "HEAD").getText().trim() // Paper
          attributes(
              "Main-Class" to "org.bukkit.craftbukkit.Main",
              "Implementation-Title" to "CraftBukkit",
@@ -23114,7 +23121,7 @@ index 0000000000000000000000000000000000000000..300364f693583be802a71d94cda5d96c
 +    }
 +}
 diff --git a/src/main/java/co/aikar/timings/MinecraftTimings.java b/src/main/java/co/aikar/timings/MinecraftTimings.java
-index e873b23527cc4e56580c3c7dc5b52ecc3f2a9e31..6317988df19da315c057a9cbc55ff77006f45912 100644
+index 8c883d2f88acc731734a121ebb76821e66658cc9..c2e8380590d83ce20ee02c90d825b0ad5e883ba9 100644
 --- a/src/main/java/co/aikar/timings/MinecraftTimings.java
 +++ b/src/main/java/co/aikar/timings/MinecraftTimings.java
 @@ -45,6 +45,8 @@ public final class MinecraftTimings {
@@ -24753,13 +24760,16 @@ index 0000000000000000000000000000000000000000..49dc783a312ed62415d28cdd801dad6a
 +}
 diff --git a/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..356a6118f1b0b091f7527aec747659025562eafc
+index 0000000000000000000000000000000000000000..bca56d612451a70b55ed37817df7cf4453311477
 --- /dev/null
 +++ b/src/main/java/com/tuinity/tuinity/config/TuinityConfig.java
-@@ -0,0 +1,432 @@
+@@ -0,0 +1,441 @@
 +package com.tuinity.tuinity.config;
 +
 +import com.destroystokyo.paper.util.SneakyThrow;
++import io.papermc.paper.util.ObfHelper;
++import java.util.HashMap;
++import java.util.Map;
 +import net.minecraft.server.MinecraftServer;
 +import org.bukkit.Bukkit;
 +import org.bukkit.configuration.ConfigurationSection;
@@ -24926,35 +24936,41 @@ index 0000000000000000000000000000000000000000..356a6118f1b0b091f7527aec74765902
 +
 +        // auto recipe limiting
 +        TuinityConfig.getDouble("packet-limiter.limits." +
-+                "PacketPlayInAutoRecipe" + ".interval", 4.0);
++            "PacketPlayInAutoRecipe" + ".interval", 4.0);
 +        TuinityConfig.getDouble("packet-limiter.limits." +
 +            "PacketPlayInAutoRecipe" + ".max-packet-rate", 5.0);
 +        TuinityConfig.getString("packet-limiter.limits." +
 +            "PacketPlayInAutoRecipe" + ".action", PacketLimit.ViolateAction.DROP.name());
 +
-+        final String canonicalName = MinecraftServer.class.getCanonicalName();
-+        final String nmsPackage = canonicalName.substring(0, canonicalName.lastIndexOf("."));
++        final Map<String, String> mojangToSpigot = new HashMap<>();
++        final Map<String, ObfHelper.ClassMapping> maps = ObfHelper.INSTANCE.mappings();
++        if (maps != null) {
++            maps.forEach((spigotName, classMapping) ->
++                mojangToSpigot.put(classMapping.mojangName(), classMapping.obfName()));
++        }
++
 +        for (final String packetClassName : section.getKeys(false)) {
 +            if (packetClassName.equals("all")) {
 +                continue;
 +            }
 +            Class<?> packetClazz = null;
 +
-+            try {
-+                packetClazz = Class.forName(nmsPackage + "." + packetClassName);
-+            } catch (final ClassNotFoundException ex) {
-+                for (final String subpackage : java.util.Arrays.asList("game", "handshake", "login", "status")) {
++            for (final String subpackage : List.of("game", "handshake", "login", "status")) {
++                final String fullName = "net.minecraft.network.protocol." + subpackage + "." + packetClassName;
++                try {
++                    packetClazz = Class.forName(fullName);
++                    break;
++                } catch (final ClassNotFoundException ex) {
 +                    try {
-+                        packetClazz = Class.forName("net.minecraft.network.protocol." + subpackage + "." + packetClassName);
++                        final String spigot = mojangToSpigot.get(fullName);
++                        if (spigot != null) {
++                            packetClazz = Class.forName(spigot);
++                        }
 +                    } catch (final ClassNotFoundException ignore) {}
-+                }
-+                if (packetClazz == null) {
-+                    MinecraftServer.LOGGER.warn("Packet '" + packetClassName + "' does not exist, cannot limit it! Please update tuinity.yml");
-+                    continue;
 +                }
 +            }
 +
-+            if (!net.minecraft.network.protocol.Packet.class.isAssignableFrom(packetClazz)) {
++            if (packetClazz == null || !net.minecraft.network.protocol.Packet.class.isAssignableFrom(packetClazz)) {
 +                MinecraftServer.LOGGER.warn("Packet '" + packetClassName + "' does not exist, cannot limit it! Please update tuinity.yml");
 +                continue;
 +            }
@@ -32317,7 +32333,7 @@ index 1cc4e0a1f3d8235ef88b48e01ca8b78a263d2676..428d94c60b826ddf3797d6713661dff1
 +     */ // Tuinity - replace old loader system
  }
 diff --git a/src/main/java/net/minecraft/server/level/ServerChunkCache.java b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
-index 1043577580bee20a46ae4b2c9e7cef27d45568ad..3f0168a9edfa67f99e6fe9ce161878034e57c3f4 100644
+index 0d143d073fa7cdfa14f12e9c795350dca8ac5e80..8b84befc6840d25dc3d6e2d42a4024a3c979a097 100644
 --- a/src/main/java/net/minecraft/server/level/ServerChunkCache.java
 +++ b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
 @@ -47,6 +47,7 @@ import net.minecraft.world.level.storage.LevelStorageSource;
@@ -32606,11 +32622,19 @@ index 1043577580bee20a46ae4b2c9e7cef27d45568ad..3f0168a9edfa67f99e6fe9ce16187803
          this.level.timings.doChunkUnload.stopTiming(); // Spigot
          this.level.getProfiler().pop();
          this.clearCache();
-@@ -838,18 +1017,26 @@ public class ServerChunkCache extends ChunkSource {
-             //Collections.shuffle(list); // Paper
-             // Paper - moved up
+@@ -834,24 +1013,31 @@ public class ServerChunkCache extends ChunkSource {
+ 
+             this.lastSpawnState = spawnercreature_d;
+             this.level.getProfiler().pop();
+-            List<ChunkHolder> list = Lists.newArrayList(this.chunkMap.visibleChunkMap.values()); // Paper
++            //List<ChunkHolder> list = Lists.newArrayList(this.chunkMap.visibleChunkMap.values()); // Paper
+ 
+-            Collections.shuffle(list);
++            //Collections.shuffle(list);
+             // Paper - moved natural spawn event up
              this.level.timings.chunkTicks.startTiming(); // Paper
--            final int[] chunksTicked = {0}; this.chunkMap.forEachVisibleChunk((playerchunk) -> { // Paper - safe iterator incase chunk loads, also no wrapping
+-            final int[] chunksTicked = {0}; // Paper
+-            list.forEach((playerchunk) -> {
 -                Optional<LevelChunk> optional = ((Either) playerchunk.getTickingChunkFuture().getNow(ChunkHolder.UNLOADED_LEVEL_CHUNK)).left();
 -
 -                if (optional.isPresent()) {
@@ -32640,7 +32664,7 @@ index 1043577580bee20a46ae4b2c9e7cef27d45568ad..3f0168a9edfa67f99e6fe9ce16187803
                          }
  
                          // this.level.timings.doTickTiles.startTiming(); // Spigot // Paper
-@@ -857,7 +1044,11 @@ public class ServerChunkCache extends ChunkSource {
+@@ -859,7 +1045,11 @@ public class ServerChunkCache extends ChunkSource {
                          // this.level.timings.doTickTiles.stopTiming(); // Spigot // Paper
                      }
                  }
@@ -32653,7 +32677,7 @@ index 1043577580bee20a46ae4b2c9e7cef27d45568ad..3f0168a9edfa67f99e6fe9ce16187803
              this.level.timings.chunkTicks.stopTiming(); // Paper
              this.level.getProfiler().push("customSpawners");
              if (flag1) {
-@@ -866,25 +1057,28 @@ public class ServerChunkCache extends ChunkSource {
+@@ -868,25 +1058,28 @@ public class ServerChunkCache extends ChunkSource {
                  } // Paper - timings
              }
  
@@ -32697,7 +32721,7 @@ index 1043577580bee20a46ae4b2c9e7cef27d45568ad..3f0168a9edfa67f99e6fe9ce16187803
      }
  
      private void getFullChunk(long pos, Consumer<LevelChunk> chunkConsumer) {
-@@ -1031,46 +1225,14 @@ public class ServerChunkCache extends ChunkSource {
+@@ -1033,46 +1226,14 @@ public class ServerChunkCache extends ChunkSource {
              super.doRunTask(task);
          }
  
@@ -33816,7 +33840,7 @@ index 961660f6f9e00b93252519e38b74c66c53388ed2..c80280150897064dc9d814edfbbcc1ce
                  protected void initChannel(Channel channel) {
                      try {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 064aecb28f05fcf572ee7d29f611a31cc7b6e49a..c4cea533f619624976c4d1290312ed1a6b250855 100644
+index ad1a9c6c354d40d5fa589666b1b00792d9cd6161..162a4b3b3312867a64425caa0d6ec6af157b20e1 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -536,6 +536,12 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
@@ -38353,10 +38377,10 @@ index 0a76032b48af4327580b99730e534f628924fe35..c9c668aa5b2ddf21ffcce8b395e3d88b
  
      @Override
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 9954e45c32a4b6d80fe912ed9d55cd4fc8c4e98b..1ec307d705087eec9d867f9f8e8858ac388f3846 100644
+index 6d7f16fede01c19f638e1dcdae8b07b79cd86dc0..57dab1be4bfa91c7c9d7e53e7fe388a94dc60e0b 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -239,7 +239,7 @@ import javax.annotation.Nullable; // Paper
+@@ -240,7 +240,7 @@ import javax.annotation.Nullable; // Paper
  import javax.annotation.Nonnull; // Paper
  
  public final class CraftServer implements Server {
@@ -38365,7 +38389,7 @@ index 9954e45c32a4b6d80fe912ed9d55cd4fc8c4e98b..1ec307d705087eec9d867f9f8e8858ac
      private final String serverVersion;
      private final String bukkitVersion = Versioning.getBukkitVersion();
      private final Logger logger = Logger.getLogger("Minecraft");
-@@ -884,6 +884,7 @@ public final class CraftServer implements Server {
+@@ -886,6 +886,7 @@ public final class CraftServer implements Server {
  
          org.spigotmc.SpigotConfig.init((File) console.options.valueOf("spigot-settings")); // Spigot
          com.destroystokyo.paper.PaperConfig.init((File) console.options.valueOf("paper-settings")); // Paper
@@ -38373,7 +38397,7 @@ index 9954e45c32a4b6d80fe912ed9d55cd4fc8c4e98b..1ec307d705087eec9d867f9f8e8858ac
          for (ServerLevel world : this.console.getAllLevels()) {
              world.serverLevelData.setDifficulty(config.difficulty);
              world.setSpawnSettings(config.spawnMonsters, config.spawnAnimals);
-@@ -918,6 +919,7 @@ public final class CraftServer implements Server {
+@@ -920,6 +921,7 @@ public final class CraftServer implements Server {
              }
              world.spigotConfig.init(); // Spigot
              world.paperConfig.init(); // Paper
@@ -38381,7 +38405,7 @@ index 9954e45c32a4b6d80fe912ed9d55cd4fc8c4e98b..1ec307d705087eec9d867f9f8e8858ac
          }
  
          Plugin[] pluginClone = pluginManager.getPlugins().clone(); // Paper
-@@ -2451,6 +2453,14 @@ public final class CraftServer implements Server {
+@@ -2453,6 +2455,14 @@ public final class CraftServer implements Server {
              return com.destroystokyo.paper.PaperConfig.config;
          }
  
