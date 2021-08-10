@@ -29938,6 +29938,33 @@ index 0000000000000000000000000000000000000000..f188ff6b08abddd06a3120fb15825e0f
 +        }
 +    }
 +}
+diff --git a/src/main/java/net/minecraft/Util.java b/src/main/java/net/minecraft/Util.java
+index 59437f04911662f06596ef61b91017caa6427eec..82e8338c69e846ab9ff0a9b9427d968e0a67927e 100644
+--- a/src/main/java/net/minecraft/Util.java
++++ b/src/main/java/net/minecraft/Util.java
+@@ -67,6 +67,22 @@ public class Util {
+     private static final AtomicInteger WORKER_COUNT = new AtomicInteger(1);
+     private static final ExecutorService BOOTSTRAP_EXECUTOR = makeExecutor("Bootstrap", -2); // Paper - add -2 priority
+     private static final ExecutorService BACKGROUND_EXECUTOR = makeExecutor("Main", -1); // Paper - add -1 priority
++    // Tuinity start - don't submit BLOCKING PROFILE LOOKUPS to the world gen thread
++    public static final ExecutorService PROFILE_EXECUTOR = Executors.newFixedThreadPool(2, new java.util.concurrent.ThreadFactory() {
++
++        private final AtomicInteger count = new AtomicInteger();
++
++        @Override
++        public Thread newThread(Runnable run) {
++            Thread ret = new Thread(run);
++            ret.setName("Profile Lookup Executor #" + this.count.getAndIncrement());
++            ret.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -> {
++                LOGGER.fatal("Uncaught exception in thread " + thread.getName(), throwable);
++            });
++            return ret;
++        }
++    });
++    // Tuinity end - don't submit BLOCKING PROFILE LOOKUPS to the world gen thread
+     private static final ExecutorService IO_POOL = makeIoExecutor();
+     public static LongSupplier timeSource = System::nanoTime;
+     public static final UUID NIL_UUID = new UUID(0L, 0L);
 diff --git a/src/main/java/net/minecraft/core/BlockPos.java b/src/main/java/net/minecraft/core/BlockPos.java
 index b70aa66732fb5e957aed0901f4c76358b2c56f8e..b01d7da333bac7820e42b6f645634a15ef88ae4f 100644
 --- a/src/main/java/net/minecraft/core/BlockPos.java
@@ -32771,7 +32798,7 @@ index 0d143d073fa7cdfa14f12e9c795350dca8ac5e80..8b84befc6840d25dc3d6e2d42a4024a3
                  return true;
              } else {
 diff --git a/src/main/java/net/minecraft/server/level/ServerEntity.java b/src/main/java/net/minecraft/server/level/ServerEntity.java
-index 2f3e69ad809199ffc2661d524bb627ec8dbc2e80..0fcd6a9162f5bddb3c4fc42b3a64efde7c7d9a9b 100644
+index e5cae2fb67541785072324e5434820ee4b169556..60e58d5f03c66146a86b49c4d1ef17080f094a4c 100644
 --- a/src/main/java/net/minecraft/server/level/ServerEntity.java
 +++ b/src/main/java/net/minecraft/server/level/ServerEntity.java
 @@ -173,7 +173,7 @@ public class ServerEntity {
@@ -33285,7 +33312,7 @@ index baa25df9f446c8edea9666983425df31c32a13ff..f9ed48f5bbde84fd1804e482f2777b51
  
          public void onTrackingStart(Entity entity) {
 diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-index 82eaf3bd7332b173197d81eaebdf58c6f43d6a23..8e795c9380eb0379838ab4881ba6393d57e8e92c 100644
+index 5ecfd9a1e39343746828520c307879547feb33a7..b0f5224ec677d2806fde65f495819b11775705e5 100644
 --- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
 +++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
 @@ -261,7 +261,7 @@ public class ServerPlayer extends Player {
@@ -34059,7 +34086,7 @@ index 45e77d96f673ce68cf15ce3d45fd1eeffed4d8d8..9ab220ef0d20151d4e205f3edc213fd9
              throw new IllegalStateException("Protocol error", cryptographyexception);
          }
 diff --git a/src/main/java/net/minecraft/server/players/GameProfileCache.java b/src/main/java/net/minecraft/server/players/GameProfileCache.java
-index 61405c2b53e03a4b83e2c70c6e4d3739ca9676cb..1f307f8e3f0f484dad33e9af085dabd93a3509fd 100644
+index 61405c2b53e03a4b83e2c70c6e4d3739ca9676cb..357efb989362e0be8cb08533ad677634f0b390f7 100644
 --- a/src/main/java/net/minecraft/server/players/GameProfileCache.java
 +++ b/src/main/java/net/minecraft/server/players/GameProfileCache.java
 @@ -62,6 +62,11 @@ public class GameProfileCache {
@@ -34133,6 +34160,15 @@ index 61405c2b53e03a4b83e2c70c6e4d3739ca9676cb..1f307f8e3f0f484dad33e9af085dabd9
      }
  
      public void getAsync(String username, Consumer<Optional<GameProfile>> consumer) {
+@@ -187,7 +200,7 @@ public class GameProfileCache {
+             } else {
+                 this.requests.put(username, CompletableFuture.supplyAsync(() -> {
+                     return this.get(username);
+-                }, Util.backgroundExecutor()).whenCompleteAsync((optional, throwable) -> {
++                }, Util.PROFILE_EXECUTOR).whenCompleteAsync((optional, throwable) -> { // Tuinity - not a good idea to use BLOCKING OPERATIONS on the worldgen executor
+                     this.requests.remove(username);
+                 }, this.executor).whenCompleteAsync((optional, throwable) -> {
+                     consumer.accept(optional);
 @@ -322,7 +335,9 @@ public class GameProfileCache {
      }
  
@@ -34144,7 +34180,7 @@ index 61405c2b53e03a4b83e2c70c6e4d3739ca9676cb..1f307f8e3f0f484dad33e9af085dabd9
  
      private static JsonElement writeGameProfile(GameProfileCache.GameProfileInfo entry, DateFormat dateFormat) {
 diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
-index 48045993c8ad4b014cf4a67f7c4db42e014d1c81..936ae5576902e6593bd21af4d3cf3998109347b5 100644
+index 9966d0bb4f85866a46f5e4098416ab9af81f8d9f..ea8956b2c4cbe7059512ebfa9fd7a865e5fae0ac 100644
 --- a/src/main/java/net/minecraft/server/players/PlayerList.java
 +++ b/src/main/java/net/minecraft/server/players/PlayerList.java
 @@ -177,6 +177,7 @@ public abstract class PlayerList {
@@ -35698,6 +35734,19 @@ index aa1ba8b74ab70b6cede99e4853ac0203f388ab06..a242a80b16c7d074d52a52728646224b
      }
  
      @Override
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/SkullBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/SkullBlockEntity.java
+index 6381544b0038de9a09c01238638e4e127e4eddc6..5bdec9531f2f2b1f50ed3b71ab79f2b058647a07 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/SkullBlockEntity.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/SkullBlockEntity.java
+@@ -150,7 +150,7 @@ public class SkullBlockEntity extends BlockEntity {
+     public static void updateGameprofile(@Nullable GameProfile owner, Consumer<GameProfile> callback) {
+         if (owner != null && !StringUtil.isNullOrEmpty(owner.getName()) && (!owner.isComplete() || !owner.getProperties().containsKey("textures")) && profileCache != null && sessionService != null) {
+             profileCache.getAsync(owner.getName(), (profile) -> {
+-                Util.backgroundExecutor().execute(() -> {
++                Util.PROFILE_EXECUTOR.execute(() -> { // Tuinity - not a good idea to use BLOCKING OPERATIONS on the worldgen executor
+                     Util.ifElse(profile, (profilex) -> {
+                         Property property = Iterables.getFirst(profilex.getProperties().get("textures"), (Property)null);
+                         if (property == null) {
 diff --git a/src/main/java/net/minecraft/world/level/block/state/BlockBehaviour.java b/src/main/java/net/minecraft/world/level/block/state/BlockBehaviour.java
 index 1179c62695da4dcf02590c97d8da3c6fcdbee9ef..04d5ef90cd4171f9360017ac0c01ce48ae6ec983 100644
 --- a/src/main/java/net/minecraft/world/level/block/state/BlockBehaviour.java
@@ -38642,7 +38691,7 @@ index 85ca30aef0703db6859e66c62781ecfd334426e7..8ce49478441e77cedf5148ecb81d78b3
      @Override
      public boolean teleport(Location location) {
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index 9e8918d03b8213e5f6689fc93030138fd704aca9..5038bd2d0920ffc37a33d0c971cf28c330e58e06 100644
+index 3971fed7a0d1399117366a5d7dd2e84adbfda55a..7eed75ad1d5d7c62f35bdaed3766fcdb7aac2ce6 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 @@ -517,15 +517,70 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
