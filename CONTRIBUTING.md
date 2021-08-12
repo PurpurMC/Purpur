@@ -12,12 +12,12 @@ Assuming you already have forked the repository:
 3. Type `./gradlew applyPatches` to apply the latest Purpur patches
 4. cd into `Purpur-Server` for server changes, and `Purpur-API` for API changes
 
-These directories aren't git repositories in the traditional sense:
+These directories aren't Git repositories in the traditional sense:
 
 - Every single commit in Purpur-Server/API is a patch. 
 - 'origin/master' points to a directory similar to Purpur-Server/API but for Paper
 - Typing `git status` should show that we are 10 or 11 commits ahead of master, meaning we have 10 or 11 patches that Paper doesn't
-  - If it says something like `212 commits ahead, 207 commits behind`, then type `git fetch` to update purpur
+  - If it says something like `212 commits ahead, 207 commits behind`, then type `git fetch` to update Purpur
 
 ## Adding Patches
 Adding patches to Purpur is very simple:
@@ -30,7 +30,7 @@ Adding patches to Purpur is very simple:
 6. Run `./gradlew rebuildPatches` in the main directory to convert your commit into a new patch
 7. PR your patches back to this repository
 
-Your commit will be converted into a patch that you can then PR into Purpur
+Your commit will be converted into a patch that you can then PR into Purpur.
 
 ## Help! I can't find the file I'm looking for!
 By default, Purpur (and upstream) only import files that we make changes to.
@@ -113,8 +113,8 @@ Location spawnLocation = ((CraftWorld)entity.getWorld()).getSpawnLocation();
 entity.getWorld().explode(new BlockPosition(spawnLocation.getX(), spawnLocation.getY(), spawnLocation.getZ()));
 // Purpur end
 ```
-- We generally follow usual java style, or what is programmed into most IDEs and formatters by default
-  - This is also known as oracle style
+- We generally follow usual Java style, or what is programmed into most IDEs and formatters by default
+  - This is also known as Oracle style
   - It is fine to go over 80 lines as long as it doesn't hurt readability
   - There are exceptions, especially in Spigot-related files
   - When in doubt, use the same style as the surrounding code
@@ -140,7 +140,7 @@ Subject: [PATCH] revert serverside behavior of keepalives
 This patch intends to bump up the time that a client has to reply to the
 server back to 30 seconds as per pre 1.12.2, which allowed clients
 more than enough time to reply potentially allowing them to be less
-tempermental due to lag spikes on the network thread, e.g. that caused
+temperamental due to lag spikes on the network thread, e.g. that caused
 by plugins that are interacting with netty.
 
 We also add a system property to allow people to tweak how long the server
@@ -163,7 +163,7 @@ An obfuscation helper to get an obfuscated field may be as simple as something l
 ```java
 public final int getStuckArrows() { return this.bY(); } // Purpur - OBFHELPER
 ```
-Or it may be as complex as forwarding an entire method so that it can be overriden later:
+Or it may be as complex as forwarding an entire method so that it can be overridden later:
 ```java
 public boolean be() {
     // Purpur start - OBFHELPER

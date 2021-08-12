@@ -118,18 +118,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for more detailed information.
 
 #### Compiling
 
-Use the command `./gradlew build` to build the api and server. Compiled jars
+Use the command `./gradlew build` to build the API and server. Compiled JARs
 will be placed under `Purpur-API/build/libs` and `Purpur-Server/build/libs`.
 
 To get a purpurclip jar, run `./gradlew paperclip`.
-To install the `purpur-api` and `purpur` dependencies to your local maven repo, run `./gradlew publishToMavenLocal`
+To install the `purpur-api` and `purpur` dependencies to your local Maven repo, run `./gradlew publishToMavenLocal`
 
 Special Thanks To:
 -------------
 
 ![YourKit-Logo](https://www.yourkit.com/images/yklogo.png)
 
-[YourKit](https://www.yourkit.com/), makers of the outstanding java profiler,
+[YourKit](https://www.yourkit.com/), makers of the outstanding Java profiler,
 support open source projects of all kinds with their full featured [Java](https://www.yourkit.com/java/profiler)
 and [.NET](https://www.yourkit.com/.net/profiler) application profilers. We thank them for allowing us to use their
 software so we can make Purpur the best it can be.
