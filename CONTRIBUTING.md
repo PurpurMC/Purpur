@@ -10,7 +10,7 @@ Assuming you already have forked the repository:
 1. Pull the latest changes from the main repository
 2. Update the Paper submodule if necessary: `git submodule update --init --recursive` and `./gradlew setupUpstream`
 3. Type `./gradlew applyPatches` to apply the latest Purpur patches
-4. cd into `Purpur-Server` for server changes, and `Purpur-API` for API changes
+4. Then, `cd` into `Purpur-Server` for server changes, and `Purpur-API` for API changes
 
 These directories aren't Git repositories in the traditional sense:
 
@@ -23,10 +23,10 @@ These directories aren't Git repositories in the traditional sense:
 Adding patches to Purpur is very simple:
 
 1. Modify `Purpur-Server` and/or `Purpur-API` with the appropriate changes
-2. `cd` into the server/api directory you want to add a patch to
+2. Next, `cd` into the server/api directory you want to add a patch to
 3. Type `git add .` to add your changes
 4. Run `git commit` with the desired patch message
-5. `cd ../` to get back to the project root
+5. Then, `cd ../` to get back to the project root
 6. Run `./gradlew rebuildPatches` in the main directory to convert your commit into a new patch
 7. PR your patches back to this repository
 
