@@ -1,0 +1,197 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Fri, 28 May 2021 12:24:45 -0500
+Subject: [PATCH] Fix advancement triggers on entity death
+
+This fixes PaperMC/Paper#3729 and PaperMC/Paper#4252
+
+Paper changes logical order revolving around making the EntityDeathEvent
+cancellable. Reordering this logic has ended up with entity equipment being
+cleared _before_ advancement criteria can run, causing things like killing
+raid captains not giving the voluntary exile advancement.
+
+This fixes the issue by storing a copy of the equipment in a new field just
+before doing the death event logic where the equipment is cleared and then
+restoring it back to the entity just before the criterion triggers run and
+then finally clearing the equipment again right after the criterion is done.
+
+diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+index 90be441ca0222f9df6ab0f8111b204f9673a8e66..3bef0780fa95a63887fdb64cb1b038d44cf1c028 100644
+--- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
++++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+@@ -1661,10 +1661,13 @@ public abstract class LivingEntity extends Entity {
+                 }
+ 
+                 // Paper start
++                List<List<ItemStack>> equipmentSnapshotBefore = this.cloneEquipment(); // Purpur
+                 org.bukkit.event.entity.EntityDeathEvent deathEvent = this.dropAllDeathLoot(source);
+                 if (deathEvent == null || !deathEvent.isCancelled()) {
+                     if (this.deathScore >= 0 && entityliving != null) {
++                        this.restoreEquipment(equipmentSnapshotBefore); // Purpur
+                         entityliving.awardKillScore(this, this.deathScore, source);
++                        this.clearEquipment(); // Purpur
+                     }
+ 
+                     if (this.isSleeping()) {
+@@ -2548,6 +2551,12 @@ public abstract class LivingEntity extends Entity {
+     @Override
+     public abstract void setItemSlot(EquipmentSlot slot, ItemStack stack);
+ 
++    // Purpur start
++    public abstract List<List<ItemStack>> cloneEquipment();
++    public abstract void restoreEquipment(List<List<ItemStack>> list);
++    public abstract void clearEquipment();
++    // Purpur end
++
+     protected void verifyEquippedItem(ItemStack stack) {
+         CompoundTag nbttagcompound = stack.getTag();
+ 
+diff --git a/src/main/java/net/minecraft/world/entity/Mob.java b/src/main/java/net/minecraft/world/entity/Mob.java
+index d52b7294c6ad137008d0caae21ca1616ae34f04a..f79b35b117231b5fa0bf7b9ebe9380dab043ab33 100644
+--- a/src/main/java/net/minecraft/world/entity/Mob.java
++++ b/src/main/java/net/minecraft/world/entity/Mob.java
+@@ -1026,6 +1026,41 @@ public abstract class Mob extends LivingEntity {
+ 
+     }
+ 
++    // Purpur start
++    public List<List<ItemStack>> cloneEquipment() {
++        List<List<ItemStack>> list = new java.util.ArrayList<>();
++        List<ItemStack> handItems = new java.util.ArrayList<>();
++        for (ItemStack item : this.handItems) {
++            handItems.add(item.copy());
++        }
++        list.add(handItems);
++        List<ItemStack> armorItems = new java.util.ArrayList<>();
++        for (ItemStack item : this.armorItems) {
++            armorItems.add(item.copy());
++        }
++        list.add(armorItems);
++        return list;
++    }
++
++    public void restoreEquipment(List<List<ItemStack>> list) {
++        this.handItems.clear();
++        List<ItemStack> handItems = list.get(0);
++        for (int i = 0; i < handItems.size(); i++) {
++            this.handItems.set(i, handItems.get(1));
++        }
++        this.armorItems.clear();
++        List<ItemStack> armorItems = list.get(1);
++        for (int i = 0; i < armorItems.size(); i++) {
++            this.armorItems.set(i, armorItems.get(i));
++        }
++    }
++
++    public void clearEquipment() {
++        this.handItems.clear();
++        this.armorItems.clear();
++    }
++    // Purpur end
++
+     @Override
+     protected void dropCustomDeathLoot(DamageSource source, int lootingMultiplier, boolean allowDrops) {
+         super.dropCustomDeathLoot(source, lootingMultiplier, allowDrops);
+diff --git a/src/main/java/net/minecraft/world/entity/decoration/ArmorStand.java b/src/main/java/net/minecraft/world/entity/decoration/ArmorStand.java
+index c9a44a4765f43b9c0247ed1005f4c13469bdee95..6d08c8c31a32ea38f06410fbaddf19b95bec7c6f 100644
+--- a/src/main/java/net/minecraft/world/entity/decoration/ArmorStand.java
++++ b/src/main/java/net/minecraft/world/entity/decoration/ArmorStand.java
+@@ -205,6 +205,41 @@ public class ArmorStand extends LivingEntity {
+         this.noTickEquipmentDirty = true; // Paper - Allow equipment to be updated even when tick disabled
+     }
+ 
++    // Purpur start
++    public List<List<ItemStack>> cloneEquipment() {
++        List<List<ItemStack>> list = new java.util.ArrayList<>();
++        List<ItemStack> handItems = new java.util.ArrayList<>();
++        for (ItemStack item : this.handItems) {
++            handItems.add(item.copy());
++        }
++        list.add(handItems);
++        List<ItemStack> armorItems = new java.util.ArrayList<>();
++        for (ItemStack item : this.armorItems) {
++            armorItems.add(item.copy());
++        }
++        list.add(armorItems);
++        return list;
++    }
++
++    public void restoreEquipment(List<List<ItemStack>> list) {
++        this.handItems.clear();
++        List<ItemStack> handItems = list.get(0);
++        for (int i = 0; i < handItems.size(); i++) {
++            this.handItems.set(i, handItems.get(1));
++        }
++        this.armorItems.clear();
++        List<ItemStack> armorItems = list.get(1);
++        for (int i = 0; i < armorItems.size(); i++) {
++            this.armorItems.set(i, armorItems.get(1));
++        }
++    }
++
++    public void clearEquipment() {
++        this.handItems.clear();
++        this.armorItems.clear();
++    }
++    // Purpur end
++
+     @Override
+     public boolean canTakeItem(ItemStack stack) {
+         net.minecraft.world.entity.EquipmentSlot enumitemslot = Mob.getEquipmentSlotForItem(stack);
+diff --git a/src/main/java/net/minecraft/world/entity/player/Player.java b/src/main/java/net/minecraft/world/entity/player/Player.java
+index ace974dd50765602aa234cb7be9151714f072f5a..24523dd712329f2f3abe40bb3f1801ef7946e831 100644
+--- a/src/main/java/net/minecraft/world/entity/player/Player.java
++++ b/src/main/java/net/minecraft/world/entity/player/Player.java
+@@ -1991,6 +1991,52 @@ public abstract class Player extends LivingEntity {
+ 
+     }
+ 
++    // Purpur start
++    public List<List<ItemStack>> cloneEquipment() {
++        List<List<ItemStack>> list = new java.util.ArrayList<>();
++        List<ItemStack> invItems = new java.util.ArrayList<>();
++        for (ItemStack item : this.inventory.items) {
++            invItems.add(item.copy());
++        }
++        list.add(invItems);
++        List<ItemStack> armorItems = new java.util.ArrayList<>();
++        for (ItemStack item : this.inventory.armor) {
++            armorItems.add(item.copy());
++        }
++        list.add(armorItems);
++        List<ItemStack> offhandItems = new java.util.ArrayList<>();
++        for (ItemStack item : this.inventory.offhand) {
++            offhandItems.add(item.copy());
++        }
++        list.add(offhandItems);
++        return list;
++    }
++
++    public void restoreEquipment(List<List<ItemStack>> list) {
++        this.inventory.items.clear();
++        List<ItemStack> invItems = list.get(0);
++        for (int i = 0; i < invItems.size(); i++) {
++            this.inventory.items.set(i, invItems.get(1));
++        }
++        this.inventory.armor.clear();
++        List<ItemStack> armorItems = list.get(1);
++        for (int i = 0; i < armorItems.size(); i++) {
++            this.inventory.armor.set(i, armorItems.get(1));
++        }
++        this.inventory.offhand.clear();
++        List<ItemStack> offhandItems = list.get(2);
++        for (int i = 0; i < offhandItems.size(); i++) {
++            this.inventory.offhand.set(i, offhandItems.get(1));
++        }
++    }
++
++    public void clearEquipment() {
++        this.inventory.items.clear();
++        this.inventory.armor.clear();
++        this.inventory.offhand.clear();
++    }
++    // Purpur end
++
+     public boolean addItem(ItemStack stack) {
+         this.equipEventAndSound(stack);
+         return this.inventory.add(stack);

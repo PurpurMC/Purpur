@@ -1,0 +1,124 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Thu, 25 Jul 2019 18:07:37 -0500
+Subject: [PATCH] Implement elytra settings
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+index c6cfc4f83ec5b67c62fbf82ef4b795c3c6b27282..93df077de01e88b97359d0409db9e3043cda902b 100644
+--- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
++++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+@@ -3298,7 +3298,16 @@ public abstract class LivingEntity extends Entity {
+                     int j = i / 10;
+ 
+                     if (j % 2 == 0) {
+-                        itemstack.hurtAndBreak(1, this, (entityliving) -> {
++                        // Purpur start
++                        int damage = level.purpurConfig.elytraDamagePerSecond;
++                        if (level.purpurConfig.elytraDamageMultiplyBySpeed > 0) {
++                            double speed = getDeltaMovement().lengthSqr();
++                            if (speed > level.purpurConfig.elytraDamageMultiplyBySpeed) {
++                                damage *= (int) speed;
++                            }
++                        }
++                        itemstack.hurtAndBreak(damage, this, (entityliving) -> {
++                        // Purpur end
+                             entityliving.broadcastBreakEvent(EquipmentSlot.CHEST);
+                         });
+                     }
+diff --git a/src/main/java/net/minecraft/world/item/FireworkRocketItem.java b/src/main/java/net/minecraft/world/item/FireworkRocketItem.java
+index 543a08f920319a2547258640bafebb1e70af65c4..dd211aa7c4ef1e158933a89898b9e5bc1451ee14 100644
+--- a/src/main/java/net/minecraft/world/item/FireworkRocketItem.java
++++ b/src/main/java/net/minecraft/world/item/FireworkRocketItem.java
+@@ -17,6 +17,7 @@ import net.minecraft.server.level.ServerPlayer;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.InteractionResult;
+ import net.minecraft.world.InteractionResultHolder;
++import net.minecraft.world.entity.EquipmentSlot;
+ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+ import net.minecraft.world.item.context.UseOnContext;
+@@ -70,6 +71,14 @@ public class FireworkRocketItem extends Item {
+                 com.destroystokyo.paper.event.player.PlayerElytraBoostEvent event = new com.destroystokyo.paper.event.player.PlayerElytraBoostEvent((org.bukkit.entity.Player) user.getBukkitEntity(), org.bukkit.craftbukkit.inventory.CraftItemStack.asCraftMirror(itemStack), (org.bukkit.entity.Firework) fireworkRocketEntity.getBukkitEntity());
+                 if (event.callEvent() && world.addFreshEntity(fireworkRocketEntity)) {
+                     user.awardStat(Stats.ITEM_USED.get(this));
++                    // Purpur start
++                    if (world.purpurConfig.elytraDamagePerFireworkBoost > 0) {
++                        ItemStack chestItem = user.getItemBySlot(EquipmentSlot.CHEST);
++                        if (chestItem.getItem() == Items.ELYTRA) {
++                            chestItem.hurtAndBreak(world.purpurConfig.elytraDamagePerFireworkBoost, user, (entityliving) -> entityliving.broadcastBreakEvent(EquipmentSlot.CHEST));
++                        }
++                    }
++                    // Purpur end
+                     if (event.shouldConsume() && !user.getAbilities().instabuild) {
+                     itemStack.shrink(1);
+                     } else ((net.minecraft.server.level.ServerPlayer) user).getBukkitEntity().updateInventory();
+diff --git a/src/main/java/net/minecraft/world/item/ItemStack.java b/src/main/java/net/minecraft/world/item/ItemStack.java
+index 7b1393f3c1acf29318de8222ef54032a449b03f3..d1b4fe830170ddee2b6f39eba29e7068e6ae37a3 100644
+--- a/src/main/java/net/minecraft/world/item/ItemStack.java
++++ b/src/main/java/net/minecraft/world/item/ItemStack.java
+@@ -540,7 +540,7 @@ public final class ItemStack {
+             int j;
+ 
+             if (amount > 0) {
+-                j = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.UNBREAKING, this);
++                j = (getItem() == Items.ELYTRA && player != null && player.level.purpurConfig.elytraIgnoreUnbreaking) ? 0 : EnchantmentHelper.getItemEnchantmentLevel(Enchantments.UNBREAKING, this);
+                 int k = 0;
+ 
+                 for (int l = 0; j > 0 && l < amount; ++l) {
+@@ -594,6 +594,12 @@ public final class ItemStack {
+                 if (this.hurt(amount, entity.getRandom(), entity /*instanceof ServerPlayer ? (ServerPlayer) entity : null*/)) { // Paper - pass LivingEntity for EntityItemDamageEvent
+                     breakCallback.accept(entity);
+                     Item item = this.getItem();
++                    // Purpur start
++                    if (item == Items.ELYTRA) {
++                        setDamageValue(item.getMaxDamage() - 1);
++                        return;
++                    }
++                    // Purpur end
+                     // CraftBukkit start - Check for item breaking
+                     if (this.count == 1 && entity instanceof net.minecraft.world.entity.player.Player) {
+                         org.bukkit.craftbukkit.event.CraftEventFactory.callPlayerItemBreakEvent((net.minecraft.world.entity.player.Player) entity, this);
+diff --git a/src/main/java/net/minecraft/world/item/TridentItem.java b/src/main/java/net/minecraft/world/item/TridentItem.java
+index 510ed67a7de2b503ab8b01db57ed09ee33b0d825..3f53dc8f250ad3f7616ce7ef0a2353caa0ab1879 100644
+--- a/src/main/java/net/minecraft/world/item/TridentItem.java
++++ b/src/main/java/net/minecraft/world/item/TridentItem.java
+@@ -126,6 +126,14 @@ public class TridentItem extends Item implements Vanishable {
+                         f2 *= f6 / f5;
+                         f3 *= f6 / f5;
+                         f4 *= f6 / f5;
++
++                        // Purpur start
++                        ItemStack chestItem = entityhuman.getItemBySlot(EquipmentSlot.CHEST);
++                        if (chestItem.getItem() == Items.ELYTRA && world.purpurConfig.elytraDamagePerTridentBoost > 0) {
++                            chestItem.hurtAndBreak(world.purpurConfig.elytraDamagePerTridentBoost, entityhuman, (entity) -> entity.broadcastBreakEvent(EquipmentSlot.CHEST));
++                        }
++                        // Purpur end
++
+                         entityhuman.push((double) f2, (double) f3, (double) f4);
+                         entityhuman.startAutoSpinAttack(20);
+                         if (entityhuman.isOnGround()) {
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index ec4eacc03b51944eaaa92a6326bc059faa558750..dd00807ca9893f5919c6e76e30145e118ce343ea 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -98,6 +98,19 @@ public class PurpurWorldConfig {
+         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
+     }
+ 
++    public int elytraDamagePerSecond = 1;
++    public double elytraDamageMultiplyBySpeed = 0;
++    public boolean elytraIgnoreUnbreaking = false;
++    public int elytraDamagePerFireworkBoost = 0;
++    public int elytraDamagePerTridentBoost = 0;
++    private void elytraSettings() {
++        elytraDamagePerSecond = getInt("gameplay-mechanics.elytra.damage-per-second", elytraDamagePerSecond);
++        elytraDamageMultiplyBySpeed = getDouble("gameplay-mechanics.elytra.damage-multiplied-by-speed", elytraDamageMultiplyBySpeed);
++        elytraIgnoreUnbreaking = getBoolean("gameplay-mechanics.elytra.ignore-unbreaking", elytraIgnoreUnbreaking);
++        elytraDamagePerFireworkBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.firework", elytraDamagePerFireworkBoost);
++        elytraDamagePerTridentBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.trident", elytraDamagePerTridentBoost);
++    }
++
+     public double minecartMaxSpeed = 0.4D;
+     public boolean minecartPlaceAnywhere = false;
+     public boolean minecartControllable = false;
