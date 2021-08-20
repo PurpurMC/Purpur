@@ -46,7 +46,7 @@ subprojects {
         maven("https://repo.aikar.co/content/groups/aikar")
         maven("https://repo.md-5.net/content/repositories/releases/")
         maven("https://hub.spigotmc.org/nexus/content/groups/public/")
-        maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
+        maven("https://jitpack.io")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
     }
 
