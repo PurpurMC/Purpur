@@ -1,7 +1,7 @@
 plugins {
     java
     id("com.github.johnrengelman.shadow") version "7.0.0" apply false
-    id("io.papermc.paperweight.patcher") version "1.1.9"
+    id("io.papermc.paperweight.patcher") version "1.1.11"
 }
 
 repositories {
@@ -11,15 +11,10 @@ repositories {
             onlyForConfigurations("paperclip")
         }
     }
-    maven("https://maven.quiltmc.org/repository/release/") {
-        content {
-            onlyForConfigurations("remapper")
-        }
-    }
 }
 
 dependencies {
-    remapper("org.quiltmc:tiny-remapper:0.4.1")
+    remapper("org.quiltmc:tiny-remapper:0.4.3:fat")
     paperclip("io.papermc:paperclip:2.0.1")
 }
 
@@ -66,6 +61,9 @@ paperweight {
         withPaperPatcher {
             apiPatchDir.set(layout.projectDirectory.dir("patches/api"))
             apiOutputDir.set(layout.projectDirectory.dir("Purpur-API"))
+
+            remapRepo.set("https://maven.quiltmc.org/repository/release/")
+            decompileRepo.set("https://files.minecraftforge.net/maven/")
 
             serverPatchDir.set(layout.projectDirectory.dir("patches/server"))
             serverOutputDir.set(layout.projectDirectory.dir("Purpur-Server"))
