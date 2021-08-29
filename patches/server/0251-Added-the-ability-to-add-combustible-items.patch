@@ -4,29 +4,44 @@ Date: Mon, 9 Aug 2021 13:22:20 +0200
 Subject: [PATCH] Added the ability to add combustible items
 
 
+diff --git a/src/main/java/net/minecraft/world/inventory/AbstractFurnaceMenu.java b/src/main/java/net/minecraft/world/inventory/AbstractFurnaceMenu.java
+index 37878812892ea5cdfdd2d76d87bd14e035eab908..a2e1aaed795823d4054414d704404ceb73bf4424 100644
+--- a/src/main/java/net/minecraft/world/inventory/AbstractFurnaceMenu.java
++++ b/src/main/java/net/minecraft/world/inventory/AbstractFurnaceMenu.java
+@@ -145,7 +145,13 @@ public abstract class AbstractFurnaceMenu extends RecipeBookMenu<Container> {
+             } else if (index != 1 && index != 0) {
+                 if (this.canSmelt(itemstack1)) {
+                     if (!this.moveItemStackTo(itemstack1, 0, 1, false)) {
+-                        return ItemStack.EMPTY;
++                        // Purpur start - fix #625
++                        if (this.isFuel(itemstack1)) {
++                            if (!this.moveItemStackTo(itemstack1, 1, 2, false)) {
++                                return ItemStack.EMPTY;
++                            }
++                        }
++                        // Purpur end
+                     }
+                 } else if (this.isFuel(itemstack1)) {
+                     if (!this.moveItemStackTo(itemstack1, 1, 2, false)) {
 diff --git a/src/main/java/net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java
-index 2c64622577fdb6c2a5746471121403b633bf9042..0bd838b95d87fd2436f3674b7f16155e6c2dd720 100644
+index 2c64622577fdb6c2a5746471121403b633bf9042..c61746ca8ef1b4cec064c0022e419bcfe034874c 100644
 --- a/src/main/java/net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java
 +++ b/src/main/java/net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity.java
-@@ -205,6 +205,26 @@ public abstract class AbstractFurnaceBlockEntity extends BaseContainerBlockEntit
+@@ -205,6 +205,22 @@ public abstract class AbstractFurnaceBlockEntity extends BaseContainerBlockEntit
          // Paper end
      }
  
 +    // Purpur start
 +    public static void addFuel(ItemStack itemStack, Integer burnTime) {
 +        Map<Item, Integer> map = Maps.newLinkedHashMap();
-+        if (cachedBurnDurations != null) {
-+            map.putAll(cachedBurnDurations);
-+        }
++        map.putAll(getFuel());
 +        map.put(itemStack.getItem(), burnTime);
 +        cachedBurnDurations = com.google.common.collect.ImmutableMap.copyOf(map);
 +    }
 +
 +    public static void removeFuel(ItemStack itemStack) {
 +        Map<Item, Integer> map = Maps.newLinkedHashMap();
-+        if (cachedBurnDurations != null) {
-+            map.putAll(cachedBurnDurations);
-+        }
++        map.putAll(getFuel());
 +        map.remove(itemStack.getItem());
 +        cachedBurnDurations = com.google.common.collect.ImmutableMap.copyOf(map);
 +    }
@@ -36,55 +51,23 @@ index 2c64622577fdb6c2a5746471121403b633bf9042..0bd838b95d87fd2436f3674b7f16155e
      private int maxStack = MAX_STACK;
      public List<HumanEntity> transaction = new java.util.ArrayList<HumanEntity>();
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index badfecb3613cebf66a27610baf494a95a74a0214..c72777cacff992661a35f3464e1040e38977d016 100644
+index badfecb3613cebf66a27610baf494a95a74a0214..bd3b975481ce780199d6ec60bddaaa263714d289 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -4,7 +4,6 @@ import com.google.common.base.Charsets;
- import com.google.common.base.Function;
- import com.google.common.base.Preconditions;
- import com.google.common.collect.ImmutableList;
--import com.google.common.collect.ImmutableSet;
- import com.google.common.collect.Iterators;
- import com.google.common.collect.Lists;
- import com.google.common.collect.MapMaker;
-@@ -18,7 +17,6 @@ import com.mojang.serialization.Lifecycle;
- import io.netty.buffer.ByteBuf;
- import io.netty.buffer.ByteBufOutputStream;
- import io.netty.buffer.Unpooled;
--import io.papermc.paper.logging.SysoutCatcher;
- import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
- import java.awt.image.BufferedImage;
- import java.io.File;
-@@ -101,6 +99,7 @@ import net.minecraft.world.level.LevelSettings;
- import net.minecraft.world.level.biome.BiomeManager;
- import net.minecraft.world.level.biome.BiomeSource;
- import net.minecraft.world.level.block.Block;
-+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
- import net.minecraft.world.level.dimension.DimensionType;
- import net.minecraft.world.level.dimension.LevelStem;
- import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-@@ -236,6 +235,7 @@ import org.bukkit.potion.PotionEffectType;
- import org.bukkit.scheduler.BukkitWorker;
- import org.bukkit.util.StringUtil;
- import org.bukkit.util.permissions.DefaultPermissions;
-+import org.jetbrains.annotations.NotNull;
- import org.yaml.snakeyaml.Yaml;
- import org.yaml.snakeyaml.constructor.SafeConstructor;
- import org.yaml.snakeyaml.error.MarkedYAMLException;
 @@ -1384,6 +1384,19 @@ public final class CraftServer implements Server {
          return true;
      }
  
 +    // Purpur Start
 +    @Override
-+    public void addFuel(@NotNull org.bukkit.Material material, int burnTime) {
++    public void addFuel(org.bukkit.Material material, int burnTime) {
 +        Preconditions.checkArgument(burnTime > 0, "BurnTime must be greater than 0");
-+        AbstractFurnaceBlockEntity.addFuel(net.minecraft.world.item.ItemStack.fromBukkitCopy(new ItemStack(material)), burnTime);
++        net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.addFuel(net.minecraft.world.item.ItemStack.fromBukkitCopy(new ItemStack(material)), burnTime);
 +    }
 +
 +    @Override
-+    public void removeFuel(@NotNull org.bukkit.Material material) {
-+        AbstractFurnaceBlockEntity.removeFuel(net.minecraft.world.item.ItemStack.fromBukkitCopy(new ItemStack(material)));
++    public void removeFuel(org.bukkit.Material material) {
++        net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.removeFuel(net.minecraft.world.item.ItemStack.fromBukkitCopy(new ItemStack(material)));
 +    }
 +    // Purpur End
 +
