@@ -5,19 +5,19 @@ Subject: [PATCH] Rebrand
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 8a56862f59b7b7d64580b46c561643a1d99348c7..628ac56388882a1bcbeae37769a99e9ccb071f66 100644
+index 8a4c00b978b289d162321a043efb0a5ca4c9ef4a..399641413d38f1a27165a0cf60b6c7c781cf1488 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -29,7 +29,7 @@ repositories {
+@@ -32,7 +32,7 @@ repositories {
  }
  
  dependencies {
--    implementation(project(":Airplane-API")) // Airplane // Tuinity
+-    implementation(project(":Airplane-API")) // Airplane // Paper
 +    implementation(project(":Purpur-API")) // Airplane // Purpur
      implementation("io.papermc.paper:paper-mojangapi:1.17.1-R0.1-SNAPSHOT") // Airplane
      // Paper start
      implementation("org.jline:jline-terminal-jansi:3.12.1")
-@@ -61,6 +61,7 @@ dependencies {
+@@ -64,6 +64,7 @@ dependencies {
  
      implementation("co.aikar:cleaner:1.0-SNAPSHOT") // Paper
      implementation("io.netty:netty-all:4.1.65.Final") // Paper
@@ -25,17 +25,18 @@ index 8a56862f59b7b7d64580b46c561643a1d99348c7..628ac56388882a1bcbeae37769a99e9c
  
      implementation("org.quiltmc:tiny-mappings-parser:0.3.0") // Paper - needed to read mappings for stacktrace deobfuscation
      implementation("com.velocitypowered:velocity-native:1.1.0-SNAPSHOT") // Paper
-@@ -86,7 +87,7 @@ tasks.jar {
+@@ -89,8 +90,7 @@ tasks.jar {
          attributes(
              "Main-Class" to "org.bukkit.craftbukkit.Main",
              "Implementation-Title" to "CraftBukkit",
--            "Implementation-Version" to "git-Airplane-$implementationVersion", // Airplane
+-            "Implementation-Version" to "git-Paper-$implementationVersion",
+-            "Implementation-Version" to "git-Airplane-$implementationVersion", // Airplane // Tuinity
 +            "Implementation-Version" to "git-Purpur-$implementationVersion", // Airplane // Purpur
              "Implementation-Vendor" to date, // Paper
              "Specification-Title" to "Bukkit",
              "Specification-Version" to project.version,
 diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-index 030731923811f7748e8f9086f88e913031f1ec21..e2c0717066ac16a9274daff1a192bf70f0c119a0 100644
+index 51d89d6bcbcc24a6be6a836263ebb1ed23e91cba..b6c1e50df4e0a69ac1e81613539bcc0731c67063 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
 @@ -18,7 +18,7 @@ import java.util.stream.StreamSupport;
@@ -51,8 +52,8 @@ index 030731923811f7748e8f9086f88e913031f1ec21..e2c0717066ac16a9274daff1a192bf70
      @Nonnull
      @Override
      public Component getVersionMessage(@Nonnull String serverVersion) {
--        String[] parts = serverVersion.substring("git-Airplane-".length()).split("[-\\s]"); // Airplane
--        final Component updateMessage = getUpdateStatusMessage("TECHNOVE/Airplane", GITHUB_BRANCH_NAME, parts[0]); // Airplane
+-        String[] parts = serverVersion.substring("git-Airplane-".length()).split("[-\\s]"); // Tuinity
+-        final Component updateMessage = getUpdateStatusMessage("TECHNOVE/Airplane", GITHUB_BRANCH_NAME, parts[0]); // Tuinity
 +        String[] parts = serverVersion.substring("git-Purpur-".length()).split("[-\\s]"); // Airplane // Purpur
 +        final Component updateMessage = getUpdateStatusMessage("pl3xgaming/Purpur", "ver/" + getMinecraftVersion(), parts[0]); // Airplane // Purpur
          final Component history = getHistory();
@@ -67,7 +68,31 @@ index 030731923811f7748e8f9086f88e913031f1ec21..e2c0717066ac16a9274daff1a192bf70
                  org.bukkit.Bukkit.getLogger().warning("Pattern: " + VER_PATTERN.toString());
                  org.bukkit.Bukkit.getLogger().warning("Version: " + org.bukkit.Bukkit.getBukkitVersion());
              }
-@@ -78,15 +78,11 @@ public class PaperVersionFetcher implements VersionFetcher {
+@@ -54,13 +54,18 @@ public class PaperVersionFetcher implements VersionFetcher {
+ 
+     private static Component getUpdateStatusMessage(@Nonnull String repo, @Nonnull String branch, @Nonnull String versionInfo) {
+         int distance;
+-        //try {
+-        //    int jenkinsBuild = Integer.parseInt(versionInfo);
+-        //    distance = fetchDistanceFromSiteApi(jenkinsBuild, getMinecraftVersion());
+-        //} catch (NumberFormatException ignored) {
++        // Purpur start - put all this back, yet again
++        try {
++            int buildNumber = Integer.parseInt(versionInfo);
++            distance = fetchDistanceFromSiteApi(buildNumber, getMinecraftVersion());
++            if (distance < 0) {
++                distance = fetchDistanceFromJenkins(buildNumber);
++            }
++        } catch (NumberFormatException ignored) {
+             versionInfo = versionInfo.replace("\"", "");
+             distance = fetchDistanceFromGitHub(repo, branch, versionInfo);
+-        //}
++        }
++        // Purpur end
+ 
+         switch (distance) {
+             case -1:
+@@ -78,15 +83,11 @@ public class PaperVersionFetcher implements VersionFetcher {
          if (siteApiVersion == null) { return -1; }
          try {
              try (BufferedReader reader = Resources.asCharSource(
@@ -85,6 +110,29 @@ index 030731923811f7748e8f9086f88e913031f1ec21..e2c0717066ac16a9274daff1a192bf70
                  return latest - jenkinsBuild;
              } catch (JsonSyntaxException ex) {
                  ex.printStackTrace();
+@@ -98,6 +99,22 @@ public class PaperVersionFetcher implements VersionFetcher {
+         }
+     }
+ 
++    // Purpur start
++    private static int fetchDistanceFromJenkins(int jenkinsBuild) {
++        try {
++            try (BufferedReader reader = Resources.asCharSource(new URL(JENKINS_URL), Charsets.UTF_8).openBufferedStream()) {
++                return Integer.decode(reader.readLine()) - jenkinsBuild;
++            } catch (NumberFormatException ex) {
++                ex.printStackTrace();
++                return -2;
++            }
++        } catch (IOException e) {
++            e.printStackTrace();
++            return -1;
++        }
++    }
++    // Purpur end
++
+     // Contributed by Techcable <Techcable@outlook.com> in GH-65
+     private static int fetchDistanceFromGitHub(@Nonnull String repo, @Nonnull String branch, @Nonnull String hash) {
+         try {
 diff --git a/src/main/java/com/destroystokyo/paper/console/PaperConsole.java b/src/main/java/com/destroystokyo/paper/console/PaperConsole.java
 index e0b1f0671d16ddddcb6725acd25a1d1d69e42701..8c3c68465197fafc14849dc38a572e309931e2a2 100644
 --- a/src/main/java/com/destroystokyo/paper/console/PaperConsole.java
@@ -99,14 +147,14 @@ index e0b1f0671d16ddddcb6725acd25a1d1d69e42701..8c3c68465197fafc14849dc38a572e30
                  .completer(new ConsoleCommandCompleter(this.server))
                  .option(LineReader.Option.COMPLETE_IN_WORD, true);
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 1490753c9f47769177212051924306493efdc5d5..080ccf4092de52292175c9333b530b82bf3aa5c8 100644
+index 61b0e52ec692b8bfc7629ee6e84952a6704362aa..080ccf4092de52292175c9333b530b82bf3aa5c8 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -1730,7 +1730,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
  
      @DontObfuscate
      public String getServerModName() {
--        return "Airplane"; // Airplane - Airplane > // Paper - Paper > // Spigot - Spigot > // CraftBukkit - cb > vanilla!
+-        return "Airplane"; // Airplane - Airplane > //Paper - Paper > // Spigot - Spigot > // CraftBukkit - cb > vanilla!
 +        return "Purpur"; // Purpur - Purpur > // Airplane - Airplane > // Paper - Paper > // Spigot - Spigot > // CraftBukkit - cb > vanilla!
      }
  
@@ -144,14 +192,14 @@ index fe1b046f707ee145327475b7f923928f4dfcad05..c757e4fe3e511f699512dccbcb11137f
      private final String bukkitVersion = Versioning.getBukkitVersion();
      private final Logger logger = Logger.getLogger("Minecraft");
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/Versioning.java b/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
-index 7217088fda330c97c6edd007159aa6b2dee41bfb..e7d740e191c5ac408ba1fa493e9367dd52900a02 100644
+index 1788d79ea489e446d3d9f541693d4ba3dfc26015..e7d740e191c5ac408ba1fa493e9367dd52900a02 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
 @@ -11,7 +11,7 @@ public final class Versioning {
      public static String getBukkitVersion() {
          String result = "Unknown-Version";
  
--        InputStream stream = Bukkit.class.getClassLoader().getResourceAsStream("META-INF/maven/gg.airplane/airplane-api/pom.properties"); // Airplane
+-        InputStream stream = Bukkit.class.getClassLoader().getResourceAsStream("META-INF/maven/gg.airplane/airplane-api/pom.properties"); // Tuinity // Airplane
 +        InputStream stream = Bukkit.class.getClassLoader().getResourceAsStream("META-INF/maven/net.pl3x.purpur/purpur-api/pom.properties"); // Airplane // Purpur
          Properties properties = new Properties();
  

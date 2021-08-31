@@ -19,21 +19,34 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index b3687f632bbf06c933a6ef04dc2236ccf3c030b8..8a56862f59b7b7d64580b46c561643a1d99348c7 100644
+index b3687f632bbf06c933a6ef04dc2236ccf3c030b8..8a4c00b978b289d162321a043efb0a5ca4c9ef4a 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -29,8 +29,8 @@ repositories {
+@@ -2,9 +2,12 @@ import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCach
+ import com.github.jengelman.gradle.plugins.shadow.transformers.Transformer
+ import io.papermc.paperweight.tasks.BaseTask
+ import io.papermc.paperweight.util.Git
++import io.papermc.paperweight.util.cache
+ import io.papermc.paperweight.util.defaultOutput
+ import io.papermc.paperweight.util.openZip
+ import io.papermc.paperweight.util.path
++import io.papermc.paperweight.util.registering
++import io.papermc.paperweight.util.set
+ import shadow.org.apache.logging.log4j.core.config.plugins.processor.PluginProcessor.PLUGIN_CACHE_FILE
+ import java.nio.file.Files
+ import java.util.Locale
+@@ -29,8 +32,8 @@ repositories {
  }
  
  dependencies {
 -    implementation(project(":Paper-API"))
 -    implementation(project(":Paper-MojangAPI"))
-+    implementation(project(":Airplane-API")) // Airplane // Tuinity
++    implementation(project(":Airplane-API")) // Airplane // Paper
 +    implementation("io.papermc.paper:paper-mojangapi:1.17.1-R0.1-SNAPSHOT") // Airplane
      // Paper start
      implementation("org.jline:jline-terminal-jansi:3.12.1")
      implementation("net.minecrell:terminalconsoleappender:1.2.0")
-@@ -65,6 +65,10 @@ dependencies {
+@@ -65,6 +68,10 @@ dependencies {
      implementation("org.quiltmc:tiny-mappings-parser:0.3.0") // Paper - needed to read mappings for stacktrace deobfuscation
      implementation("com.velocitypowered:velocity-native:1.1.0-SNAPSHOT") // Paper
  
@@ -44,17 +57,39 @@ index b3687f632bbf06c933a6ef04dc2236ccf3c030b8..8a56862f59b7b7d64580b46c561643a1
      testImplementation("io.github.classgraph:classgraph:4.8.47") // Paper - mob goal test
      testImplementation("junit:junit:4.13.1")
      testImplementation("org.hamcrest:hamcrest-library:1.3")
-@@ -82,7 +86,7 @@ tasks.jar {
-         attributes(
+@@ -83,6 +90,7 @@ tasks.jar {
              "Main-Class" to "org.bukkit.craftbukkit.Main",
              "Implementation-Title" to "CraftBukkit",
--            "Implementation-Version" to "git-Paper-$implementationVersion",
-+            "Implementation-Version" to "git-Airplane-$implementationVersion", // Airplane
+             "Implementation-Version" to "git-Paper-$implementationVersion",
++            "Implementation-Version" to "git-Airplane-$implementationVersion", // Airplane // Tuinity
              "Implementation-Vendor" to date, // Paper
              "Specification-Title" to "Bukkit",
              "Specification-Version" to project.version,
+@@ -140,6 +148,22 @@ relocation {
+     }
+ }
+ 
++val generateReobfMappings = rootProject.tasks.named<io.papermc.paperweight.tasks.GenerateReobfMappings>("generateReobfMappings")
++
++val patchReobfMappings by tasks.registering<io.papermc.paperweight.tasks.PatchMappings> {
++    inputMappings.set(generateReobfMappings.flatMap { it.reobfMappings })
++    patch.set(rootProject.layout.cache.resolve("paperweight/upstreams/paper/build-data/reobf-mappings-patch.tiny"))
++
++    fromNamespace.set(io.papermc.paperweight.util.constants.DEOBF_NAMESPACE)
++    toNamespace.set(io.papermc.paperweight.util.constants.SPIGOT_NAMESPACE)
++
++    outputMappings.set(layout.cache.resolve("paperweight/mappings/reobf-patched.tiny"))
++}
++
++tasks.reobfJar {
++    mappingsFile.set(patchReobfMappings.flatMap { it.outputMappings })
++}
++
+ val generatePom = tasks.named<GenerateMavenPom>("generatePomFileForMavenPublication")
+ 
+ tasks.shadowJar {
 diff --git a/src/main/java/co/aikar/timings/TimingsExport.java b/src/main/java/co/aikar/timings/TimingsExport.java
-index 7d44abcb4fff9717a1af55879deb7eb9c2d9e7e9..5fc65b0224b5c56039d60baf30f2de35f8bfb1c6 100644
+index 7d44abcb4fff9717a1af55879deb7eb9c2d9e7e9..da6a5b1b2f5203a0fab8e4fccd727951df7c9c9a 100644
 --- a/src/main/java/co/aikar/timings/TimingsExport.java
 +++ b/src/main/java/co/aikar/timings/TimingsExport.java
 @@ -228,7 +228,8 @@ public class TimingsExport extends Thread {
@@ -62,13 +97,13 @@ index 7d44abcb4fff9717a1af55879deb7eb9c2d9e7e9..5fc65b0224b5c56039d60baf30f2de35
              pair("spigot", mapAsJSON(Bukkit.spigot().getSpigotConfig(), null)),
              pair("bukkit", mapAsJSON(Bukkit.spigot().getBukkitConfig(), null)),
 -            pair("paper", mapAsJSON(Bukkit.spigot().getPaperConfig(), null))
-+            pair("paper", mapAsJSON(Bukkit.spigot().getPaperConfig(), null)),
-+            pair("airplane", mapAsJSON(gg.airplane.AirplaneConfig.getConfigCopy(), null))
++            pair("paper", mapAsJSON(Bukkit.spigot().getPaperConfig(), null)), // Airplane
++            pair("airplane", mapAsJSON(gg.airplane.AirplaneConfig.getConfigCopy(), null)) // Airplane
          ));
  
          new TimingsExport(listeners, parent, history).start();
 diff --git a/src/main/java/com/destroystokyo/paper/Metrics.java b/src/main/java/com/destroystokyo/paper/Metrics.java
-index 218f5bafeed8551b55b91c7fccaf6935c8b631ca..9d70f944af2c81ab5ab23b06857d740db74709d9 100644
+index 218f5bafeed8551b55b91c7fccaf6935c8b631ca..f5d01bce4d5547b4aeca96b7962b2090f47ea541 100644
 --- a/src/main/java/com/destroystokyo/paper/Metrics.java
 +++ b/src/main/java/com/destroystokyo/paper/Metrics.java
 @@ -593,7 +593,7 @@ public class Metrics {
@@ -76,7 +111,7 @@ index 218f5bafeed8551b55b91c7fccaf6935c8b631ca..9d70f944af2c81ab5ab23b06857d740d
              // Only start Metrics, if it's enabled in the config
              if (config.getBoolean("enabled", true)) {
 -                Metrics metrics = new Metrics("Paper", serverUUID, logFailedRequests, Bukkit.getLogger());
-+                Metrics metrics = new Metrics("Airplane", serverUUID, logFailedRequests, Bukkit.getLogger()); // Airplane
++                Metrics metrics = new Metrics("Airplane", serverUUID, logFailedRequests, Bukkit.getLogger()); // Tuinity - we have our own bstats page // Airplane
  
                  metrics.addCustomChart(new Metrics.SimplePie("minecraft_version", () -> {
                      String minecraftVersion = Bukkit.getVersion();
@@ -85,12 +120,12 @@ index 218f5bafeed8551b55b91c7fccaf6935c8b631ca..9d70f944af2c81ab5ab23b06857d740d
                  metrics.addCustomChart(new Metrics.SingleLineChart("players", () -> Bukkit.getOnlinePlayers().size()));
                  metrics.addCustomChart(new Metrics.SimplePie("online_mode", () -> Bukkit.getOnlineMode() ? "online" : "offline"));
 -                metrics.addCustomChart(new Metrics.SimplePie("paper_version", () -> (Metrics.class.getPackage().getImplementationVersion() != null) ? Metrics.class.getPackage().getImplementationVersion() : "unknown"));
-+                metrics.addCustomChart(new Metrics.SimplePie("airplane_version", () -> (Metrics.class.getPackage().getImplementationVersion() != null) ? Metrics.class.getPackage().getImplementationVersion() : "unknown")); // Airplane
++                metrics.addCustomChart(new Metrics.SimplePie("airplane_version", () -> (Metrics.class.getPackage().getImplementationVersion() != null) ? Metrics.class.getPackage().getImplementationVersion() : "unknown")); // Tuinity - we have our own bstats page // Airplane
  
                  metrics.addCustomChart(new Metrics.DrilldownPie("java_version", () -> {
                      Map<String, Map<String, Integer>> map = new HashMap<>();
 diff --git a/src/main/java/com/destroystokyo/paper/PaperConfig.java b/src/main/java/com/destroystokyo/paper/PaperConfig.java
-index 076b0218ccb064ee36f46f9d76fe61eacda931b3..6ba32b6efd32e6861f2c6bc8296b12c5c9cee593 100644
+index 86d73c98ff04384f3d6c9d967ae7ad85c7c29bf1..25f9103041ebc065502bb32066cd8db79518034d 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperConfig.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperConfig.java
 @@ -202,16 +202,26 @@ public class PaperConfig {
@@ -122,7 +157,7 @@ index 076b0218ccb064ee36f46f9d76fe61eacda931b3..6ba32b6efd32e6861f2c6bc8296b12c5
          int timingHistoryLength = getInt("timings.history-length", 3600);
          timingsServerName = getString("timings.server-name", "Unknown Server");
 diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-index 580bae0d414d371a07a6bfeefc41fdd989dc0083..030731923811f7748e8f9086f88e913031f1ec21 100644
+index 580bae0d414d371a07a6bfeefc41fdd989dc0083..51d89d6bcbcc24a6be6a836263ebb1ed23e91cba 100644
 --- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
 +++ b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
 @@ -29,8 +29,8 @@ public class PaperVersionFetcher implements VersionFetcher {
@@ -131,11 +166,30 @@ index 580bae0d414d371a07a6bfeefc41fdd989dc0083..030731923811f7748e8f9086f88e9130
      public Component getVersionMessage(@Nonnull String serverVersion) {
 -        String[] parts = serverVersion.substring("git-Paper-".length()).split("[-\\s]");
 -        final Component updateMessage = getUpdateStatusMessage("PaperMC/Paper", GITHUB_BRANCH_NAME, parts[0]);
-+        String[] parts = serverVersion.substring("git-Airplane-".length()).split("[-\\s]"); // Airplane
-+        final Component updateMessage = getUpdateStatusMessage("TECHNOVE/Airplane", GITHUB_BRANCH_NAME, parts[0]); // Airplane
++        String[] parts = serverVersion.substring("git-Airplane-".length()).split("[-\\s]"); // Tuinity
++        final Component updateMessage = getUpdateStatusMessage("TECHNOVE/Airplane", GITHUB_BRANCH_NAME, parts[0]); // Tuinity
          final Component history = getHistory();
  
          return history != null ? TextComponent.ofChildren(updateMessage, Component.newline(), history) : updateMessage;
+@@ -54,13 +54,13 @@ public class PaperVersionFetcher implements VersionFetcher {
+ 
+     private static Component getUpdateStatusMessage(@Nonnull String repo, @Nonnull String branch, @Nonnull String versionInfo) {
+         int distance;
+-        try {
+-            int jenkinsBuild = Integer.parseInt(versionInfo);
+-            distance = fetchDistanceFromSiteApi(jenkinsBuild, getMinecraftVersion());
+-        } catch (NumberFormatException ignored) {
++        //try {
++        //    int jenkinsBuild = Integer.parseInt(versionInfo);
++        //    distance = fetchDistanceFromSiteApi(jenkinsBuild, getMinecraftVersion());
++        //} catch (NumberFormatException ignored) {
+             versionInfo = versionInfo.replace("\"", "");
+             distance = fetchDistanceFromGitHub(repo, branch, versionInfo);
+-        }
++        //}
+ 
+         switch (distance) {
+             case -1:
 diff --git a/src/main/java/gg/airplane/AirplaneCommand.java b/src/main/java/gg/airplane/AirplaneCommand.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..89c89e633f14b5820147e734b1b7ad8cadfdce80
@@ -1606,7 +1660,7 @@ index 505546d32eea4682452dbac02311433157f6a30e..5c7b9ad379f3c272e15648dd16f4df92
  
      public static <V> CompletableFuture<List<V>> sequenceFailFast(List<? extends CompletableFuture<? extends V>> futures) {
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index edd2333e0fb24a50bc388249224e9311aa90a10f..1490753c9f47769177212051924306493efdc5d5 100644
+index edd2333e0fb24a50bc388249224e9311aa90a10f..61b0e52ec692b8bfc7629ee6e84952a6704362aa 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -1730,7 +1730,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -1614,7 +1668,7 @@ index edd2333e0fb24a50bc388249224e9311aa90a10f..1490753c9f4776917721205192430649
      @DontObfuscate
      public String getServerModName() {
 -        return "Paper"; //Paper - Paper > // Spigot - Spigot > // CraftBukkit - cb > vanilla!
-+        return "Airplane"; // Airplane - Airplane > // Paper - Paper > // Spigot - Spigot > // CraftBukkit - cb > vanilla!
++        return "Airplane"; // Airplane - Airplane > //Paper - Paper > // Spigot - Spigot > // CraftBukkit - cb > vanilla!
      }
  
      public SystemReport fillSystemReport(SystemReport details) {
@@ -3437,7 +3491,7 @@ index d752720f2f234b9dbd2117333fee1bfad663ec02..9868b3a9a35cea9689c76ea9b62f2732
              // Paper start - try to shutdown on main
              server.safeShutdown(false, false);
 diff --git a/src/main/java/org/bukkit/craftbukkit/util/Versioning.java b/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
-index 774556a62eb240da42e84db4502e2ed43495be17..7217088fda330c97c6edd007159aa6b2dee41bfb 100644
+index 774556a62eb240da42e84db4502e2ed43495be17..1788d79ea489e446d3d9f541693d4ba3dfc26015 100644
 --- a/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
 +++ b/src/main/java/org/bukkit/craftbukkit/util/Versioning.java
 @@ -11,7 +11,7 @@ public final class Versioning {
@@ -3445,7 +3499,7 @@ index 774556a62eb240da42e84db4502e2ed43495be17..7217088fda330c97c6edd007159aa6b2
          String result = "Unknown-Version";
  
 -        InputStream stream = Bukkit.class.getClassLoader().getResourceAsStream("META-INF/maven/io.papermc.paper/paper-api/pom.properties");
-+        InputStream stream = Bukkit.class.getClassLoader().getResourceAsStream("META-INF/maven/gg.airplane/airplane-api/pom.properties"); // Airplane
++        InputStream stream = Bukkit.class.getClassLoader().getResourceAsStream("META-INF/maven/gg.airplane/airplane-api/pom.properties"); // Tuinity // Airplane
          Properties properties = new Properties();
  
          if (stream != null) {
