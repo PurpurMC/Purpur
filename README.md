@@ -56,7 +56,7 @@ Downloads API endpoints:
 
 All patches are licensed under the MIT license, unless otherwise noted in the patch headers.
 
-See [PaperMC/Paper](https://github.com/PaperMC/Paper), [Tuinity/Tuinity](https://github.com/Tuinity/Tuinity), and [jpenilla/Toothpick](https://github.com/jpenilla/Toothpick) for the license of material used by this project.
+See [PaperMC/Paper](https://github.com/PaperMC/Paper), [TECHNOVE/Airplane](https://github.com/TECHNOVE/Airplane), and [jpenilla/Toothpick](https://github.com/jpenilla/Toothpick) for the license of material used by this project.
 
 ## bStats
 
