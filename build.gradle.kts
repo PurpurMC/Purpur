@@ -48,7 +48,7 @@ subprojects {
         maven("https://hub.spigotmc.org/nexus/content/groups/public/")
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
-        maven("https://notom3ga.me/repo/")
+        maven("https://maven.pkg.github.com/cyberflamego/upnp4j/")
     }
 
     configure<PublishingExtension> {
