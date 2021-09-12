@@ -43,7 +43,6 @@ subprojects {
         maven("https://hub.spigotmc.org/nexus/content/groups/public/")
         maven("https://jitpack.io")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
-        maven("https://maven.pkg.github.com/cyberflamego/upnp4j/")
     }
 
     configure<PublishingExtension> {
