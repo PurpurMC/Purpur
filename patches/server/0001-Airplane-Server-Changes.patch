@@ -2108,6 +2108,47 @@ index 8a864238e154e2131834d013652746b7e7a78c97..b8e512e1c4b00b468b2d22add5653b98
          this.goalSelector.tick();
          this.level.getProfiler().pop();
          this.level.getProfiler().push("navigation");
+diff --git a/src/main/java/net/minecraft/world/entity/ai/Brain.java b/src/main/java/net/minecraft/world/entity/ai/Brain.java
+index 75022e5888de2730bb29d1e7535ddc63e2c5f713..a7c71fc4e49079d11b9a0537a4f6d20bbbba815b 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/Brain.java
++++ b/src/main/java/net/minecraft/world/entity/ai/Brain.java
+@@ -76,15 +76,15 @@ public class Brain<E extends LivingEntity> {
+ 
+             @Override
+             public <T> DataResult<Brain<E>> decode(DynamicOps<T> dynamicOps, MapLike<T> mapLike) {
+-                MutableObject<DataResult<Builder<Brain.MemoryValue<?>>>> mutableObject = new MutableObject<>(DataResult.success(ImmutableList.builder()));
++                MutableObject<DataResult<Builder<Brain.MemoryValue<?>>>> mutableObject2 = new MutableObject<>(DataResult.success(ImmutableList.builder())); // Airplane - compile error due to decompiler
+                 mapLike.entries().forEach((pair) -> {
+                     DataResult<MemoryModuleType<?>> dataResult = Registry.MEMORY_MODULE_TYPE.parse(dynamicOps, pair.getFirst());
+                     DataResult<? extends Brain.MemoryValue<?>> dataResult2 = dataResult.flatMap((memoryModuleType) -> {
+                         return this.captureRead(memoryModuleType, dynamicOps, (T)pair.getSecond());
+                     });
+-                    mutableObject.setValue(mutableObject.getValue().apply2(Builder::add, dataResult2));
++                    mutableObject2.setValue(mutableObject2.getValue().apply2(Builder::add, dataResult2)); // Airplane - compile error due to decompiler
+                 });
+-                ImmutableList<Brain.MemoryValue<?>> immutableList = mutableObject.getValue().resultOrPartial(Brain.LOGGER::error).map(Builder::build).orElseGet(ImmutableList::of);
++                ImmutableList<Brain.MemoryValue<?>> immutableList = mutableObject2.getValue().resultOrPartial(Brain.LOGGER::error).map(Builder::build).orElseGet(ImmutableList::of); // Airplane - compile error due to decompiler
+                 return DataResult.success(new Brain<>(memoryModules, sensors, immutableList, mutableObject::getValue));
+             }
+ 
+@@ -174,7 +174,7 @@ public class Brain<E extends LivingEntity> {
+     }
+ 
+     public <U> Optional<U> getMemory(MemoryModuleType<U> type) {
+-        return this.memories.get(type).map(ExpirableValue::getValue);
++        return (Optional<U>) this.memories.get(type).map(ExpirableValue::getValue); // Airplane - compile fix
+     }
+ 
+     public <U> long getTimeUntilExpiry(MemoryModuleType<U> type) {
+@@ -465,7 +465,7 @@ public class Brain<E extends LivingEntity> {
+         private final Optional<? extends ExpirableValue<U>> value;
+ 
+         static <U> Brain.MemoryValue<U> createUnchecked(MemoryModuleType<U> type, Optional<? extends ExpirableValue<?>> data) {
+-            return new Brain.MemoryValue<>(type, data);
++            return new Brain.MemoryValue<>(type, (Optional) data); // Airplane - compile fix
+         }
+ 
+         MemoryValue(MemoryModuleType<U> type, Optional<? extends ExpirableValue<U>> data) {
 diff --git a/src/main/java/net/minecraft/world/entity/ai/attributes/AttributeMap.java b/src/main/java/net/minecraft/world/entity/ai/attributes/AttributeMap.java
 index 9cbfda029782385d1a7987f5be46d450bd8a758e..d3e97858dacc850012e5585ac44a1aeafc82b8f4 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/attributes/AttributeMap.java
@@ -2150,6 +2191,23 @@ index afbb2acd27416c801af3d718850b82a170734cd3..0b206a3f964f5143e0720890d78d682b
          PoiManager poiManager = world.getPoiManager();
          this.batchCache.long2ObjectEntrySet().removeIf((entry) -> {
              return !entry.getValue().isStillValid(time);
+diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerPanicTrigger.java b/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerPanicTrigger.java
+index 42d466f7f162943886078eba3db18f2dfc2d7bee..32da2d3f87758bee359522769ebbee73f4f3256a 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerPanicTrigger.java
++++ b/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerPanicTrigger.java
+@@ -37,7 +37,11 @@ public class VillagerPanicTrigger extends Behavior<Villager> {
+ 
+     @Override
+     protected void tick(ServerLevel serverLevel, Villager villager, long l) {
+-        if (l % 100L == 0L) {
++        // Airplane start
++        if (villager.nextGolemPanic < 0) villager.nextGolemPanic = l + 100;
++        if (--villager.nextGolemPanic < l) {
++            villager.nextGolemPanic = -1;
++            // Airplane end
+             villager.spawnGolemIfNeeded(serverLevel, l, 3);
+         }
+ 
 diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/GoalSelector.java b/src/main/java/net/minecraft/world/entity/ai/goal/GoalSelector.java
 index a96831d5df2b88203aec8fe2a5909708764b38ee..441e2edd8357c4f11093b4dee2192780ac3f3579 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/goal/GoalSelector.java
@@ -2311,6 +2369,26 @@ index e1e220b3e4967590a2a77370e2a6ab919ad50eaa..5d371a3e94720e24058d007474355af6
          boolean flag = iblockdata.getMaterial().blocksMotion();
          boolean flag1 = iblockdata.getFluidState().is((Tag) FluidTags.WATER);
  
+diff --git a/src/main/java/net/minecraft/world/entity/monster/hoglin/Hoglin.java b/src/main/java/net/minecraft/world/entity/monster/hoglin/Hoglin.java
+index c510da19883d1aa79b2fc25e2d9c8f5cd8dd7bfa..3f6697d21cf32b83d3dcd74d810effc28c9efc95 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/hoglin/Hoglin.java
++++ b/src/main/java/net/minecraft/world/entity/monster/hoglin/Hoglin.java
+@@ -123,12 +123,14 @@ public class Hoglin extends Animal implements Enemy, HoglinBase {
+ 
+     @Override
+     public Brain<Hoglin> getBrain() {
+-        return super.getBrain();
++        return (Brain<Hoglin>) super.getBrain(); // Airplane - decompile fix
+     }
+ 
++    private int behaviorTick; // Airplane
+     @Override
+     protected void customServerAiStep() {
+         this.level.getProfiler().push("hoglinBrain");
++        if (this.behaviorTick++ % this.activatedPriority == 0) // Airplane
+         this.getBrain().tick((ServerLevel)this.level, this);
+         this.level.getProfiler().pop();
+         HoglinAi.updateActivity(this);
 diff --git a/src/main/java/net/minecraft/world/entity/monster/piglin/Piglin.java b/src/main/java/net/minecraft/world/entity/monster/piglin/Piglin.java
 index c7ad0e317c0c74e5ad3e08278c5e7b31c894413e..06c6ed64488bb3685b9de3e05d8a1e74ebc62e37 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/piglin/Piglin.java
@@ -3247,6 +3325,128 @@ index 7fda7da544b2d0bbd3803d88ee34c92350a8b8ef..adf91f3006a2d224c957f08520f93f76
  
          return flag;
      }
+diff --git a/src/main/java/net/minecraft/world/level/storage/loot/LootContext.java b/src/main/java/net/minecraft/world/level/storage/loot/LootContext.java
+index 05b64f2730bfe836bd1d72dcfccd9f536908a099..39e941a6a315e2a9fc0f47eb39ef9d2b58069f90 100644
+--- a/src/main/java/net/minecraft/world/level/storage/loot/LootContext.java
++++ b/src/main/java/net/minecraft/world/level/storage/loot/LootContext.java
+@@ -41,8 +41,10 @@ public class LootContext {
+         this.level = world;
+         this.lootTables = tableGetter;
+         this.conditions = conditionGetter;
+-        this.params = ImmutableMap.copyOf(parameters);
+-        this.dynamicDrops = ImmutableMap.copyOf(drops);
++        // Airplane start - use unmodifiable maps instead of immutable ones to skip the copy
++        this.params = java.util.Collections.unmodifiableMap(parameters);
++        this.dynamicDrops = java.util.Collections.unmodifiableMap(drops);
++        // Airplane end
+     }
+ 
+     public boolean hasParam(LootContextParam<?> parameter) {
+diff --git a/src/main/java/net/minecraft/world/phys/shapes/EntityCollisionContext.java b/src/main/java/net/minecraft/world/phys/shapes/EntityCollisionContext.java
+index fcb7bd9f3b6b6ada0f2e5692bce32ab76b8798a7..61c2096f2c034dbc3ad33b193b058c7d0d05e909 100644
+--- a/src/main/java/net/minecraft/world/phys/shapes/EntityCollisionContext.java
++++ b/src/main/java/net/minecraft/world/phys/shapes/EntityCollisionContext.java
+@@ -22,55 +22,82 @@ public class EntityCollisionContext implements CollisionContext {
+             return defaultValue;
+         }
+     };
+-    private final boolean descending;
+-    private final double entityBottom;
+-    private final ItemStack heldItem;
+-    private final ItemStack footItem;
+-    private final Predicate<Fluid> canStandOnFluid;
+-    private final Optional<Entity> entity;
++    // Airplane start - remove these and pray no plugin uses them
++    //private final boolean descending;
++    //private final double entityBottom;
++    //private final ItemStack heldItem;
++    //private final ItemStack footItem;
++    //private final Predicate<Fluid> canStandOnFluid;
++    // Airplane end
++    private final @org.jetbrains.annotations.Nullable Entity entity; // Airplane
+ 
+     protected EntityCollisionContext(boolean descending, double minY, ItemStack boots, ItemStack heldItem, Predicate<Fluid> walkOnFluidPredicate, Optional<Entity> entity) {
+-        this.descending = descending;
+-        this.entityBottom = minY;
+-        this.footItem = boots;
+-        this.heldItem = heldItem;
+-        this.canStandOnFluid = walkOnFluidPredicate;
+-        this.entity = entity;
++        // Airplane start
++        //this.descending = descending;
++        //this.entityBottom = minY;
++        //this.footItem = boots;
++        //this.heldItem = heldItem;
++        ///this.canStandOnFluid = walkOnFluidPredicate;
++        this.entity = entity.orElse(null);
++        // Airplane end
+     }
+ 
+     @Deprecated
+     protected EntityCollisionContext(Entity entity) {
++        // Airplane start - remove unneeded things
++        /*
+         this(entity.isDescending(), entity.getY(), entity instanceof LivingEntity ? ((LivingEntity)entity).getItemBySlot(EquipmentSlot.FEET) : ItemStack.EMPTY, entity instanceof LivingEntity ? ((LivingEntity)entity).getMainHandItem() : ItemStack.EMPTY, entity instanceof LivingEntity ? ((LivingEntity)entity)::canStandOnFluid : (fluid) -> {
+             return false;
+         }, Optional.of(entity));
++         */
++        this.entity = entity;
++        // Airplane end
+     }
+ 
+     @Override
+     public boolean hasItemOnFeet(Item item) {
+-        return this.footItem.is(item);
++        // Airplane start
++        Entity entity = this.entity;
++        if (entity instanceof LivingEntity livingEntity) {
++            return livingEntity.getItemBySlot(EquipmentSlot.FEET).is(item);
++        }
++        return ItemStack.EMPTY.is(item);
++        // Airplane end
+     }
+ 
+     @Override
+     public boolean isHoldingItem(Item item) {
+-        return this.heldItem.is(item);
++        // Airplane start
++        Entity entity = this.entity;
++        if (entity instanceof LivingEntity livingEntity) {
++            return livingEntity.getMainHandItem().is(item);
++        }
++        return ItemStack.EMPTY.is(item);
++        // Airplane end
+     }
+ 
+     @Override
+     public boolean canStandOnFluid(FluidState state, FlowingFluid fluid) {
+-        return this.canStandOnFluid.test(fluid) && !state.getType().isSame(fluid);
++        // Airplane start
++        Entity entity = this.entity;
++        if (entity instanceof LivingEntity livingEntity) {
++            return livingEntity.canStandOnFluid(fluid) && !state.getType().isSame(fluid);
++        }
++        return false;
++        // Airplane end
+     }
+ 
+     @Override
+     public boolean isDescending() {
+-        return this.descending;
++        return this.entity != null && this.entity.isDescending(); // Airplane
+     }
+ 
+     @Override
+     public boolean isAbove(VoxelShape shape, BlockPos pos, boolean defaultValue) {
+-        return this.entityBottom > (double)pos.getY() + shape.max(Direction.Axis.Y) - (double)1.0E-5F;
++        return (this.entity == null ? -Double.MAX_VALUE : entity.getY()) > (double)pos.getY() + shape.max(Direction.Axis.Y) - (double)1.0E-5F; // Airplane
+     }
+ 
+     public Optional<Entity> getEntity() {
+-        return this.entity;
++        return Optional.ofNullable(this.entity); // Airplane
+     }
+ }
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 index c1fc309411c277f7b7450686543a6a7a7fe2fdb1..28fa8e5c0d1e78d57d9cfb5ea2998740b8d700dc 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
