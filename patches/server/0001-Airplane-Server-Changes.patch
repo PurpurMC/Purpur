@@ -92,7 +92,7 @@ index b3687f632bbf06c933a6ef04dc2236ccf3c030b8..c1e70d5f127804deabcf626b72539086
  
  tasks.shadowJar {
 diff --git a/src/main/java/co/aikar/timings/TimingsExport.java b/src/main/java/co/aikar/timings/TimingsExport.java
-index 7d44abcb4fff9717a1af55879deb7eb9c2d9e7e9..da6a5b1b2f5203a0fab8e4fccd727951df7c9c9a 100644
+index e29b0a90019b12bd6586ad0f7b5314f307e527ba..6e8001c7ff6497c9e5c274a5fe85cc204f3ba4c5 100644
 --- a/src/main/java/co/aikar/timings/TimingsExport.java
 +++ b/src/main/java/co/aikar/timings/TimingsExport.java
 @@ -228,7 +228,8 @@ public class TimingsExport extends Thread {
@@ -1949,7 +1949,7 @@ index 7437f01ca8f416e2c9150250e324af4725a4efb6..bdcd0e38a3ba904811112f41d8bfbfc0
      int LARGE_MAX_STACK_SIZE = 64;
  
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 94857a736d2a16e8ade286c6f2ddf8bd798008eb..732eb171f6a8fe1b02044a00fcf85217c41116ac 100644
+index 94857a736d2a16e8ade286c6f2ddf8bd798008eb..29ddf0b12911fb46f260234e704f15f17d80d018 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
 @@ -338,6 +338,10 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
@@ -2022,6 +2022,108 @@ index 94857a736d2a16e8ade286c6f2ddf8bd798008eb..732eb171f6a8fe1b02044a00fcf85217
              // Paper end
          }
      }
+@@ -3813,12 +3837,14 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+             return false;
+         } else {
+             AABB axisalignedbb = this.getBoundingBox().deflate(0.001D);
+-            int i = Mth.floor(axisalignedbb.minX);
+-            int j = Mth.ceil(axisalignedbb.maxX);
+-            int k = Mth.floor(axisalignedbb.minY);
+-            int l = Mth.ceil(axisalignedbb.maxY);
+-            int i1 = Mth.floor(axisalignedbb.minZ);
+-            int j1 = Mth.ceil(axisalignedbb.maxZ);
++            // Airplane start - rename
++            int minBlockX = Mth.floor(axisalignedbb.minX);
++            int maxBlockX = Mth.ceil(axisalignedbb.maxX);
++            int minBlockY = Mth.floor(axisalignedbb.minY);
++            int maxBlockY = Mth.ceil(axisalignedbb.maxY);
++            int minBlockZ = Mth.floor(axisalignedbb.minZ);
++            int maxBlockZ = Mth.ceil(axisalignedbb.maxZ);
++            // Airplane end
+             double d1 = 0.0D;
+             boolean flag = this.isPushedByFluid();
+             boolean flag1 = false;
+@@ -3826,14 +3852,61 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+             int k1 = 0;
+             BlockPos.MutableBlockPos blockposition_mutableblockposition = new BlockPos.MutableBlockPos();
+ 
+-            for (int l1 = i; l1 < j; ++l1) {
+-                for (int i2 = k; i2 < l; ++i2) {
+-                    for (int j2 = i1; j2 < j1; ++j2) {
+-                        blockposition_mutableblockposition.set(l1, i2, j2);
+-                        FluidState fluid = this.level.getFluidState(blockposition_mutableblockposition);
++            // Airplane start - based off CollisionUtil.getCollisionsForBlocksOrWorldBorder
++            final int minSection = io.papermc.paper.util.WorldUtil.getMinSection(this.level);
++            final int maxSection = io.papermc.paper.util.WorldUtil.getMaxSection(this.level);
++            final int minBlock = minSection << 4;
++            final int maxBlock = (maxSection << 4) | 15;
++
++            // special cases:
++            if (minBlockY > maxBlock || maxBlockY < minBlock) {
++                // no point in checking
++                return false;
++            }
++
++            int minYIterate = Math.max(minBlock, minBlockY);
++            int maxYIterate = Math.min(maxBlock, maxBlockY);
++
++            int minChunkX = minBlockX >> 4;
++            int maxChunkX = maxBlockX >> 4;
++
++            int minChunkZ = minBlockZ >> 4;
++            int maxChunkZ = maxBlockZ >> 4;
++
++            for (int currChunkZ = minChunkZ; currChunkZ <= maxChunkZ; ++currChunkZ) {
++                int minZ = currChunkZ == minChunkZ ? minBlockZ & 15 : 0; // coordinate in chunk
++                int maxZ = currChunkZ == maxChunkZ ? maxBlockZ & 15 : 15; // coordinate in chunk
++
++                for (int currChunkX = minChunkX; currChunkX <= maxChunkX; ++currChunkX) {
++                    int minX = currChunkX == minChunkX ? minBlockX & 15 : 0; // coordinate in chunk
++                    int maxX = currChunkX == maxChunkX ? maxBlockX & 15 : 15; // coordinate in chunk
++
++                    net.minecraft.world.level.chunk.ChunkAccess chunk = this.level.getChunkIfLoadedImmediately(currChunkX, currChunkZ);
++                    if (chunk == null) {
++                        continue;
++                    }
++
++                    net.minecraft.world.level.chunk.LevelChunkSection[] sections = chunk.getSections();
++
++                    for (int currY = minYIterate; currY <= maxYIterate; ++currY) {
++                        net.minecraft.world.level.chunk.LevelChunkSection section = sections[(currY >> 4) - minSection];
++
++                        if (section == null || section.isEmpty() || !section.isRandomlyTickingFluids()) { // if no ticking fluids, nothing in this section
++                            // empty
++                            // skip to next section
++                            currY = (currY & ~(15)) + 15; // increment by 15: iterator loop increments by the extra one
++                            continue;
++                        }
++
++                        net.minecraft.world.level.chunk.PalettedContainer<BlockState> blocks = section.states;
++
++                        for (int currZ = minZ; currZ <= maxZ; ++currZ) {
++                            for (int currX = minX; currX <= maxX; ++currX) {
++                                int localBlockIndex = (currX) | (currZ << 4) | ((currY & 15) << 8);
++                                FluidState fluid = blocks.get(localBlockIndex).getFluidState();
+ 
+                         if (fluid.is(tag)) {
+-                            double d2 = (double) ((float) i2 + fluid.getHeight(this.level, blockposition_mutableblockposition));
++                            double d2 = (double) ((float) currY + fluid.getHeight(this.level, blockposition_mutableblockposition));
+ 
+                             if (d2 >= axisalignedbb.minY) {
+                                 flag1 = true;
+@@ -3850,9 +3923,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+                                 }
+                             }
+                         }
++                            }
++                        }
+                     }
+                 }
+             }
++            // Airplane end
+ 
+             if (vec3d.length() > 0.0D) {
+                 if (k1 > 0) {
 diff --git a/src/main/java/net/minecraft/world/entity/EntityType.java b/src/main/java/net/minecraft/world/entity/EntityType.java
 index 1c446dba5de89698397041ee38a2e1a00bec8a56..03371c99c34ba4b2ffde3f6da36f171b582e3c3f 100644
 --- a/src/main/java/net/minecraft/world/entity/EntityType.java
