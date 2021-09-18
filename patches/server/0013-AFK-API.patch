@@ -68,23 +68,44 @@ index d2d2e3c58bd3d08f4e7f6257502ce8c2bca19825..04d2e4e641c12fb259ee7758db81b354
          return this.stats;
      }
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index eaca5e3c6d26d5fff1eae1cacabfd389b74aec4d..9de4ca41c22fc92762b8c2705cdc8a5ffbe60233 100644
+index 88227a0882b4a667206891b2a26ad5764fd33590..ecd0fa7daa11cd9f27b2e48cf935a5e92ee5b2f4 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -390,6 +390,12 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
+@@ -294,6 +294,20 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
+     private boolean justTeleported = false;
+     private boolean hasMoved; // Spigot
+ 
++    // Purpur start
++    private final com.google.common.cache.LoadingCache<CraftPlayer, Boolean> kickPermissionCache = com.google.common.cache.CacheBuilder.newBuilder()
++            .maximumSize(1000)
++            .expireAfterWrite(1, java.util.concurrent.TimeUnit.MINUTES)
++            .build(
++                    new com.google.common.cache.CacheLoader<>() {
++                        @Override
++                        public Boolean load(CraftPlayer player) {
++                            return player.hasPermission("purpur.bypassIdleKick");
++                        }
++                    }
++            );
++    // Purpur end
++
+     public CraftPlayer getCraftPlayer() {
+         return (this.player == null) ? null : (CraftPlayer) this.player.getBukkitEntity();
+     }
+@@ -390,6 +404,12 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
          }
  
          if (this.player.getLastActionTime() > 0L && this.server.getPlayerIdleTimeout() > 0 && Util.getMillis() - this.player.getLastActionTime() > (long) (this.server.getPlayerIdleTimeout() * 1000 * 60) && !this.player.wonGame) { // Paper - Prevent AFK kick while watching end credits.
 +            // Purpur start
 +            this.player.setAfk(true);
-+            if (!this.player.level.purpurConfig.idleTimeoutKick) {
++            if (!this.player.level.purpurConfig.idleTimeoutKick || kickPermissionCache.getUnchecked(this.player.getBukkitEntity())) {
 +                return;
 +            }
 +            // Purpur end
              this.player.resetLastActionTime(); // CraftBukkit - SPIGOT-854
              this.disconnect(new TranslatableComponent("multiplayer.disconnect.idling"), org.bukkit.event.player.PlayerKickEvent.Cause.IDLING); // Paper - kick event cause
          }
-@@ -662,6 +668,8 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
+@@ -662,6 +682,8 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
                      this.lastYaw = to.getYaw();
                      this.lastPitch = to.getPitch();
  
@@ -93,7 +114,7 @@ index eaca5e3c6d26d5fff1eae1cacabfd389b74aec4d..9de4ca41c22fc92762b8c2705cdc8a5f
                      // Skip the first time we do this
                      if (true) { // Spigot - don't skip any move events
                          Location oldTo = to.clone();
-@@ -1420,7 +1428,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
+@@ -1420,7 +1442,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
  
                              if (!this.player.isChangingDimension() && d11 > org.spigotmc.SpigotConfig.movedWronglyThreshold && !this.player.isSleeping() && !this.player.gameMode.isCreative() && this.player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) { // Spigot
                                  flag1 = true; // Paper - diff on change, this should be moved wrongly
@@ -102,7 +123,7 @@ index eaca5e3c6d26d5fff1eae1cacabfd389b74aec4d..9de4ca41c22fc92762b8c2705cdc8a5f
                              }
  
                              this.player.absMoveTo(d0, d1, d2, f, f1);
-@@ -1470,6 +1478,8 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
+@@ -1470,6 +1492,8 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
                                      this.lastYaw = to.getYaw();
                                      this.lastPitch = to.getPitch();
  
@@ -192,7 +213,7 @@ index 7224c56e8a68870364c6538c82c04f371b74aabd..730e8a856b9e9560a62d959cefb6efad
                  if (range < 0.0D || d < range * range) {
                      return true;
 diff --git a/src/main/java/net/pl3x/purpur/PurpurConfig.java b/src/main/java/net/pl3x/purpur/PurpurConfig.java
-index 70b9e94ec9f094b9db5808247f05d577f76e2401..dca58fcd00d104e70a7e7c57132b9016df393640 100644
+index eaff201b75f74a41e14c43d522d7b87faf9296b3..7f572658706fdc3009490bd54c2393f7685c7de7 100644
 --- a/src/main/java/net/pl3x/purpur/PurpurConfig.java
 +++ b/src/main/java/net/pl3x/purpur/PurpurConfig.java
 @@ -158,8 +158,16 @@ public class PurpurConfig {
@@ -242,7 +263,7 @@ index 20215510857b8e49ea0c93d35eddfbad7cd355b0..996171e7271e62e72c0b2b213c21caf5
      public boolean untamedTamablesAreRidable = true;
      public boolean useNightVisionWhenRiding = false;
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index bc88b15dc5c2d2d63edd4bb382affce1d5d7312e..59f7b83332a6eaaeb9b0e24f1329d5b11a8ae053 100644
+index 5055945fdf4c0ec6e5ecaf7f865e2e0738c0e021..ee9752ec75a94be33b9f30fd5e0facc5af30ee65 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 @@ -424,10 +424,15 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
@@ -262,7 +283,7 @@ index bc88b15dc5c2d2d63edd4bb382affce1d5d7312e..59f7b83332a6eaaeb9b0e24f1329d5b1
          for (ServerPlayer player : (List<ServerPlayer>) server.getHandle().players) {
              if (player.getBukkitEntity().canSee(this)) {
                  player.connection.send(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.UPDATE_DISPLAY_NAME, this.getHandle()));
-@@ -2555,5 +2560,20 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+@@ -2556,5 +2561,20 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
      public boolean usesPurpurClient() {
          return getHandle().purpurClient;
      }
