@@ -14,7 +14,7 @@ repositories {
 }
 
 dependencies {
-    remapper("org.quiltmc:tiny-remapper:0.4.3:fat")
+    remapper("net.fabricmc:tiny-remapper:0.6.0:fat")
     paperclip("io.papermc:paperclip:2.0.1")
 }
 
@@ -62,7 +62,7 @@ paperweight {
             apiPatchDir.set(layout.projectDirectory.dir("patches/api"))
             apiOutputDir.set(layout.projectDirectory.dir("Purpur-API"))
 
-            remapRepo.set("https://maven.quiltmc.org/repository/release/")
+            remapRepo.set("https://maven.fabricmc.net/")
             decompileRepo.set("https://files.minecraftforge.net/maven/")
 
             serverPatchDir.set(layout.projectDirectory.dir("patches/server"))
