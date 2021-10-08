@@ -237,12 +237,21 @@ into most IDEs and formatters by default. There are a few notes, however:
 
 ## Patch Notes
 
-When submitting patches to Purpur, we may ask you to add notes to the patch
-header. While we do not require it for all changes, you should add patch notes
-when the changes you're making are technical, complex, or require an explanation
-of some kind. It is very likely that your patch will remain long after we've all
-forgotten about the details of your PR; patch notes will help us maintain it
-without having to dig back through GitHub history looking for your PR.
+When submitting patches to Purpur, they should be prefixed with a type (`[feat]`, 
+`[fix]`, `[meta]`, `[refactor]`, `[perf]`). The type should also appear in your PR title. 
+
+This lets us and users:
+
+* know what type of PR it is
+* know what the patches do at a glance
+* categorize the patches
+
+We also ask you to add notes to the patch header. You should add patch notes even
+if the changes you're making aren't technical or complex. These notes are there
+for both the users of the software and us, so it's not difficult to figure out
+what the patch does. It is very likely that your patch will remain long after
+we've all forgotten about the details of your PR; patch notes will help us
+maintain it without having to dig back through GitHub history looking for your PR.
 
 These notes should express the intent of your patch, as well as any pertinent
 technical details we should keep in mind long-term. Ultimately, they exist to
