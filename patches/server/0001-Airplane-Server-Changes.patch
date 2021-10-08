@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index cb1a931417073908be5c7aa1af710477775b3dbd..d28ed33187f146bbaad6ebd4247cd798d84b3173 100644
+index cb1a931417073908be5c7aa1af710477775b3dbd..fdc3f2390d8d0124102cbff386e8a981c6f92c22 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -2,9 +2,12 @@ import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCach
@@ -64,7 +64,7 @@ index cb1a931417073908be5c7aa1af710477775b3dbd..d28ed33187f146bbaad6ebd4247cd798
              "Main-Class" to "org.bukkit.craftbukkit.Main",
              "Implementation-Title" to "CraftBukkit",
              "Implementation-Version" to "git-Paper-$implementationVersion",
-+            "Implementation-Version" to "git-Airplane-$implementationVersion", // Airplane // Tuinity
++            "Implementation-Version" to "git-Airplane-$implementationVersion", // Airplane
              "Implementation-Vendor" to date, // Paper
              "Specification-Title" to "Bukkit",
              "Specification-Version" to project.version,
@@ -159,40 +159,32 @@ index e143e4514789f707938a67fab4d313d5c55dc870..361b05c3211704edbbe921a042d4daae
          int timingHistoryInterval = getInt("timings.history-interval", 300);
          int timingHistoryLength = getInt("timings.history-length", 3600);
          timingsServerName = getString("timings.server-name", "Unknown Server");
-diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-index ece77f5ea4b14bbed7c070131b3251ea86764538..8642f3eaa4035243afd629b78ddb8cd2430323dd 100644
---- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-+++ b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-@@ -31,8 +31,8 @@ public class PaperVersionFetcher implements VersionFetcher {
-     @Nonnull
-     @Override
-     public Component getVersionMessage(@Nonnull String serverVersion) {
--        String[] parts = serverVersion.substring("git-Paper-".length()).split("[-\\s]");
--        final Component updateMessage = getUpdateStatusMessage("PaperMC/Paper", GITHUB_BRANCH_NAME, parts[0]);
-+        String[] parts = serverVersion.substring("git-Airplane-".length()).split("[-\\s]"); // Tuinity
-+        final Component updateMessage = getUpdateStatusMessage("TECHNOVE/Airplane", GITHUB_BRANCH_NAME, parts[0]); // Tuinity
-         final Component history = getHistory();
+diff --git a/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java b/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
+index 416ecbdf244716c2fb1277d7d1df697fe6f77756..86edf7ddd025b54b2fc1907a306168bd56dd5396 100644
+--- a/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
++++ b/src/main/java/com/destroystokyo/paper/PaperWorldConfig.java
+@@ -268,6 +268,9 @@ public class PaperWorldConfig {
  
-         return history != null ? TextComponent.ofChildren(updateMessage, Component.newline(), history) : updateMessage;
-@@ -56,13 +56,13 @@ public class PaperVersionFetcher implements VersionFetcher {
+     public int softDespawnDistance;
+     public int hardDespawnDistance;
++    // Airplane start - separate squared values
++    public int softDespawnDistanceSq;
++    public int hardDespawnDistanceSq;
+     private void despawnDistances() {
+         softDespawnDistance = getInt("despawn-ranges.soft", 32); // 32^2 = 1024, Minecraft Default
+         hardDespawnDistance = getInt("despawn-ranges.hard", 128); // 128^2 = 16384, Minecraft Default
+@@ -278,8 +281,9 @@ public class PaperWorldConfig {
  
-     private static Component getUpdateStatusMessage(@Nonnull String repo, @Nonnull String branch, @Nonnull String versionInfo) {
-         int distance;
--        try {
--            int jenkinsBuild = Integer.parseInt(versionInfo);
--            distance = fetchDistanceFromSiteApi(jenkinsBuild, getMinecraftVersion());
--        } catch (NumberFormatException ignored) {
-+        //try {
-+        //    int jenkinsBuild = Integer.parseInt(versionInfo);
-+        //    distance = fetchDistanceFromSiteApi(jenkinsBuild, getMinecraftVersion());
-+        //} catch (NumberFormatException ignored) {
-             versionInfo = versionInfo.replace("\"", "");
-             distance = fetchDistanceFromGitHub(repo, branch, versionInfo);
--        }
-+        //}
+         log("Living Entity Despawn Ranges:  Soft: " + softDespawnDistance + " Hard: " + hardDespawnDistance);
  
-         switch (distance) {
-             case -1:
+-        softDespawnDistance = softDespawnDistance*softDespawnDistance;
+-        hardDespawnDistance = hardDespawnDistance*hardDespawnDistance;
++        softDespawnDistanceSq = softDespawnDistance*softDespawnDistance;
++        hardDespawnDistanceSq = hardDespawnDistance*hardDespawnDistance;
++        // Airplane end
+     }
+ 
+     public boolean keepSpawnInMemory;
 diff --git a/src/main/java/gg/airplane/AirplaneCommand.java b/src/main/java/gg/airplane/AirplaneCommand.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..89c89e633f14b5820147e734b1b7ad8cadfdce80
@@ -550,6 +542,149 @@ index 0000000000000000000000000000000000000000..1a9d71739019d12772bec6076b195552
 +        setLevel(Level.ALL);
 +    }
 +}
+diff --git a/src/main/java/gg/airplane/AirplaneVersionFetcher.java b/src/main/java/gg/airplane/AirplaneVersionFetcher.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e79ec7919e6cf160fec1cb981d85f0f33c316b41
+--- /dev/null
++++ b/src/main/java/gg/airplane/AirplaneVersionFetcher.java
+@@ -0,0 +1,137 @@
++package gg.airplane;
++
++import com.destroystokyo.paper.VersionHistoryManager;
++import com.destroystokyo.paper.util.VersionFetcher;
++import com.google.gson.Gson;
++import com.google.gson.JsonObject;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.JoinConfiguration;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.kyori.adventure.text.format.TextDecoration;
++import org.bukkit.craftbukkit.CraftServer;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
++
++import java.io.IOException;
++import java.net.URI;
++import java.net.http.HttpClient;
++import java.net.http.HttpRequest;
++import java.net.http.HttpResponse;
++import java.nio.charset.StandardCharsets;
++import java.util.concurrent.TimeUnit;
++import java.util.logging.Level;
++import java.util.logging.Logger;
++
++import static net.kyori.adventure.text.Component.text;
++import static net.kyori.adventure.text.format.NamedTextColor.GREEN;
++import static net.kyori.adventure.text.format.NamedTextColor.RED;
++
++public class AirplaneVersionFetcher implements VersionFetcher {
++
++    private static final Logger LOGGER = Logger.getLogger("AirplaneVersionFetcher");
++    private static final HttpClient client = HttpClient.newHttpClient();
++
++    private static final URI JENKINS_URI = URI.create("https://ci.tivy.ca/job/Airplane-1.17/lastSuccessfulBuild/buildNumber");
++    private static final String GITHUB_FORMAT = "https://api.github.com/repos/TECHNOVE/Airplane/compare/ver/1.17...%s";
++
++    private static final HttpResponse.BodyHandler<JsonObject> JSON_OBJECT_BODY_HANDLER = responseInfo -> HttpResponse.BodySubscribers.mapping(
++            HttpResponse.BodySubscribers.ofString(StandardCharsets.UTF_8),
++            string -> new Gson().fromJson(string, JsonObject.class)
++    );
++
++    @Override
++    public long getCacheTime() {
++        return TimeUnit.MINUTES.toMillis(30);
++    }
++
++    @Override
++    public @NotNull Component getVersionMessage(final @NotNull String serverVersion) {
++        final String[] parts = CraftServer.class.getPackage().getImplementationVersion().split("-");
++        @NotNull Component component;
++
++        if (parts.length != 3) {
++            component = text("Unknown server version.", RED);
++        } else {
++            final String versionString = parts[2];
++
++            try {
++                component = this.fetchJenkinsVersion(Integer.parseInt(versionString));
++            } catch (NumberFormatException e) {
++                component = this.fetchGithubVersion(versionString.substring(1, versionString.length() - 1));
++            }
++        }
++
++        final @Nullable Component history = this.getHistory();
++        return history != null ? Component.join(JoinConfiguration.noSeparators(), component, Component.newline(), this.getHistory()) : component;
++    }
++
++    private @NotNull Component fetchJenkinsVersion(final int versionNumber) {
++        final HttpRequest request = HttpRequest.newBuilder(JENKINS_URI).build();
++        try {
++            final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
++            if (response.statusCode() != 200) {
++                return text("Received invalid status code (" + response.statusCode() + ") from server.", RED);
++            }
++
++            int latestVersionNumber;
++            try {
++                latestVersionNumber = Integer.parseInt(response.body());
++            } catch (NumberFormatException e) {
++                LOGGER.log(Level.WARNING, "Received invalid response from Jenkins \"" + response.body() + "\".");
++                return text("Received invalid response from server.", RED);
++            }
++
++            final int versionDiff = latestVersionNumber - versionNumber;
++            return this.getResponseMessage(versionDiff);
++        } catch (IOException | InterruptedException e) {
++            LOGGER.log(Level.WARNING, "Failed to look up version from Jenkins", e);
++            return text("Failed to retrieve version from server.", RED);
++        }
++    }
++
++    // Based off code contributed by Techcable <Techcable@outlook.com> in Paper/GH-65
++    private @NotNull Component fetchGithubVersion(final @NotNull String hash) {
++        final URI uri = URI.create(String.format(GITHUB_FORMAT, hash));
++        final HttpRequest request = HttpRequest.newBuilder(uri).build();
++        try {
++            final HttpResponse<JsonObject> response = client.send(request, JSON_OBJECT_BODY_HANDLER);
++            if (response.statusCode() != 200) {
++                return text("Received invalid status code (" + response.statusCode() + ") from server.", RED);
++            }
++
++            final JsonObject obj = response.body();
++            final int versionDiff = obj.get("behind_by").getAsInt();
++
++            return this.getResponseMessage(versionDiff);
++        } catch (IOException | InterruptedException e) {
++            LOGGER.log(Level.WARNING, "Failed to look up version from GitHub", e);
++            return text("Failed to retrieve version from server.", RED);
++        }
++    }
++
++    private @NotNull Component getResponseMessage(final int versionDiff) {
++        return switch (Math.max(-1, Math.min(1, versionDiff))) {
++            case -1 ->
++                text("You are running an unsupported version of Airplane.", RED);
++            case 0 ->
++                text("You are on the latest version!", GREEN);
++            default ->
++                text("You are running " + versionDiff + " version" + (versionDiff == 1 ? "" : "s") + " beyond. " +
++                    "Please update your server when possible to maintain stability, security, and receive the latest optimizations.", RED);
++        };
++    }
++
++    private @Nullable Component getHistory() {
++        final VersionHistoryManager.VersionData data = VersionHistoryManager.INSTANCE.getVersionData();
++        if (data == null) {
++            return null;
++        }
++
++        final String oldVersion = data.getOldVersion();
++        if (oldVersion == null) {
++            return null;
++        }
++
++        return Component.text("Previous version: " + oldVersion, NamedTextColor.GRAY, TextDecoration.ITALIC);
++    }
++}
 diff --git a/src/main/java/gg/airplane/commands/AirplaneCommands.java b/src/main/java/gg/airplane/commands/AirplaneCommands.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..807cf274619b8f7be839e249cb62b9817876ca04
@@ -649,6 +784,390 @@ index 0000000000000000000000000000000000000000..f9a71ff3edd7e7b6cda680e5a156373b
 +        }
 +    }
 +
++}
+diff --git a/src/main/java/gg/airplane/entity/CollisionCache.java b/src/main/java/gg/airplane/entity/CollisionCache.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..3822fc6b78419e681ff838bc2050c4f8fb3e90eb
+--- /dev/null
++++ b/src/main/java/gg/airplane/entity/CollisionCache.java
+@@ -0,0 +1,244 @@
++package gg.airplane.entity;
++
++import io.papermc.paper.util.CollisionUtil;
++import io.papermc.paper.util.WorldUtil;
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.SectionPos;
++import net.minecraft.server.level.ServerChunkCache;
++import net.minecraft.util.Mth;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.level.CollisionGetter;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.chunk.LevelChunk;
++import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.shapes.CollisionContext;
++import net.minecraft.world.phys.shapes.Shapes;
++import net.minecraft.world.phys.shapes.VoxelShape;
++import org.bukkit.craftbukkit.util.UnsafeList;
++import org.jetbrains.annotations.NotNull;
++import org.simpleyaml.utils.Validate;
++
++import java.util.HashSet;
++import java.util.List;
++import java.util.Set;
++import java.util.function.BiPredicate;
++
++public class CollisionCache {
++
++    private static record BlockEntry(int x, int y, int z, BlockState state, VoxelShape shape){}
++
++    @NotNull
++    private final Entity entity;
++    private final UnsafeList<BlockEntry> blocks = new UnsafeList<>();
++    private Set<CollisionCacheList> chunkToList = new HashSet<>();
++
++    private boolean dirty = true;
++
++    private int previousMinBlockX;
++    private int previousMaxBlockX;
++    private int previousMinBlockY;
++    private int previousMaxBlockY;
++    private int previousMinBlockZ;
++    private int previousMaxBlockZ;
++
++    public CollisionCache(@NotNull Entity entity) {
++        this.entity = entity;
++    }
++
++    public int getId() {
++        return this.entity.getId();
++    }
++
++    public void dirtySection(@NotNull SectionPos sectionPos) {
++        this.dirty = true;
++    }
++
++    public void onRemove() {
++        this.blocks.setSize(0);
++
++        for (CollisionCacheList collisionCaches : this.chunkToList) {
++            collisionCaches.remove(this);
++        }
++        this.chunkToList.clear();
++        this.dirty = false;
++    }
++
++    public boolean getCollisions(final CollisionGetter view, AABB aabb, List<AABB> into, boolean collidesWithUnloaded, boolean checkOnly, BiPredicate<BlockState, BlockPos> predicate) {
++        boolean ret = false;
++
++        int minBlockX = Mth.floor(aabb.minX - CollisionUtil.COLLISION_EPSILON) - 1;
++        int maxBlockX = Mth.floor(aabb.maxX + CollisionUtil.COLLISION_EPSILON) + 1;
++
++        int minBlockY = Mth.floor(aabb.minY - CollisionUtil.COLLISION_EPSILON) - 1;
++        int maxBlockY = Mth.floor(aabb.maxY + CollisionUtil.COLLISION_EPSILON) + 1;
++
++        int minBlockZ = Mth.floor(aabb.minZ - CollisionUtil.COLLISION_EPSILON) - 1;
++        int maxBlockZ = Mth.floor(aabb.maxZ + CollisionUtil.COLLISION_EPSILON) + 1;
++
++        // if nothing changed and the location didn't move out of our area, use previous set
++        if (!this.dirty && minBlockX >= this.previousMinBlockX && maxBlockX <= this.previousMaxBlockX &&
++                minBlockY >= this.previousMinBlockY && maxBlockY <= this.previousMaxBlockY &&
++                minBlockZ >= this.previousMinBlockZ && maxBlockZ <= this.previousMaxBlockZ) {
++            if (checkOnly) {
++                BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
++                for (int i = 0, length = this.blocks.size(); i < length; i++) {
++                    BlockEntry entry = this.blocks.unsafeGet(i);
++                    if (entry.shape.intersects(aabb) && predicate.test(entry.state, pos.set(entry.x, entry.y, entry.z))) {
++                        return true;
++                    }
++                }
++            } else {
++                for (int i = 0, length = this.blocks.size(); i < length; i++) {
++                    ret |= CollisionUtil.addBoxesToIfIntersects(this.blocks.unsafeGet(i).shape, aabb, into);
++                }
++            }
++
++            return ret;
++        } else if (checkOnly) {
++            // tl;dr this is only used by inWall right now, and we don't want to generate a cache for inWall because it'll always be smaller than a move cache anyways
++            return CollisionUtil.getCollisionsForBlocksOrWorldBorder(view, this.entity, aabb, into, false, collidesWithUnloaded, false, checkOnly, predicate);
++        }
++
++        Validate.isTrue(predicate == null, "predicate cannot be used without checkOnly");
++
++        this.previousMinBlockX = minBlockX;
++        this.previousMaxBlockX = maxBlockX;
++
++        this.previousMinBlockY = minBlockY;
++        this.previousMaxBlockY = maxBlockY;
++
++        this.previousMinBlockZ = minBlockZ;
++        this.previousMaxBlockZ = maxBlockZ;
++
++        // remove old shapes, since we missed cache
++        this.blocks.setSize(0);
++        this.dirty = false;
++
++        final int minSection = WorldUtil.getMinSection(this.entity.level);
++        final int maxSection = WorldUtil.getMaxSection(this.entity.level);
++        final int minBlock = minSection << 4;
++        final int maxBlock = (maxSection << 4) | 15;
++
++        BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
++        CollisionContext collisionShape = null;
++
++        // special cases:
++        if (minBlockY > maxBlock || maxBlockY < minBlock) {
++            // no point in checking
++            if (!this.chunkToList.isEmpty()) {
++                for (CollisionCacheList collisionCaches : this.chunkToList) {
++                    collisionCaches.remove(this);
++                }
++                this.chunkToList.clear();
++            }
++            return ret;
++        }
++
++        int minYIterate = Math.max(minBlock, minBlockY);
++        int maxYIterate = Math.min(maxBlock, maxBlockY);
++
++        int minChunkX = minBlockX >> 4;
++        int maxChunkX = maxBlockX >> 4;
++
++        int minChunkZ = minBlockZ >> 4;
++        int maxChunkZ = maxBlockZ >> 4;
++
++        ServerChunkCache chunkProvider = (ServerChunkCache) this.entity.level.getChunkSource();
++
++        Set<CollisionCacheList> cacheLists = new HashSet<>(this.blocks.size());
++
++        for (int currChunkZ = minChunkZ; currChunkZ <= maxChunkZ; ++currChunkZ) {
++            int minZ = currChunkZ == minChunkZ ? minBlockZ & 15 : 0; // coordinate in chunk
++            int maxZ = currChunkZ == maxChunkZ ? maxBlockZ & 15 : 15; // coordinate in chunk
++
++            for (int currChunkX = minChunkX; currChunkX <= maxChunkX; ++currChunkX) {
++                int minX = currChunkX == minChunkX ? minBlockX & 15 : 0; // coordinate in chunk
++                int maxX = currChunkX == maxChunkX ? maxBlockX & 15 : 15; // coordinate in chunk
++
++                int chunkXGlobalPos = currChunkX << 4;
++                int chunkZGlobalPos = currChunkZ << 4;
++
++                LevelChunk chunk = chunkProvider.getChunkAtIfLoadedImmediately(currChunkX, currChunkZ);
++
++                if (chunk == null) {
++                    if (collidesWithUnloaded) {
++                        into.add(CollisionUtil.getBoxForChunk(currChunkX, currChunkZ));
++                        ret = true;
++                    }
++                    continue;
++                }
++
++                LevelChunkSection[] sections = chunk.getSections();
++
++                // bound y
++
++                for (int currY = minYIterate; currY <= maxYIterate; ++currY) {
++                    int sectionIndex = SectionPos.blockToSectionCoord(currY) - minSection;
++
++                    CollisionCacheList cacheList = chunk.collisionCaches[sectionIndex];
++                    if (cacheLists.add(cacheList)) {
++                        cacheList.add(this);
++                    }
++
++                    LevelChunkSection section = sections[sectionIndex];
++                    if (section == null || section.isEmpty()) {
++                        // empty
++                        // skip to next section
++                        currY = (currY & ~(15)) + 15; // increment by 15: iterator loop increments by the extra one
++                        continue;
++                    }
++
++                    net.minecraft.world.level.chunk.PalettedContainer<BlockState> blocks = section.states;
++
++                    for (int currZ = minZ; currZ <= maxZ; ++currZ) {
++                        for (int currX = minX; currX <= maxX; ++currX) {
++                            int localBlockIndex = (currX) | (currZ << 4) | ((currY & 15) << 8);
++                            int blockX = currX | chunkXGlobalPos;
++                            int blockY = currY;
++                            int blockZ = currZ | chunkZGlobalPos;
++
++                            int edgeCount = ((blockX == minBlockX || blockX == maxBlockX) ? 1 : 0) +
++                                    ((blockY == minBlockY || blockY == maxBlockY) ? 1 : 0) +
++                                    ((blockZ == minBlockZ || blockZ == maxBlockZ) ? 1 : 0);
++                            if (edgeCount == 3) {
++                                continue;
++                            }
++
++                            BlockState blockData = blocks.get(localBlockIndex);
++                            if (blockData.isAir()) {
++                                continue;
++                            }
++
++                            if ((edgeCount != 1 || blockData.shapeExceedsCube()) && (edgeCount != 2 || blockData.getBlock() == Blocks.MOVING_PISTON)) {
++                                mutablePos.set(blockX, blockY, blockZ);
++                                if (collisionShape == null) {
++                                    collisionShape = new CollisionUtil.LazyEntityCollisionContext(entity);
++                                }
++                                VoxelShape voxelshape2 = blockData.getCollisionShape(this.entity.level, mutablePos, collisionShape);
++                                if (voxelshape2 != Shapes.empty()) {
++                                    VoxelShape voxelshape3 = voxelshape2.move((double) blockX, (double) blockY, (double) blockZ);
++
++                                    this.blocks.add(new BlockEntry(blockX, blockY, blockZ, blockData, voxelshape3));
++
++                                    ret |= CollisionUtil.addBoxesToIfIntersects(voxelshape3, aabb, into);
++                                }
++                            }
++                        }
++                    }
++                }
++            }
++        }
++
++        for (CollisionCacheList cache : this.chunkToList) {
++            if (!cacheLists.contains(cache)) {
++                cache.remove(this);
++            }
++        }
++        this.chunkToList = cacheLists;
++
++        return ret;
++    }
++
++}
+diff --git a/src/main/java/gg/airplane/entity/CollisionCacheList.java b/src/main/java/gg/airplane/entity/CollisionCacheList.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..017da9e1461250a0fd8baacdcca203d6949244fc
+--- /dev/null
++++ b/src/main/java/gg/airplane/entity/CollisionCacheList.java
+@@ -0,0 +1,128 @@
++package gg.airplane.entity;
++
++import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
++
++import java.util.Arrays;
++import java.util.Iterator;
++import java.util.NoSuchElementException;
++
++/**
++ * @see com.destroystokyo.paper.util.maplist.EntityList
++ */
++public class CollisionCacheList implements Iterable<CollisionCache> {
++
++    protected final Int2IntOpenHashMap entityToIndex = new Int2IntOpenHashMap(2, 0.8f);
++
++    {
++        this.entityToIndex.defaultReturnValue(Integer.MIN_VALUE);
++    }
++
++    protected static final CollisionCache[] EMPTY_LIST = new CollisionCache[0];
++
++    protected CollisionCache[] entities = EMPTY_LIST;
++    protected int count;
++
++    public int size() {
++        return this.count;
++    }
++
++    public boolean contains(final CollisionCache entity) {
++        return this.entityToIndex.containsKey(entity.getId());
++    }
++
++    public boolean remove(final CollisionCache entity) {
++        final int index = this.entityToIndex.remove(entity.getId());
++        if (index == Integer.MIN_VALUE) {
++            return false;
++        }
++
++        // move the entity at the end to this index
++        final int endIndex = --this.count;
++        final CollisionCache end = this.entities[endIndex];
++        if (index != endIndex) {
++            // not empty after this call
++            this.entityToIndex.put(end.getId(), index); // update index
++        }
++        this.entities[index] = end;
++        this.entities[endIndex] = null;
++
++        return true;
++    }
++
++    public boolean add(final CollisionCache entity) {
++        final int count = this.count;
++        final int currIndex = this.entityToIndex.putIfAbsent(entity.getId(), count);
++
++        if (currIndex != Integer.MIN_VALUE) {
++            return false; // already in this list
++        }
++
++        CollisionCache[] list = this.entities;
++
++        if (list.length == count) {
++            // resize required
++            list = this.entities = Arrays.copyOf(list, (int) Math.max(4L, count * 2L)); // overflow results in negative
++        }
++
++        list[count] = entity;
++        this.count = count + 1;
++
++        return true;
++    }
++
++    public CollisionCache getChecked(final int index) {
++        if (index < 0 || index >= this.count) {
++            throw new IndexOutOfBoundsException("Index: " + index + " is out of bounds, size: " + this.count);
++        }
++        return this.entities[index];
++    }
++
++    public CollisionCache getUnchecked(final int index) {
++        return this.entities[index];
++    }
++
++    public CollisionCache[] getRawData() {
++        return this.entities;
++    }
++
++    public void clear() {
++        this.entityToIndex.clear();
++        Arrays.fill(this.entities, 0, this.count, null);
++        this.count = 0;
++    }
++
++    @Override
++    public Iterator<CollisionCache> iterator() {
++        return new Iterator<CollisionCache>() {
++
++            CollisionCache lastRet;
++            int current;
++
++            @Override
++            public boolean hasNext() {
++                return this.current < CollisionCacheList.this.count;
++            }
++
++            @Override
++            public CollisionCache next() {
++                if (this.current >= CollisionCacheList.this.count) {
++                    throw new NoSuchElementException();
++                }
++                return this.lastRet = CollisionCacheList.this.entities[this.current++];
++            }
++
++            @Override
++            public void remove() {
++                final CollisionCache lastRet = this.lastRet;
++
++                if (lastRet == null) {
++                    throw new IllegalStateException();
++                }
++                this.lastRet = null;
++
++                CollisionCacheList.this.remove(lastRet);
++                --this.current;
++            }
++        };
++    }
 +}
 diff --git a/src/main/java/gg/airplane/flare/CustomCategories.java b/src/main/java/gg/airplane/flare/CustomCategories.java
 new file mode 100644
@@ -1646,6 +2165,24 @@ index 0000000000000000000000000000000000000000..a7f297ebb569f7c1f205e967ca485be7
 +        entryToRemove.replace(data, value);
 +    }
 +}
+diff --git a/src/main/java/io/papermc/paper/util/CollisionUtil.java b/src/main/java/io/papermc/paper/util/CollisionUtil.java
+index 98ca1199a823cdf55b913396ce0a24554e85f116..840142d340d4569772552b961f829ca921b15dc4 100644
+--- a/src/main/java/io/papermc/paper/util/CollisionUtil.java
++++ b/src/main/java/io/papermc/paper/util/CollisionUtil.java
+@@ -547,6 +547,13 @@ public final class CollisionUtil {
+         return ret;
+     }
+ 
++    public static boolean getEntityCollisionsWithCache(final net.minecraft.world.level.Level getter, Entity entity, AABB aabb, List<AABB> into,
++                                                       final boolean loadChunks, final boolean collidesWithUnloaded,
++                                                       final boolean checkBorder, final boolean checkOnly, final BiPredicate<BlockState, BlockPos> predicate) {
++        return entity.collisionCache.getCollisions(getter, aabb, into, collidesWithUnloaded, checkOnly, predicate) ||
++                getEntityHardCollisions(getter, entity, aabb, into, checkOnly, null);
++    }
++
+     public static boolean getEntityHardCollisions(final CollisionGetter getter, final Entity entity, AABB aabb,
+                                                   final List<AABB> into, final boolean checkOnly, final Predicate<Entity> predicate) {
+         if (isEmpty(aabb) || !(getter instanceof EntityGetter entityGetter)) {
 diff --git a/src/main/java/net/minecraft/Util.java b/src/main/java/net/minecraft/Util.java
 index 505546d32eea4682452dbac02311433157f6a30e..5c7b9ad379f3c272e15648dd16f4df9245d927da 100644
 --- a/src/main/java/net/minecraft/Util.java
@@ -1949,21 +2486,22 @@ index 7437f01ca8f416e2c9150250e324af4725a4efb6..bdcd0e38a3ba904811112f41d8bfbfc0
      int LARGE_MAX_STACK_SIZE = 64;
  
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index e17bda0d13bae337cfad5ae31b118aa7a85499fc..69fe6b0c774ec1f15e49826a2dc36d9288e3ae86 100644
+index e17bda0d13bae337cfad5ae31b118aa7a85499fc..d35cdcf2ee7568ad5caf52588db54e9c6f607d4b 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
-@@ -338,6 +338,10 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+@@ -338,6 +338,11 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
      protected int numCollisions = 0; // Paper
      public void inactiveTick() { }
      // Spigot end
 +    // Airplane start
 +    public int activatedPriority = gg.airplane.AirplaneConfig.maximumActivationPrio; // golf score
 +    public final BlockPos.MutableBlockPos cachedBlockPos = new BlockPos.MutableBlockPos(); // used where needed
++    public final gg.airplane.entity.CollisionCache collisionCache = new gg.airplane.entity.CollisionCache(this);
 +    // Airplane end
  
      public float getBukkitYaw() {
          return this.yRot;
-@@ -362,17 +366,36 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+@@ -362,17 +367,36 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
          this.isLegacyTrackingEntity = isLegacyTrackingEntity;
      }
  
@@ -2001,7 +2539,7 @@ index e17bda0d13bae337cfad5ae31b118aa7a85499fc..69fe6b0c774ec1f15e49826a2dc36d92
          for (Entity passenger : passengers) {
              org.spigotmc.TrackingRange.TrackingRangeType passengerType = passenger.trackingRangeType;
              int passengerRange = chunkMap.getEntityTrackerRange(passengerType.ordinal());
-@@ -381,6 +404,9 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+@@ -381,6 +405,9 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
                  range = passengerRange;
              }
          }
@@ -2011,18 +2549,38 @@ index e17bda0d13bae337cfad5ae31b118aa7a85499fc..69fe6b0c774ec1f15e49826a2dc36d92
  
          return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this));
      }
-@@ -2441,9 +2467,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+@@ -1264,8 +1291,10 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+                 }
+             }
+ 
+-            io.papermc.paper.util.CollisionUtil.getCollisions(world, this, collisionBox, potentialCollisions, false, true,
+-                false, false, null, null);
++            // Airplane start - use collision cache
++            io.papermc.paper.util.CollisionUtil.getEntityCollisionsWithCache(world, this, collisionBox, potentialCollisions, false, true,
++                    false, false, null);
++            // Airplane end
+ 
+             if (io.papermc.paper.util.CollisionUtil.isCollidingWithBorderEdge(world.getWorldBorder(), collisionBox)) {
+                 io.papermc.paper.util.CollisionUtil.addBoxesToIfIntersects(world.getWorldBorder().getCollisionShape(), collisionBox, potentialCollisions);
+@@ -2440,10 +2469,8 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+             AABB axisalignedbb = AABB.ofSize(this.getEyePosition(), (double) f, 1.0E-6D, (double) f);
  
              // Paper start
-             return io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this.level, this, axisalignedbb, null,
+-            return io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this.level, this, axisalignedbb, null,
 -                false, false, false, true, (iblockdata, blockposition) -> {
 -                    return iblockdata.isSuffocating(this.level, blockposition);
 -            });
++            return io.papermc.paper.util.CollisionUtil.getEntityCollisionsWithCache(this.level, this, axisalignedbb, null, // Airplane - use cache
 +                false, false, false, true, this.level.isAlmostSuffocating); // Airplane - don't allocate lambda here
              // Paper end
          }
      }
-@@ -3834,12 +3858,14 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+@@ -3830,16 +3857,18 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+     }
+ 
+     public boolean updateFluidHeightAndDoFluidPushing(Tag<Fluid> tag, double d0) {
+-        if (this.touchingUnloadedChunk()) {
++        if (false && this.touchingUnloadedChunk()) { // Airplane - cost of a lookup here is the same cost as below, so skip
              return false;
          } else {
              AABB axisalignedbb = this.getBoundingBox().deflate(0.001D);
@@ -2043,7 +2601,7 @@ index e17bda0d13bae337cfad5ae31b118aa7a85499fc..69fe6b0c774ec1f15e49826a2dc36d92
              double d1 = 0.0D;
              boolean flag = this.isPushedByFluid();
              boolean flag1 = false;
-@@ -3847,14 +3873,62 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+@@ -3847,14 +3876,62 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
              int k1 = 0;
              BlockPos.MutableBlockPos blockposition_mutableblockposition = new BlockPos.MutableBlockPos();
  
@@ -2083,7 +2641,7 @@ index e17bda0d13bae337cfad5ae31b118aa7a85499fc..69fe6b0c774ec1f15e49826a2dc36d92
 +
 +                    net.minecraft.world.level.chunk.ChunkAccess chunk = this.level.getChunkIfLoadedImmediately(currChunkX, currChunkZ);
 +                    if (chunk == null) {
-+                        continue;
++                        return false; // if we're touching an unloaded chunk then it's false
 +                    }
 +
 +                    net.minecraft.world.level.chunk.LevelChunkSection[] sections = chunk.getSections();
@@ -2112,7 +2670,7 @@ index e17bda0d13bae337cfad5ae31b118aa7a85499fc..69fe6b0c774ec1f15e49826a2dc36d92
  
                              if (d2 >= axisalignedbb.minY) {
                                  flag1 = true;
-@@ -3871,9 +3945,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
+@@ -3871,9 +3948,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, n
                                  }
                              }
                          }
@@ -2183,7 +2741,7 @@ index 1018f4640bab5876c5e0afb5b88f71437fb79662..5905f02cb695ca619ebcd13cad2fc6df
      }
  
 diff --git a/src/main/java/net/minecraft/world/entity/Mob.java b/src/main/java/net/minecraft/world/entity/Mob.java
-index 8a864238e154e2131834d013652746b7e7a78c97..b8e512e1c4b00b468b2d22add5653b98f4a2c81a 100644
+index 8a864238e154e2131834d013652746b7e7a78c97..6051fd771dd989f2903b854b6564252a847a74e3 100644
 --- a/src/main/java/net/minecraft/world/entity/Mob.java
 +++ b/src/main/java/net/minecraft/world/entity/Mob.java
 @@ -207,10 +207,10 @@ public abstract class Mob extends LivingEntity {
@@ -2199,6 +2757,26 @@ index 8a864238e154e2131834d013652746b7e7a78c97..b8e512e1c4b00b468b2d22add5653b98
              this.targetSelector.tick();
          }
      }
+@@ -801,16 +801,16 @@ public abstract class Mob extends LivingEntity {
+                 int i = this.getType().getCategory().getDespawnDistance();
+                 int j = i * i;
+ 
+-                if (d0 > (double) level.paperConfig.hardDespawnDistance) { // CraftBukkit - remove isTypeNotPersistent() check // Paper - custom despawn distances
++                if (d0 > (double) level.paperConfig.hardDespawnDistanceSq) { // CraftBukkit - remove isTypeNotPersistent() check // Paper - custom despawn distances // Airplane
+                     this.discard();
+                 }
+ 
+                 int k = this.getType().getCategory().getNoDespawnDistance();
+                 int l = k * k;
+ 
+-                if (this.noActionTime > 600 && this.random.nextInt(800) == 0 && d0 > level.paperConfig.softDespawnDistance) { // CraftBukkit - remove isTypeNotPersistent() check // Paper - custom despawn distances
++                if (this.noActionTime > 600 && this.random.nextInt(800) == 0 && d0 > level.paperConfig.softDespawnDistanceSq) { // CraftBukkit - remove isTypeNotPersistent() check // Paper - custom despawn distances // Airplane
+                     this.discard();
+-                } else if (d0 < level.paperConfig.softDespawnDistance) { // Paper - custom despawn distances
++                } else if (d0 < level.paperConfig.softDespawnDistanceSq) { // Paper - custom despawn distances // Airplane
+                     this.noActionTime = 0;
+                 }
+             }
 @@ -838,9 +838,11 @@ public abstract class Mob extends LivingEntity {
          this.sensing.tick();
          this.level.getProfiler().pop();
@@ -2790,7 +3368,7 @@ index e7ca5d6fb8922e7e8065864f736b06056be080a0..833ad6fbedfc275b3fde640b0e873f23
          final String id;
          private final GameRules.Category category;
 diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
-index f936e9f9a9fa655fa997d6862b5ed54c04169d35..8b8daa771288492b4a02cb40c1b376b65e210e5b 100644
+index f936e9f9a9fa655fa997d6862b5ed54c04169d35..24d772c18d5a448154909e4a51964ba29485a5c2 100644
 --- a/src/main/java/net/minecraft/world/level/Level.java
 +++ b/src/main/java/net/minecraft/world/level/Level.java
 @@ -176,6 +176,8 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
@@ -2802,7 +3380,37 @@ index f936e9f9a9fa655fa997d6862b5ed54c04169d35..8b8daa771288492b4a02cb40c1b376b6
      // Paper start - fix and optimise world upgrading
      // copied from below
      public static ResourceKey<DimensionType> getDimensionKey(DimensionType manager) {
-@@ -452,6 +454,91 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+@@ -311,6 +313,15 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+     }
+     // Paper end - optimise checkDespawn
+ 
++    // Airplane start - ensure these get inlined
++    private final int minBuildHeight, minSection, height, maxBuildHeight, maxSection;
++    @Override public final int getMaxBuildHeight() { return this.maxBuildHeight; }
++    @Override public final int getMinSection() { return this.minSection; }
++    @Override public final int getMaxSection() { return this.maxSection; }
++    @Override public final int getMinBuildHeight() { return this.minBuildHeight; }
++    @Override public final int getHeight() { return this.height; }
++    // Airplane end
++
+     protected Level(WritableLevelData worlddatamutable, ResourceKey<Level> resourcekey, final DimensionType dimensionmanager, Supplier<ProfilerFiller> supplier, boolean flag, boolean flag1, long i, org.bukkit.generator.ChunkGenerator gen, org.bukkit.generator.BiomeProvider biomeProvider, org.bukkit.World.Environment env, java.util.concurrent.Executor executor) { // Paper - Anti-Xray - Pass executor
+         this.spigotConfig = new org.spigotmc.SpigotWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName()); // Spigot
+         this.paperConfig = new com.destroystokyo.paper.PaperWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName(), this.spigotConfig); // Paper
+@@ -329,6 +340,13 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+         this.profiler = supplier;
+         this.levelData = worlddatamutable;
+         this.dimensionType = dimensionmanager;
++        // Airplane start
++        this.minBuildHeight = dimensionmanager.minY();
++        this.minSection = SectionPos.blockToSectionCoord(this.minBuildHeight);
++        this.height = dimensionmanager.height();
++        this.maxBuildHeight = this.minBuildHeight + this.height;
++        this.maxSection = SectionPos.blockToSectionCoord(this.maxBuildHeight - 1) + 1;
++        // Airplane end
+         this.dimension = resourcekey;
+         this.isClientSide = flag;
+         if (dimensionmanager.coordinateScale() != 1.0D) {
+@@ -452,6 +470,91 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
          return null;
      }
  
@@ -2894,7 +3502,7 @@ index f936e9f9a9fa655fa997d6862b5ed54c04169d35..8b8daa771288492b4a02cb40c1b376b6
      public boolean isInWorldBounds(BlockPos pos) {
          return pos.isValidLocation(this); // Paper - use better/optimized check
      }
-@@ -987,13 +1074,13 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+@@ -987,13 +1090,13 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
          try {
              tickConsumer.accept(entity);
              MinecraftServer.getServer().executeMidTickTasks(); // Paper - execute chunk tasks mid tick
@@ -2910,7 +3518,7 @@ index f936e9f9a9fa655fa997d6862b5ed54c04169d35..8b8daa771288492b4a02cb40c1b376b6
              // Paper end
          }
      }
-@@ -1447,6 +1534,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+@@ -1447,6 +1550,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
      }
  
      public ProfilerFiller getProfiler() {
@@ -3202,10 +3810,10 @@ index ed3518fe7c841d9e1a9c97626acaa3d765a6d76f..ac564148956beb984650341c5c099457
  
      @Override
 diff --git a/src/main/java/net/minecraft/world/level/chunk/LevelChunk.java b/src/main/java/net/minecraft/world/level/chunk/LevelChunk.java
-index 86686c24b0b7de4b4bfadbc77419a8872a8e86ee..e265980f07d95a7912bf8873819033e51ef04c98 100644
+index 86686c24b0b7de4b4bfadbc77419a8872a8e86ee..db7904b1bb402a36684b97c443336630762aeaf9 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/src/main/java/net/minecraft/world/level/chunk/LevelChunk.java
-@@ -172,11 +172,25 @@ public class LevelChunk implements ChunkAccess {
+@@ -172,6 +172,20 @@ public class LevelChunk implements ChunkAccess {
      }
      // Paper end - rewrite light engine
  
@@ -3221,17 +3829,25 @@ index 86686c24b0b7de4b4bfadbc77419a8872a8e86ee..e265980f07d95a7912bf8873819033e5
 +    }
 +    // Airplane end
 +
-+    private final int levelHeight; private final int minBuildHeight; // Airplane
++    public final gg.airplane.entity.CollisionCacheList[] collisionCaches; // Airplane
++
      public LevelChunk(Level world, ChunkPos pos, ChunkBiomeContainer biomes) {
          this(world, pos, biomes, UpgradeData.EMPTY, EmptyTickList.empty(), EmptyTickList.empty(), 0L, (LevelChunkSection[]) null, (Consumer) null);
      }
- 
-     public LevelChunk(Level world, ChunkPos pos, ChunkBiomeContainer biomes, UpgradeData upgradeData, TickList<Block> blockTickScheduler, TickList<Fluid> fluidTickScheduler, long inhabitedTime, @Nullable LevelChunkSection[] sections, @Nullable Consumer<LevelChunk> loadToWorldConsumer) {
-+        this.levelHeight = world.getHeight(); this.minBuildHeight = world.getMinBuildHeight(); // Airplane
-         // Paper start
-         this.blockNibbles = StarLightEngine.getFilledEmptyLight(world);
-         this.skyNibbles = StarLightEngine.getFilledEmptyLight(world);
-@@ -220,6 +234,7 @@ public class LevelChunk implements ChunkAccess {
+@@ -209,6 +223,12 @@ public class LevelChunk implements ChunkAccess {
+         this.inhabitedTime = inhabitedTime;
+         this.postLoad = loadToWorldConsumer;
+         this.sections = new LevelChunkSection[world.getSectionsCount()];
++        // Airplane start
++        this.collisionCaches = new gg.airplane.entity.CollisionCacheList[world.getSectionsCount()];
++        for (int i = 0; i < this.collisionCaches.length; i++) {
++            this.collisionCaches[i] = new gg.airplane.entity.CollisionCacheList();
++        }
++        // Airplane end
+         if (sections != null) {
+             if (this.sections.length == sections.length) {
+                 System.arraycopy(sections, 0, this.sections, 0, this.sections.length);
+@@ -220,6 +240,7 @@ public class LevelChunk implements ChunkAccess {
          this.postProcessing = new ShortList[world.getSectionsCount()];
          // CraftBukkit start
          this.bukkitChunk = new org.bukkit.craftbukkit.CraftChunk(this);
@@ -3239,28 +3855,24 @@ index 86686c24b0b7de4b4bfadbc77419a8872a8e86ee..e265980f07d95a7912bf8873819033e5
      }
  
      public org.bukkit.Chunk bukkitChunk;
-@@ -1296,13 +1311,17 @@ public class LevelChunk implements ChunkAccess {
-     }
+@@ -655,6 +676,17 @@ public class LevelChunk implements ChunkAccess {
+         int i1 = blockposition.getZ() & 15;
+         BlockState iblockdata1 = chunksection.setBlockState(k, l, i1, iblockdata);
  
-     @Override
--    public int getMinBuildHeight() {
--        return this.level.getMinBuildHeight();
-+    // Airplane start
-+    public final int getMinBuildHeight() {
-+        return this.minBuildHeight;
++        // Airplane start - notify dirty
++        SectionPos pos = SectionPos.of(this.chunkPos, j);
++        gg.airplane.entity.CollisionCache[] caches = this.collisionCaches[j].getRawData();
++        for (int index = 0; index < caches.length; index++) {
++            gg.airplane.entity.CollisionCache cache = caches[index];
++            if (cache != null) {
++                cache.dirtySection(pos);
++            }
++        }
 +        // Airplane end
-     }
- 
-     @Override
--    public int getHeight() {
--        return this.level.getHeight();
-+    // Airplane start
-+    public final int getHeight() {
-+        return this.levelHeight;
-+        // Airplane end
-     }
- 
-     @Override
++
+         if (iblockdata1 == iblockdata) {
+             return null;
+         } else {
 diff --git a/src/main/java/net/minecraft/world/level/chunk/LevelChunkSection.java b/src/main/java/net/minecraft/world/level/chunk/LevelChunkSection.java
 index 72e3264dc74822f746fb84fec0be400047d2d9f5..831e2dbe530daf63ac9e681a92af2740fa18ac8c 100644
 --- a/src/main/java/net/minecraft/world/level/chunk/LevelChunkSection.java
@@ -3377,6 +3989,23 @@ index 3b13f6ea36a3bfecabe09221eb5c48dddab119db..c02b9104c0cc1a7319cca29d5e32a5c2
      @Nullable
      @Override
      public T get(int id) {
+diff --git a/src/main/java/net/minecraft/world/level/entity/PersistentEntitySectionManager.java b/src/main/java/net/minecraft/world/level/entity/PersistentEntitySectionManager.java
+index 1ed6573e0ca6b353d1de3b4486e199a5db9aa447..125a067ac989ba05e796c1aa5c28206dbe08eb50 100644
+--- a/src/main/java/net/minecraft/world/level/entity/PersistentEntitySectionManager.java
++++ b/src/main/java/net/minecraft/world/level/entity/PersistentEntitySectionManager.java
+@@ -606,6 +606,12 @@ public class PersistentEntitySectionManager<T extends EntityAccess> implements A
+             PersistentEntitySectionManager.this.knownUuids.remove(this.entity.getUUID());
+             this.entity.setLevelCallback(PersistentEntitySectionManager.Callback.NULL);
+             PersistentEntitySectionManager.this.removeSectionIfEmpty(this.currentSectionKey, this.currentSection);
++
++            // Airplane start
++            if (this.entity instanceof Entity realEntity) {
++                realEntity.collisionCache.onRemove();
++            }
++            // Airplane end
+         }
+     }
+ }
 diff --git a/src/main/java/net/minecraft/world/level/material/FlowingFluid.java b/src/main/java/net/minecraft/world/level/material/FlowingFluid.java
 index 7fda7da544b2d0bbd3803d88ee34c92350a8b8ef..adf91f3006a2d224c957f08520f93f761c3ba832 100644
 --- a/src/main/java/net/minecraft/world/level/material/FlowingFluid.java
@@ -3659,6 +4288,19 @@ index 909b2c98e7a9117d2f737245e4661792ffafb744..9da898c6f44832b4421b8c2745e3121b
      public Server getServer() {
 -        throw new UnsupportedOperationException("Not supported.");
 +        return org.bukkit.Bukkit.getServer(); // Airplane - impl
+     }
+ 
+     @Override
+diff --git a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
+index 408863b137b7bda3f3e654ac3665ddeefb6d9e7b..efbe385b3a78f4bd0dee6b63d78999513433b79b 100644
+--- a/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
++++ b/src/main/java/org/bukkit/craftbukkit/util/CraftMagicNumbers.java
+@@ -394,7 +394,7 @@ public final class CraftMagicNumbers implements UnsafeValues {
+ 
+     @Override
+     public com.destroystokyo.paper.util.VersionFetcher getVersionFetcher() {
+-        return new com.destroystokyo.paper.PaperVersionFetcher();
++        return new gg.airplane.AirplaneVersionFetcher(); // Airplane
      }
  
      @Override
