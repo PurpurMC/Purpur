@@ -1,0 +1,225 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Da_Racci <tangentmoons@gmail.com>
+Date: Sun, 17 Oct 2021 21:00:37 +1100
+Subject: [PATCH] Potion NamespacedKey The addition of this namespacedkey will
+ allow individual plugins to only get values of their own when interacting
+ with potion and being able to use this to better control the flow of potions.
+
+
+diff --git a/src/main/java/net/minecraft/world/effect/MobEffectInstance.java b/src/main/java/net/minecraft/world/effect/MobEffectInstance.java
+index 544b3711bc7538609f64ad30995ef927f562a36f..608e0ea83470afb5df5b7fd3f63efa0b756c1570 100644
+--- a/src/main/java/net/minecraft/world/effect/MobEffectInstance.java
++++ b/src/main/java/net/minecraft/world/effect/MobEffectInstance.java
+@@ -6,6 +6,7 @@ import net.minecraft.nbt.CompoundTag;
+ import net.minecraft.world.entity.LivingEntity;
+ import org.apache.logging.log4j.LogManager;
+ import org.apache.logging.log4j.Logger;
++import org.bukkit.NamespacedKey;
+ 
+ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+     private static final Logger LOGGER = LogManager.getLogger();
+@@ -16,6 +17,7 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+     private boolean noCounter;
+     private boolean visible;
+     private boolean showIcon;
++    private NamespacedKey key;
+     @Nullable
+     private MobEffectInstance hiddenEffect;
+ 
+@@ -36,16 +38,23 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+     }
+ 
+     public MobEffectInstance(MobEffect type, int duration, int amplifier, boolean ambient, boolean showParticles, boolean showIcon) {
+-        this(type, duration, amplifier, ambient, showParticles, showIcon, (MobEffectInstance)null);
++        this(type, duration, amplifier, ambient, showParticles, showIcon, null);
+     }
+ 
+-    public MobEffectInstance(MobEffect type, int duration, int amplifier, boolean ambient, boolean showParticles, boolean showIcon, @Nullable MobEffectInstance hiddenEffect) {
++    // Purpur start
++    public MobEffectInstance(MobEffect type, int duration, int amplifier, boolean ambient, boolean showParticles, boolean showIcon, @Nullable NamespacedKey key) {
++        this(type, duration, amplifier, ambient, showParticles, showIcon, key, (MobEffectInstance)null);
++    }
++    // Purpur end
++
++    public MobEffectInstance(MobEffect type, int duration, int amplifier, boolean ambient, boolean showParticles, boolean showIcon, @Nullable NamespacedKey key, @Nullable MobEffectInstance hiddenEffect) { // Purpur - add key
+         this.effect = type;
+         this.duration = duration;
+         this.amplifier = amplifier;
+         this.ambient = ambient;
+         this.visible = showParticles;
+         this.showIcon = showIcon;
++        this.key = key; // Purpur
+         this.hiddenEffect = hiddenEffect;
+     }
+ 
+@@ -60,6 +69,7 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         this.ambient = that.ambient;
+         this.visible = that.visible;
+         this.showIcon = that.showIcon;
++        this.key = that.key; // Purpur
+     }
+ 
+     public boolean update(MobEffectInstance that) {
+@@ -103,6 +113,12 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+             this.showIcon = that.showIcon;
+             bl = true;
+         }
++        // Purpur start
++        if (that.key != this.key) {
++            this.key = that.key;
++            bl = true;
++        }
++        // Purpur end
+ 
+         return bl;
+     }
+@@ -131,6 +147,16 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         return this.showIcon;
+     }
+ 
++    // Purpur start
++    public boolean hasKey() {
++        return this.key != null;
++    }
++
++    public NamespacedKey getKey() {
++        return this.key;
++    }
++    // Purpur end
++
+     public boolean tick(LivingEntity entity, Runnable overwriteCallback) {
+         if (this.duration > 0) {
+             if (this.effect.isDurationEffectTick(this.duration, this.amplifier)) {
+@@ -184,6 +210,12 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+             string = string + ", Show Icon: false";
+         }
+ 
++        // Purpur start
++        if (this.key != null) {
++            string = string + ", Key: " + this.key;
++        }
++        // Purpur end
++
+         return string;
+     }
+ 
+@@ -195,7 +227,7 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+             return false;
+         } else {
+             MobEffectInstance mobEffectInstance = (MobEffectInstance)object;
+-            return this.duration == mobEffectInstance.duration && this.amplifier == mobEffectInstance.amplifier && this.ambient == mobEffectInstance.ambient && this.effect.equals(mobEffectInstance.effect);
++            return this.duration == mobEffectInstance.duration && this.amplifier == mobEffectInstance.amplifier && this.ambient == mobEffectInstance.ambient && this.effect.equals(mobEffectInstance.effect) && this.key == mobEffectInstance.key; // Purpur - add key
+         }
+     }
+ 
+@@ -219,6 +251,11 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         nbt.putBoolean("Ambient", this.isAmbient());
+         nbt.putBoolean("ShowParticles", this.isVisible());
+         nbt.putBoolean("ShowIcon", this.showIcon());
++        // Purpur start
++        if (this.key != null) {
++            nbt.putString("Key", this.getKey().toString());
++        }
++        // Purpur end
+         if (this.hiddenEffect != null) {
+             CompoundTag compoundTag = new CompoundTag();
+             this.hiddenEffect.save(compoundTag);
+@@ -247,13 +284,14 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         if (nbt.contains("ShowIcon", 1)) {
+             bl3 = nbt.getBoolean("ShowIcon");
+         }
++        NamespacedKey key = NamespacedKey.fromString(nbt.getString("Key"));
+ 
+         MobEffectInstance mobEffectInstance = null;
+         if (nbt.contains("HiddenEffect", 10)) {
+             mobEffectInstance = loadSpecifiedEffect(type, nbt.getCompound("HiddenEffect"));
+         }
+ 
+-        return new MobEffectInstance(type, j, i < 0 ? 0 : i, bl, bl2, bl3, mobEffectInstance);
++        return new MobEffectInstance(type, j, i < 0 ? 0 : i, bl, bl2, bl3, key, mobEffectInstance);
+     }
+ 
+     public void setNoCounter(boolean permanent) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
+index 9ecf1ef7e876418d2b454d6cd8ac8739194acfaa..a5eca40edf91eeca1c86208cd17c49aff3e40e76 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftLivingEntity.java
+@@ -436,7 +436,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
+ 
+     @Override
+     public boolean addPotionEffect(PotionEffect effect, boolean force) {
+-        this.getHandle().addEffect(new MobEffectInstance(MobEffect.byId(effect.getType().getId()), effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles(), effect.hasIcon()), EntityPotionEffectEvent.Cause.PLUGIN); // Paper - Don't ignore icon
++        this.getHandle().addEffect(new MobEffectInstance(MobEffect.byId(effect.getType().getId()), effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles(), effect.hasIcon(), effect.getKey()), EntityPotionEffectEvent.Cause.PLUGIN); // Purpur - Add key // Paper - Don't ignore icon
+         return true;
+     }
+ 
+@@ -457,7 +457,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
+     @Override
+     public PotionEffect getPotionEffect(PotionEffectType type) {
+         MobEffectInstance handle = this.getHandle().getEffect(MobEffect.byId(type.getId()));
+-        return (handle == null) ? null : new PotionEffect(PotionEffectType.getById(MobEffect.getId(handle.getEffect())), handle.getDuration(), handle.getAmplifier(), handle.isAmbient(), handle.isVisible());
++        return (handle == null) ? null : new PotionEffect(PotionEffectType.getById(MobEffect.getId(handle.getEffect())), handle.getDuration(), handle.getAmplifier(), handle.isAmbient(), handle.isVisible(), handle.getKey()); // Purpur - add key
+     }
+ 
+     @Override
+@@ -469,7 +469,7 @@ public class CraftLivingEntity extends CraftEntity implements LivingEntity {
+     public Collection<PotionEffect> getActivePotionEffects() {
+         List<PotionEffect> effects = new ArrayList<PotionEffect>();
+         for (MobEffectInstance handle : this.getHandle().activeEffects.values()) {
+-            effects.add(new PotionEffect(PotionEffectType.getById(MobEffect.getId(handle.getEffect())), handle.getDuration(), handle.getAmplifier(), handle.isAmbient(), handle.isVisible()));
++            effects.add(new PotionEffect(PotionEffectType.getById(MobEffect.getId(handle.getEffect())), handle.getDuration(), handle.getAmplifier(), handle.isAmbient(), handle.isVisible(), handle.getKey())); // Purpur - add key
+         }
+         return effects;
+     }
+diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaPotion.java b/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaPotion.java
+index 4d325f61e9171b9e1a069ae69a87ec397735da79..7b0e78c893e1d199419f6ade2cb6fe6e26f0f0f8 100644
+--- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaPotion.java
++++ b/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaPotion.java
+@@ -33,6 +33,7 @@ class CraftMetaPotion extends CraftMetaItem implements PotionMeta {
+     static final ItemMetaKey POTION_COLOR = new ItemMetaKey("CustomPotionColor", "custom-color");
+     static final ItemMetaKey ID = new ItemMetaKey("Id", "potion-id");
+     static final ItemMetaKey DEFAULT_POTION = new ItemMetaKey("Potion", "potion-type");
++    static final ItemMetaKey KEY = new ItemMetaKey("Key", "namespacedkey");
+ 
+     // Having an initial "state" in ItemMeta seems bit dirty but the UNCRAFTABLE potion type
+     // is treated as the empty form of the meta because it represents an empty potion with no effect
+@@ -132,6 +133,7 @@ class CraftMetaPotion extends CraftMetaItem implements PotionMeta {
+                 effectData.putBoolean(AMBIENT.NBT, effect.isAmbient());
+                 effectData.putBoolean(SHOW_PARTICLES.NBT, effect.hasParticles());
+                 effectData.putBoolean(SHOW_ICON.NBT, effect.hasIcon());
++                effectData.putString(KEY.NBT, effect.getKey());
+                 effectList.add(effectData);
+             }
+         }
+@@ -201,7 +203,7 @@ class CraftMetaPotion extends CraftMetaItem implements PotionMeta {
+         if (index != -1) {
+             if (overwrite) {
+                 PotionEffect old = this.customEffects.get(index);
+-                if (old.getAmplifier() == effect.getAmplifier() && old.getDuration() == effect.getDuration() && old.isAmbient() == effect.isAmbient()) {
++                if (old.getAmplifier() == effect.getAmplifier() && old.getDuration() == effect.getDuration() && old.isAmbient() == effect.isAmbient() && old.getKey() == effect.getKey()) {
+                     return false;
+                 }
+                 this.customEffects.set(index, effect);
+diff --git a/src/main/java/org/bukkit/craftbukkit/potion/CraftPotionUtil.java b/src/main/java/org/bukkit/craftbukkit/potion/CraftPotionUtil.java
+index acb69821a99aa69bce6d127e10976089c85be223..ba2d6c50101a3497d845982f7404fe841e829e31 100644
+--- a/src/main/java/org/bukkit/craftbukkit/potion/CraftPotionUtil.java
++++ b/src/main/java/org/bukkit/craftbukkit/potion/CraftPotionUtil.java
+@@ -101,7 +101,7 @@ public class CraftPotionUtil {
+ 
+     public static MobEffectInstance fromBukkit(PotionEffect effect) {
+         MobEffect type = MobEffect.byId(effect.getType().getId());
+-        return new MobEffectInstance(type, effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles());
++        return new MobEffectInstance(type, effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles(), effect.getKey()); // Purpur - add key
+     }
+ 
+     public static PotionEffect toBukkit(MobEffectInstance effect) {
+@@ -110,7 +110,8 @@ public class CraftPotionUtil {
+         int duration = effect.getDuration();
+         boolean ambient = effect.isAmbient();
+         boolean particles = effect.isVisible();
+-        return new PotionEffect(type, duration, amp, ambient, particles);
++        NamespacedKey key = effect.getKey(); // Purpur - add key
++        return new PotionEffect(type, duration, amp, ambient, particles, key);
+     }
+ 
+     public static boolean equals(MobEffect mobEffect, PotionEffectType type) {
