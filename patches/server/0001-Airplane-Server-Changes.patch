@@ -774,10 +774,10 @@ index 0000000000000000000000000000000000000000..f9a71ff3edd7e7b6cda680e5a156373b
 +}
 diff --git a/src/main/java/gg/airplane/entity/CollisionCache.java b/src/main/java/gg/airplane/entity/CollisionCache.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..3822fc6b78419e681ff838bc2050c4f8fb3e90eb
+index 0000000000000000000000000000000000000000..87e162cc30da9346190c7daeb19cc74049b5377e
 --- /dev/null
 +++ b/src/main/java/gg/airplane/entity/CollisionCache.java
-@@ -0,0 +1,244 @@
+@@ -0,0 +1,258 @@
 +package gg.airplane.entity;
 +
 +import io.papermc.paper.util.CollisionUtil;
@@ -794,6 +794,7 @@ index 0000000000000000000000000000000000000000..3822fc6b78419e681ff838bc2050c4f8
 +import net.minecraft.world.level.chunk.LevelChunkSection;
 +import net.minecraft.world.phys.AABB;
 +import net.minecraft.world.phys.shapes.CollisionContext;
++import net.minecraft.world.phys.shapes.EntityCollisionContext;
 +import net.minecraft.world.phys.shapes.Shapes;
 +import net.minecraft.world.phys.shapes.VoxelShape;
 +import org.bukkit.craftbukkit.util.UnsafeList;
@@ -807,7 +808,7 @@ index 0000000000000000000000000000000000000000..3822fc6b78419e681ff838bc2050c4f8
 +
 +public class CollisionCache {
 +
-+    private static record BlockEntry(int x, int y, int z, BlockState state, VoxelShape shape){}
++    private static record BlockEntry(int x, int y, int z, BlockState state){}
 +
 +    @NotNull
 +    private final Entity entity;
@@ -861,17 +862,30 @@ index 0000000000000000000000000000000000000000..3822fc6b78419e681ff838bc2050c4f8
 +        if (!this.dirty && minBlockX >= this.previousMinBlockX && maxBlockX <= this.previousMaxBlockX &&
 +                minBlockY >= this.previousMinBlockY && maxBlockY <= this.previousMaxBlockY &&
 +                minBlockZ >= this.previousMinBlockZ && maxBlockZ <= this.previousMaxBlockZ) {
++            BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
++            CollisionContext collisionShape = CollisionContext.of(entity);
 +            if (checkOnly) {
-+                BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 +                for (int i = 0, length = this.blocks.size(); i < length; i++) {
-+                    BlockEntry entry = this.blocks.unsafeGet(i);
-+                    if (entry.shape.intersects(aabb) && predicate.test(entry.state, pos.set(entry.x, entry.y, entry.z))) {
-+                        return true;
++                    BlockEntry blockEntry = this.blocks.unsafeGet(i);
++                    VoxelShape voxelshape2 = blockEntry.state.getCollisionShape(this.entity.level, mutablePos, collisionShape);
++                    if (voxelshape2 != Shapes.empty()) {
++                        VoxelShape voxelshape3 = voxelshape2.move((double) blockEntry.x, (double) blockEntry.y, (double) blockEntry.z);
++
++                        if (voxelshape3.intersects(aabb) && predicate.test(blockEntry.state, mutablePos.set(blockEntry.x, blockEntry.y, blockEntry.z))) {
++                            return true;
++                        }
 +                    }
 +                }
 +            } else {
 +                for (int i = 0, length = this.blocks.size(); i < length; i++) {
-+                    ret |= CollisionUtil.addBoxesToIfIntersects(this.blocks.unsafeGet(i).shape, aabb, into);
++                    BlockEntry blockEntry = this.blocks.unsafeGet(i);
++                    VoxelShape voxelshape2 = blockEntry.state.getCollisionShape(this.entity.level, mutablePos, collisionShape);
++
++                    if (voxelshape2 != Shapes.empty()) {
++                        VoxelShape voxelshape3 = voxelshape2.move((double) blockEntry.x, (double) blockEntry.y, (double) blockEntry.z);
++
++                        ret |= CollisionUtil.addBoxesToIfIntersects(voxelshape3, aabb, into);
++                    }
 +                }
 +            }
 +
@@ -994,13 +1008,13 @@ index 0000000000000000000000000000000000000000..3822fc6b78419e681ff838bc2050c4f8
 +                            if ((edgeCount != 1 || blockData.shapeExceedsCube()) && (edgeCount != 2 || blockData.getBlock() == Blocks.MOVING_PISTON)) {
 +                                mutablePos.set(blockX, blockY, blockZ);
 +                                if (collisionShape == null) {
-+                                    collisionShape = new CollisionUtil.LazyEntityCollisionContext(entity);
++                                    collisionShape = CollisionContext.of(entity);
 +                                }
 +                                VoxelShape voxelshape2 = blockData.getCollisionShape(this.entity.level, mutablePos, collisionShape);
 +                                if (voxelshape2 != Shapes.empty()) {
 +                                    VoxelShape voxelshape3 = voxelshape2.move((double) blockX, (double) blockY, (double) blockZ);
 +
-+                                    this.blocks.add(new BlockEntry(blockX, blockY, blockZ, blockData, voxelshape3));
++                                    this.blocks.add(new BlockEntry(blockX, blockY, blockZ, blockData));
 +
 +                                    ret |= CollisionUtil.addBoxesToIfIntersects(voxelshape3, aabb, into);
 +                                }
@@ -2153,9 +2167,18 @@ index 0000000000000000000000000000000000000000..a7f297ebb569f7c1f205e967ca485be7
 +    }
 +}
 diff --git a/src/main/java/io/papermc/paper/util/CollisionUtil.java b/src/main/java/io/papermc/paper/util/CollisionUtil.java
-index 98ca1199a823cdf55b913396ce0a24554e85f116..b16e65fa8be40f6c938c8c183c9bca7c13acc9e2 100644
+index 98ca1199a823cdf55b913396ce0a24554e85f116..b2e2d6ee25a88f9c8f6769c6774643220f9c148b 100644
 --- a/src/main/java/io/papermc/paper/util/CollisionUtil.java
 +++ b/src/main/java/io/papermc/paper/util/CollisionUtil.java
+@@ -519,7 +519,7 @@ public final class CollisionUtil {
+                             if ((edgeCount != 1 || blockData.shapeExceedsCube()) && (edgeCount != 2 || blockData.getBlock() == Blocks.MOVING_PISTON)) {
+                                 mutablePos.set(blockX, blockY, blockZ);
+                                 if (collisionShape == null) {
+-                                    collisionShape = new LazyEntityCollisionContext(entity);
++                                    collisionShape = CollisionContext.of(entity); // Airplane - use normal context, we already tore it apart
+                                 }
+                                 VoxelShape voxelshape2 = blockData.getCollisionShape(getter, mutablePos, collisionShape);
+                                 if (voxelshape2 != Shapes.empty()) {
 @@ -547,6 +547,18 @@ public final class CollisionUtil {
          return ret;
      }
@@ -2175,6 +2198,24 @@ index 98ca1199a823cdf55b913396ce0a24554e85f116..b16e65fa8be40f6c938c8c183c9bca7c
      public static boolean getEntityHardCollisions(final CollisionGetter getter, final Entity entity, AABB aabb,
                                                    final List<AABB> into, final boolean checkOnly, final Predicate<Entity> predicate) {
          if (isEmpty(aabb) || !(getter instanceof EntityGetter entityGetter)) {
+@@ -599,6 +611,8 @@ public final class CollisionUtil {
+         }
+     }
+ 
++    // Airplane start - unneeded
++    /*
+     public static final class LazyEntityCollisionContext extends EntityCollisionContext {
+ 
+         private CollisionContext delegate;
+@@ -638,6 +652,8 @@ public final class CollisionUtil {
+             return this.getDelegate().canStandOnFluid(state, fluid);
+         }
+     }
++     */
++    // Airplane end
+ 
+     private CollisionUtil() {
+         throw new RuntimeException();
 diff --git a/src/main/java/net/minecraft/Util.java b/src/main/java/net/minecraft/Util.java
 index 505546d32eea4682452dbac02311433157f6a30e..5c7b9ad379f3c272e15648dd16f4df9245d927da 100644
 --- a/src/main/java/net/minecraft/Util.java
