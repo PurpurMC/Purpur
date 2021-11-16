@@ -25,7 +25,7 @@ Join us on [Discord](https://discord.gg/mtAAnkk)
 ## Downloads
 [![Downloads](https://img.shields.io/github/workflow/status/pl3xgaming/purpur/Build?event=push&label=Downloads&logo=github)](https://purpur.pl3x.net/downloads)
 
-Downloads can be obtained from the [downloads page](https://purpur.pl3x.net/downloads/), the [downloads API](https://api.pl3x.net), or alternatively from Pl3x's [Jenkins CI Server](https://ci.pl3x.net/job/Purpur/).
+Downloads can be obtained from the [downloads page](https://purpur.pl3x.net/downloads/) or the [downloads API](https://api.pl3x.net).
 
 Latest build shortcut links:
 * [1.17.1](https://api.pl3x.net/v2/purpur/1.17.1/latest/download) builds 1256+
