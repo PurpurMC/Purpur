@@ -1,0 +1,202 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sat, 22 Feb 2020 15:54:08 -0600
+Subject: [PATCH] Item entity immunities
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ChunkMap.java b/src/main/java/net/minecraft/server/level/ChunkMap.java
+index 3947e1f2823e8d077350b7e781c04a4b46a83939..9656e8f0338568d317d81f0a54e3354652ec7353 100644
+--- a/src/main/java/net/minecraft/server/level/ChunkMap.java
++++ b/src/main/java/net/minecraft/server/level/ChunkMap.java
+@@ -2179,7 +2179,7 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+ 
+     public class TrackedEntity {
+ 
+-        final ServerEntity serverEntity;
++        public final ServerEntity serverEntity; // Purpur -> package -> public
+         final Entity entity;
+         private final int range;
+         SectionPos lastSectionPos;
+diff --git a/src/main/java/net/minecraft/server/level/ServerEntity.java b/src/main/java/net/minecraft/server/level/ServerEntity.java
+index 703ac671b19636859648f16a5431b2700791e7d5..38d5e710146c817b1cd3d0930de3257f01667529 100644
+--- a/src/main/java/net/minecraft/server/level/ServerEntity.java
++++ b/src/main/java/net/minecraft/server/level/ServerEntity.java
+@@ -67,7 +67,7 @@ public class ServerEntity {
+     private boolean wasRiding;
+     private boolean wasOnGround;
+     // CraftBukkit start
+-    final Set<ServerPlayerConnection> trackedPlayers; // Paper - private -> package
++    public final Set<ServerPlayerConnection> trackedPlayers; // Paper - private -> package // Purpur - package -> public
+ 
+     public ServerEntity(ServerLevel worldserver, Entity entity, int i, boolean flag, Consumer<Packet<?>> consumer, Set<ServerPlayerConnection> trackedPlayers) {
+         this.trackedPlayers = trackedPlayers;
+diff --git a/src/main/java/net/minecraft/world/entity/item/ItemEntity.java b/src/main/java/net/minecraft/world/entity/item/ItemEntity.java
+index 0ac107d7a360a5812a43488c611498d12546eed9..c2b0add36da8ad1bfb3fbfdd180a8606f66b8478 100644
+--- a/src/main/java/net/minecraft/world/entity/item/ItemEntity.java
++++ b/src/main/java/net/minecraft/world/entity/item/ItemEntity.java
+@@ -54,6 +54,12 @@ public class ItemEntity extends Entity {
+     public final float bobOffs;
+     private int lastTick = MinecraftServer.currentTick - 1; // CraftBukkit
+     public boolean canMobPickup = true; // Paper
++    // Purpur start
++    public boolean immuneToCactus = false;
++    public boolean immuneToExplosion = false;
++    public boolean immuneToFire = false;
++    public boolean immuneToLightning = false;
++    // Purpur end
+ 
+     public ItemEntity(EntityType<? extends ItemEntity> type, Level world) {
+         super(type, world);
+@@ -321,6 +327,16 @@ public class ItemEntity extends Entity {
+             return false;
+         } else if (!this.getItem().getItem().canBeHurtBy(source)) {
+             return false;
++        // Purpur start
++        } else if (
++                (immuneToCactus && source == DamageSource.CACTUS) ||
++                (immuneToFire && (source.isFire() || source == DamageSource.IN_FIRE)) ||
++                (immuneToLightning && source == DamageSource.LIGHTNING_BOLT) ||
++                (immuneToExplosion && source.isExplosion())
++        ) {
++            respawnOnClient();
++            return false;
++        // Purpur end
+         } else {
+             // CraftBukkit start
+             if (org.bukkit.craftbukkit.event.CraftEventFactory.handleNonLivingEntityDamageEvent(this, source, amount)) {
+@@ -503,6 +519,12 @@ public class ItemEntity extends Entity {
+         com.google.common.base.Preconditions.checkArgument(!stack.isEmpty(), "Cannot drop air"); // CraftBukkit
+         this.getEntityData().set(ItemEntity.DATA_ITEM, stack);
+         this.getEntityData().markDirty(ItemEntity.DATA_ITEM); // CraftBukkit - SPIGOT-4591, must mark dirty
++        // Purpur start
++        if (level.purpurConfig.itemImmuneToCactus.contains(stack.getItem())) immuneToCactus = true;
++        if (level.purpurConfig.itemImmuneToExplosion.contains(stack.getItem())) immuneToExplosion = true;
++        if (level.purpurConfig.itemImmuneToFire.contains(stack.getItem())) immuneToFire = true;
++        if (level.purpurConfig.itemImmuneToLightning.contains(stack.getItem())) immuneToLightning = true;
++        // level end
+     }
+ 
+     @Override
+@@ -593,4 +615,17 @@ public class ItemEntity extends Entity {
+     public SoundSource getSoundSource() {
+         return SoundSource.AMBIENT;
+     }
++
++    // Purpur start
++    public void respawnOnClient() {
++        Packet<?> spawnPacket = new ClientboundAddEntityPacket(this);
++        Packet<?> metadataPacket = new net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket(getId(), getEntityData(), true);
++        for (net.minecraft.server.network.ServerPlayerConnection connection : this.tracker.serverEntity.trackedPlayers) {
++            if (!connection.getPlayer().purpurClient) {
++                connection.send(spawnPacket);
++                connection.send(metadataPacket);
++            }
++        }
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+index 3163d930237291d4a80e5b36e15b4880e3933a4e..1e0896ed38cf0d861f25d23c6ebe6a0be4742132 100644
+--- a/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
++++ b/src/main/java/net/pl3x/purpur/PurpurWorldConfig.java
+@@ -112,6 +112,49 @@ public class PurpurWorldConfig {
+         elytraDamagePerTridentBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.trident", elytraDamagePerTridentBoost);
+     }
+ 
++    public List<Item> itemImmuneToCactus = new ArrayList<>();
++    public List<Item> itemImmuneToExplosion = new ArrayList<>();
++    public List<Item> itemImmuneToFire = new ArrayList<>();
++    public List<Item> itemImmuneToLightning = new ArrayList<>();
++    private void itemSettings() {
++        itemImmuneToCactus.clear();
++        getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
++            if (key.toString().equals("*")) {
++                Registry.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToCactus.add(item));
++                return;
++            }
++            Item item = Registry.ITEM.get(new ResourceLocation(key.toString()));
++            if (item != Items.AIR) itemImmuneToCactus.add(item);
++        });
++        itemImmuneToExplosion.clear();
++        getList("gameplay-mechanics.item.immune.explosion", new ArrayList<>()).forEach(key -> {
++            if (key.toString().equals("*")) {
++                Registry.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToExplosion.add(item));
++                return;
++            }
++            Item item = Registry.ITEM.get(new ResourceLocation(key.toString()));
++            if (item != Items.AIR) itemImmuneToExplosion.add(item);
++        });
++        itemImmuneToFire.clear();
++        getList("gameplay-mechanics.item.immune.fire", new ArrayList<>()).forEach(key -> {
++            if (key.toString().equals("*")) {
++                Registry.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToFire.add(item));
++                return;
++            }
++            Item item = Registry.ITEM.get(new ResourceLocation(key.toString()));
++            if (item != Items.AIR) itemImmuneToFire.add(item);
++        });
++        itemImmuneToLightning.clear();
++        getList("gameplay-mechanics.item.immune.lightning", new ArrayList<>()).forEach(key -> {
++            if (key.toString().equals("*")) {
++                Registry.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToLightning.add(item));
++                return;
++            }
++            Item item = Registry.ITEM.get(new ResourceLocation(key.toString()));
++            if (item != Items.AIR) itemImmuneToLightning.add(item);
++        });
++    }
++
+     public double minecartMaxSpeed = 0.4D;
+     public boolean minecartPlaceAnywhere = false;
+     public boolean minecartControllable = false;
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
+index 342345eb04d00efb58392ccf209e3c51c1064173..5f5c37fb447a4c1790714158f4b41f15793002d1 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
+@@ -116,4 +116,46 @@ public class CraftItem extends CraftEntity implements Item {
+     public EntityType getType() {
+         return EntityType.DROPPED_ITEM;
+     }
++
++    // Purpur start
++    @Override
++    public void setImmuneToCactus(boolean immuneToCactus) {
++        item.immuneToCactus = immuneToCactus;
++    }
++
++    @Override
++    public boolean isImmuneToCactus() {
++        return item.immuneToCactus;
++    }
++
++    @Override
++    public void setImmuneToExplosion(boolean immuneToExplosion) {
++        item.immuneToExplosion = immuneToExplosion;
++    }
++
++    @Override
++    public boolean isImmuneToExplosion() {
++        return item.immuneToExplosion;
++    }
++
++    @Override
++    public void setImmuneToFire(boolean immuneToFire) {
++        item.immuneToFire = immuneToFire;
++    }
++
++    @Override
++    public boolean isImmuneToFire() {
++        return item.immuneToFire;
++    }
++
++    @Override
++    public void setImmuneToLightning(boolean immuneToLightning) {
++        item.immuneToLightning = immuneToLightning;
++    }
++
++    @Override
++    public boolean isImmuneToLightning() {
++        return item.immuneToLightning;
++    }
++    // Purpur end
+ }
