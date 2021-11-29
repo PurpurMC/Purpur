@@ -20,7 +20,7 @@ dependencies {
     paperclip("io.papermc:paperclip:3.0.2-SNAPSHOT")
 }
 
-subprojects {
+allprojects {
     apply(plugin = "java")
     apply(plugin = "maven-publish")
 
@@ -29,10 +29,20 @@ subprojects {
             languageVersion.set(JavaLanguageVersion.of(17))
         }
     }
+}
 
+subprojects {
     tasks.withType<JavaCompile>().configureEach {
-        options.encoding = "UTF-8"
+        options.encoding = Charsets.UTF_8.name()
         options.release.set(17)
+    }
+
+    tasks.withType<Javadoc> {
+        options.encoding = Charsets.UTF_8.name()
+    }
+
+    tasks.withType<ProcessResources> {
+        filteringCharset = Charsets.UTF_8.name()
     }
 
     repositories {
@@ -45,18 +55,10 @@ subprojects {
         maven("https://hub.spigotmc.org/nexus/content/groups/public/")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
     }
-
-    configure<PublishingExtension> {
-        repositories.maven {
-            name = "purpur"
-            url = uri("https://repo.purpurmc.org/snapshots")
-            credentials(PasswordCredentials::class)
-        }
-    }
 }
 
 paperweight {
-    serverProject.set(project(":Purpur-Server"))
+    serverProject.set(project(":purpur-server"))
 
     remapRepo.set("https://maven.fabricmc.net/")
     decompileRepo.set("https://files.minecraftforge.net/maven/")
@@ -68,6 +70,17 @@ paperweight {
 
             serverPatchDir.set(layout.projectDirectory.dir("patches/server"))
             serverOutputDir.set(layout.projectDirectory.dir("Purpur-Server"))
+        }
+    }
+}
+
+allprojects {
+    publishing {
+        repositories {
+            maven("https://repo.purpurmc.org/snapshots") {
+                name = "purpur"
+                credentials(PasswordCredentials::class)
+            }
         }
     }
 }
