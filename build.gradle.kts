@@ -48,7 +48,7 @@ subprojects {
 
     configure<PublishingExtension> {
         repositories.maven {
-            name = "maven"
+            name = "purpur"
             url = uri("https://repo.purpurmc.org/snapshots")
             credentials(PasswordCredentials::class)
         }
