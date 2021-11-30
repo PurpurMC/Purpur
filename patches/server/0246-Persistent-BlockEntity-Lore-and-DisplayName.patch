@@ -1,15 +1,13 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Jason Penilla <11360596+jpenilla@users.noreply.github.com>
-Date: Wed, 30 Sep 2020 14:32:46 -0700
-Subject: [PATCH] Persistent TileEntity Lore and DisplayName
+Date: Tue, 30 Nov 2021 07:05:46 -0500
+Subject: [PATCH] Persistent BlockEntity Lore and DisplayName
 
-Makes it so that when a TileEntity is placed in the world and then broken,
+Makes it so that when a BlockEntity is placed in the world and then broken,
 the dropped ItemStack retains any original custom display name/lore.
 
-removed save function ugh
-
 diff --git a/src/main/java/net/minecraft/world/item/BlockItem.java b/src/main/java/net/minecraft/world/item/BlockItem.java
-index d36e73cfab79960bf4d778ea01a684b9b6af39d7..8cb5e91bdf5e0a9cdcef1c3b7a683ab125751f9f 100644
+index be47543240bd573cd2cc08f84b7eab1c693438ec..6b0131cccf1a38bc449dd79df8e79a43e96d0bf1 100644
 --- a/src/main/java/net/minecraft/world/item/BlockItem.java
 +++ b/src/main/java/net/minecraft/world/item/BlockItem.java
 @@ -137,7 +137,24 @@ public class BlockItem extends Item {
@@ -39,20 +37,20 @@ index d36e73cfab79960bf4d778ea01a684b9b6af39d7..8cb5e91bdf5e0a9cdcef1c3b7a683ab1
  
      @Nullable
 diff --git a/src/main/java/net/minecraft/world/level/block/Block.java b/src/main/java/net/minecraft/world/level/block/Block.java
-index 8c30e28b97ac7e8b54322c903e0b75ee8135620b..577f38fcff55ef23fcacce1b05b6d0de117efd5e 100644
+index 9a4858eb3a3289d3da9c1984d94ba7244db254bf..ce2feeefbff41fca32f25786f1cab668d0790d25 100644
 --- a/src/main/java/net/minecraft/world/level/block/Block.java
 +++ b/src/main/java/net/minecraft/world/level/block/Block.java
-@@ -20,6 +20,9 @@ import net.minecraft.core.IdMapper;
+@@ -18,6 +18,9 @@ import net.minecraft.core.Direction;
+ import net.minecraft.core.IdMapper;
  import net.minecraft.core.NonNullList;
  import net.minecraft.core.Registry;
- import net.minecraft.core.Vec3i;
 +import net.minecraft.nbt.CompoundTag;
 +import net.minecraft.nbt.ListTag;
 +import net.minecraft.nbt.StringTag;
  import net.minecraft.network.chat.Component;
  import net.minecraft.network.chat.MutableComponent;
  import net.minecraft.network.chat.TranslatableComponent;
-@@ -28,6 +31,7 @@ import net.minecraft.stats.Stats;
+@@ -26,6 +29,7 @@ import net.minecraft.stats.Stats;
  import net.minecraft.tags.BlockTags;
  import net.minecraft.tags.Tag;
  import net.minecraft.util.Mth;
@@ -60,16 +58,16 @@ index 8c30e28b97ac7e8b54322c903e0b75ee8135620b..577f38fcff55ef23fcacce1b05b6d0de
  import net.minecraft.world.damagesource.DamageSource;
  import net.minecraft.world.entity.Entity;
  import net.minecraft.world.entity.EntityType;
-@@ -325,7 +329,7 @@ public class Block extends BlockBehaviour implements ItemLike {
+@@ -323,7 +327,7 @@ public class Block extends BlockBehaviour implements ItemLike {
      public static void dropResources(BlockState state, LevelAccessor world, BlockPos pos, @Nullable BlockEntity blockEntity) {
          if (world instanceof ServerLevel) {
              Block.getDrops(state, (ServerLevel) world, pos, blockEntity).forEach((itemstack) -> {
--                Block.popResource((Level) ((ServerLevel) world), pos, itemstack);
-+                Block.popResource((Level) ((ServerLevel) world), pos, applyDisplayNameAndLoreFromTile(itemstack, blockEntity)); // Purpur
+-                Block.popResource((ServerLevel) world, pos, itemstack);
++                Block.popResource((ServerLevel) world, pos, applyDisplayNameAndLoreFromTile(itemstack, blockEntity)); // Purpur
              });
              state.spawnAfterBreak((ServerLevel) world, pos, ItemStack.EMPTY);
          }
-@@ -352,13 +356,53 @@ public class Block extends BlockBehaviour implements ItemLike {
+@@ -350,13 +354,53 @@ public class Block extends BlockBehaviour implements ItemLike {
      public static void dropResources(BlockState state, Level world, BlockPos pos, @Nullable BlockEntity blockEntity, Entity entity, ItemStack stack) {
          if (world instanceof ServerLevel) {
              Block.getDrops(state, (ServerLevel) world, pos, blockEntity, entity, stack).forEach((itemstack1) -> {
@@ -125,7 +123,7 @@ index 8c30e28b97ac7e8b54322c903e0b75ee8135620b..577f38fcff55ef23fcacce1b05b6d0de
          float f = EntityType.ITEM.getHeight() / 2.0F;
          // Paper start - don't convert potentially massive numbers to floats
 diff --git a/src/main/java/net/minecraft/world/level/block/entity/BlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/BlockEntity.java
-index 9b4a464fe820effa906af486cf71a74e283ccd4e..473ab1d7be8a2b8507ecfb7a653a5b0abf5c4f2e 100644
+index 5601d0c2fe635a2a4f073c333531e1a8adf1833c..9e7d2fbdfa89736807d2025a5814ddd83122ad5e 100644
 --- a/src/main/java/net/minecraft/world/level/block/entity/BlockEntity.java
 +++ b/src/main/java/net/minecraft/world/level/block/entity/BlockEntity.java
 @@ -5,6 +5,8 @@ import net.minecraft.CrashReportCategory;
@@ -134,10 +132,10 @@ index 9b4a464fe820effa906af486cf71a74e283ccd4e..473ab1d7be8a2b8507ecfb7a653a5b0a
  import net.minecraft.nbt.CompoundTag;
 +import net.minecraft.nbt.ListTag;
 +import net.minecraft.nbt.StringTag;
- import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+ import net.minecraft.network.protocol.Packet;
+ import net.minecraft.network.protocol.game.ClientGamePacketListener;
  import net.minecraft.resources.ResourceLocation;
- import net.minecraft.world.level.Level;
-@@ -87,10 +89,26 @@ public abstract class BlockEntity implements net.minecraft.server.KeyedObject {
+@@ -94,10 +96,27 @@ public abstract class BlockEntity implements io.papermc.paper.util.KeyedObject {
          if (persistentDataTag instanceof CompoundTag) {
              this.persistentDataContainer.putAll((CompoundTag) persistentDataTag);
          }
@@ -152,7 +150,8 @@ index 9b4a464fe820effa906af486cf71a74e283ccd4e..473ab1d7be8a2b8507ecfb7a653a5b0a
      }
      // CraftBukkit end
  
-     public CompoundTag save(CompoundTag nbt) {
+-    protected void saveAdditional(CompoundTag nbt) {}
++    protected void saveAdditional(CompoundTag nbt) {
 +        // Purpur start
 +        if (this.persistentDisplayName != null) {
 +            nbt.put("Purpur.persistentDisplayName", StringTag.valueOf(this.persistentDisplayName));
@@ -161,10 +160,11 @@ index 9b4a464fe820effa906af486cf71a74e283ccd4e..473ab1d7be8a2b8507ecfb7a653a5b0a
 +            nbt.put("Purpur.persistentLore", this.persistentLore);
 +        }
 +        // Purpur end
-         return this.saveMetadata(nbt);
-     }
++    }
  
-@@ -238,4 +256,25 @@ public abstract class BlockEntity implements net.minecraft.server.KeyedObject {
+     public final CompoundTag saveWithFullMetadata() {
+         CompoundTag nbttagcompound = this.saveWithoutMetadata();
+@@ -276,4 +295,25 @@ public abstract class BlockEntity implements io.papermc.paper.util.KeyedObject {
          return null;
      }
      // CraftBukkit end
@@ -191,22 +191,22 @@ index 9b4a464fe820effa906af486cf71a74e283ccd4e..473ab1d7be8a2b8507ecfb7a653a5b0a
 +    // Purpur end
  }
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 8b330029db238a7c3f9b67b89cb4e9c7efa4ab46..2109f3d8c532f21da732d2d9b375c7f7c03e1ae6 100644
+index 5379c6418869373c6b52f6e835abcf297e6f2f56..64b1bedb055d5aa905ef1703b60097120b030d95 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-@@ -339,6 +339,7 @@ public class PurpurWorldConfig {
-     public boolean disableDropsOnCrammingDeath = false;
-     public boolean entitiesCanUsePortals = true;
+@@ -654,6 +654,7 @@ public class PurpurWorldConfig {
      public boolean milkCuresBadOmen = true;
+     public boolean noteBlockIgnoreAbove = false;
+     public boolean persistentDroppableEntityDisplayNames = false;
 +    public boolean persistentTileEntityDisplayNames = false;
-     public double tridentLoyaltyVoidReturnHeight = 0.0D;
-     public double voidDamageHeight = -64.0D;
-     public double voidDamageDealt = 4.0D;
-@@ -349,6 +350,7 @@ public class PurpurWorldConfig {
-         disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);
-         entitiesCanUsePortals = getBoolean("gameplay-mechanics.entities-can-use-portals", entitiesCanUsePortals);
+     public boolean projectilesBypassMobGriefing = false;
+     public boolean tickFluids = true;
+     public double mobsBlindnessMultiplier = 1;
+@@ -677,6 +678,7 @@ public class PurpurWorldConfig {
+         imposeTeleportRestrictionsOnGateways = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-gateways", imposeTeleportRestrictionsOnGateways);
          milkCuresBadOmen = getBoolean("gameplay-mechanics.milk-cures-bad-omen", milkCuresBadOmen);
+         noteBlockIgnoreAbove = getBoolean("gameplay-mechanics.note-block-ignore-above", noteBlockIgnoreAbove);
 +        persistentTileEntityDisplayNames = getBoolean("gameplay-mechanics.persistent-tileentity-display-names-and-lore", persistentTileEntityDisplayNames);
-         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
-         voidDamageHeight = getDouble("gameplay-mechanics.void-damage-height", voidDamageHeight);
-         voidDamageDealt = getDouble("gameplay-mechanics.void-damage-dealt", voidDamageDealt);
+         persistentDroppableEntityDisplayNames = getBoolean("gameplay-mechanics.persistent-droppable-entity-display-names", persistentDroppableEntityDisplayNames);
+         projectilesBypassMobGriefing = getBoolean("gameplay-mechanics.projectiles-bypass-mob-griefing", projectilesBypassMobGriefing);
+         tickFluids = getBoolean("gameplay-mechanics.tick-fluids", tickFluids);
