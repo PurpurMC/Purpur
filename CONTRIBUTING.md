@@ -335,7 +335,7 @@ if (!PurpurConfig.saveEmptyScoreboardTeams) {
 
 It is often preferred that you use the fully qualified name for the
 configuration class when accessing it, like so:
-`net.pl3x.purpur.PurpurConfig.valueHere`.  
+`org.purpurmc.purpur.PurpurConfig.valueHere`.  
 If this is not done, a developer for Purpur might fix that for you before
 merging, but it's always nice if you make it a habit where you only need 1-2
 lines changed.
