@@ -72,7 +72,7 @@ Maven
 ```xml
 <repository>
     <id>purpur</id>
-    <url>https://repo.purpurmc.org/</url>
+    <url>https://repo.purpurmc.org/snapshots</url>
 </repository>
 ```
 ```xml
@@ -87,7 +87,7 @@ Maven
 Gradle
 ```kotlin
 repositories {
-    maven("https://repo.purpurmc.org/")
+    maven("https://repo.purpurmc.org/snapshots")
 }
 ```
 ```kotlin
