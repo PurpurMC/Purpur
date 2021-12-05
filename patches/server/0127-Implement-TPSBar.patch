@@ -1,0 +1,430 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Sat, 12 Dec 2020 21:19:05 -0600
+Subject: [PATCH] Implement TPSBar
+
+
+diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
+index 3e568ce480d01e8ea7cbabd0929a99fb635de1ee..bc418143e63bfe9553f6853b89c6f5e8fb73c36e 100644
+--- a/src/main/java/net/minecraft/commands/Commands.java
++++ b/src/main/java/net/minecraft/commands/Commands.java
+@@ -208,6 +208,7 @@ public class Commands {
+             org.purpurmc.purpur.command.CreditsCommand.register(this.dispatcher); // Purpur
+             org.purpurmc.purpur.command.DemoCommand.register(this.dispatcher); // Purpur
+             org.purpurmc.purpur.command.PingCommand.register(this.dispatcher); // Purpur
++            org.purpurmc.purpur.command.TPSBarCommand.register(this.dispatcher); // Purpur
+         }
+ 
+         if (environment.includeIntegrated) {
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 70dfa4d3b7a2c9b2a47000bf26100f174ab67d46..e759c7f4686a88fdfd15d9ecd6b891f60b026468 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1124,6 +1124,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+         this.safeShutdown(flag, false);
+     }
+     public void safeShutdown(boolean flag, boolean isRestarting) {
++        org.purpurmc.purpur.task.BossBarTask.stopAll(); // Purpur
+         this.isRestarting = isRestarting;
+         this.hasLoggedStop = true; // Paper
+         if (isDebugging()) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper
+diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+index 8bf98d8f8e9f0baaf203a9e8d18683236856eab7..455776981274e64724376a3182b60784b56db9cf 100644
+--- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -355,6 +355,8 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
+                 DedicatedServer.LOGGER.info("JMX monitoring enabled");
+             }
+ 
++            org.purpurmc.purpur.task.BossBarTask.startAll(); // Purpur
++
+             return true;
+         }
+     }
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index bb392c810776264b08db6588ed9253a5aadef021..ea852a092231a9fd0a9bfc4dc1e31c859db17ade 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -256,6 +256,7 @@ public class ServerPlayer extends Player {
+     public PlayerNaturallySpawnCreaturesEvent playerNaturallySpawnedEvent; // Paper
+     public boolean purpurClient = false; // Purpur
+     public boolean acceptingResourcePack = false; // Purpur
++    private boolean tpsBar = false; // Purpur
+ 
+     public double lastEntitySpawnRadiusSquared; // Paper - optimise isOutsideRange, this field is in blocks
+     public final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> cachedSingleHashSet; // Paper
+@@ -477,6 +478,7 @@ public class ServerPlayer extends Player {
+             }
+         }
+ 
++        if (nbt.contains("Purpur.TPSBar")) { this.tpsBar = nbt.getBoolean("Purpur.TPSBar"); } // Purpur
+     }
+ 
+     @Override
+@@ -537,6 +539,7 @@ public class ServerPlayer extends Player {
+         }
+         this.getBukkitEntity().setExtraData(nbt); // CraftBukkit
+ 
++        nbt.putBoolean("Purpur.TPSBar", this.tpsBar); // Purpur
+     }
+ 
+     // CraftBukkit start - World fallback code, either respawn location or global spawn
+@@ -2566,5 +2569,13 @@ public class ServerPlayer extends Player {
+             this.server.getPlayerList().respawn(this, toLevel, true, to, !toLevel.paperConfig.disableTeleportationSuffocationCheck);
+         }
+     }
++
++    public boolean tpsBar() {
++        return this.tpsBar;
++    }
++
++    public void tpsBar(boolean tpsBar) {
++        this.tpsBar = tpsBar;
++    }
+     // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index 5c11e91e1eebb0e24aaca9af323a9d5ecdc0a411..63e8397d6eff95ed81ab5d7cdb69495e188d931b 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -482,6 +482,7 @@ public abstract class PlayerList {
+             scoreboard.addPlayerToTeam(player.getScoreboardName(), collideRuleTeam);
+         }
+         // Paper end
++        org.purpurmc.purpur.task.BossBarTask.addToAll(player); // Purpur
+         // CraftBukkit - Moved from above, added world
+         PlayerList.LOGGER.info("{}[{}] logged in with entity id {} at ([{}]{}, {}, {})", player.getName().getString(), s1, player.getId(), worldserver1.serverLevelData.getLevelName(), player.getX(), player.getY(), player.getZ());
+     }
+@@ -592,6 +593,8 @@ public abstract class PlayerList {
+     }
+     public net.kyori.adventure.text.Component remove(ServerPlayer entityplayer, net.kyori.adventure.text.Component leaveMessage) {
+         // Paper end
++        org.purpurmc.purpur.task.BossBarTask.removeFromAll(entityplayer.getBukkitEntity()); // Purpur
++
+         ServerLevel worldserver = entityplayer.getLevel();
+ 
+         entityplayer.awardStat(Stats.LEAVE_GAME);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index e654f940f0c6cf6b6bc0cbcfd8d440df5375a8de..600b9e9bc6a9c92920c8ec28764e64dfc1fd6e3f 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -209,6 +209,29 @@ public class PurpurConfig {
+         disableGiveCommandDrops = getBoolean("settings.disable-give-dropping", disableGiveCommandDrops);
+     }
+ 
++    public static String commandTPSBarTitle = "<gray>TPS<yellow>:</yellow> <tps> MSPT<yellow>:</yellow> <mspt> Ping<yellow>:</yellow> <ping>ms";
++    public static BossBar.Overlay commandTPSBarProgressOverlay = BossBar.Overlay.NOTCHED_20;
++    public static TPSBarTask.FillMode commandTPSBarProgressFillMode = TPSBarTask.FillMode.MSPT;
++    public static BossBar.Color commandTPSBarProgressColorGood = BossBar.Color.GREEN;
++    public static BossBar.Color commandTPSBarProgressColorMedium = BossBar.Color.YELLOW;
++    public static BossBar.Color commandTPSBarProgressColorLow = BossBar.Color.RED;
++    public static String commandTPSBarTextColorGood = "<gradient:#55ff55:#00aa00><text></gradient>";
++    public static String commandTPSBarTextColorMedium = "<gradient:#ffff55:#ffaa00><text></gradient>";
++    public static String commandTPSBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
++    public static int commandTPSBarTickInterval = 20;
++    private static void commandSettings() {
++        commandTPSBarTitle = getString("settings.command.tpsbar.title", commandTPSBarTitle);
++        commandTPSBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.tpsbar.overlay", commandTPSBarProgressOverlay.name()));
++        commandTPSBarProgressFillMode = TPSBarTask.FillMode.valueOf(getString("settings.command.tpsbar.fill-mode", commandTPSBarProgressFillMode.name()));
++        commandTPSBarProgressColorGood = BossBar.Color.valueOf(getString("settings.command.tpsbar.progress-color.good", commandTPSBarProgressColorGood.name()));
++        commandTPSBarProgressColorMedium = BossBar.Color.valueOf(getString("settings.command.tpsbar.progress-color.medium", commandTPSBarProgressColorMedium.name()));
++        commandTPSBarProgressColorLow = BossBar.Color.valueOf(getString("settings.command.tpsbar.progress-color.low", commandTPSBarProgressColorLow.name()));
++        commandTPSBarTextColorGood = getString("settings.command.tpsbar.text-color.good", commandTPSBarTextColorGood);
++        commandTPSBarTextColorMedium = getString("settings.command.tpsbar.text-color.medium", commandTPSBarTextColorMedium);
++        commandTPSBarTextColorLow = getString("settings.command.tpsbar.text-color.low", commandTPSBarTextColorLow);
++        commandTPSBarTickInterval = getInt("settings.command.tpsbar.tick-interval", commandTPSBarTickInterval);
++    }
++
+     public static int barrelRows = 3;
+     public static boolean enderChestSixRows = false;
+     public static boolean enderChestPermissionRows = false;
+diff --git a/src/main/java/org/purpurmc/purpur/command/TPSBarCommand.java b/src/main/java/org/purpurmc/purpur/command/TPSBarCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..2547eb09f34410ae5e6b3dcfd1706ca5f05ff896
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/command/TPSBarCommand.java
+@@ -0,0 +1,21 @@
++package org.purpurmc.purpur.command;
++
++import com.mojang.brigadier.CommandDispatcher;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.server.level.ServerPlayer;
++import org.purpurmc.purpur.task.TPSBarTask;
++
++public class TPSBarCommand {
++    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++        dispatcher.register(Commands.literal("tpsbar")
++                .requires(listener -> listener.hasPermission(2))
++                .executes(context -> {
++                    ServerPlayer player = context.getSource().getPlayerOrException();
++                    boolean result = TPSBarTask.instance().togglePlayer(player.getBukkitEntity());
++                    player.tpsBar(result);
++                    return 1;
++                })
++        ).setPermission("bukkit.command.tpsbar");
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/task/BossBarTask.java b/src/main/java/org/purpurmc/purpur/task/BossBarTask.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..d38b3c4a722396cc3b61a9a8ed7e39cea4ae65cb
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/task/BossBarTask.java
+@@ -0,0 +1,109 @@
++package org.purpurmc.purpur.task;
++
++import net.kyori.adventure.bossbar.BossBar;
++import net.minecraft.server.level.ServerPlayer;
++import org.bukkit.Bukkit;
++import org.bukkit.craftbukkit.scheduler.MinecraftInternalPlugin;
++import org.bukkit.entity.Player;
++import org.bukkit.scheduler.BukkitRunnable;
++
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.Iterator;
++import java.util.Map;
++import java.util.UUID;
++
++public abstract class BossBarTask extends BukkitRunnable {
++    private final Map<UUID, BossBar> bossbars = new HashMap<>();
++    private boolean started;
++
++    abstract BossBar createBossBar();
++
++    abstract void updateBossBar(BossBar bossbar, Player player);
++
++    @Override
++    public void run() {
++        Iterator<Map.Entry<UUID, BossBar>> iter = bossbars.entrySet().iterator();
++        while (iter.hasNext()) {
++            Map.Entry<UUID, BossBar> entry = iter.next();
++            Player player = Bukkit.getPlayer(entry.getKey());
++            if (player == null) {
++                iter.remove();
++                continue;
++            }
++            updateBossBar(entry.getValue(), player);
++        }
++    }
++
++    @Override
++    public void cancel() {
++        super.cancel();
++        new HashSet<>(this.bossbars.keySet()).forEach(uuid -> {
++            Player player = Bukkit.getPlayer(uuid);
++            if (player != null) {
++                removePlayer(player);
++            }
++        });
++        this.bossbars.clear();
++    }
++
++    public boolean removePlayer(Player player) {
++        BossBar bossbar = this.bossbars.remove(player.getUniqueId());
++        if (bossbar != null) {
++            player.hideBossBar(bossbar);
++            return true;
++        }
++        return false;
++    }
++
++    public void addPlayer(Player player) {
++        removePlayer(player);
++        BossBar bossbar = createBossBar();
++        this.bossbars.put(player.getUniqueId(), bossbar);
++        this.updateBossBar(bossbar, player);
++        player.showBossBar(bossbar);
++    }
++
++    public boolean hasPlayer(UUID uuid) {
++        return this.bossbars.containsKey(uuid);
++    }
++
++    public boolean togglePlayer(Player player) {
++        if (removePlayer(player)) {
++            return false;
++        }
++        addPlayer(player);
++        return true;
++    }
++
++    public void start() {
++        stop();
++        this.runTaskTimerAsynchronously(new MinecraftInternalPlugin(), 1, 1);
++        started = true;
++    }
++
++    public void stop() {
++        if (started) {
++            cancel();
++        }
++    }
++
++    public static void startAll() {
++        TPSBarTask.instance().start();
++    }
++
++    public static void stopAll() {
++        TPSBarTask.instance().stop();
++    }
++
++    public static void addToAll(ServerPlayer player) {
++        Player bukkit = player.getBukkitEntity();
++        if (player.tpsBar()) {
++            TPSBarTask.instance().addPlayer(bukkit);
++        }
++    }
++
++    public static void removeFromAll(Player player) {
++        TPSBarTask.instance().removePlayer(player);
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/task/TPSBarTask.java b/src/main/java/org/purpurmc/purpur/task/TPSBarTask.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..6c4d5167a9d965edbb25f4c24e6bb885afe281ca
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/task/TPSBarTask.java
+@@ -0,0 +1,142 @@
++package org.purpurmc.purpur.task;
++
++import net.kyori.adventure.bossbar.BossBar;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.minimessage.MiniMessage;
++import net.kyori.adventure.text.minimessage.Template;
++import org.purpurmc.purpur.PurpurConfig;
++import org.bukkit.Bukkit;
++import org.bukkit.entity.Player;
++
++public class TPSBarTask extends BossBarTask {
++    private static TPSBarTask instance;
++    private double tps = 20.0D;
++    private double mspt = 0.0D;
++    private int tick = 0;
++
++    public static TPSBarTask instance() {
++        if (instance == null) {
++            instance = new TPSBarTask();
++        }
++        return instance;
++    }
++
++    @Override
++    BossBar createBossBar() {
++        return BossBar.bossBar(Component.text(""), 0.0F, instance().getBossBarColor(), PurpurConfig.commandTPSBarProgressOverlay);
++    }
++
++    @Override
++    void updateBossBar(BossBar bossbar, Player player) {
++        bossbar.progress(getBossBarProgress());
++        bossbar.color(getBossBarColor());
++        bossbar.name(MiniMessage.get().parse(PurpurConfig.commandTPSBarTitle,
++                Template.of("tps", getTPSColor()),
++                Template.of("mspt", getMSPTColor()),
++                Template.of("ping", getPingColor(player.getPing()))
++        ));
++    }
++
++    @Override
++    public void run() {
++        if (++tick < PurpurConfig.commandTPSBarTickInterval) {
++            return;
++        }
++        tick = 0;
++
++        this.tps = Math.max(Math.min(Bukkit.getTPS()[0], 20.0D), 0.0D);
++        this.mspt = Bukkit.getAverageTickTime();
++
++        super.run();
++    }
++
++    private float getBossBarProgress() {
++        if (PurpurConfig.commandTPSBarProgressFillMode == FillMode.MSPT) {
++            return Math.max(Math.min((float) mspt / 50.0F, 1.0F), 0.0F);
++        } else {
++            return Math.max(Math.min((float) tps / 20.0F, 1.0F), 0.0F);
++        }
++    }
++
++    private BossBar.Color getBossBarColor() {
++        if (isGood(PurpurConfig.commandTPSBarProgressFillMode)) {
++            return PurpurConfig.commandTPSBarProgressColorGood;
++        } else if (isMedium(PurpurConfig.commandTPSBarProgressFillMode)) {
++            return PurpurConfig.commandTPSBarProgressColorMedium;
++        } else {
++            return PurpurConfig.commandTPSBarProgressColorLow;
++        }
++    }
++
++    private boolean isGood(FillMode mode) {
++        return isGood(mode, 0);
++    }
++
++    private boolean isGood(FillMode mode, int ping) {
++        if (mode == FillMode.MSPT) {
++            return mspt < 40;
++        } else if (mode == FillMode.TPS) {
++            return tps >= 19;
++        } else if (mode == FillMode.PING) {
++            return ping < 100;
++        } else {
++            return false;
++        }
++    }
++
++    private boolean isMedium(FillMode mode) {
++        return isMedium(mode, 0);
++    }
++
++    private boolean isMedium(FillMode mode, int ping) {
++        if (mode == FillMode.MSPT) {
++            return mspt < 50;
++        } else if (mode == FillMode.TPS) {
++            return tps >= 15;
++        } else if (mode == FillMode.PING) {
++            return ping < 200;
++        } else {
++            return false;
++        }
++    }
++
++    private Component getTPSColor() {
++        String color;
++        if (isGood(FillMode.TPS)) {
++            color = PurpurConfig.commandTPSBarTextColorGood;
++        } else if (isMedium(FillMode.TPS)) {
++            color = PurpurConfig.commandTPSBarTextColorMedium;
++        } else {
++            color = PurpurConfig.commandTPSBarTextColorLow;
++        }
++        return MiniMessage.get().parse(color, Template.of("text", String.format("%.2f", tps)));
++    }
++
++    private Component getMSPTColor() {
++        String color;
++        if (isGood(FillMode.MSPT)) {
++            color = PurpurConfig.commandTPSBarTextColorGood;
++        } else if (isMedium(FillMode.MSPT)) {
++            color = PurpurConfig.commandTPSBarTextColorMedium;
++        } else {
++            color = PurpurConfig.commandTPSBarTextColorLow;
++        }
++        return MiniMessage.get().parse(color, Template.of("text", String.format("%.2f", mspt)));
++    }
++
++    private Component getPingColor(int ping) {
++        String color;
++        if (isGood(FillMode.PING, ping)) {
++            color = PurpurConfig.commandTPSBarTextColorGood;
++        } else if (isMedium(FillMode.PING, ping)) {
++            color = PurpurConfig.commandTPSBarTextColorMedium;
++        } else {
++            color = PurpurConfig.commandTPSBarTextColorLow;
++        }
++        return MiniMessage.get().parse(color, Template.of("text", String.format("%s", ping)));
++    }
++
++    public enum FillMode {
++        TPS, MSPT, PING
++    }
++}

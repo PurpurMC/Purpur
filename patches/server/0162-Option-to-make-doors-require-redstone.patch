@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Wed, 24 Mar 2021 04:40:11 -0500
+Subject: [PATCH] Option to make doors require redstone
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/InteractWithDoor.java b/src/main/java/net/minecraft/world/entity/ai/behavior/InteractWithDoor.java
+index 469dbdf09e83a1837919008c009d1a350cce4316..b0064d5913f27ab7614d01813f09eb2d74d2c48f 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/behavior/InteractWithDoor.java
++++ b/src/main/java/net/minecraft/world/entity/ai/behavior/InteractWithDoor.java
+@@ -65,7 +65,7 @@ public class InteractWithDoor extends Behavior<LivingEntity> {
+         BlockPos blockposition = pathpoint.asBlockPos();
+         BlockState iblockdata = world.getBlockState(blockposition);
+ 
+-        if (iblockdata.is((Tag) BlockTags.WOODEN_DOORS)) {
++        if (iblockdata.is(BlockTags.WOODEN_DOORS) && !DoorBlock.requiresRedstone(entity.level, iblockdata, blockposition)) { // Purpur
+             DoorBlock blockdoor = (DoorBlock) iblockdata.getBlock();
+ 
+             if (!blockdoor.isOpen(iblockdata)) {
+@@ -85,7 +85,7 @@ public class InteractWithDoor extends Behavior<LivingEntity> {
+         BlockPos blockposition1 = pathpoint1.asBlockPos();
+         BlockState iblockdata1 = world.getBlockState(blockposition1);
+ 
+-        if (iblockdata1.is((Tag) BlockTags.WOODEN_DOORS)) {
++        if (iblockdata1.is(BlockTags.WOODEN_DOORS) && !DoorBlock.requiresRedstone(entity.level, iblockdata, blockposition1)) { // Purpur
+             DoorBlock blockdoor1 = (DoorBlock) iblockdata1.getBlock();
+ 
+             if (!blockdoor1.isOpen(iblockdata1)) {
+@@ -120,7 +120,7 @@ public class InteractWithDoor extends Behavior<LivingEntity> {
+                     } else {
+                         BlockState iblockdata = world.getBlockState(blockposition);
+ 
+-                        if (!iblockdata.is((Tag) BlockTags.WOODEN_DOORS)) {
++                        if (!iblockdata.is(BlockTags.WOODEN_DOORS) || DoorBlock.requiresRedstone(entity.level, iblockdata, blockposition)) { // Purpur
+                             iterator.remove();
+                         } else {
+                             DoorBlock blockdoor = (DoorBlock) iblockdata.getBlock();
+diff --git a/src/main/java/net/minecraft/world/level/block/DoorBlock.java b/src/main/java/net/minecraft/world/level/block/DoorBlock.java
+index 1df52a9c86c01696a8bc9f84a2082387160b3eeb..a4b9c5da133e2e8ad45d447e3f184cb12884961e 100644
+--- a/src/main/java/net/minecraft/world/level/block/DoorBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/DoorBlock.java
+@@ -169,6 +169,7 @@ public class DoorBlock extends Block {
+     public InteractionResult use(BlockState state, Level world, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hit) {
+         if (this.material == Material.METAL) {
+             return InteractionResult.PASS;
++        } else if (requiresRedstone(world, state, pos)) { return InteractionResult.CONSUME; // Purpur
+         } else {
+             state = (BlockState) state.cycle(DoorBlock.OPEN);
+             world.setBlock(pos, state, 10);
+@@ -264,4 +265,18 @@ public class DoorBlock extends Block {
+     public static boolean isWoodenDoor(BlockState state) {
+         return state.getBlock() instanceof DoorBlock && (state.getMaterial() == Material.WOOD || state.getMaterial() == Material.NETHER_WOOD);
+     }
++
++    // Purpur start
++    public static boolean requiresRedstone(Level level, BlockState state, BlockPos pos) {
++        if (level.purpurConfig.doorRequiresRedstone.contains(state.getBlock())) {
++            // force update client
++            BlockPos otherPos = pos.relative(state.getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER ? Direction.UP : Direction.DOWN);
++            BlockState otherState = level.getBlockState(otherPos);
++            level.sendBlockUpdated(pos, state, state, 3);
++            level.sendBlockUpdated(otherPos, otherState, otherState, 3);
++            return true;
++        }
++        return false;
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 904ec899828d6ef345f5c279ceefd9d7e0b116f6..48eaeaba6ba55abdf855397a1d60d702a285a8d9 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -492,6 +492,16 @@ public class PurpurWorldConfig {
+         dispenserPlaceAnvils = getBoolean("blocks.dispenser.place-anvils", dispenserPlaceAnvils);
+     }
+ 
++    public List<Block> doorRequiresRedstone = new ArrayList<>();
++    private void doorSettings() {
++        getList("blocks.door.requires-redstone", new ArrayList<String>()).forEach(key -> {
++            Block block = Registry.BLOCK.get(new ResourceLocation(key.toString()));
++            if (!block.defaultBlockState().isAir()) {
++                doorRequiresRedstone.add(block);
++            }
++        });
++    }
++
+     public boolean baselessEndCrystalExplode = true;
+     public double baselessEndCrystalExplosionPower = 6.0D;
+     public boolean baselessEndCrystalExplosionFire = false;

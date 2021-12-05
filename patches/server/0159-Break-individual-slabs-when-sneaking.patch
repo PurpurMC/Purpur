@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Tue, 23 Mar 2021 19:38:53 -0500
+Subject: [PATCH] Break individual slabs when sneaking
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java b/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
+index 5565dfb30bd2609aded4c064ea6dfcabf71047e6..cd1d5c3a21b08105b00e2d10671cfa0c7f24330d 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
+@@ -418,6 +418,7 @@ public class ServerPlayerGameMode {
+                 }
+                 return false;
+             }
++            if (this.player.level.purpurConfig.slabHalfBreak && this.player.isShiftKeyDown() && iblockdata.getBlock() instanceof net.minecraft.world.level.block.SlabBlock && ((net.minecraft.world.level.block.SlabBlock) iblockdata.getBlock()).halfBreak(iblockdata, pos, this.player)) return true; // Purpur
+         }
+         // CraftBukkit end
+ 
+diff --git a/src/main/java/net/minecraft/world/level/block/SlabBlock.java b/src/main/java/net/minecraft/world/level/block/SlabBlock.java
+index 54df5c2987822a727a31be2b3769d39fabb6159a..70b6a65a7d321fc71c98289f09f21ccaf4d5f6b7 100644
+--- a/src/main/java/net/minecraft/world/level/block/SlabBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/SlabBlock.java
+@@ -130,4 +130,25 @@ public class SlabBlock extends Block implements SimpleWaterloggedBlock {
+             return false;
+         }
+     }
++
++    // Purpur start
++    public boolean halfBreak(BlockState state, BlockPos pos, net.minecraft.server.level.ServerPlayer player) {
++        if (state.getValue(SlabBlock.TYPE) != SlabType.DOUBLE) {
++            return false;
++        }
++        net.minecraft.world.phys.HitResult result = player.getRayTrace(16);
++        if (result.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) {
++            return false;
++        }
++        double hitY = result.getLocation().y();
++        int blockY = org.bukkit.util.NumberConversions.floor(hitY);
++        player.level.setBlock(pos, state.setValue(SlabBlock.TYPE, (hitY - blockY > 0.5 || blockY - pos.getY() == 1) ? SlabType.BOTTOM : SlabType.TOP), 3);
++        if (!player.getAbilities().instabuild) {
++            net.minecraft.world.entity.item.ItemEntity item = new net.minecraft.world.entity.item.ItemEntity(player.level, pos.getX(), pos.getY(), pos.getZ(), new ItemStack(asItem()));
++            item.setDefaultPickUpDelay();
++            player.level.addFreshEntity(item);
++        }
++        return true;
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index f67e57204a2be5076c7d14ab513d205378134a60..af137c18c47ecea46c9539f4ad186619196ab1d4 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -594,6 +594,11 @@ public class PurpurWorldConfig {
+         signRightClickEdit = getBoolean("blocks.sign.right-click-edit", signRightClickEdit);
+     }
+ 
++    public boolean slabHalfBreak = false;
++    private void slabSettings() {
++        slabHalfBreak = getBoolean("blocks.slab.break-individual-slabs-when-sneaking", slabHalfBreak);
++    }
++
+     public boolean spawnerDeactivateByRedstone = false;
+     private void spawnerSettings() {
+         spawnerDeactivateByRedstone = getBoolean("blocks.spawner.deactivate-by-redstone", spawnerDeactivateByRedstone);

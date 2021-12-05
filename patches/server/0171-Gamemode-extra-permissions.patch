@@ -1,0 +1,96 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Fri, 30 Apr 2021 13:39:39 -0500
+Subject: [PATCH] Gamemode extra permissions
+
+
+diff --git a/src/main/java/net/minecraft/commands/CommandSourceStack.java b/src/main/java/net/minecraft/commands/CommandSourceStack.java
+index 6e8111ef16439d2b3025ebe2a0418b245420bd88..c20c7c9a6eb299e1a8d3d3e9bdf986ea282dd98a 100644
+--- a/src/main/java/net/minecraft/commands/CommandSourceStack.java
++++ b/src/main/java/net/minecraft/commands/CommandSourceStack.java
+@@ -195,6 +195,21 @@ public class CommandSourceStack implements SharedSuggestionProvider, com.destroy
+     }
+     // CraftBukkit end
+ 
++    // Purpur start
++    public boolean testPermission(int i, String bukkitPermission) {
++        if (hasPermission(i, bukkitPermission)) {
++            return true;
++        }
++        String permissionMessage = getLevel().getServer().server.getPermissionMessage();
++        if (!permissionMessage.isBlank()) {
++            for (String line : permissionMessage.replace("<permission>", bukkitPermission).split("\n")) {
++                sendFailure(new TextComponent(line));
++            }
++        }
++        return false;
++    }
++    // Purpur end
++
+     public Vec3 getPosition() {
+         return this.worldPosition;
+     }
+diff --git a/src/main/java/net/minecraft/server/commands/GameModeCommand.java b/src/main/java/net/minecraft/server/commands/GameModeCommand.java
+index 79f6089b934124c3309c6bee2e48b36b937252e0..d1e6ac2dcff3f058dc147c8ed4d16d273b7c40a9 100644
+--- a/src/main/java/net/minecraft/server/commands/GameModeCommand.java
++++ b/src/main/java/net/minecraft/server/commands/GameModeCommand.java
+@@ -49,6 +49,18 @@ public class GameModeCommand {
+     }
+ 
+     private static int setMode(CommandContext<CommandSourceStack> context, Collection<ServerPlayer> targets, GameType gameMode) {
++        // Purpur start
++        if (org.purpurmc.purpur.PurpurConfig.commandGamemodeRequiresPermission) {
++            String gamemode = gameMode.getName();
++            CommandSourceStack sender = context.getSource();
++            if (!sender.testPermission(2, "minecraft.command.gamemode." + gamemode)) {
++                return 0;
++            }
++            if (sender.getEntity() instanceof ServerPlayer player && (targets.size() > 1 || !targets.contains(player)) && !sender.testPermission(2, "minecraft.command.gamemode." + gamemode + ".other")) {
++                return 0;
++            }
++        }
++        // Purpur end
+         int i = 0;
+ 
+         for(ServerPlayer serverPlayer : targets) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/util/permissions/CommandPermissions.java b/src/main/java/org/bukkit/craftbukkit/util/permissions/CommandPermissions.java
+index 6cc517b394bafefce50d877761e5b2eee8e14c78..46ca899a7abddea108f6ff1b4ca14ca5cd3112ab 100644
+--- a/src/main/java/org/bukkit/craftbukkit/util/permissions/CommandPermissions.java
++++ b/src/main/java/org/bukkit/craftbukkit/util/permissions/CommandPermissions.java
+@@ -23,7 +23,15 @@ public final class CommandPermissions {
+         DefaultPermissions.registerPermission(CommandPermissions.PREFIX + "kick", "Allows the user to kick players", PermissionDefault.OP, commands);
+         DefaultPermissions.registerPermission(CommandPermissions.PREFIX + "stop", "Allows the user to stop the server", PermissionDefault.OP, commands);
+         DefaultPermissions.registerPermission(CommandPermissions.PREFIX + "list", "Allows the user to list all online players", PermissionDefault.OP, commands);
+-        DefaultPermissions.registerPermission(CommandPermissions.PREFIX + "gamemode", "Allows the user to change the gamemode of another player", PermissionDefault.OP, commands);
++        // Purpur start
++        Permission gamemodeVanilla = DefaultPermissions.registerPermission(PREFIX + "gamemode", "Allows the user to change the gamemode", PermissionDefault.OP, commands);
++        for (net.minecraft.world.level.GameType gametype : net.minecraft.world.level.GameType.values()) {
++            Permission gamemodeSelf = DefaultPermissions.registerPermission(PREFIX + "gamemode." + gametype.getName(), "Allows the user to set " + gametype.getName() + " gamemode for self", PermissionDefault.OP);
++            Permission gamemodeOther = DefaultPermissions.registerPermission(PREFIX + "gamemode." + gametype.getName() + ".other", "Allows the user to set " + gametype.getName() + " gamemode for other players", PermissionDefault.OP);
++            gamemodeSelf.addParent(gamemodeOther, true);
++            gamemodeVanilla.addParent(gamemodeSelf, true);
++        }
++        // Purpur end
+         DefaultPermissions.registerPermission(CommandPermissions.PREFIX + "xp", "Allows the user to give themselves or others arbitrary values of experience", PermissionDefault.OP, commands);
+         DefaultPermissions.registerPermission(CommandPermissions.PREFIX + "toggledownfall", "Allows the user to toggle rain on/off for a given world", PermissionDefault.OP, commands);
+         DefaultPermissions.registerPermission(CommandPermissions.PREFIX + "defaultgamemode", "Allows the user to change the default gamemode of the server", PermissionDefault.OP, commands);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 2c3cdaa093f28954620f17ee92b4fdc0e4508d51..39840a49c3900e227f1410db07abdc98051a7269 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -221,6 +221,7 @@ public class PurpurConfig {
+     public static String commandTPSBarTextColorMedium = "<gradient:#ffff55:#ffaa00><text></gradient>";
+     public static String commandTPSBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
+     public static int commandTPSBarTickInterval = 20;
++    public static boolean commandGamemodeRequiresPermission = false;
+     private static void commandSettings() {
+         commandTPSBarTitle = getString("settings.command.tpsbar.title", commandTPSBarTitle);
+         commandTPSBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.tpsbar.overlay", commandTPSBarProgressOverlay.name()));
+@@ -232,6 +233,7 @@ public class PurpurConfig {
+         commandTPSBarTextColorMedium = getString("settings.command.tpsbar.text-color.medium", commandTPSBarTextColorMedium);
+         commandTPSBarTextColorLow = getString("settings.command.tpsbar.text-color.low", commandTPSBarTextColorLow);
+         commandTPSBarTickInterval = getInt("settings.command.tpsbar.tick-interval", commandTPSBarTickInterval);
++        commandGamemodeRequiresPermission = getBoolean("settings.command.gamemode.requires-specific-permission", commandGamemodeRequiresPermission);
+     }
+ 
+     public static int barrelRows = 3;
