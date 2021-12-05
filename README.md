@@ -27,7 +27,8 @@ Join us on [Discord](https://discord.gg/mtAAnkk)
 Downloads can be obtained from the [downloads page](https://purpurmc.org/downloads/) or the [downloads API](https://api.purpurmc.org).
 
 Latest build shortcut links:
-* [1.17.1](https://api.purpurmc.org/v1/purpur/1.17.1/latest/download) builds 1256+
+* [1.18](https://purpurmc.org/downloads/1.18/latest/download) builds 1429+
+* [1.17.1](https://api.purpurmc.org/v1/purpur/1.17.1/latest/download) builds 1256-1428
 * [1.17](https://api.purpurmc.org/v1/purpur/1.17/latest/download) builds 1172-1255
 * [1.16.5](https://api.purpurmc.org/v1/purpur/1.16.5/latest/download) builds 957-1171
 * [1.16.4](https://api.purpurmc.org/v1/purpur/1.16.4/latest/download) builds 809-956
