@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Thu, 6 Jun 2019 17:40:30 -0500
+Subject: [PATCH] Signs allow color codes
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index e2e83d8b39ddb154c0e69b63d5b996644926ac43..a9885f92e0a3494b27376a7a01edbd0e22a31708 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -1496,6 +1496,7 @@ public class ServerPlayer extends Player {
+ 
+     @Override
+     public void openTextEdit(SignBlockEntity sign) {
++        if (level.purpurConfig.signAllowColors) this.connection.send(sign.getTranslatedUpdatePacket(textFilteringEnabled)); // Purpur
+         sign.setAllowedPlayerEditor(this.getUUID());
+         this.connection.send(new ClientboundBlockUpdatePacket(this.level, sign.getBlockPos()));
+         this.connection.send(new ClientboundOpenSignEditorPacket(sign.getBlockPos()));
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index ae8450fa09cb481d14db81364553d16e542aa182..bea4a6d594b1fb266cbbe0a107f1a0a91d6fe682 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -3139,11 +3139,15 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Ser
+                 }
+                 // Paper end
+ 
+-                if (this.player.isTextFilteringEnabled()) {
+-                    lines.add(net.kyori.adventure.text.Component.text(SharedConstants.filterText(currentLine.getFiltered())));
+-                } else {
+-                    lines.add(net.kyori.adventure.text.Component.text(SharedConstants.filterText(currentLine.getRaw())));
+-                }
++                String line = SharedConstants.filterText(this.player.isTextFilteringEnabled() ? currentLine.getFiltered() : currentLine.getRaw());
++                if (worldserver.purpurConfig.signAllowColors) {
++                    if (player.hasPermission("purpur.sign.color")) line = line.replaceAll("(?i)&([0-9a-fr])", "\u00a7$1");
++                    if (player.hasPermission("purpur.sign.style")) line = line.replaceAll("(?i)&([l-or])", "\u00a7$1");
++                    if (player.hasPermission("purpur.sign.magic")) line = line.replaceAll("(?i)&([kr])", "\u00a7$1");
++                    lines.add(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(line));
++                } else
++                    lines.add(net.kyori.adventure.text.Component.text(line));
++                // Purpur end
+             }
+             SignChangeEvent event = new SignChangeEvent((org.bukkit.craftbukkit.block.CraftBlock) player.getWorld().getBlockAt(x, y, z), this.player.getBukkitEntity(), lines);
+             this.cserver.getPluginManager().callEvent(event);
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
+index 6371176fba41218a209ea59b4cafe5b2d4a685fd..7666bca74f4f68bb4e902ec2eb7c4895adbb9373 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
+@@ -184,6 +184,23 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
+         return ClientboundBlockEntityDataPacket.create(this);
+     }
+ 
++    // Purpur start
++    public ClientboundBlockEntityDataPacket getTranslatedUpdatePacket(boolean filtered) {
++        final CompoundTag nbt = new CompoundTag();
++        this.saveAdditional(nbt);
++        final Component[] lines = getMessages(filtered);
++        for (int i = 0; i < 4; i++) {
++            final var component = io.papermc.paper.adventure.PaperAdventure.asAdventure(lines[i]);
++            final String line = io.papermc.paper.adventure.PaperAdventure.LEGACY_AMPERSAND.serialize(component);
++            final var text = net.kyori.adventure.text.Component.text(line);
++            final String json = net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson().serialize(text);
++            nbt.putString("Text" + (i + 1), json);
++        }
++        nbt.putString("PurpurEditor", "true");
++        return ClientboundBlockEntityDataPacket.create(this, entity -> nbt);
++    }
++    // Purpur end
++
+     @Override
+     public CompoundTag getUpdateTag() {
+         return this.saveWithoutMetadata();
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index bf956c5b062ae21040d58f55abe6a50be2ee3a08..9a6491f7a3f10a9a0eb0b369b8d1dc26067a0aba 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -926,8 +926,10 @@ public class PurpurWorldConfig {
+     }
+ 
+     public boolean signRightClickEdit = false;
++    public boolean signAllowColors = false;
+     private void signSettings() {
+         signRightClickEdit = getBoolean("blocks.sign.right-click-edit", signRightClickEdit);
++        signAllowColors = getBoolean("blocks.sign.allow-colors", signAllowColors);
+     }
+ 
+     public boolean slabHalfBreak = false;

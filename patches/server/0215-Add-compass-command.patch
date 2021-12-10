@@ -1,0 +1,248 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sat, 24 Jul 2021 00:07:31 -0500
+Subject: [PATCH] Add compass command
+
+
+diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
+index 04aa3a9d98ff4de3ce0bbacb07dc30170ff232b1..d81e3073d0e905388e1390d849f779902fadbad2 100644
+--- a/src/main/java/net/minecraft/commands/Commands.java
++++ b/src/main/java/net/minecraft/commands/Commands.java
+@@ -210,6 +210,7 @@ public class Commands {
+             org.purpurmc.purpur.command.PingCommand.register(this.dispatcher); // Purpur
+             org.purpurmc.purpur.command.UptimeCommand.register(this.dispatcher); // Purpur
+             org.purpurmc.purpur.command.TPSBarCommand.register(this.dispatcher); // Purpur
++            org.purpurmc.purpur.command.CompassCommand.register(this.dispatcher); // Purpur
+         }
+ 
+         if (environment.includeIntegrated) {
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index 6d643998ee32de7f96b94e10fbd0b08a75628978..e2e83d8b39ddb154c0e69b63d5b996644926ac43 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -257,6 +257,7 @@ public class ServerPlayer extends Player {
+     public boolean purpurClient = false; // Purpur
+     public boolean acceptingResourcePack = false; // Purpur
+     private boolean tpsBar = false; // Purpur
++    private boolean compassBar = false; // Purpur
+ 
+     public double lastEntitySpawnRadiusSquared; // Paper - optimise isOutsideRange, this field is in blocks
+     public final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> cachedSingleHashSet; // Paper
+@@ -479,6 +480,7 @@ public class ServerPlayer extends Player {
+         }
+ 
+         if (nbt.contains("Purpur.TPSBar")) { this.tpsBar = nbt.getBoolean("Purpur.TPSBar"); } // Purpur
++        if (nbt.contains("Purpur.CompassBar")) { this.compassBar = nbt.getBoolean("Purpur.CompassBar"); } // Purpur
+     }
+ 
+     @Override
+@@ -540,6 +542,7 @@ public class ServerPlayer extends Player {
+         this.getBukkitEntity().setExtraData(nbt); // CraftBukkit
+ 
+         nbt.putBoolean("Purpur.TPSBar", this.tpsBar); // Purpur
++        nbt.putBoolean("Purpur.CompassBar", this.compassBar); // Purpur
+     }
+ 
+     // CraftBukkit start - World fallback code, either respawn location or global spawn
+@@ -2579,5 +2582,13 @@ public class ServerPlayer extends Player {
+     public void tpsBar(boolean tpsBar) {
+         this.tpsBar = tpsBar;
+     }
++
++    public boolean compassBar() {
++        return this.compassBar;
++    }
++
++    public void compassBar(boolean compassBar) {
++        this.compassBar = compassBar;
++    }
+     // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/world/item/CompassItem.java b/src/main/java/net/minecraft/world/item/CompassItem.java
+index 9d541c9e53f3f8db871f01f8d083e4cfc0de0de1..49e86b191397b49480684e7d99a515e9f8cf73fd 100644
+--- a/src/main/java/net/minecraft/world/item/CompassItem.java
++++ b/src/main/java/net/minecraft/world/item/CompassItem.java
+@@ -46,6 +46,17 @@ public class CompassItem extends Item implements Vanishable {
+     @Override
+     public void inventoryTick(ItemStack stack, Level world, Entity entity, int slot, boolean selected) {
+         if (!world.isClientSide) {
++            // Purpur start
++            if (world.purpurConfig.compassItemShowsBossBar && entity instanceof net.minecraft.server.level.ServerPlayer player && !player.compassBar()) {
++                org.purpurmc.purpur.task.CompassTask task = org.purpurmc.purpur.task.CompassTask.instance();
++                boolean hasTask = task.hasPlayer(player.getUUID());
++                if (selected && !hasTask) {
++                    task.addPlayer(player.getBukkitEntity());
++                } else if (!selected && hasTask) {
++                    task.removePlayer(player.getBukkitEntity());
++                }
++            }
++            // Purpur end
+             if (isLodestoneCompass(stack)) {
+                 CompoundTag compoundTag = stack.getOrCreateTag();
+                 if (compoundTag.contains("LodestoneTracked") && !compoundTag.getBoolean("LodestoneTracked")) {
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 049bf902e8e77d7eac8dc868593c215bf04838a9..2b90f0aa67e3ed19e29c5ec72cf8947391bffdb7 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -252,6 +252,11 @@ public class PurpurConfig {
+     public static String commandTPSBarTextColorMedium = "<gradient:#ffff55:#ffaa00><text></gradient>";
+     public static String commandTPSBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
+     public static int commandTPSBarTickInterval = 20;
++    public static String commandCompassBarTitle = "S  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  SW  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  W  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  NW  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  N  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  NE  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  E  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  SE  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  S  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  SW  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  W  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  NW  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  N  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  NE  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  E  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  SE  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  ";
++    public static BossBar.Overlay commandCompassBarProgressOverlay = BossBar.Overlay.PROGRESS;
++    public static BossBar.Color commandCompassBarProgressColor = BossBar.Color.BLUE;
++    public static float commandCompassBarProgressPercent = 1.0F;
++    public static int commandCompassBarTickInterval = 5;
+     public static boolean commandGamemodeRequiresPermission = false;
+     public static boolean hideHiddenPlayersFromEntitySelector = false;
+     public static String uptimeFormat = "<days><hours><minutes><seconds>";
+@@ -274,6 +279,13 @@ public class PurpurConfig {
+         commandTPSBarTextColorMedium = getString("settings.command.tpsbar.text-color.medium", commandTPSBarTextColorMedium);
+         commandTPSBarTextColorLow = getString("settings.command.tpsbar.text-color.low", commandTPSBarTextColorLow);
+         commandTPSBarTickInterval = getInt("settings.command.tpsbar.tick-interval", commandTPSBarTickInterval);
++
++        commandCompassBarTitle = getString("settings.command.compass.title", commandCompassBarTitle);
++        commandCompassBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.compass.overlay", commandCompassBarProgressOverlay.name()));
++        commandCompassBarProgressColor = BossBar.Color.valueOf(getString("settings.command.compass.progress-color", commandCompassBarProgressColor.name()));
++        commandCompassBarProgressPercent = (float) getDouble("settings.command.compass.percent", commandCompassBarProgressPercent);
++        commandCompassBarTickInterval = getInt("settings.command.compass.tick-interval", commandCompassBarTickInterval);
++
+         commandGamemodeRequiresPermission = getBoolean("settings.command.gamemode.requires-specific-permission", commandGamemodeRequiresPermission);
+         hideHiddenPlayersFromEntitySelector = getBoolean("settings.command.hide-hidden-players-from-entity-selector", hideHiddenPlayersFromEntitySelector);
+         uptimeFormat = getString("settings.command.uptime.format", uptimeFormat);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index aee40fd438225fa5eb0b023ed047eb95136f2093..619d1295836ac51ff5b5bc8400ee59f296788455 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -176,6 +176,7 @@ public class PurpurWorldConfig {
+     public float enderPearlEndermiteChance = 0.05F;
+     public int glowBerriesEatGlowDuration = 0;
+     public boolean shulkerBoxItemDropContentsWhenDestroyed = true;
++    public boolean compassItemShowsBossBar = false;
+     private void itemSettings() {
+         itemImmuneToCactus.clear();
+         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
+@@ -221,6 +222,7 @@ public class PurpurWorldConfig {
+         enderPearlEndermiteChance = (float) getDouble("gameplay-mechanics.item.ender-pearl.endermite-spawn-chance", enderPearlEndermiteChance);
+         glowBerriesEatGlowDuration = getInt("gameplay-mechanics.item.glow_berries.eat-glow-duration", glowBerriesEatGlowDuration);
+         shulkerBoxItemDropContentsWhenDestroyed = getBoolean("gameplay-mechanics.item.shulker_box.drop-contents-when-destroyed", shulkerBoxItemDropContentsWhenDestroyed);
++        compassItemShowsBossBar = getBoolean("gameplay-mechanics.item.compass.holding-shows-bossbar", compassItemShowsBossBar);
+     }
+ 
+     public double minecartMaxSpeed = 0.4D;
+diff --git a/src/main/java/org/purpurmc/purpur/command/CompassCommand.java b/src/main/java/org/purpurmc/purpur/command/CompassCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..c493bb0ff9b0de2edadbee4138eab4d51f1fd20a
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/command/CompassCommand.java
+@@ -0,0 +1,21 @@
++package org.purpurmc.purpur.command;
++
++import com.mojang.brigadier.CommandDispatcher;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.server.level.ServerPlayer;
++import org.purpurmc.purpur.task.CompassTask;
++
++public class CompassCommand {
++    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++        dispatcher.register(Commands.literal("compass")
++                .requires(listener -> listener.hasPermission(2))
++                .executes(context -> {
++                    ServerPlayer player = context.getSource().getPlayerOrException();
++                    boolean result = CompassTask.instance().togglePlayer(player.getBukkitEntity());
++                    player.compassBar(result);
++                    return 1;
++                })
++        ).setPermission("bukkit.command.compass");
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/task/BossBarTask.java b/src/main/java/org/purpurmc/purpur/task/BossBarTask.java
+index d38b3c4a722396cc3b61a9a8ed7e39cea4ae65cb..d333334f323049ca97e756324cff0b23eddacd2a 100644
+--- a/src/main/java/org/purpurmc/purpur/task/BossBarTask.java
++++ b/src/main/java/org/purpurmc/purpur/task/BossBarTask.java
+@@ -90,10 +90,12 @@ public abstract class BossBarTask extends BukkitRunnable {
+ 
+     public static void startAll() {
+         TPSBarTask.instance().start();
++        CompassTask.instance().start();
+     }
+ 
+     public static void stopAll() {
+         TPSBarTask.instance().stop();
++        CompassTask.instance().stop();
+     }
+ 
+     public static void addToAll(ServerPlayer player) {
+@@ -101,9 +103,13 @@ public abstract class BossBarTask extends BukkitRunnable {
+         if (player.tpsBar()) {
+             TPSBarTask.instance().addPlayer(bukkit);
+         }
++        if (player.compassBar()) {
++            CompassTask.instance().addPlayer(bukkit);
++        }
+     }
+ 
+     public static void removeFromAll(Player player) {
+         TPSBarTask.instance().removePlayer(player);
++        CompassTask.instance().removePlayer(player);
+     }
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/task/CompassTask.java b/src/main/java/org/purpurmc/purpur/task/CompassTask.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..c34abe39812466437826a06101cd81c770e9e7a3
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/task/CompassTask.java
+@@ -0,0 +1,52 @@
++package org.purpurmc.purpur.task;
++
++import net.kyori.adventure.bossbar.BossBar;
++import net.kyori.adventure.text.Component;
++import org.purpurmc.purpur.PurpurConfig;
++import org.bukkit.entity.Player;
++
++public class CompassTask extends BossBarTask {
++    private static CompassTask instance;
++
++    private int tick = 0;
++
++    public static CompassTask instance() {
++        if (instance == null) {
++            instance = new CompassTask();
++        }
++        return instance;
++    }
++
++    @Override
++    public void run() {
++        if (++tick < PurpurConfig.commandCompassBarTickInterval) {
++            return;
++        }
++        tick = 0;
++
++        super.run();
++    }
++
++    @Override
++    BossBar createBossBar() {
++        return BossBar.bossBar(Component.text(""), PurpurConfig.commandCompassBarProgressPercent, PurpurConfig.commandCompassBarProgressColor, PurpurConfig.commandCompassBarProgressOverlay);
++    }
++
++    @Override
++    void updateBossBar(BossBar bossbar, Player player) {
++        float yaw = player.getLocation().getYaw();
++        int length = PurpurConfig.commandCompassBarTitle.length();
++        int pos = (int) ((normalize(yaw) * (length / 720F)) + (length / 2F));
++        bossbar.name(Component.text(PurpurConfig.commandCompassBarTitle.substring(pos - 25, pos + 25)));
++    }
++
++    private float normalize(float yaw) {
++        while (yaw < -180.0F) {
++            yaw += 360.0F;
++        }
++        while (yaw > 180.0F) {
++            yaw -= 360.0F;
++        }
++        return yaw;
++    }
++}
