@@ -17,7 +17,7 @@ toothpick {
     nmsRevision = "R0.1-SNAPSHOT"
 
     upstream = "Paper"
-    upstreamBranch = "origin/master"
+    upstreamBranch = "origin/ver/1.16.5"
 
     server {
         project = projects.purpurServer.dependencyProject
@@ -34,6 +34,9 @@ subprojects {
         maven("https://nexus.velocitypowered.com/repository/velocity-artifacts-snapshots/")
         maven("https://oss.sonatype.org/content/repositories/snapshots/") {
             name = "sonatype-oss-snapshots"
+        }
+        maven("https://repository.apache.org/content/groups/snapshots/") {
+            name = "apache-snapshot"
         }
     }
 
