@@ -192,7 +192,7 @@ index 645c1dc9bd09b135a641759c76ce8d957b9bd488..03adc3b746e05bb4b0514ba4a66c101b
      protected ParticleOptions getInkParticle() {
          return ParticleTypes.GLOW_SQUID_INK;
 diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
-index fe7e22d9a69d69dfcce63faa28e90945ea45fc49..76209fd395c65a30201d731448f870610a1e27f2 100644
+index fe7e22d9a69d69dfcce63faa28e90945ea45fc49..5d9e460c54068e0e05f975fa057a099c160a3d0d 100644
 --- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
 +++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
 @@ -217,9 +217,9 @@ public abstract class LivingEntity extends Entity {
@@ -208,7 +208,24 @@ index fe7e22d9a69d69dfcce63faa28e90945ea45fc49..76209fd395c65a30201d731448f87061
      protected int lerpSteps;
      protected double lerpX;
      protected double lerpY;
-@@ -2585,7 +2585,7 @@ public abstract class LivingEntity extends Entity {
+@@ -284,7 +284,7 @@ public abstract class LivingEntity extends Entity {
+         this.effectsDirty = true;
+         this.useItem = ItemStack.EMPTY;
+         this.lastClimbablePos = Optional.empty();
+-        this.attributes = new AttributeMap(DefaultAttributes.getSupplier(type));
++        this.attributes = new AttributeMap(DefaultAttributes.getSupplier(type), this); // Purpur
+         this.craftAttributes = new CraftAttributeMap(this.attributes); // CraftBukkit
+         // CraftBukkit - setHealth(getMaxHealth()) inlined and simplified to skip the instanceof check for EntityPlayer, as getBukkitEntity() is not initialized in constructor
+         this.entityData.set(LivingEntity.DATA_HEALTH_ID, (float) this.getAttribute(Attributes.MAX_HEALTH).getValue());
+@@ -335,6 +335,7 @@ public abstract class LivingEntity extends Entity {
+     public static AttributeSupplier.Builder createLivingAttributes() {
+         return AttributeSupplier.builder().add(Attributes.MAX_HEALTH).add(Attributes.KNOCKBACK_RESISTANCE).add(Attributes.MOVEMENT_SPEED).add(Attributes.ARMOR).add(Attributes.ARMOR_TOUGHNESS);
+     }
++    public boolean shouldSendAttribute(Attribute attribute) { return true; } // Purpur
+ 
+     @Override
+     protected void checkFallDamage(double heightDifference, boolean onGround, BlockState landedState, BlockPos landedPosition) {
+@@ -2585,7 +2586,7 @@ public abstract class LivingEntity extends Entity {
      }
  
      protected long lastJumpTime = 0L; // Paper
@@ -217,7 +234,7 @@ index fe7e22d9a69d69dfcce63faa28e90945ea45fc49..76209fd395c65a30201d731448f87061
          double d0 = (double) this.getJumpPower() + this.getJumpBoostPower();
          Vec3 vec3d = this.getDeltaMovement();
          // Paper start
-@@ -3321,8 +3321,10 @@ public abstract class LivingEntity extends Entity {
+@@ -3321,8 +3322,10 @@ public abstract class LivingEntity extends Entity {
          this.pushEntities();
          this.level.getProfiler().pop();
          // Paper start
@@ -230,7 +247,7 @@ index fe7e22d9a69d69dfcce63faa28e90945ea45fc49..76209fd395c65a30201d731448f87061
                  Location from = new Location(this.level.getWorld(), this.xo, this.yo, this.zo, this.yRotO, this.xRotO);
                  Location to = new Location (this.level.getWorld(), this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot());
                  io.papermc.paper.event.entity.EntityMoveEvent event = new io.papermc.paper.event.entity.EntityMoveEvent(this.getBukkitLivingEntity(), from, to.clone());
-@@ -3332,6 +3334,21 @@ public abstract class LivingEntity extends Entity {
+@@ -3332,6 +3335,21 @@ public abstract class LivingEntity extends Entity {
                      absMoveTo(event.getTo().getX(), event.getTo().getY(), event.getTo().getZ(), event.getTo().getYaw(), event.getTo().getPitch());
                  }
              }
@@ -327,6 +344,41 @@ index 8200e33ed4ebcae8a27cccf2a28daba5e10cf75d..b7e3091e9ce5b634c73ac573cf205278
 +    }
 +    // Purpur end
  }
+diff --git a/src/main/java/net/minecraft/world/entity/ai/attributes/AttributeMap.java b/src/main/java/net/minecraft/world/entity/ai/attributes/AttributeMap.java
+index 9cbfda029782385d1a7987f5be46d450bd8a758e..718b3fbf5b92d9979de7775e1d40420bb7cf439b 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/attributes/AttributeMap.java
++++ b/src/main/java/net/minecraft/world/entity/ai/attributes/AttributeMap.java
+@@ -22,13 +22,20 @@ public class AttributeMap {
+     private final Map<Attribute, AttributeInstance> attributes = Maps.newHashMap();
+     private final Set<AttributeInstance> dirtyAttributes = Sets.newHashSet();
+     private final AttributeSupplier supplier;
++    private final net.minecraft.world.entity.LivingEntity entity; // Purpur
+ 
+     public AttributeMap(AttributeSupplier defaultAttributes) {
++        // Purpur start
++        this(defaultAttributes, null);
++    }
++    public AttributeMap(AttributeSupplier defaultAttributes, net.minecraft.world.entity.LivingEntity entity) {
++        this.entity = entity;
++        // Purpur end
+         this.supplier = defaultAttributes;
+     }
+ 
+     private void onAttributeModified(AttributeInstance instance) {
+-        if (instance.getAttribute().isClientSyncable()) {
++        if (instance.getAttribute().isClientSyncable() && (entity == null || entity.shouldSendAttribute(instance.getAttribute()))) { // Purpur
+             this.dirtyAttributes.add(instance);
+         }
+ 
+@@ -40,7 +47,7 @@ public class AttributeMap {
+ 
+     public Collection<AttributeInstance> getSyncableAttributes() {
+         return this.attributes.values().stream().filter((attribute) -> {
+-            return attribute.getAttribute().isClientSyncable();
++            return attribute.getAttribute().isClientSyncable() && (entity == null || entity.shouldSendAttribute(attribute.getAttribute())); // Purpur
+         }).collect(Collectors.toList());
+     }
+ 
 diff --git a/src/main/java/net/minecraft/world/entity/ai/attributes/DefaultAttributes.java b/src/main/java/net/minecraft/world/entity/ai/attributes/DefaultAttributes.java
 index 6a4a0ba0f8f96dd8566b3164bbbceeaa37b548f1..65d0b0e7856eaa61e26b0af750bb7959f5a225f7 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/attributes/DefaultAttributes.java
@@ -479,7 +531,7 @@ index 7df56705a4a0de2dc4ff7ab133fc26612c219162..60d21d6171b9af20a4c6fcc0d564a31a
          }
  
 diff --git a/src/main/java/net/minecraft/world/entity/ambient/Bat.java b/src/main/java/net/minecraft/world/entity/ambient/Bat.java
-index 29dfbcecfbb2560e6ecde997abd5224a16c08c94..45dd82005ff4d03041a9c42e6eacaa2b8a7dc9f8 100644
+index 29dfbcecfbb2560e6ecde997abd5224a16c08c94..8a6608310caf1a9046fba4e51ca0eff92c8177fc 100644
 --- a/src/main/java/net/minecraft/world/entity/ambient/Bat.java
 +++ b/src/main/java/net/minecraft/world/entity/ambient/Bat.java
 @@ -19,6 +19,7 @@ import net.minecraft.world.entity.EntityDimensions;
@@ -490,7 +542,7 @@ index 29dfbcecfbb2560e6ecde997abd5224a16c08c94..45dd82005ff4d03041a9c42e6eacaa2b
  import net.minecraft.world.entity.Pose;
  import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
  import net.minecraft.world.entity.ai.attributes.Attributes;
-@@ -42,9 +43,48 @@ public class Bat extends AmbientCreature {
+@@ -42,9 +43,51 @@ public class Bat extends AmbientCreature {
  
      public Bat(EntityType<? extends Bat> type, Level world) {
          super(type, world);
@@ -499,6 +551,9 @@ index 29dfbcecfbb2560e6ecde997abd5224a16c08c94..45dd82005ff4d03041a9c42e6eacaa2b
      }
  
 +    // Purpur start
++    @Override
++    public boolean shouldSendAttribute(net.minecraft.world.entity.ai.attributes.Attribute attribute) { return attribute != Attributes.FLYING_SPEED; } // Fixes log spam on clients
++
 +    @Override
 +    public boolean isRidable() {
 +        return level.purpurConfig.batRidable;
@@ -539,7 +594,7 @@ index 29dfbcecfbb2560e6ecde997abd5224a16c08c94..45dd82005ff4d03041a9c42e6eacaa2b
      @Override
      public boolean isFlapping() {
          return !this.isResting() && this.tickCount % Bat.TICKS_PER_FLAP == 0;
-@@ -94,7 +134,7 @@ public class Bat extends AmbientCreature {
+@@ -94,7 +137,7 @@ public class Bat extends AmbientCreature {
      protected void pushEntities() {}
  
      public static AttributeSupplier.Builder createAttributes() {
@@ -548,7 +603,7 @@ index 29dfbcecfbb2560e6ecde997abd5224a16c08c94..45dd82005ff4d03041a9c42e6eacaa2b
      }
  
      public boolean isResting() {
-@@ -126,6 +166,14 @@ public class Bat extends AmbientCreature {
+@@ -126,6 +169,14 @@ public class Bat extends AmbientCreature {
  
      @Override
      protected void customServerAiStep() {
