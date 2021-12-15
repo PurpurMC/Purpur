@@ -19,7 +19,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index e067c69fea1dec79ef8e97cad1c74020b6a3a235..fd3528be3d90733e826bcbeae967b95cedf92dfe 100644
+index ffcc23d50922b508719534d6eb8f707c81d186c5..2557d27106f30a87d4bc33f5c9bacb1b08e60027 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -22,8 +22,8 @@ repositories {
@@ -33,7 +33,7 @@ index e067c69fea1dec79ef8e97cad1c74020b6a3a235..fd3528be3d90733e826bcbeae967b95c
      // Paper start
      implementation("org.jline:jline-terminal-jansi:3.21.0")
      implementation("net.minecrell:terminalconsoleappender:1.3.0")
-@@ -57,6 +57,13 @@ dependencies {
+@@ -58,6 +58,15 @@ dependencies {
      implementation("net.fabricmc:mapping-io:0.3.0") // Paper - needed to read mappings for stacktrace deobfuscation
      implementation("com.velocitypowered:velocity-native:1.1.0-SNAPSHOT") // Paper
  
@@ -44,10 +44,12 @@ index e067c69fea1dec79ef8e97cad1c74020b6a3a235..fd3528be3d90733e826bcbeae967b95c
 +    } // Airplane - more config
 +    implementation("com.github.technove:Flare:2c4a2114a0") // Airplane - flare
 +
++    implementation("io.sentry:sentry:5.4.0") // Airplane
++
      testImplementation("io.github.classgraph:classgraph:4.8.47") // Paper - mob goal test
      testImplementation("junit:junit:4.13.1")
      testImplementation("org.hamcrest:hamcrest-library:1.3")
-@@ -75,6 +82,7 @@ tasks.jar {
+@@ -76,6 +85,7 @@ tasks.jar {
              "Main-Class" to "org.bukkit.craftbukkit.Main",
              "Implementation-Title" to "CraftBukkit",
              "Implementation-Version" to "git-Paper-$implementationVersion",
@@ -55,7 +57,7 @@ index e067c69fea1dec79ef8e97cad1c74020b6a3a235..fd3528be3d90733e826bcbeae967b95c
              "Implementation-Vendor" to date, // Paper
              "Specification-Title" to "Bukkit",
              "Specification-Version" to project.version,
-@@ -133,6 +141,22 @@ relocation {
+@@ -134,6 +144,22 @@ relocation {
      }
  }
  
@@ -219,14 +221,15 @@ index 0000000000000000000000000000000000000000..89c89e633f14b5820147e734b1b7ad8c
 +}
 diff --git a/src/main/java/gg/airplane/AirplaneConfig.java b/src/main/java/gg/airplane/AirplaneConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2b654e6adfe331a5fa68c1aea7d6d6cea1f3567d
+index 0000000000000000000000000000000000000000..f34327d578ea8acfd4bb8f6f933af5d4f0f49c90
 --- /dev/null
 +++ b/src/main/java/gg/airplane/AirplaneConfig.java
-@@ -0,0 +1,257 @@
+@@ -0,0 +1,286 @@
 +package gg.airplane;
 +
 +import co.technove.air.AIR;
 +import co.technove.air.ValueType;
++import io.sentry.Sentry;
 +import net.minecraft.core.Registry;
 +import gg.airplane.flare.FlareCommand;
 +import net.minecraft.server.MinecraftServer;
@@ -478,6 +481,34 @@ index 0000000000000000000000000000000000000000..2b654e6adfe331a5fa68c1aea7d6d6ce
 +        config.setComment("misc", "Settings for things that don't belong elsewhere");
 +    }
 +
++    public static boolean usingSentry = false;
++    public static Level sentryLevel;
++
++    private static void sentrySetup() {
++        if (Sentry.isEnabled()) {
++            Sentry.endSession();
++            Sentry.close();
++        }
++
++        String sentryDsn = getString("sentry.dsn", "");
++        if (sentryDsn.isEmpty()) {
++            usingSentry = false;
++            Sentry.close();
++            return;
++        }
++
++        sentryLevel = Level.valueOf(getString("sentry.log-level", Level.WARN.name()));
++
++        usingSentry = true;
++        Sentry.init(sentryDsn);
++    }
++
++    public static void reportException(Throwable e) {
++        if (usingSentry) {
++            Sentry.captureException(e);
++        }
++    }
++
 +
 +}
 diff --git a/src/main/java/gg/airplane/AirplaneLogger.java b/src/main/java/gg/airplane/AirplaneLogger.java
@@ -501,6 +532,47 @@ index 0000000000000000000000000000000000000000..1a9d71739019d12772bec6076b195552
 +
 +        setParent(Bukkit.getLogger());
 +        setLevel(Level.ALL);
++    }
++}
+diff --git a/src/main/java/gg/airplane/AirplaneSentryAppender.java b/src/main/java/gg/airplane/AirplaneSentryAppender.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..eb83e44fc384e1b17291066d58512803834bf4ed
+--- /dev/null
++++ b/src/main/java/gg/airplane/AirplaneSentryAppender.java
+@@ -0,0 +1,35 @@
++package gg.airplane;
++
++import io.sentry.Sentry;
++import org.apache.logging.log4j.core.Appender;
++import org.apache.logging.log4j.core.Core;
++import org.apache.logging.log4j.core.LogEvent;
++import org.apache.logging.log4j.core.appender.AbstractAppender;
++import org.apache.logging.log4j.core.config.plugins.Plugin;
++import org.apache.logging.log4j.core.config.plugins.PluginFactory;
++
++@Plugin(
++        name = "AirplaneSentry",
++        category = Core.CATEGORY_NAME,
++        elementType = Appender.ELEMENT_TYPE
++)
++public class AirplaneSentryAppender extends AbstractAppender {
++    protected AirplaneSentryAppender() {
++        super("AirplaneSentry", null, null);
++    }
++
++    @Override
++    public void append(LogEvent event) {
++        if (AirplaneConfig.usingSentry && event.getLevel().isMoreSpecificThan(AirplaneConfig.sentryLevel)) {
++            Throwable thrown = event.getThrown();
++            if (thrown != null) {
++                Sentry.captureException(thrown);
++            }
++        }
++    }
++
++    @PluginFactory
++    public static AirplaneSentryAppender createAppender() {
++        return new AirplaneSentryAppender();
 +    }
 +}
 diff --git a/src/main/java/gg/airplane/AirplaneVersionFetcher.java b/src/main/java/gg/airplane/AirplaneVersionFetcher.java
@@ -2195,6 +2267,18 @@ index 98ca1199a823cdf55b913396ce0a24554e85f116..b2e2d6ee25a88f9c8f6769c677464322
  
      private CollisionUtil() {
          throw new RuntimeException();
+diff --git a/src/main/java/net/minecraft/CrashReport.java b/src/main/java/net/minecraft/CrashReport.java
+index b9a618eba86656289e20d051c3f0023ec93bb733..1233c2d6b58a36a87e84cc73de7a71980431b9ca 100644
+--- a/src/main/java/net/minecraft/CrashReport.java
++++ b/src/main/java/net/minecraft/CrashReport.java
+@@ -30,6 +30,7 @@ public class CrashReport {
+     private final SystemReport systemReport = new SystemReport();
+ 
+     public CrashReport(String message, Throwable cause) {
++        gg.airplane.AirplaneConfig.reportException(cause); // Airplane
+         io.papermc.paper.util.StacktraceDeobfuscator.INSTANCE.deobfuscateThrowable(cause); // Paper
+         this.title = message;
+         this.exception = cause;
 diff --git a/src/main/java/net/minecraft/Util.java b/src/main/java/net/minecraft/Util.java
 index 505546d32eea4682452dbac02311433157f6a30e..5c7b9ad379f3c272e15648dd16f4df9245d927da 100644
 --- a/src/main/java/net/minecraft/Util.java
@@ -4330,3 +4414,23 @@ index 9c456cce42ef9d1654df9047d6fc1e0da13dc1c9..3cc2cf10efbe05cf91876f760c786ab4
              {
                  return 1; // Paper
              }
+diff --git a/src/main/resources/log4j2.xml b/src/main/resources/log4j2.xml
+index 74ccc67e3c12dc5182602fb691ef3ddeb5b53280..77d71eaac32a2d33d7659134114c79415da64cd8 100644
+--- a/src/main/resources/log4j2.xml
++++ b/src/main/resources/log4j2.xml
+@@ -42,6 +42,7 @@
+             <AppenderRef ref="TerminalConsole" level="info"/>
+             <AppenderRef ref="ServerGuiConsole" level="info"/>
+         </Rewrite>
++        <AirplaneSentry />
+     </Appenders>
+     <Loggers>
+         <Root level="info">
+@@ -49,6 +50,7 @@
+                 <MarkerFilter marker="NETWORK_PACKETS" onMatch="DENY" onMismatch="NEUTRAL" />
+             </filters>
+             <AppenderRef ref="Async"/>
++            <AppenderRef ref="AirplaneSentry"/>
+         </Root>
+     </Loggers>
+ </Configuration>
