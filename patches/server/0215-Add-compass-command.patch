@@ -5,7 +5,7 @@ Subject: [PATCH] Add compass command
 
 
 diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
-index 04aa3a9d98ff4de3ce0bbacb07dc30170ff232b1..d81e3073d0e905388e1390d849f779902fadbad2 100644
+index 4c243155b4a4a5f69bcf0558574ac31b35bea971..e61a05c91e6e567b9c5b99f460bd96ca4da6c4e8 100644
 --- a/src/main/java/net/minecraft/commands/Commands.java
 +++ b/src/main/java/net/minecraft/commands/Commands.java
 @@ -210,6 +210,7 @@ public class Commands {
@@ -58,28 +58,6 @@ index 6d643998ee32de7f96b94e10fbd0b08a75628978..e2e83d8b39ddb154c0e69b63d5b99664
 +    }
      // Purpur end
  }
-diff --git a/src/main/java/net/minecraft/world/item/CompassItem.java b/src/main/java/net/minecraft/world/item/CompassItem.java
-index 9d541c9e53f3f8db871f01f8d083e4cfc0de0de1..49e86b191397b49480684e7d99a515e9f8cf73fd 100644
---- a/src/main/java/net/minecraft/world/item/CompassItem.java
-+++ b/src/main/java/net/minecraft/world/item/CompassItem.java
-@@ -46,6 +46,17 @@ public class CompassItem extends Item implements Vanishable {
-     @Override
-     public void inventoryTick(ItemStack stack, Level world, Entity entity, int slot, boolean selected) {
-         if (!world.isClientSide) {
-+            // Purpur start
-+            if (world.purpurConfig.compassItemShowsBossBar && entity instanceof net.minecraft.server.level.ServerPlayer player && !player.compassBar()) {
-+                org.purpurmc.purpur.task.CompassTask task = org.purpurmc.purpur.task.CompassTask.instance();
-+                boolean hasTask = task.hasPlayer(player.getUUID());
-+                if (selected && !hasTask) {
-+                    task.addPlayer(player.getBukkitEntity());
-+                } else if (!selected && hasTask) {
-+                    task.removePlayer(player.getBukkitEntity());
-+                }
-+            }
-+            // Purpur end
-             if (isLodestoneCompass(stack)) {
-                 CompoundTag compoundTag = stack.getOrCreateTag();
-                 if (compoundTag.contains("LodestoneTracked") && !compoundTag.getBoolean("LodestoneTracked")) {
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
 index e230f65d8599f1d6f8c567227859935a905426f8..a75db67d2ed1d3440903396181b4cd6cf982f15d 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
@@ -132,10 +110,10 @@ index aee40fd438225fa5eb0b023ed047eb95136f2093..619d1295836ac51ff5b5bc8400ee59f2
      public double minecartMaxSpeed = 0.4D;
 diff --git a/src/main/java/org/purpurmc/purpur/command/CompassCommand.java b/src/main/java/org/purpurmc/purpur/command/CompassCommand.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c493bb0ff9b0de2edadbee4138eab4d51f1fd20a
+index 0000000000000000000000000000000000000000..34b6b1db6ef85d40cb84a5e19453ef5c5110d539
 --- /dev/null
 +++ b/src/main/java/org/purpurmc/purpur/command/CompassCommand.java
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,27 @@
 +package org.purpurmc.purpur.command;
 +
 +import com.mojang.brigadier.CommandDispatcher;
@@ -150,8 +128,14 @@ index 0000000000000000000000000000000000000000..c493bb0ff9b0de2edadbee4138eab4d5
 +                .requires(listener -> listener.hasPermission(2))
 +                .executes(context -> {
 +                    ServerPlayer player = context.getSource().getPlayerOrException();
-+                    boolean result = CompassTask.instance().togglePlayer(player.getBukkitEntity());
-+                    player.compassBar(result);
++                    CompassTask task = CompassTask.instance();
++                    if (player.compassBar()) {
++                        task.removePlayer(player.getBukkitEntity());
++                        player.compassBar(false);
++                    } else {
++                        task.addPlayer(player.getBukkitEntity());
++                        player.compassBar(true);
++                    }
 +                    return 1;
 +                })
 +        ).setPermission("bukkit.command.compass");
@@ -190,16 +174,18 @@ index d38b3c4a722396cc3b61a9a8ed7e39cea4ae65cb..d333334f323049ca97e756324cff0b23
  }
 diff --git a/src/main/java/org/purpurmc/purpur/task/CompassTask.java b/src/main/java/org/purpurmc/purpur/task/CompassTask.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c34abe39812466437826a06101cd81c770e9e7a3
+index 0000000000000000000000000000000000000000..bdb214bc2e0d944a26c825c1124d23d4fee2eca9
 --- /dev/null
 +++ b/src/main/java/org/purpurmc/purpur/task/CompassTask.java
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,68 @@
 +package org.purpurmc.purpur.task;
 +
 +import net.kyori.adventure.bossbar.BossBar;
 +import net.kyori.adventure.text.Component;
-+import org.purpurmc.purpur.PurpurConfig;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.world.item.Items;
 +import org.bukkit.entity.Player;
++import org.purpurmc.purpur.PurpurConfig;
 +
 +public class CompassTask extends BossBarTask {
 +    private static CompassTask instance;
@@ -219,6 +205,20 @@ index 0000000000000000000000000000000000000000..c34abe39812466437826a06101cd81c7
 +            return;
 +        }
 +        tick = 0;
++
++        MinecraftServer.getServer().levels.forEach((key, level) -> {
++            if (level.purpurConfig.compassItemShowsBossBar) {
++                level.players.forEach(player -> {
++                    if (!player.compassBar()) {
++                        if (player.getMainHandItem().getItem() != Items.COMPASS && player.getOffhandItem().getItem() != Items.COMPASS) {
++                            removePlayer(player.getBukkitEntity());
++                        } else if (!hasPlayer(player.getUUID())) {
++                            addPlayer(player.getBukkitEntity());
++                        }
++                    }
++                });
++            }
++        });
 +
 +        super.run();
 +    }
