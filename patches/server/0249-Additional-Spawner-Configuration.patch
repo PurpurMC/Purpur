@@ -1,0 +1,97 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Oharass <oharass@bk.ru>
+Date: Tue, 28 Dec 2021 00:32:20 -0600
+Subject: [PATCH] Additional Spawner Configuration
+
+
+diff --git a/src/main/java/net/minecraft/world/level/BaseSpawner.java b/src/main/java/net/minecraft/world/level/BaseSpawner.java
+index 76979991d2ded84161e8a0fc72cbb2d2c3c6c55e..f9669563b1c563ae37e832a9658968ea36d55307 100644
+--- a/src/main/java/net/minecraft/world/level/BaseSpawner.java
++++ b/src/main/java/net/minecraft/world/level/BaseSpawner.java
+@@ -33,14 +33,16 @@ public abstract class BaseSpawner {
+     public SpawnData nextSpawnData = new SpawnData();
+     private double spin;
+     private double oSpin;
+-    public int minSpawnDelay = 200;
+-    public int maxSpawnDelay = 800;
+-    public int spawnCount = 4;
++    // Purpur start
++    public int minSpawnDelay = org.purpurmc.purpur.PurpurConfig.spawnerMinimumTicks;
++    public int maxSpawnDelay = org.purpurmc.purpur.PurpurConfig.spawnerMaximumTicks;
++    public int spawnCount = org.purpurmc.purpur.PurpurConfig.spawnerSpawnCount;
+     @Nullable
+     private Entity displayEntity;
+-    public int maxNearbyEntities = 6;
+-    public int requiredPlayerRange = 16;
+-    public int spawnRange = 4;
++    public int maxNearbyEntities = org.purpurmc.purpur.PurpurConfig.spawnerMaximumNearbyEntities;
++    public int requiredPlayerRange = org.purpurmc.purpur.PurpurConfig.spawnerPlayerAfkRadius;
++    public int spawnRange = org.purpurmc.purpur.PurpurConfig.spawnerSpawnRadius;
++    // Purpur end
+     private final Random random = new Random();
+     private int tickDelay = 0; // Paper
+ 
+@@ -53,7 +55,7 @@ public abstract class BaseSpawner {
+ 
+     public boolean isNearPlayer(Level world, BlockPos pos) {
+         if (world.purpurConfig.spawnerDeactivateByRedstone && world.hasNeighborSignal(pos)) return false; // Purpur
+-        return world.isAffectsSpawningPlayerNearby((double) pos.getX() + 0.5D, (double) pos.getY() + 0.5D, (double) pos.getZ() + 0.5D, (double) this.requiredPlayerRange); // Paper
++        return !org.purpurmc.purpur.PurpurConfig.spawnerRequiresPlayer || world.isAffectsSpawningPlayerNearby((double) pos.getX() + 0.5D, (double) pos.getY() + 0.5D, (double) pos.getZ() + 0.5D, (double) this.requiredPlayerRange); // Paper // Purpur
+     }
+ 
+     public void clientTick(Level world, BlockPos pos) {
+@@ -326,6 +328,7 @@ public abstract class BaseSpawner {
+ 
+     @Nullable
+     public Entity getOrCreateDisplayEntity(Level world) {
++        if (!org.purpurmc.purpur.PurpurConfig.spawnerEntityVisible) return null;
+         if (this.displayEntity == null) {
+             this.displayEntity = EntityType.loadEntityRecursive(this.nextSpawnData.getEntityToSpawn(), world, Function.identity());
+             if (this.nextSpawnData.getEntityToSpawn().size() == 1 && this.nextSpawnData.getEntityToSpawn().contains("id", 8) && this.displayEntity instanceof Mob) {
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/SpawnerBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/SpawnerBlockEntity.java
+index 1cb52df2ef42cfedf22f2c7524b75c00f7ced4cb..c2b7365427f059f5d0e269f5d26a9a0ac5af1ced 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/SpawnerBlockEntity.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/SpawnerBlockEntity.java
+@@ -62,6 +62,13 @@ public class SpawnerBlockEntity extends BlockEntity {
+     public CompoundTag getUpdateTag() {
+         CompoundTag compoundTag = this.saveWithoutMetadata();
+         compoundTag.remove("SpawnPotentials");
++        // Purpur start
++        if (!org.purpurmc.purpur.PurpurConfig.spawnerEntityVisible) {
++            CompoundTag markerTag = compoundTag.copy();
++            markerTag.getCompound("SpawnData").getCompound("entity").putString("id", "minecraft:marker");
++            return markerTag;
++        }
++        // Purpur end
+         return compoundTag;
+     }
+ 
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 5c9973374991446c39d6a84d745283eac3eb70ab..3790404cf291e95bde4ac8e25fc9b2d60b57002c 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -383,4 +383,24 @@ public class PurpurConfig {
+     private static void networkSettings() {
+         useUPnP = getBoolean("settings.network.upnp-port-forwarding", useUPnP);
+     }
++
++    public static boolean spawnerRequiresPlayer = true;
++    public static int spawnerPlayerAfkRadius = 16;
++    public static int spawnerMinimumTicks = 200;
++    public static int spawnerMaximumTicks = 800;
++    public static int spawnerSpawnCount = 4;
++    public static int spawnerSpawnRadius = 4;
++    public static int spawnerMaximumNearbyEntities = 6;
++    public static boolean spawnerEntityVisible = true;
++    private static void spawnerSettings() {
++        spawnerRequiresPlayer = getBoolean("settings.blocks.spawner.require-player", spawnerRequiresPlayer);
++        spawnerPlayerAfkRadius = getInt("settings.blocks.spawner.player-radius", spawnerPlayerAfkRadius);
++        spawnerMinimumTicks = getInt("settings.blocks.spawner.minimum-ticks", spawnerMinimumTicks);
++        spawnerMaximumTicks = getInt("settings.blocks.spawner.maximum-ticks", spawnerMaximumTicks);
++        spawnerSpawnCount = getInt("settings.blocks.spawner.spawn-count", spawnerSpawnCount);
++        spawnerSpawnRadius = getInt("settings.blocks.spawner.spawn-radius", spawnerSpawnRadius);
++        spawnerMaximumNearbyEntities = getInt("settings.blocks.spawner.maximum-nearby-entities", spawnerMaximumNearbyEntities);
++        spawnerEntityVisible = getBoolean("settings.blocks.spawner.entity-visible", spawnerEntityVisible);
++    }
++
+ }
