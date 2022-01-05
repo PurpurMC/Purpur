@@ -3,7 +3,7 @@ import io.papermc.paperweight.util.constants.*
 plugins {
     java
     `maven-publish`
-    id("com.github.johnrengelman.shadow") version "7.1.1" apply false
+    id("com.github.johnrengelman.shadow") version "7.1.2" apply false
     id("io.papermc.paperweight.patcher") version "1.3.3"
 }
 
@@ -56,6 +56,7 @@ subprojects {
         maven("https://repo.md-5.net/content/repositories/releases/")
         maven("https://hub.spigotmc.org/nexus/content/groups/public/")
         maven("https://oss.sonatype.org/content/repositories/snapshots/")
+        maven("https://jitpack.io")
     }
 }
 
