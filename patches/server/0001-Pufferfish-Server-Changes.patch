@@ -617,7 +617,7 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..c32f284b5ce200c0f4dc7e22b986c10edee5a66f
+index 0000000000000000000000000000000000000000..284f9eb542b686833ec54d4de6493d7dac5aa6b8
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 @@ -0,0 +1,266 @@
@@ -848,10 +848,10 @@ index 0000000000000000000000000000000000000000..c32f284b5ce200c0f4dc7e22b986c10e
 +        setComment("dab", "Optimizes entity brains when", "they're far away from the player");
 +    }
 +    
-+    public static boolean disableInactiveGoalSelectorTick;
-+	private static void inactiveGoalSelectorDisable() {
-+		getBoolean("inactive-goal-selector-disable", true,
-+				"Disables the AI goal selector in entity inactive ticks.",
++    public static boolean throttleInactiveGoalSelectorTick;
++	private static void inactiveGoalSelectorThrottle() {
++		getBoolean("inactive-goal-selector-throttle", "inactive-goal-selector-disable", true,
++				"Throttles the AI goal selector in entity inactive ticks.",
 +				"This can improve performance by a few percent, but has minor gameplay implications.");
 +	}
 +
@@ -2799,15 +2799,21 @@ index 43378561cf48f969f5bf1fd0db349415f4d1c866..2c988e05299d530d483e21ab452de0a0
      }
  
 diff --git a/src/main/java/net/minecraft/world/entity/Mob.java b/src/main/java/net/minecraft/world/entity/Mob.java
-index 031660f7d0ea270f87e5174a4fe65ccad1f7a561..607e78c24edabb26fd7494855087f7f19cfdc576 100644
+index 031660f7d0ea270f87e5174a4fe65ccad1f7a561..06e87f3564bfba17393f36d2188abfd2ee9ac650 100644
 --- a/src/main/java/net/minecraft/world/entity/Mob.java
 +++ b/src/main/java/net/minecraft/world/entity/Mob.java
-@@ -210,10 +210,10 @@ public abstract class Mob extends LivingEntity {
+@@ -206,14 +206,16 @@ public abstract class Mob extends LivingEntity {
+         return this.lookControl;
+     }
+ 
++    int tickCount = 0; // Pufferfish - throttle inactive goal selector ticking
+     // Paper start
      @Override
      public void inactiveTick() {
          super.inactiveTick();
 -        if (this.goalSelector.inactiveTick()) {
-+        if (this.goalSelector.inactiveTick(this.activatedPriority, true) && !gg.pufferfish.pufferfish.PufferfishConfig.disableInactiveGoalSelectorTick) { // Pufferfish - pass activated priroity // Pufferfish - disable inactive goal selector ticking
++        boolean isThrottled = gg.pufferfish.pufferfish.PufferfishConfig.throttleInactiveGoalSelectorTick && tickCount++ % 20 != 0; // Pufferfish - throttle inactive goal selector ticking
++        if (this.goalSelector.inactiveTick(this.activatedPriority, true) && !isThrottled) { // Pufferfish - pass activated priroity // Pufferfish - throttle inactive goal selector ticking
              this.goalSelector.tick();
          }
 -        if (this.targetSelector.inactiveTick()) {
@@ -2815,7 +2821,7 @@ index 031660f7d0ea270f87e5174a4fe65ccad1f7a561..607e78c24edabb26fd7494855087f7f1
              this.targetSelector.tick();
          }
      }
-@@ -844,16 +844,20 @@ public abstract class Mob extends LivingEntity {
+@@ -844,16 +846,20 @@ public abstract class Mob extends LivingEntity {
  
          if (i % 2 != 0 && this.tickCount > 1) {
              this.level.getProfiler().push("targetSelector");
