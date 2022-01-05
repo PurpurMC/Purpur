@@ -26,22 +26,6 @@ Join us on [Discord](https://discord.gg/mtAAnkk)
 
 Downloads can be obtained from the [downloads page](https://purpurmc.org/downloads/) or the [downloads API](https://api.purpurmc.org).
 
-Latest build shortcut links:
-* [1.18.1](https://api.purpurmc.org/v2/purpur/1.18.1/latest/download) builds 1434+
-* [1.18](https://api.purpurmc.org/v2/purpur/1.18/latest/download) builds 1429-1433
-* [1.17.1](https://api.purpurmc.org/v2/purpur/1.17.1/latest/download) builds 1256-1428
-* [1.17](https://api.purpurmc.org/v2/purpur/1.17/latest/download) builds 1172-1255
-* [1.16.5](https://api.purpurmc.org/v2/purpur/1.16.5/latest/download) builds 957-1171
-* [1.16.4](https://api.purpurmc.org/v2/purpur/1.16.4/latest/download) builds 809-956
-* [1.16.3](https://api.purpurmc.org/v2/purpur/1.16.3/latest/download) builds 751-808
-* [1.16.2](https://api.purpurmc.org/v2/purpur/1.16.2/latest/download) builds 711-750
-* [1.16.1](https://api.purpurmc.org/v2/purpur/1.16.1/latest/download) builds 608-710
-* [1.15.2](https://api.purpurmc.org/v2/purpur/1.15.2/latest/download) builds 398-606
-* [1.15.1](https://api.purpurmc.org/v2/purpur/1.15.1/latest/download) builds 348-397
-* [1.15](https://api.purpurmc.org/v2/purpur/1.15/latest/download) builds 339-346
-* [1.14.x](https://api.purpurmc.org/v2/purpur/1.14.4/latest/download) builds 337 and below
-
-
 Downloads API endpoints:
  * List versions of Minecraft with builds available:
    `https://api.purpurmc.org/v2/purpur`
