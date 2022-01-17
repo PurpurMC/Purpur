@@ -1,11 +1,11 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Encode42 <me@encode42.dev>
 Date: Wed, 29 Sep 2021 13:37:57 -0400
-Subject: [PATCH] Config for Grindstones ignoring curses
+Subject: [PATCH] Config for grindstone to ignore specified enchants
 
 
 diff --git a/src/main/java/net/minecraft/world/inventory/GrindstoneMenu.java b/src/main/java/net/minecraft/world/inventory/GrindstoneMenu.java
-index 0bdf874ddb951daf8d469575a44144504472d12d..66d1b438227e004d7ffb6e7c5d0cd3e6da3d2a49 100644
+index 0bdf874ddb951daf8d469575a44144504472d12d..f8fe06c65c87b877f22ea7c0df0bfe15adc42746 100644
 --- a/src/main/java/net/minecraft/world/inventory/GrindstoneMenu.java
 +++ b/src/main/java/net/minecraft/world/inventory/GrindstoneMenu.java
 @@ -130,7 +130,7 @@ public class GrindstoneMenu extends AbstractContainerMenu {
@@ -13,7 +13,7 @@ index 0bdf874ddb951daf8d469575a44144504472d12d..66d1b438227e004d7ffb6e7c5d0cd3e6
                      Integer integer = (Integer) entry.getValue();
  
 -                    if (!enchantment.isCurse()) {
-+                    if (!org.purpurmc.purpur.PurpurConfig.grindstoneIgnoreCurses || !enchantment.isCurse()) { // Purpur
++                    if (!org.purpurmc.purpur.PurpurConfig.grindstoneIgnoredEnchants.contains(enchantment)) { // Purpur
                          j += enchantment.getMinCost(integer);
                      }
                  }
@@ -22,7 +22,7 @@ index 0bdf874ddb951daf8d469575a44144504472d12d..66d1b438227e004d7ffb6e7c5d0cd3e6
              Enchantment enchantment = (Enchantment) entry.getKey();
  
 -            if (!enchantment.isCurse() || EnchantmentHelper.getItemEnchantmentLevel(enchantment, itemstack2) == 0) {
-+            if (!org.purpurmc.purpur.PurpurConfig.grindstoneIgnoreCurses || !enchantment.isCurse() || EnchantmentHelper.getItemEnchantmentLevel(enchantment, itemstack2) == 0) { // Purpur
++            if (!org.purpurmc.purpur.PurpurConfig.grindstoneIgnoredEnchants.contains(enchantment) || EnchantmentHelper.getItemEnchantmentLevel(enchantment, itemstack2) == 0) { // Purpur
                  itemstack2.enchant(enchantment, (Integer) entry.getValue());
              }
          }
@@ -31,27 +31,64 @@ index 0bdf874ddb951daf8d469575a44144504472d12d..66d1b438227e004d7ffb6e7c5d0cd3e6
          itemstack1.setCount(amount);
          Map<Enchantment, Integer> map = (Map) EnchantmentHelper.getEnchantments(item).entrySet().stream().filter((entry) -> {
 -            return ((Enchantment) entry.getKey()).isCurse();
-+            return org.purpurmc.purpur.PurpurConfig.grindstoneIgnoreCurses && ((Enchantment) entry.getKey()).isCurse(); // Purpur
++            return org.purpurmc.purpur.PurpurConfig.grindstoneIgnoredEnchants.contains((Enchantment) entry.getKey()); // Purpur
          }).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
  
          EnchantmentHelper.setEnchantments(map, itemstack1);
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
-index 209d563791695bfca5becdcdd0e088d88d2d354c..bf666e87d20de7df7470cc0618685f9711f59241 100644
+index 258ef634bac087710c77abff0a52954aa591ddd2..db40a001cd7bb65615d5df1e7623774ccda45807 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
-@@ -300,6 +300,7 @@ public class PurpurConfig {
+@@ -4,9 +4,13 @@ import co.aikar.timings.TimingsManager;
+ import com.google.common.base.Throwables;
+ import com.google.common.collect.ImmutableMap;
+ import net.kyori.adventure.bossbar.BossBar;
++import net.minecraft.core.Registry;
++import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.world.entity.EntityDimensions;
+ import net.minecraft.world.entity.EntityType;
++import net.minecraft.world.item.enchantment.Enchantment;
++
+ import org.purpurmc.purpur.command.PurpurCommand;
+ import org.purpurmc.purpur.task.TPSBarTask;
+ import org.bukkit.Bukkit;
+@@ -20,9 +24,12 @@ import java.io.IOException;
+ import java.lang.reflect.InvocationTargetException;
+ import java.lang.reflect.Method;
+ import java.lang.reflect.Modifier;
++import java.util.ArrayList;
+ import java.util.HashMap;
++import java.util.HashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Set;
+ import java.util.logging.Level;
+ 
+ @SuppressWarnings("unused")
+@@ -300,6 +307,7 @@ public class PurpurConfig {
      public static int beeInsideBeeHive = 3;
      public static boolean anvilCumulativeCost = true;
      public static int lightningRodRange = 128;
-+    public static boolean grindstoneIgnoreCurses = true;
++    public static Set<Enchantment> grindstoneIgnoredEnchants = new HashSet<>();
      private static void blockSettings() {
          if (version < 3) {
              boolean oldValue = getBoolean("settings.barrel.packed-barrels", true);
-@@ -334,6 +335,7 @@ public class PurpurConfig {
+@@ -334,6 +342,17 @@ public class PurpurConfig {
          beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
          anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
          lightningRodRange = getInt("settings.blocks.lightning_rod.range", lightningRodRange);
-+        grindstoneIgnoreCurses = getBoolean("settings.blocks.grindstone.ignore-curses", grindstoneIgnoreCurses);
++        ArrayList<String> defaultCurses = new ArrayList<>(){{
++            add("minecraft:binding_curse");
++            add("minecraft:vanishing_curse");
++        }};
++        if (version < 24 && !getBoolean("settings.blocks.grindstone.ignore-curses", true)) {
++            defaultCurses.clear();
++        }
++        getList("settings.blocks.grindstone.ignored-enchants", defaultCurses).forEach(key -> {
++            Enchantment enchantment = Registry.ENCHANTMENT.get(new ResourceLocation(key.toString()));
++            grindstoneIgnoredEnchants.add(enchantment);
++        });
      }
  
      public static boolean allowInfinityMending = false;
