@@ -238,7 +238,7 @@ index d3311df20c37517e7c4ae1b8fbee6add6d32332e..ccb18fea0e03d08405b0fff5e9df5025
  
      public boolean isTrusting() {
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Panda.java b/src/main/java/net/minecraft/world/entity/animal/Panda.java
-index ed8890d6a5431412248722182c697844f7792c6e..1a4434432516f8b7f2bbbc64f9554c340530ce89 100644
+index 906b0f0b7907f84f9a4344d8a06e5dcfc2c6d8a8..45a92265ac626ae401342e6a21b0ba271ba5b371 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Panda.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Panda.java
 @@ -126,6 +126,12 @@ public class Panda extends Animal {
@@ -982,42 +982,74 @@ index 647796e6f3352582c49c780a860a617ce7b44ddd..4ed0fb155dfae60cee24dc0752fa525c
  
      @Override
 diff --git a/src/main/java/net/minecraft/world/entity/monster/MagmaCube.java b/src/main/java/net/minecraft/world/entity/monster/MagmaCube.java
-index 95741b63d68bdf815212d718c3cc0fc689c0e4de..68abf045f0510abc45bdc2fd8c147f27c2fa784d 100644
+index 95741b63d68bdf815212d718c3cc0fc689c0e4de..cf69ac8710df2f01fed76389d53fb121a2319273 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/MagmaCube.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/MagmaCube.java
-@@ -42,6 +42,16 @@ public class MagmaCube extends Slime {
+@@ -42,6 +42,26 @@ public class MagmaCube extends Slime {
      public float getJumpPower() {
          return 0.42F * this.getBlockJumpFactor(); // from EntityLiving
      }
 +
 +    @Override
-+    public void initAttributes() {
-+        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(this.generateMaxHealth());
++    protected String getMaxHealthEquation() {
++        return level.purpurConfig.magmaCubeMaxHealth;
 +    }
 +
 +    @Override
-+    protected String getMaxHealthEquation() {
-+        return level.purpurConfig.magmaCubeMaxHealth;
++    protected String getAttackDamageEquation() {
++        return level.purpurConfig.magmaCubeAttackDamage;
++    }
++
++    @Override
++    protected java.util.Map<Integer, Double> getMaxHealthCache() {
++        return level.purpurConfig.magmaCubeMaxHealthCache;
++    }
++
++    @Override
++    protected java.util.Map<Integer, Double> getAttackDamageCache() {
++        return level.purpurConfig.magmaCubeAttackDamageCache;
 +    }
      // Purpur end
  
      public static AttributeSupplier.Builder createAttributes() {
 diff --git a/src/main/java/net/minecraft/world/entity/monster/Phantom.java b/src/main/java/net/minecraft/world/entity/monster/Phantom.java
-index e4401125da58e0a82a30f9b4a137f5804ae2a8dc..f4da51e75b3f8772f0d3de17ef4699845a08fdd1 100644
+index e4401125da58e0a82a30f9b4a137f5804ae2a8dc..59289140f51ea63e81ebebc97d5a54fc2b0e1914 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/Phantom.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/Phantom.java
-@@ -111,6 +111,11 @@ public class Phantom extends FlyingMob implements Enemy {
+@@ -111,6 +111,21 @@ public class Phantom extends FlyingMob implements Enemy {
          level.addFreshEntity(flames);
          return true;
      }
 +
-+    @Override
-+    public void initAttributes() {
-+        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(this.level.purpurConfig.phantomMaxHealth);
++    private double getFromCache(java.util.function.Supplier<String> equation, java.util.function.Supplier<java.util.Map<Integer, Double>> cache, java.util.function.Supplier<Double> defaultValue) {
++        int size = getPhantomSize();
++        Double value = cache.get().get(size);
++        if (value == null) {
++            try {
++                scriptEngine.eval("size = " + size);
++                value = (double) scriptEngine.eval(equation.get());
++            } catch (Exception e) {
++                value = defaultValue.get();
++            }
++            cache.get().put(size, value);
++        }
++        return value;
 +    }
      // Purpur end
  
      @Override
+@@ -145,7 +160,10 @@ public class Phantom extends FlyingMob implements Enemy {
+ 
+     private void updatePhantomSizeInfo() {
+         this.refreshDimensions();
+-        this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue((double) (6 + this.getPhantomSize()));
++        // Purpur start
++        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(getFromCache(() -> this.level.purpurConfig.phantomMaxHealth, () -> this.level.purpurConfig.phantomMaxHealthCache, () -> 20.0D));
++        this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(getFromCache(() -> this.level.purpurConfig.phantomAttackDamage, () -> this.level.purpurConfig.phantomAttackDamageCache, () -> (double) 6 + this.getPhantomSize()));
++        // Purpur end
+     }
+ 
+     public int getPhantomSize() {
 diff --git a/src/main/java/net/minecraft/world/entity/monster/Pillager.java b/src/main/java/net/minecraft/world/entity/monster/Pillager.java
 index 1457c0eda11000a0513e601ea60b6ca4a5b463b6..2c7155f2b3c29ff1f777ff6b6d0b19ef922614ae 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/Pillager.java
@@ -1099,49 +1131,59 @@ index a8c6971cc7d004bdc61a2b49e4542a8af46e8539..9448bdd5026f35bba805dee19ceead5d
  
      @Override
 diff --git a/src/main/java/net/minecraft/world/entity/monster/Slime.java b/src/main/java/net/minecraft/world/entity/monster/Slime.java
-index 08935565ca3d1ee779abc491aa1e9eec13342bb5..3a3f5d6fb7ad5bb6082016c7415c25ab48405780 100644
+index 08935565ca3d1ee779abc491aa1e9eec13342bb5..296165ff7b1ac5c6690fb3cc195a3ae3e6115611 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/Slime.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/Slime.java
-@@ -101,6 +101,30 @@ public class Slime extends Mob implements Enemy {
+@@ -101,6 +101,37 @@ public class Slime extends Mob implements Enemy {
          }
          return true; // do not jump() in wasd controller, let vanilla controller handle
      }
-+
-+    @Override
-+    public void initAttributes() {
-+        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(this.generateMaxHealth());
-+    }
 +
 +    protected String getMaxHealthEquation() {
 +        return level.purpurConfig.slimeMaxHealth;
 +    }
 +
-+    protected double generateMaxHealth() {
++    protected String getAttackDamageEquation() {
++        return level.purpurConfig.slimeAttackDamage;
++    }
++
++    protected java.util.Map<Integer, Double> getMaxHealthCache() {
++        return level.purpurConfig.slimeMaxHealthCache;
++    }
++
++    protected java.util.Map<Integer, Double> getAttackDamageCache() {
++        return level.purpurConfig.slimeAttackDamageCache;
++    }
++
++    protected double getFromCache(java.util.function.Supplier<String> equation, java.util.function.Supplier<java.util.Map<Integer, Double>> cache, java.util.function.Supplier<Double> defaultValue) {
 +        int size = getSize();
-+        Double maxHealth = level.purpurConfig.slimeMaxHealthCache.get(size);
-+        if (maxHealth == null) {
++        Double value = cache.get().get(size);
++        if (value == null) {
 +            try {
 +                scriptEngine.eval("size = " + size);
-+                maxHealth = (double) scriptEngine.eval(getMaxHealthEquation());
++                value = (double) scriptEngine.eval(equation.get());
 +            } catch (Exception e) {
-+                maxHealth = (double) size * size;
++                value = defaultValue.get();
 +            }
-+            level.purpurConfig.slimeMaxHealthCache.put(size, maxHealth);
++            cache.get().put(size, value);
 +        }
-+        return maxHealth;
++        return value;
 +    }
      // Purpur end
  
      @Override
-@@ -129,7 +153,7 @@ public class Slime extends Mob implements Enemy {
+@@ -129,9 +160,9 @@ public class Slime extends Mob implements Enemy {
          this.entityData.set(Slime.ID_SIZE, j);
          this.reapplyPosition();
          this.refreshDimensions();
 -        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue((double) (j * j));
-+        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(generateMaxHealth()); // Purpur
++        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(getFromCache(this::getMaxHealthEquation, this::getMaxHealthCache, () -> (double) size * size)); // Purpur
          this.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue((double) (0.2F + 0.1F * (float) j));
-         this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue((double) j);
+-        this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue((double) j);
++        this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(getFromCache(this::getAttackDamageEquation, this::getAttackDamageCache, () -> (double) j)); // Purpur
          if (heal) {
+             this.setHealth(this.getMaxHealth());
+         }
 diff --git a/src/main/java/net/minecraft/world/entity/monster/Spider.java b/src/main/java/net/minecraft/world/entity/monster/Spider.java
 index a31a5186a48e6ba90c2a87bec104d10bdc3c50d5..d095df11ffc34dd641bc2795365a4d1dda8cbc88 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/Spider.java
@@ -1422,10 +1464,10 @@ index ab648e7dafd78f414646cef96b422e87da5c1982..0bcfece84ac11f04671ed38a99b31da9
  
      @Override
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index b8103294d3963a9bfe7d4f4199be866158f580ec..373bdce6590564bd9de4a571a91bbf05e287ee08 100644
+index aec3628645d75ae0b4bf7207a4c80af465561151..a524f120c7ba18cc0f89fa365a6097bebb48aea4 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-@@ -98,257 +98,573 @@ public class PurpurWorldConfig {
+@@ -99,257 +99,579 @@ public class PurpurWorldConfig {
      }
  
      public boolean axolotlRidable = false;
@@ -1905,6 +1947,9 @@ index b8103294d3963a9bfe7d4f4199be866158f580ec..373bdce6590564bd9de4a571a91bbf05
      public boolean magmaCubeRidable = false;
      public boolean magmaCubeRidableInWater = false;
 +    public String magmaCubeMaxHealth = "size * size";
++    public String magmaCubeAttackDamage = "size";
++    public Map<Integer, Double> magmaCubeMaxHealthCache = new HashMap<>();
++    public Map<Integer, Double> magmaCubeAttackDamageCache = new HashMap<>();
      private void magmaCubeSettings() {
          magmaCubeRidable = getBoolean("mobs.magma_cube.ridable", magmaCubeRidable);
          magmaCubeRidableInWater = getBoolean("mobs.magma_cube.ridable-in-water", magmaCubeRidableInWater);
@@ -1914,6 +1959,9 @@ index b8103294d3963a9bfe7d4f4199be866158f580ec..373bdce6590564bd9de4a571a91bbf05
 +            set("mobs.magma_cube.attributes.max_health", oldValue);
 +        }
 +        magmaCubeMaxHealth = getString("mobs.magma_cube.attributes.max_health", magmaCubeMaxHealth);
++        magmaCubeAttackDamage = getString("mobs.magma_cube.attributes.attack_damage", magmaCubeAttackDamage);
++        magmaCubeMaxHealthCache.clear();
++        magmaCubeAttackDamageCache.clear();
      }
  
      public boolean mooshroomRidable = false;
@@ -1999,24 +2047,34 @@ index b8103294d3963a9bfe7d4f4199be866158f580ec..373bdce6590564bd9de4a571a91bbf05
      }
  
      public boolean phantomRidable = false;
-@@ -357,6 +673,7 @@ public class PurpurWorldConfig {
+@@ -358,6 +680,10 @@ public class PurpurWorldConfig {
      public float phantomFlameDamage = 1.0F;
      public int phantomFlameFireTime = 8;
      public boolean phantomAllowGriefing = false;
-+    public double phantomMaxHealth = 20.0D;
++    public String phantomMaxHealth = "20.0";
++    public String phantomAttackDamage = "6 + size";
++    public Map<Integer, Double> phantomMaxHealthCache = new HashMap<>();
++    public Map<Integer, Double> phantomAttackDamageCache = new HashMap<>();
      private void phantomSettings() {
          phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
          phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
-@@ -364,255 +681,559 @@ public class PurpurWorldConfig {
+@@ -365,255 +691,570 @@ public class PurpurWorldConfig {
          phantomFlameDamage = (float) getDouble("mobs.phantom.flames.damage", phantomFlameDamage);
          phantomFlameFireTime = getInt("mobs.phantom.flames.fire-time", phantomFlameFireTime);
          phantomAllowGriefing = getBoolean("mobs.phantom.allow-griefing", phantomAllowGriefing);
 +        if (PurpurConfig.version < 10) {
-+            double oldValue = getDouble("mobs.phantom.attributes.max-health", phantomMaxHealth);
++            double oldValue = getDouble("mobs.phantom.attributes.max-health", Double.parseDouble(phantomMaxHealth));
 +            set("mobs.phantom.attributes.max-health", null);
-+            set("mobs.phantom.attributes.max_health", oldValue);
++            set("mobs.phantom.attributes.max_health", String.valueOf(oldValue));
 +        }
-+        phantomMaxHealth = getDouble("mobs.phantom.attributes.max_health", phantomMaxHealth);
++        if (PurpurConfig.version < 25) {
++            double oldValue = getDouble("mobs.phantom.attributes.max_health", Double.parseDouble(phantomMaxHealth));
++            set("mobs.phantom.attributes.max_health", String.valueOf(oldValue));
++        }
++        phantomMaxHealth = getString("mobs.phantom.attributes.max_health", phantomMaxHealth);
++        phantomAttackDamage = getString("mobs.phantom.attributes.attack_damage", phantomAttackDamage);
++        phantomMaxHealthCache.clear();
++        phantomAttackDamageCache.clear();
      }
  
      public boolean pigRidable = false;
@@ -2225,7 +2283,9 @@ index b8103294d3963a9bfe7d4f4199be866158f580ec..373bdce6590564bd9de4a571a91bbf05
      public boolean slimeRidable = false;
      public boolean slimeRidableInWater = false;
 +    public String slimeMaxHealth = "size * size";
++    public String slimeAttackDamage = "size";
 +    public Map<Integer, Double> slimeMaxHealthCache = new HashMap<>();
++    public Map<Integer, Double> slimeAttackDamageCache = new HashMap<>();
      private void slimeSettings() {
          slimeRidable = getBoolean("mobs.slime.ridable", slimeRidable);
          slimeRidableInWater = getBoolean("mobs.slime.ridable-in-water", slimeRidableInWater);
@@ -2235,7 +2295,9 @@ index b8103294d3963a9bfe7d4f4199be866158f580ec..373bdce6590564bd9de4a571a91bbf05
 +            set("mobs.slime.attributes.max_health", oldValue);
 +        }
 +        slimeMaxHealth = getString("mobs.slime.attributes.max_health", slimeMaxHealth);
++        slimeAttackDamage = getString("mobs.slime.attributes.attack_damage", slimeAttackDamage);
 +        slimeMaxHealthCache.clear();
++        slimeAttackDamageCache.clear();
      }
  
      public boolean snowGolemRidable = false;
