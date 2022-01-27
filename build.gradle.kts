@@ -77,6 +77,20 @@ paperweight {
     }
 }
 
+tasks.generateDevelopmentBundle {
+    apiCoordinates.set("org.purpurmc.purpur:purpur-api")
+    mojangApiCoordinates.set("io.papermc.paper:paper-mojangapi")
+    libraryRepositories.set(
+        listOf(
+            "https://repo.maven.apache.org/maven2/",
+            "https://libraries.minecraft.net/",
+            "https://papermc.io/repo/repository/maven-public/",
+            "https://maven.quiltmc.org/repository/release/",
+	    "https://repo.purpurmc.org/snapshots",
+        )
+    )
+}
+
 allprojects {
     publishing {
         repositories {
@@ -84,6 +98,14 @@ allprojects {
                 name = "purpur"
                 credentials(PasswordCredentials::class)
             }
+        }
+    }
+}
+
+publishing {
+    publications.create<MavenPublication>("devBundle") {
+        artifact(tasks.generateDevelopmentBundle) {
+            artifactId = "dev-bundle"
         }
     }
 }
