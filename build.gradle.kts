@@ -67,7 +67,7 @@ paperweight {
     decompileRepo.set("https://files.minecraftforge.net/maven/")
 
     usePaperUpstream(providers.gradleProperty("paperCommit")) {
-        url.set(github("pufferfish-gg", "Paper"))
+        url.set(github("PurpurMC", "Paper"))
         withPaperPatcher {
             apiPatchDir.set(layout.projectDirectory.dir("patches/api"))
             apiOutputDir.set(layout.projectDirectory.dir("Purpur-API"))
