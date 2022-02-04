@@ -1,0 +1,102 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Racci <90304606+DaRacci@users.noreply.github.com>
+Date: Fri, 4 Feb 2022 16:10:21 +1100
+Subject: [PATCH] Fire Immunity API
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
+index 44e693e88e03cd34ac0fd293e611a0ebf1221f53..57bd455d3cae42aac8f24b6cf6ead4ffca418604 100644
+--- a/src/main/java/net/minecraft/world/entity/Entity.java
++++ b/src/main/java/net/minecraft/world/entity/Entity.java
+@@ -92,7 +92,6 @@ import net.minecraft.world.level.block.Mirror;
+ import net.minecraft.world.level.block.RenderShape;
+ import net.minecraft.world.level.block.Rotation;
+ import net.minecraft.world.level.block.SoundType;
+-import net.minecraft.world.level.block.state.BlockBehaviour;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+ import net.minecraft.world.level.border.WorldBorder;
+@@ -334,6 +333,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, i
+     @javax.annotation.Nullable
+     private UUID originWorld;
+     public boolean freezeLocked = false; // Paper - Freeze Tick Lock API
++    public @Nullable Boolean immuneToFire = null; // Purpur - Fire immune API
+ 
+     public void setOrigin(@javax.annotation.Nonnull Location location) {
+         this.origin = location.toVector();
+@@ -1558,7 +1558,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, i
+     }
+ 
+     public boolean fireImmune() {
+-        return this.getType().fireImmune();
++        return this.immuneToFire != null ? immuneToFire : this.getType().fireImmune(); // Purpur - add fire immune API
+     }
+ 
+     public boolean causeFallDamage(float fallDistance, float damageMultiplier, DamageSource damageSource) {
+@@ -2192,6 +2192,11 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, i
+                 nbt.putBoolean("Paper.FreezeLock", true);
+             }
+             // Paper end
++            // Purpur start
++            if (immuneToFire != null) {
++                nbt.putBoolean("Purpur.FireImmune", immuneToFire);
++            }
++            // Purpur end
+             return nbt;
+         } catch (Throwable throwable) {
+             CrashReport crashreport = CrashReport.forThrowable(throwable, "Saving entity NBT");
+@@ -2363,6 +2368,11 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, i
+                 freezeLocked = nbt.getBoolean("Paper.FreezeLock");
+             }
+             // Paper end
++            // Purpur start
++            if (nbt.contains("Purpur.FireImmune")) {
++                immuneToFire = nbt.getBoolean("Purpur.FireImmune");
++            }
++            // Purpur end
+ 
+         } catch (Throwable throwable) {
+             CrashReport crashreport = CrashReport.forThrowable(throwable, "Loading entity NBT");
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
+index 22f19467e0d5e0ab96e1f696d7aa22c4e6c361f0..e2933dda3fd926a3d566131e3a6a15965596e617 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
+@@ -1335,5 +1335,15 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+     public boolean isRidableInWater() {
+         return getHandle().rideableUnderWater();
+     }
++
++    @Override
++    public boolean isImmuneToFire() {
++        return getHandle().fireImmune();
++    }
++
++    @Override
++    public void setImmuneToFire(Boolean fireImmune) {
++        getHandle().immuneToFire = fireImmune;
++    }
+     // Purpur end
+ }
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
+index 0637e074dbe4a10bc19e7bf9dd79e2d966b07b1d..35addb68f339c1773b99e4dbd59d2d08b6f3b133 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
+@@ -8,6 +8,7 @@ import org.bukkit.craftbukkit.inventory.CraftItemStack;
+ import org.bukkit.entity.EntityType;
+ import org.bukkit.entity.Item;
+ import org.bukkit.inventory.ItemStack;
++import org.jetbrains.annotations.*;
+ 
+ public class CraftItem extends CraftEntity implements Item {
+ 
+@@ -154,8 +155,8 @@ public class CraftItem extends CraftEntity implements Item {
+     }
+ 
+     @Override
+-    public void setImmuneToFire(boolean immuneToFire) {
+-        item.immuneToFire = immuneToFire;
++    public void setImmuneToFire(@Nullable Boolean immuneToFire) {
++        item.immuneToFire = (immuneToFire != null && immuneToFire);
+     }
+ 
+     @Override
