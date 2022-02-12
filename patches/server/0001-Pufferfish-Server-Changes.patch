@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 028f6a1795ceb99d1760c73b0980238677b4b8bc..0f194168f5fca8eb768bca3ce953f28097fed578 100644
+index 028f6a1795ceb99d1760c73b0980238677b4b8bc..86548210e50879504f646ef3aa46927998f2d775 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -18,8 +18,12 @@ repositories {
@@ -38,7 +38,7 @@ index 028f6a1795ceb99d1760c73b0980238677b4b8bc..0f194168f5fca8eb768bca3ce953f280
      // Paper start
      implementation("org.jline:jline-terminal-jansi:3.21.0")
      implementation("net.minecrell:terminalconsoleappender:1.3.0")
-@@ -51,6 +55,14 @@ dependencies {
+@@ -51,11 +55,26 @@ dependencies {
      }
      // Paper end
  
@@ -53,7 +53,19 @@ index 028f6a1795ceb99d1760c73b0980238677b4b8bc..0f194168f5fca8eb768bca3ce953f280
      testImplementation("io.github.classgraph:classgraph:4.8.47") // Paper - mob goal test
      testImplementation("junit:junit:4.13.2")
      testImplementation("org.hamcrest:hamcrest-library:1.3")
-@@ -68,7 +80,7 @@ tasks.jar {
+ }
+ 
++// Pufferfish Start
++tasks.withType<JavaCompile> {
++    val compilerArgs = options.compilerArgs
++    compilerArgs.add("--add-modules=jdk.incubator.vector")
++}
++// Pufferfish End
++
+ tasks.jar {
+     archiveClassifier.set("dev")
+ 
+@@ -68,7 +87,7 @@ tasks.jar {
          attributes(
              "Main-Class" to "org.bukkit.craftbukkit.Main",
              "Implementation-Title" to "CraftBukkit",
@@ -617,12 +629,13 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..889561a6b0cb46405398d94fa071d33d3f02c3df
+index 0000000000000000000000000000000000000000..31c3e9460625f47c166f81e9b44a3b7bdaecbeb6
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
-@@ -0,0 +1,275 @@
+@@ -0,0 +1,291 @@
 +package gg.pufferfish.pufferfish;
 +
++import gg.pufferfish.pufferfish.simd.SIMDDetection;
 +import java.io.File;
 +import java.io.IOException;
 +import java.util.Collections;
@@ -709,6 +722,21 @@ index 0000000000000000000000000000000000000000..889561a6b0cb46405398d94fa071d33d
 +		updates++;
 +		
 +		config.save(configFile);
++		
++		// Attempt to detect vectorization
++		try {
++			SIMDDetection.isEnabled = SIMDDetection.canEnable();
++			SIMDDetection.versionLimited = SIMDDetection.getJavaVersion() != 17;
++		} catch (NoClassDefFoundError ignored) {}
++		
++		if (SIMDDetection.isEnabled) {
++			PufferfishLogger.LOGGER.info("SIMD operations detected as functional. Will replace some operations with faster versions.");
++		} else if (SIMDDetection.versionLimited) {
++			PufferfishLogger.LOGGER.warning("Will not enable SIMD! These optimizations are only safely supported on Java 17.");
++		} else {
++			PufferfishLogger.LOGGER.warning("SIMD operations are available for your server, but are not configured!");
++			PufferfishLogger.LOGGER.warning("To enable additional optimizations, add \"--add-modules=jdk.incubator.vector\" to your startup flags, BEFORE the \"-jar\".");
++		}
 +	}
 +	
 +	private static void setComment(String key, String... comment) {
@@ -2545,7 +2573,7 @@ index 7437f01ca8f416e2c9150250e324af4725a4efb6..7ac51dbfce18a2bc52faa7a915abeccc
      int LARGE_MAX_STACK_SIZE = 64;
  
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 4584dcec835f97e94dcf12788b66703075dafe45..e0c91bc518168441fffa32f4c611a74800a8d2e2 100644
+index 6067ac851708fd6d30d3d295acf0e66a2ea16f13..6fbc4dcc1f150b036656be5420ad803c3b26e9f3 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
 @@ -227,7 +227,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, i

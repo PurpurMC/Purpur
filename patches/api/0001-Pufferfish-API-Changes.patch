@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 001c2b963205012f340db0d539e4033c748124ce..554f5e35954f35aecaf454853a0a2999f15d19bc 100644
+index 001c2b963205012f340db0d539e4033c748124ce..93390eaead78d229902df0f7c8f9b30cb6174de7 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -40,6 +40,7 @@ dependencies {
@@ -31,6 +31,20 @@ index 001c2b963205012f340db0d539e4033c748124ce..554f5e35954f35aecaf454853a0a2999
  
      implementation("org.ow2.asm:asm:9.2")
      implementation("org.ow2.asm:asm-commons:9.2")
+@@ -81,6 +82,13 @@ val generateApiVersioningFile by tasks.registering {
+     }
+ }
+ 
++// Pufferfish Start
++tasks.withType<JavaCompile> {
++    val compilerArgs = options.compilerArgs
++    compilerArgs.add("--add-modules=jdk.incubator.vector")
++}
++// Pufferfish End
++
+ tasks.jar {
+     from(generateApiVersioningFile.map { it.outputs.files.singleFile }) {
+         into("META-INF/maven/${project.group}/${project.name}")
 diff --git a/src/main/java/gg/pufferfish/pufferfish/sentry/SentryContext.java b/src/main/java/gg/pufferfish/pufferfish/sentry/SentryContext.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8eb08fb68a
@@ -198,6 +212,200 @@ index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8e
 +		}
 +	}
 +}
+diff --git a/src/main/java/gg/pufferfish/pufferfish/simd/SIMDChecker.java b/src/main/java/gg/pufferfish/pufferfish/simd/SIMDChecker.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..77cf83bd096bbf6bfa7e510d97716b514384d9ff
+--- /dev/null
++++ b/src/main/java/gg/pufferfish/pufferfish/simd/SIMDChecker.java
+@@ -0,0 +1,29 @@
++package gg.pufferfish.pufferfish.simd;
++
++import jdk.incubator.vector.IntVector;
++
++/**
++ * Basically, java is annoying and we have to push this out to its own class.
++ */
++@Deprecated
++public class SIMDChecker {
++	
++	@Deprecated
++	public static boolean canEnable() {
++		try {
++			if (SIMDDetection.getJavaVersion() != 17) {
++				return false;
++			} else {
++				IntVector oneVector = IntVector.broadcast(IntVector.SPECIES_256, 1);
++				IntVector twoVector = IntVector.broadcast(IntVector.SPECIES_256, 2);
++				IntVector result = oneVector.add(twoVector);
++				if (result.toArray()[0] == 3) {
++					// Vectorization works! Let's enable it!
++					return true;
++				}
++			}
++		} catch (NoClassDefFoundError | Exception ignored) {} // Basically, we don't do anything. This lets us detect if it's not functional and disable it.
++		return false;
++	}
++	
++}
+diff --git a/src/main/java/gg/pufferfish/pufferfish/simd/SIMDDetection.java b/src/main/java/gg/pufferfish/pufferfish/simd/SIMDDetection.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1bbec0b032a4765f5e55a1475a1b7401f72164e7
+--- /dev/null
++++ b/src/main/java/gg/pufferfish/pufferfish/simd/SIMDDetection.java
+@@ -0,0 +1,32 @@
++package gg.pufferfish.pufferfish.simd;
++
++import jdk.incubator.vector.IntVector;
++
++@Deprecated
++public class SIMDDetection {
++	
++	public static boolean isEnabled = false;
++	public static boolean versionLimited = false;
++	
++	@Deprecated
++	public static boolean canEnable() {
++		try {
++			return SIMDChecker.canEnable();
++		} catch (NoClassDefFoundError | Exception ignored) {
++			return false;
++		}
++	}
++	
++	@Deprecated
++	public static int getJavaVersion() {
++		// https://stackoverflow.com/a/2591122
++		String version = System.getProperty("java.version");
++		if(version.startsWith("1.")) {
++			version = version.substring(2, 3);
++		} else {
++			int dot = version.indexOf(".");
++			if(dot != -1) { version = version.substring(0, dot); }
++		} return Integer.parseInt(version);
++	}
++	
++}
+diff --git a/src/main/java/gg/pufferfish/pufferfish/simd/VectorMapPalette.java b/src/main/java/gg/pufferfish/pufferfish/simd/VectorMapPalette.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..48b67864752d6da4e2cc626e746eeb7c32b6524f
+--- /dev/null
++++ b/src/main/java/gg/pufferfish/pufferfish/simd/VectorMapPalette.java
+@@ -0,0 +1,79 @@
++package gg.pufferfish.pufferfish.simd;
++
++import java.awt.Color;
++import jdk.incubator.vector.FloatVector;
++import jdk.incubator.vector.IntVector;
++import jdk.incubator.vector.VectorMask;
++import org.bukkit.map.MapPalette;
++
++@Deprecated
++public class VectorMapPalette {
++	
++	@Deprecated
++	public static void matchColorVectorized(int[] in, byte[] out) {
++		int speciesLength = IntVector.SPECIES_256.length();
++		int i;
++		for (i = 0; i < in.length; i += speciesLength) {
++			float[] redsArr = new float[speciesLength];
++			float[] bluesArr = new float[speciesLength];
++			float[] greensArr = new float[speciesLength];
++			int[] alphasArr = new int[speciesLength];
++			
++			for (int j = 0; j < speciesLength; j++) {
++				alphasArr[j] = (in[i + j] >> 24) & 0xFF;
++				redsArr[j] = (in[i + j] >> 16) & 0xFF;
++				greensArr[j] = (in[i + j] >> 8) & 0xFF;
++				bluesArr[j] = (in[i + j] >> 0) & 0xFF;
++			}
++			
++			IntVector alphas = IntVector.fromArray(IntVector.SPECIES_256, alphasArr, 0);
++			FloatVector reds = FloatVector.fromArray(FloatVector.SPECIES_256, redsArr, 0);
++			FloatVector greens = FloatVector.fromArray(FloatVector.SPECIES_256, greensArr, 0);
++			FloatVector blues = FloatVector.fromArray(FloatVector.SPECIES_256, bluesArr, 0);
++			IntVector resultIndex = IntVector.zero(IntVector.SPECIES_256);
++			VectorMask<Integer> modificationMask = VectorMask.fromLong(IntVector.SPECIES_256, 0b11111111);
++			
++			modificationMask = modificationMask.and(alphas.lt(128).not());
++			FloatVector bestDistances = FloatVector.broadcast(FloatVector.SPECIES_256, Float.MAX_VALUE);
++			
++			for (int c = 4; c < MapPalette.colors.length; c++) {
++				// We're using 32-bit floats here because it's 2x faster and nobody will know the difference.
++				// For correctness, the original algorithm uses 64-bit floats instead. Completely unnecessary.
++				FloatVector compReds = FloatVector.broadcast(FloatVector.SPECIES_256, MapPalette.colors[c].getRed());
++				FloatVector compGreens = FloatVector.broadcast(FloatVector.SPECIES_256, MapPalette.colors[c].getGreen());
++				FloatVector compBlues = FloatVector.broadcast(FloatVector.SPECIES_256, MapPalette.colors[c].getBlue());
++				
++				FloatVector rMean = reds.add(compReds).div(2.0f);
++				FloatVector rDiff = reds.sub(compReds);
++				FloatVector gDiff = greens.sub(compGreens);
++				FloatVector bDiff = blues.sub(compBlues);
++				
++				FloatVector weightR = rMean.div(256.0f).add(2);
++				FloatVector weightG = FloatVector.broadcast(FloatVector.SPECIES_256, 4.0f);
++				FloatVector weightB = FloatVector.broadcast(FloatVector.SPECIES_256, 255.0f).sub(rMean).div(256.0f).add(2.0f);
++				
++				FloatVector distance = weightR.mul(rDiff).mul(rDiff).add(weightG.mul(gDiff).mul(gDiff)).add(weightB.mul(bDiff).mul(bDiff));
++				
++				// Now we compare to the best distance we've found.
++				// This mask contains a "1" if better, and a "0" otherwise.
++				VectorMask<Float> bestDistanceMask = distance.lt(bestDistances);
++				bestDistances = bestDistances.blend(distance, bestDistanceMask); // Update the best distances
++				
++				// Update the result array
++				// We also AND with the modification mask because we don't want to interfere if the alpha value isn't large enough.
++				resultIndex = resultIndex.blend(c, bestDistanceMask.cast(IntVector.SPECIES_256).and(modificationMask)); // Update the results
++			}
++			
++			for (int j = 0; j < speciesLength; j++) {
++				int index = resultIndex.lane(j);
++				out[i + j] = (byte) (index < 128 ? index : -129 + (index - 127));
++			}
++		}
++		
++		// For the final ones, fall back to the regular method
++		for (; i < in.length; i++) {
++			out[i] = MapPalette.matchColor(new Color(in[i], true));
++		}
++	}
++	
++}
+diff --git a/src/main/java/org/bukkit/map/MapPalette.java b/src/main/java/org/bukkit/map/MapPalette.java
+index b937441d2fb46b108644c49fcf073859765aa02e..d95b01bfd0657cf089c0f5412453cca08e36c02f 100644
+--- a/src/main/java/org/bukkit/map/MapPalette.java
++++ b/src/main/java/org/bukkit/map/MapPalette.java
+@@ -1,5 +1,6 @@
+ package org.bukkit.map;
+ 
++import gg.pufferfish.pufferfish.simd.SIMDDetection;
+ import java.awt.Color;
+ import java.awt.Graphics2D;
+ import java.awt.Image;
+@@ -34,7 +35,7 @@ public final class MapPalette {
+     }
+ 
+     @NotNull
+-    static final Color[] colors = {
++    public static final Color[] colors = { // Pufferfish - public access
+         c(0, 0, 0), c(0, 0, 0), c(0, 0, 0), c(0, 0, 0),
+         c(89, 125, 39), c(109, 153, 48), c(127, 178, 56), c(67, 94, 29),
+         c(174, 164, 115), c(213, 201, 140), c(247, 233, 163), c(130, 123, 86),
+@@ -205,9 +206,15 @@ public final class MapPalette {
+         temp.getRGB(0, 0, temp.getWidth(), temp.getHeight(), pixels, 0, temp.getWidth());
+ 
+         byte[] result = new byte[temp.getWidth() * temp.getHeight()];
++        // Pufferfish start
++        if (!SIMDDetection.isEnabled) {
+         for (int i = 0; i < pixels.length; i++) {
+             result[i] = matchColor(new Color(pixels[i], true));
+         }
++        } else {
++            gg.pufferfish.pufferfish.simd.VectorMapPalette.matchColorVectorized(pixels, result);
++        }
++        // Pufferfish end
+         return result;
+     }
+ 
 diff --git a/src/main/java/org/bukkit/plugin/SimplePluginManager.java b/src/main/java/org/bukkit/plugin/SimplePluginManager.java
 index 1366496271c4c7f72d1e5f990e51775b1c371f99..05bb388407b5bd8a942478237580a38ffaa388c8 100644
 --- a/src/main/java/org/bukkit/plugin/SimplePluginManager.java
@@ -255,7 +463,7 @@ index c8b11793c6a3baabc1c9566e0463ab1d6e293827..2b9218ddd262e89180588c3014dad328
  
              if (cloader instanceof PluginClassLoader) {
 diff --git a/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java b/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
-index 8a39c48fce819d72a94d5309db8dfc42930989af..c67e91316f35750b18e082746206a01e783f1740 100644
+index 9938ebb38353f4aa2adf1bb08cd1c347ddd9fc88..dc76cdbe93a0229a8ff552e4048613e3d8e050ce 100644
 --- a/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
 +++ b/src/main/java/org/bukkit/plugin/java/PluginClassLoader.java
 @@ -46,6 +46,8 @@ public final class PluginClassLoader extends URLClassLoader { // Spigot
