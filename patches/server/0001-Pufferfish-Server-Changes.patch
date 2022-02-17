@@ -629,7 +629,7 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..31c3e9460625f47c166f81e9b44a3b7bdaecbeb6
+index 0000000000000000000000000000000000000000..17bc75a0f0e665a3b7abaaf2bf197abe3cd2af20
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 @@ -0,0 +1,291 @@
@@ -727,7 +727,7 @@ index 0000000000000000000000000000000000000000..31c3e9460625f47c166f81e9b44a3b7b
 +		try {
 +			SIMDDetection.isEnabled = SIMDDetection.canEnable();
 +			SIMDDetection.versionLimited = SIMDDetection.getJavaVersion() != 17;
-+		} catch (NoClassDefFoundError ignored) {}
++		} catch (NoClassDefFoundError | Exception ignored) {}
 +		
 +		if (SIMDDetection.isEnabled) {
 +			PufferfishLogger.LOGGER.info("SIMD operations detected as functional. Will replace some operations with faster versions.");
@@ -2136,41 +2136,24 @@ index 0000000000000000000000000000000000000000..facd55463d44cb7e3d2ca6892982f549
 +	}
 +}
 diff --git a/src/main/java/net/minecraft/Util.java b/src/main/java/net/minecraft/Util.java
-index 34e571b702684673b89103176838dc246ff9b24d..d985932adec493163ac41f7f35d0b530c1e1f7db 100644
+index 34e571b702684673b89103176838dc246ff9b24d..3bef6ecc820b57f3953b48ecbd451d457ecc46e1 100644
 --- a/src/main/java/net/minecraft/Util.java
 +++ b/src/main/java/net/minecraft/Util.java
-@@ -392,16 +392,27 @@ public class Util {
+@@ -392,6 +392,10 @@ public class Util {
  
      private static final CompletableFuture<?>[] EMPTY_FUTURE = new CompletableFuture[0]; // Paper
      public static <V> CompletableFuture<List<V>> sequence(List<? extends CompletableFuture<? extends V>> futures) {
--        // Paper start - optimize
--        return CompletableFuture.allOf(futures.toArray(EMPTY_FUTURE))
--            .thenApply(v -> {
--                List<V> list = Lists.newArrayListWithCapacity(futures.size());
--                for (CompletableFuture<? extends V> future : futures) {
--                    list.add(future.join());
--                }
--                return list;
 +        // Pufferfish start - faster sequencing without all of.. _that_
 +        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]))
 +                .thenApply(unused -> futures.stream().map(CompletableFuture::join).collect(Collectors.toList()));
 +        /*
-+        return futures.stream().reduce(CompletableFuture.completedFuture(Lists.newArrayList()), (completableFuture, completableFuture2) -> {
-+            return completableFuture2.thenCombine(completableFuture, (object, list) -> {
-+                List<V> list2 = Lists.newArrayListWithCapacity(list.size() + 1);
-+                list2.addAll(list);
-+                list2.add(object);
-+                return list2;
+         // Paper start - optimize
+         return CompletableFuture.allOf(futures.toArray(EMPTY_FUTURE))
+             .thenApply(v -> {
+@@ -402,6 +406,8 @@ public class Util {
+                 return list;
              });
--        // Paper end
-+        }, (completableFuture, completableFuture2) -> {
-+            return completableFuture.thenCombine(completableFuture2, (list, list2) -> {
-+                List<V> list3 = Lists.newArrayListWithCapacity(list.size() + list2.size());
-+                list3.addAll(list);
-+                list3.addAll(list2);
-+                return list3;
-+            });
-+        });
+         // Paper end
 +         */
 +        // Pufferfish end
      }
@@ -2409,7 +2392,7 @@ index 9a6c67b614944f841813ec2892381c3342bc365c..e80176708db486190dd527e3ade5fc69
                          this.wasOnGround = this.entity.isOnGround();
                          this.teleportDelay = 0;
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
-index 403a6fadbeff41e67618393ac7034d32c02af7b8..59d57108f38f38e03cd8b69a53c3e9d40179599a 100644
+index 4ebdeca14b4b4378bb433d68d5f60da99ca95b82..740e1d7b299e78668bff5b176bbe54f478c73fd3 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
 +++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
 @@ -667,7 +667,20 @@ public class ServerLevel extends Level implements WorldGenLevel {
