@@ -7,10 +7,10 @@ Configurable chance to spawn a wolf that is rabid.
 Rabid wolves attack all players, mobs, and animals.
 
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Wolf.java b/src/main/java/net/minecraft/world/entity/animal/Wolf.java
-index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49cb83964c2 100644
+index ed6a552fab01b1391cf98fdbb51f7f47f72de932..cbd5f90f5005187c61e47e6f6fa74fb19d67a4d4 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Wolf.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Wolf.java
-@@ -11,6 +11,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
+@@ -11,15 +11,19 @@ import net.minecraft.network.syncher.EntityDataAccessor;
  import net.minecraft.network.syncher.EntityDataSerializers;
  import net.minecraft.network.syncher.SynchedEntityData;
  import net.minecraft.server.level.ServerLevel;
@@ -18,7 +18,6 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
  import net.minecraft.sounds.SoundEvent;
  import net.minecraft.sounds.SoundEvents;
  import net.minecraft.tags.BlockTags;
-@@ -18,9 +19,12 @@ import net.minecraft.tags.Tag;
  import net.minecraft.util.Mth;
  import net.minecraft.util.TimeUtil;
  import net.minecraft.util.valueproviders.UniformInt;
@@ -31,7 +30,7 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
  import net.minecraft.world.entity.AgeableMob;
  import net.minecraft.world.entity.Entity;
  import net.minecraft.world.entity.EntityDimensions;
-@@ -30,6 +34,7 @@ import net.minecraft.world.entity.Mob;
+@@ -29,6 +33,7 @@ import net.minecraft.world.entity.Mob;
  import net.minecraft.world.entity.MobSpawnType;
  import net.minecraft.world.entity.NeutralMob;
  import net.minecraft.world.entity.Pose;
@@ -39,7 +38,7 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
  import net.minecraft.world.entity.TamableAnimal;
  import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
  import net.minecraft.world.entity.ai.attributes.Attributes;
-@@ -38,6 +43,7 @@ import net.minecraft.world.entity.ai.goal.BegGoal;
+@@ -37,6 +42,7 @@ import net.minecraft.world.entity.ai.goal.BegGoal;
  import net.minecraft.world.entity.ai.goal.BreedGoal;
  import net.minecraft.world.entity.ai.goal.FloatGoal;
  import net.minecraft.world.entity.ai.goal.FollowOwnerGoal;
@@ -54,8 +53,8 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
 +import net.minecraft.world.level.ServerLevelAccessor;
  import net.minecraft.world.level.block.state.BlockState;
  import net.minecraft.world.level.gameevent.GameEvent;
- import net.minecraft.world.phys.Vec3;
-@@ -82,6 +89,37 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+ import net.minecraft.world.level.pathfinder.BlockPathTypes;
+@@ -83,6 +90,37 @@ public class Wolf extends TamableAnimal implements NeutralMob {
  
          return entitytypes == EntityType.SHEEP || entitytypes == EntityType.RABBIT || entitytypes == EntityType.FOX;
      };
@@ -93,7 +92,7 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
      private static final float START_HEALTH = 8.0F;
      private static final float TAME_HEALTH = 20.0F;
      private float interestedAngle;
-@@ -129,6 +167,37 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+@@ -132,6 +170,37 @@ public class Wolf extends TamableAnimal implements NeutralMob {
      public int getPurpurBreedTime() {
          return this.level.purpurConfig.wolfBreedingTicks;
      }
@@ -131,15 +130,15 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
      // Purpur end
  
      @Override
-@@ -137,6 +206,7 @@ public class Wolf extends TamableAnimal implements NeutralMob {
-         this.goalSelector.addGoal(1, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur
+@@ -141,6 +210,7 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+         this.goalSelector.addGoal(1, new Wolf.WolfPanicGoal(1.5D));
          this.goalSelector.addGoal(2, new SitWhenOrderedToGoal(this));
          this.goalSelector.addGoal(3, new Wolf.WolfAvoidEntityGoal<>(this, Llama.class, 24.0F, 1.5D, 1.5D));
 +        this.goalSelector.addGoal(3, new AvoidRabidWolfGoal(this, 24.0F, 1.5D, 1.5D)); // Purpur
          this.goalSelector.addGoal(4, new LeapAtTargetGoal(this, 0.4F));
          this.goalSelector.addGoal(5, new MeleeAttackGoal(this, 1.0D, true));
          this.goalSelector.addGoal(6, new FollowOwnerGoal(this, 1.0D, 10.0F, 2.0F, false));
-@@ -150,7 +220,7 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+@@ -154,7 +224,7 @@ public class Wolf extends TamableAnimal implements NeutralMob {
          this.targetSelector.addGoal(2, new OwnerHurtTargetGoal(this));
          this.targetSelector.addGoal(3, (new HurtByTargetGoal(this, new Class[0])).setAlertOthers());
          this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, Player.class, 10, true, false, this::isAngryAt));
@@ -148,7 +147,7 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
          this.targetSelector.addGoal(6, new NonTameRandomTargetGoal<>(this, Turtle.class, false, Turtle.BABY_ON_LAND_SELECTOR));
          this.targetSelector.addGoal(7, new NearestAttackableTargetGoal<>(this, AbstractSkeleton.class, false));
          this.targetSelector.addGoal(8, new ResetUniversalAngerTargetGoal<>(this, true));
-@@ -195,6 +265,7 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+@@ -199,6 +269,7 @@ public class Wolf extends TamableAnimal implements NeutralMob {
      public void addAdditionalSaveData(CompoundTag nbt) {
          super.addAdditionalSaveData(nbt);
          nbt.putByte("CollarColor", (byte) this.getCollarColor().getId());
@@ -156,7 +155,7 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
          this.addPersistentAngerSaveData(nbt);
      }
  
-@@ -204,6 +275,10 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+@@ -208,6 +279,10 @@ public class Wolf extends TamableAnimal implements NeutralMob {
          if (nbt.contains("CollarColor", 99)) {
              this.setCollarColor(DyeColor.byId(nbt.getInt("CollarColor")));
          }
@@ -167,7 +166,7 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
  
          this.readPersistentAngerSaveData(this.level, nbt);
      }
-@@ -248,6 +323,11 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+@@ -252,6 +327,11 @@ public class Wolf extends TamableAnimal implements NeutralMob {
      public void tick() {
          super.tick();
          if (this.isAlive()) {
@@ -179,7 +178,7 @@ index 749e007fc0a703ca9baa58490b3b7641611d2aa4..6be2d2c2b3eb33cb8657a2cdfb49c49c
              this.interestedAngleO = this.interestedAngle;
              if (this.isInterested()) {
                  this.interestedAngle += (1.0F - this.interestedAngle) * 0.4F;
-@@ -445,6 +525,20 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+@@ -452,6 +532,20 @@ public class Wolf extends TamableAnimal implements NeutralMob {
  
                  return InteractionResult.SUCCESS;
              }
