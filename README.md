@@ -64,7 +64,7 @@ Maven
 <dependency>
     <groupId>org.purpurmc.purpur</groupId>
     <artifactId>purpur-api</artifactId>
-    <version>1.18.1-R0.1-SNAPSHOT</version>
+    <version>1.18.2-R0.1-SNAPSHOT</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -77,7 +77,7 @@ repositories {
 ```
 ```kotlin
 dependencies {
-    compileOnly("org.purpurmc.purpur", "purpur-api", "1.18.1-R0.1-SNAPSHOT")
+    compileOnly("org.purpurmc.purpur", "purpur-api", "1.18.2-R0.1-SNAPSHOT")
 }
 ```
 
