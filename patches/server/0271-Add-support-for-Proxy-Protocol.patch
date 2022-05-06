@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: PanSzelescik <panszelescik@gmail.com>
+Date: Fri, 6 May 2022 17:54:45 +0200
+Subject: [PATCH] Add support for Proxy Protocol
+
+
+diff --git a/src/main/java/net/minecraft/server/network/ServerConnectionListener.java b/src/main/java/net/minecraft/server/network/ServerConnectionListener.java
+index 058fb3696c7ece4a7b6971886b1760b26add733b..ef652bf0809b7fd36cadb3ca35e350a01798358b 100644
+--- a/src/main/java/net/minecraft/server/network/ServerConnectionListener.java
++++ b/src/main/java/net/minecraft/server/network/ServerConnectionListener.java
+@@ -109,6 +109,12 @@ public class ServerConnectionListener {
+             ServerConnectionListener.LOGGER.info("Paper: Using " + com.velocitypowered.natives.util.Natives.cipher.getLoadedVariant() + " cipher from Velocity.");
+             // Paper end
+ 
++            // Purpur start - indicate Proxy Protocol usage
++            if (org.purpurmc.purpur.PurpurConfig.useProxyProtocol) {
++                ServerConnectionListener.LOGGER.info("Purpur: Using Proxy Protocol");
++            }
++            // Purpur end
++
+             this.channels.add(((ServerBootstrap) ((ServerBootstrap) (new ServerBootstrap()).channel(oclass)).childHandler(new ChannelInitializer<Channel>() {
+                 protected void initChannel(Channel channel) {
+                     try {
+@@ -122,6 +128,29 @@ public class ServerConnectionListener {
+                     int j = ServerConnectionListener.this.server.getRateLimitPacketsPerSecond();
+                     Object object = j > 0 ? new RateKickingConnection(j) : new Connection(PacketFlow.SERVERBOUND);
+ 
++                    // Purpur start - Add support for Proxy Protocol
++                    if (org.purpurmc.purpur.PurpurConfig.useProxyProtocol) {
++                        channel.pipeline().addAfter("timeout", "haproxy-decoder", new io.netty.handler.codec.haproxy.HAProxyMessageDecoder());
++                        channel.pipeline().addAfter("haproxy-decoder", "haproxy-handler", new ChannelInboundHandlerAdapter() {
++                            @Override
++                            public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
++                                if (msg instanceof io.netty.handler.codec.haproxy.HAProxyMessage message) {
++                                    System.out.println(msg);
++                                    String realaddress = message.sourceAddress();
++                                    int realport = message.sourcePort();
++
++                                    SocketAddress socketaddr = new java.net.InetSocketAddress(realaddress, realport);
++
++                                    Connection connection = (Connection) channel.pipeline().get("packet_handler");
++                                    connection.address = socketaddr;
++                                } else {
++                                    super.channelRead(ctx, msg);
++                                }
++                            }
++                        });
++                    }
++                    // Purpur end
++
+                     // ServerConnectionListener.this.connections.add((Connection) object); // CraftBukkit - decompile error
+                     pending.add((Connection) object); // Paper
+                     channel.pipeline().addLast("packet_handler", (ChannelHandler) object);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 659e93fb24124318367e5b4d0b144ca1443950e9..bc271b6393f5dd9dfffa0516888ae8bd15489843 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -429,9 +429,11 @@ public class PurpurConfig {
+ 
+     public static boolean useUPnP = false;
+     public static boolean maxJoinsPerSecond = false;
++    public static boolean useProxyProtocol = false;
+     private static void networkSettings() {
+         useUPnP = getBoolean("settings.network.upnp-port-forwarding", useUPnP);
+         maxJoinsPerSecond = getBoolean("settings.network.max-joins-per-second", maxJoinsPerSecond);
++        useProxyProtocol = getBoolean("settings.network.proxy-protocol", useProxyProtocol);
+     }
+ 
+     public static java.util.regex.Pattern usernameValidCharactersPattern;
