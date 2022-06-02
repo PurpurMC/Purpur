@@ -214,13 +214,17 @@ index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8e
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/simd/SIMDChecker.java b/src/main/java/gg/pufferfish/pufferfish/simd/SIMDChecker.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..66244a98901fff4479c50ce955502e2975f804c6
+index 0000000000000000000000000000000000000000..93f5d7ca36e043e6c0f959450d38e6946b348eaf
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/simd/SIMDChecker.java
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,40 @@
 +package gg.pufferfish.pufferfish.simd;
 +
++import java.util.logging.Level;
++import java.util.logging.Logger;
++import jdk.incubator.vector.FloatVector;
 +import jdk.incubator.vector.IntVector;
++import jdk.incubator.vector.VectorSpecies;
 +
 +/**
 + * Basically, java is annoying and we have to push this out to its own class.
@@ -229,19 +233,25 @@ index 0000000000000000000000000000000000000000..66244a98901fff4479c50ce955502e29
 +public class SIMDChecker {
 +	
 +	@Deprecated
-+	public static boolean canEnable() {
++	public static boolean canEnable(Logger logger) {
 +		try {
 +			if (SIMDDetection.getJavaVersion() != 17 && SIMDDetection.getJavaVersion() != 18) {
 +				return false;
 +			} else {
 +				SIMDDetection.testRun = true;
-+				IntVector oneVector = IntVector.broadcast(IntVector.SPECIES_256, 1);
-+				IntVector twoVector = IntVector.broadcast(IntVector.SPECIES_256, 2);
-+				IntVector result = oneVector.add(twoVector);
-+				if (result.toArray()[0] == 3) {
-+					// Vectorization works! Let's enable it!
-+					return true;
++				
++				VectorSpecies<Integer> ISPEC = IntVector.SPECIES_PREFERRED;
++				VectorSpecies<Float> FSPEC = FloatVector.SPECIES_PREFERRED;
++				
++				logger.log(Level.INFO, "Max SIMD vector size on this system is " + ISPEC.vectorBitSize() + " bits (int)");
++				logger.log(Level.INFO, "Max SIMD vector size on this system is " + FSPEC.vectorBitSize() + " bits (float)");
++				
++				if (ISPEC.elementSize() < 2 || FSPEC.elementSize() < 2) {
++					logger.log(Level.WARNING, "SIMD is not properly supported on this system!");
++					return false;
 +				}
++
++				return true;
 +			}
 +		} catch (NoClassDefFoundError | Exception ignored) {} // Basically, we don't do anything. This lets us detect if it's not functional and disable it.
 +		return false;
@@ -250,11 +260,13 @@ index 0000000000000000000000000000000000000000..66244a98901fff4479c50ce955502e29
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/simd/SIMDDetection.java b/src/main/java/gg/pufferfish/pufferfish/simd/SIMDDetection.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..d5ee3dfde2fed1f1bec49df22ba37ce725de4c2c
+index 0000000000000000000000000000000000000000..a84889d3e9cfc4d7ab5f867820a6484c6070711b
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/simd/SIMDDetection.java
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,35 @@
 +package gg.pufferfish.pufferfish.simd;
++
++import java.util.logging.Logger;
 +
 +@Deprecated
 +public class SIMDDetection {
@@ -264,9 +276,9 @@ index 0000000000000000000000000000000000000000..d5ee3dfde2fed1f1bec49df22ba37ce7
 +	public static boolean testRun = false;
 +	
 +	@Deprecated
-+	public static boolean canEnable() {
++	public static boolean canEnable(Logger logger) {
 +		try {
-+			return SIMDChecker.canEnable();
++			return SIMDChecker.canEnable(logger);
 +		} catch (NoClassDefFoundError | Exception ignored) {
 +			return false;
 +		}
@@ -289,24 +301,28 @@ index 0000000000000000000000000000000000000000..d5ee3dfde2fed1f1bec49df22ba37ce7
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/simd/VectorMapPalette.java b/src/main/java/gg/pufferfish/pufferfish/simd/VectorMapPalette.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2341b564b6383d5eca5fafe80273e046bfea070e
+index 0000000000000000000000000000000000000000..ae2464920c9412ac90b819a540ee58be0741465f
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/simd/VectorMapPalette.java
-@@ -0,0 +1,79 @@
+@@ -0,0 +1,83 @@
 +package gg.pufferfish.pufferfish.simd;
 +
 +import java.awt.Color;
 +import jdk.incubator.vector.FloatVector;
 +import jdk.incubator.vector.IntVector;
 +import jdk.incubator.vector.VectorMask;
++import jdk.incubator.vector.VectorSpecies;
 +import org.bukkit.map.MapPalette;
 +
 +@Deprecated
 +public class VectorMapPalette {
 +	
++	private static final VectorSpecies<Integer> I_SPEC = IntVector.SPECIES_PREFERRED;
++	private static final VectorSpecies<Float> F_SPEC = FloatVector.SPECIES_PREFERRED;
++	
 +	@Deprecated
 +	public static void matchColorVectorized(int[] in, byte[] out) {
-+		int speciesLength = IntVector.SPECIES_256.length();
++		int speciesLength = I_SPEC.length();
 +		int i;
 +		for (i = 0; i < in.length - speciesLength; i += speciesLength) {
 +			float[] redsArr = new float[speciesLength];
@@ -321,22 +337,22 @@ index 0000000000000000000000000000000000000000..2341b564b6383d5eca5fafe80273e046
 +				bluesArr[j] = (in[i + j] >> 0) & 0xFF;
 +			}
 +			
-+			IntVector alphas = IntVector.fromArray(IntVector.SPECIES_256, alphasArr, 0);
-+			FloatVector reds = FloatVector.fromArray(FloatVector.SPECIES_256, redsArr, 0);
-+			FloatVector greens = FloatVector.fromArray(FloatVector.SPECIES_256, greensArr, 0);
-+			FloatVector blues = FloatVector.fromArray(FloatVector.SPECIES_256, bluesArr, 0);
-+			IntVector resultIndex = IntVector.zero(IntVector.SPECIES_256);
-+			VectorMask<Integer> modificationMask = VectorMask.fromLong(IntVector.SPECIES_256, 0b11111111);
++			IntVector alphas = IntVector.fromArray(I_SPEC, alphasArr, 0);
++			FloatVector reds = FloatVector.fromArray(F_SPEC, redsArr, 0);
++			FloatVector greens = FloatVector.fromArray(F_SPEC, greensArr, 0);
++			FloatVector blues = FloatVector.fromArray(F_SPEC, bluesArr, 0);
++			IntVector resultIndex = IntVector.zero(I_SPEC);
++			VectorMask<Integer> modificationMask = VectorMask.fromLong(I_SPEC, 0xffffffff);
 +			
 +			modificationMask = modificationMask.and(alphas.lt(128).not());
-+			FloatVector bestDistances = FloatVector.broadcast(FloatVector.SPECIES_256, Float.MAX_VALUE);
++			FloatVector bestDistances = FloatVector.broadcast(F_SPEC, Float.MAX_VALUE);
 +			
 +			for (int c = 4; c < MapPalette.colors.length; c++) {
 +				// We're using 32-bit floats here because it's 2x faster and nobody will know the difference.
 +				// For correctness, the original algorithm uses 64-bit floats instead. Completely unnecessary.
-+				FloatVector compReds = FloatVector.broadcast(FloatVector.SPECIES_256, MapPalette.colors[c].getRed());
-+				FloatVector compGreens = FloatVector.broadcast(FloatVector.SPECIES_256, MapPalette.colors[c].getGreen());
-+				FloatVector compBlues = FloatVector.broadcast(FloatVector.SPECIES_256, MapPalette.colors[c].getBlue());
++				FloatVector compReds = FloatVector.broadcast(F_SPEC, MapPalette.colors[c].getRed());
++				FloatVector compGreens = FloatVector.broadcast(F_SPEC, MapPalette.colors[c].getGreen());
++				FloatVector compBlues = FloatVector.broadcast(F_SPEC, MapPalette.colors[c].getBlue());
 +				
 +				FloatVector rMean = reds.add(compReds).div(2.0f);
 +				FloatVector rDiff = reds.sub(compReds);
@@ -344,8 +360,8 @@ index 0000000000000000000000000000000000000000..2341b564b6383d5eca5fafe80273e046
 +				FloatVector bDiff = blues.sub(compBlues);
 +				
 +				FloatVector weightR = rMean.div(256.0f).add(2);
-+				FloatVector weightG = FloatVector.broadcast(FloatVector.SPECIES_256, 4.0f);
-+				FloatVector weightB = FloatVector.broadcast(FloatVector.SPECIES_256, 255.0f).sub(rMean).div(256.0f).add(2.0f);
++				FloatVector weightG = FloatVector.broadcast(F_SPEC, 4.0f);
++				FloatVector weightB = FloatVector.broadcast(F_SPEC, 255.0f).sub(rMean).div(256.0f).add(2.0f);
 +				
 +				FloatVector distance = weightR.mul(rDiff).mul(rDiff).add(weightG.mul(gDiff).mul(gDiff)).add(weightB.mul(bDiff).mul(bDiff));
 +				
@@ -356,7 +372,7 @@ index 0000000000000000000000000000000000000000..2341b564b6383d5eca5fafe80273e046
 +				
 +				// Update the result array
 +				// We also AND with the modification mask because we don't want to interfere if the alpha value isn't large enough.
-+				resultIndex = resultIndex.blend(c, bestDistanceMask.cast(IntVector.SPECIES_256).and(modificationMask)); // Update the results
++				resultIndex = resultIndex.blend(c, bestDistanceMask.cast(I_SPEC).and(modificationMask)); // Update the results
 +			}
 +			
 +			for (int j = 0; j < speciesLength; j++) {
