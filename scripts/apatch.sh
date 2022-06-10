@@ -62,7 +62,7 @@ fi
 		echo "===========================";
 		echo " "
 		echo " MISSING FILES"
-		echo $(echo "$errors" | grep "No such file")
+		echo "$errors" | grep "No such file"
 		echo -e "$missingfiles"
 		echo " "
 		echo "===========================";
