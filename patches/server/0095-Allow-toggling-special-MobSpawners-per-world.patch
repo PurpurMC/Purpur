@@ -6,7 +6,7 @@ Subject: [PATCH] Allow toggling special MobSpawners per world
 In vanilla, these are all hardcoded on for world type 0 (overworld) and hardcoded off for every other world type. Default config behaviour matches this.
 
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
-index d546494c212cef210662ff8f6bc6ec2aae11ed27..96acb6ef2ea31395f666e40c86eb7a4c61f7353c 100644
+index 03fce06dcdc2c8e4dafce04d22f75b23ea9d32c9..50e94cf33e760d1602e44256e4ccae667a64d65d 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
 +++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
 @@ -504,7 +504,24 @@ public class ServerLevel extends Level implements WorldGenLevel {
@@ -16,19 +16,19 @@ index d546494c212cef210662ff8f6bc6ec2aae11ed27..96acb6ef2ea31395f666e40c86eb7a4c
 -        this.customSpawners = list;
 +        // Purpur start - enable/disable MobSpawners per world
 +        this.customSpawners = Lists.newArrayList();
-+        if (purpurConfig.phantomSpawning) {
++        if (purpurConfig().gameplayMechanics.mobSpawning.shouldAddCustomSpawner(purpurConfig().gameplayMechanics.mobSpawning.phantomSpawning, env)) {
 +            customSpawners.add(new net.minecraft.world.level.levelgen.PhantomSpawner());
 +        }
-+        if (purpurConfig.patrolSpawning) {
++        if (purpurConfig().gameplayMechanics.mobSpawning.shouldAddCustomSpawner(purpurConfig().gameplayMechanics.mobSpawning.patrolSpawning, env)) {
 +            customSpawners.add(new net.minecraft.world.level.levelgen.PatrolSpawner());
 +        }
-+        if (purpurConfig.catSpawning) {
++        if (purpurConfig().gameplayMechanics.mobSpawning.shouldAddCustomSpawner(purpurConfig().gameplayMechanics.mobSpawning.catSpawning, env)) {
 +            customSpawners.add(new net.minecraft.world.entity.npc.CatSpawner());
 +        }
-+        if (purpurConfig.villageSiegeSpawning) {
++        if (purpurConfig().gameplayMechanics.mobSpawning.shouldAddCustomSpawner(purpurConfig().gameplayMechanics.mobSpawning.villageSiegeSpawning, env)) {
 +            customSpawners.add(new net.minecraft.world.entity.ai.village.VillageSiege());
 +        }
-+        if (purpurConfig.villagerTraderSpawning) {
++        if (purpurConfig().gameplayMechanics.mobSpawning.shouldAddCustomSpawner(purpurConfig().gameplayMechanics.mobSpawning.villagerTraderSpawning, env)) {
 +            customSpawners.add(new net.minecraft.world.entity.npc.WanderingTraderSpawner(iworlddataserver));
 +        }
 +        // Purpur end
@@ -36,7 +36,7 @@ index d546494c212cef210662ff8f6bc6ec2aae11ed27..96acb6ef2ea31395f666e40c86eb7a4c
          ChunkGenerator chunkgenerator = worlddimension.generator();
          // CraftBukkit start
 diff --git a/src/main/java/net/minecraft/world/entity/npc/WanderingTraderSpawner.java b/src/main/java/net/minecraft/world/entity/npc/WanderingTraderSpawner.java
-index 4ee71a58aff50caf5bd715a4cbe50b134b52c9ff..7cbd1f1409c1b071007629cd349c1d928aad4887 100644
+index daa7c4bd8a3f6c28f02b7117b061f0def29e3743..d4699d7eefafffd2d4e0a03d62d5094f001bbcae 100644
 --- a/src/main/java/net/minecraft/world/entity/npc/WanderingTraderSpawner.java
 +++ b/src/main/java/net/minecraft/world/entity/npc/WanderingTraderSpawner.java
 @@ -4,6 +4,7 @@ import java.util.Iterator;
@@ -66,42 +66,45 @@ index 4ee71a58aff50caf5bd715a4cbe50b134b52c9ff..7cbd1f1409c1b071007629cd349c1d92
  
              if (NaturalSpawner.isSpawnPositionOk(SpawnPlacements.Type.ON_GROUND, world, blockposition2, EntityType.WANDERING_TRADER)) {
                  blockposition1 = blockposition2;
-diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 7a7bd0fbac184b10dfd2d4a1b210c7c40efc4437..9805b0f7821049c124159cc9fd26cec2bfdae7d2 100644
---- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-+++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-@@ -68,6 +68,12 @@ public class PurpurWorldConfig {
-         return PurpurConfig.config.getBoolean("world-settings." + worldName + "." + path, PurpurConfig.config.getBoolean("world-settings.default." + path));
-     }
+diff --git a/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java b/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
+index f977733b846eee38640d087b1504cd88b8d6d6a2..9810bca5bfb0351913ef6dd1dbea0b3d72a97172 100644
+--- a/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
++++ b/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
+@@ -11,11 +11,14 @@ import net.minecraft.world.item.Item;
+ import net.minecraft.world.item.Items;
+ import net.minecraft.world.level.Explosion;
+ import net.minecraft.world.level.block.Block;
++import org.apache.commons.lang3.BooleanUtils;
++import org.bukkit.World;
+ import org.spongepowered.configurate.objectmapping.meta.Setting;
  
-+    private boolean getBoolean(String path, Predicate<Boolean> predicate) {
-+        String val = getString(path, "default").toLowerCase();
-+        Boolean bool = BooleanUtils.toBooleanObject(val, "true", "false", "default");
-+        return predicate.test(bool);
-+    }
-+
-     private double getDouble(String path, double def) {
-         PurpurConfig.config.addDefault("world-settings.default." + path, def);
-         return PurpurConfig.config.getDouble("world-settings." + worldName + "." + path, PurpurConfig.config.getDouble("world-settings.default." + path));
-@@ -236,6 +242,21 @@ public class PurpurWorldConfig {
+ import java.util.ArrayList;
+ import java.util.HashMap;
+ import java.util.List;
++import java.util.Locale;
+ import java.util.Map;
+ 
+ public class PurpurWorldConfiguration extends ConfigurationPart {
+@@ -1434,6 +1437,22 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+             public List<Item> fire = new ArrayList<>();
+             public List<Item> lightning = new ArrayList<>();
          }
++
++        public MobSpawning mobSpawning;
++        public class MobSpawning extends ConfigurationPart {
++            public String catSpawning = "default";
++            public String patrolSpawning = "default";
++            public String phantomSpawning = "default";
++            public String villagerTraderSpawning = "default";
++            public String villageSiegeSpawning = "default";
++
++            public boolean shouldAddCustomSpawner(String configValue, World.Environment env) {
++                if (configValue.equalsIgnoreCase("default") && env == World.Environment.NORMAL) {
++                    return true;
++                }
++                return BooleanUtils.toBoolean(configValue.toLowerCase(Locale.ROOT));
++            }
++        }
      }
  
-+    public boolean catSpawning;
-+    public boolean patrolSpawning;
-+    public boolean phantomSpawning;
-+    public boolean villagerTraderSpawning;
-+    public boolean villageSiegeSpawning;
-+    private void mobSpawnerSettings() {
-+        // values of "default" or null will default to true only if the world environment is normal (aka overworld)
-+        Predicate<Boolean> predicate = (bool) -> (bool != null && bool) || (bool == null && environment == World.Environment.NORMAL);
-+        catSpawning = getBoolean("gameplay-mechanics.mob-spawning.village-cats", predicate);
-+        patrolSpawning = getBoolean("gameplay-mechanics.mob-spawning.raid-patrols", predicate);
-+        phantomSpawning = getBoolean("gameplay-mechanics.mob-spawning.phantoms", predicate);
-+        villagerTraderSpawning = getBoolean("gameplay-mechanics.mob-spawning.wandering-traders", predicate);
-+        villageSiegeSpawning = getBoolean("gameplay-mechanics.mob-spawning.village-sieges", predicate);
-+    }
-+
-     public boolean idleTimeoutKick = true;
-     public boolean idleTimeoutTickNearbyEntities = true;
-     public boolean idleTimeoutCountAsSleeping = false;
+     public Blocks blocks;
