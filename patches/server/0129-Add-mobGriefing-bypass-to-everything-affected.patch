@@ -1,0 +1,561 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Encode42 <me@encode42.dev>
+Date: Tue, 5 Jan 2021 22:21:56 -0500
+Subject: [PATCH] Add mobGriefing bypass to everything affected
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+index 762a40fc3214f85bbceadd62d8fdfd3cd9066ec6..acd7040d8881293828b66cdc6884872fa4f8d435 100644
+--- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
++++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+@@ -1709,7 +1709,7 @@ public abstract class LivingEntity extends Entity {
+             boolean flag = false;
+ 
+             if (this.dead && adversary instanceof WitherBoss) { // Paper
+-                if (this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++                if (this.level.purpurConfig().mobs.wither.bypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) { // Purpur
+                     BlockPos blockposition = this.blockPosition();
+                     BlockState iblockdata = Blocks.WITHER_ROSE.defaultBlockState();
+ 
+diff --git a/src/main/java/net/minecraft/world/entity/Mob.java b/src/main/java/net/minecraft/world/entity/Mob.java
+index 9011b034e32f1a81604f79866167d80d97ea4612..bd9d30fb905b55d2353f1c929a2af9e47acc0884 100644
+--- a/src/main/java/net/minecraft/world/entity/Mob.java
++++ b/src/main/java/net/minecraft/world/entity/Mob.java
+@@ -662,7 +662,7 @@ public abstract class Mob extends LivingEntity {
+     public void aiStep() {
+         super.aiStep();
+         this.level.getProfiler().push("looting");
+-        if (!this.level.isClientSide && this.canPickUpLoot() && this.isAlive() && !this.dead && this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++        if (!this.level.isClientSide && this.canPickUpLoot() && this.isAlive() && !this.dead && (this.level.purpurConfig().gameplayMechanics.entityPickupLookBypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING))) {
+             Vec3i baseblockposition = this.getPickupReach();
+             List<ItemEntity> list = this.level.getEntitiesOfClass(ItemEntity.class, this.getBoundingBox().inflate((double) baseblockposition.getX(), (double) baseblockposition.getY(), (double) baseblockposition.getZ()));
+             Iterator iterator = list.iterator();
+diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java b/src/main/java/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
+index 4525e360bafcfa2d6e4fee5b7fa26161ff06bccf..7d3688c3c91f5257a2df2f646ea4215b71ebc8a3 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
++++ b/src/main/java/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
+@@ -41,7 +41,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+     }
+ 
+     protected boolean checkExtraStartConditions(ServerLevel world, Villager entity) {
+-        if (!world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++        if (!world.purpurConfig.villagerBypassMobGriefing && !world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) { // Purpur
+             return false;
+         } else if (entity.getVillagerData().getProfession() != VillagerProfession.FARMER && !(world.purpurConfig().mobs.villager.clericsFarmWarts && entity.getVillagerData().getProfession() == VillagerProfession.CLERIC)) { // Purpur
+             return false;
+diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/BreakDoorGoal.java b/src/main/java/net/minecraft/world/entity/ai/goal/BreakDoorGoal.java
+index 529435cf648d61f80a37f041cee3c6fc0b74ceb6..5eaf11d1ee86bf85e0373027fa1c5fd25346ec59 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/goal/BreakDoorGoal.java
++++ b/src/main/java/net/minecraft/world/entity/ai/goal/BreakDoorGoal.java
+@@ -32,7 +32,7 @@ public class BreakDoorGoal extends DoorInteractGoal {
+ 
+     @Override
+     public boolean canUse() {
+-        return !super.canUse() ? false : (!this.mob.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) ? false : this.isValidDifficulty(this.mob.level.getDifficulty()) && !this.isOpen());
++        return !super.canUse() ? false : ((!this.mob.level.purpurConfig().mobs.zombie.bypassMobGriefing && !this.mob.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) ? false : this.isValidDifficulty(this.mob.level.getDifficulty()) && !this.isOpen()); // Purpur
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/EatBlockGoal.java b/src/main/java/net/minecraft/world/entity/ai/goal/EatBlockGoal.java
+index 80aa539f7c6a6ee44338de084cdcdf5fb4ef996a..9f0e2027f203067d9e3b3c5135f2a2209a474372 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/goal/EatBlockGoal.java
++++ b/src/main/java/net/minecraft/world/entity/ai/goal/EatBlockGoal.java
+@@ -69,7 +69,7 @@ public class EatBlockGoal extends Goal {
+ 
+             if (EatBlockGoal.IS_TALL_GRASS.test(this.level.getBlockState(blockposition))) {
+                 // CraftBukkit
+-                if (!CraftEventFactory.callEntityChangeBlockEvent(this.mob, blockposition, Blocks.AIR.defaultBlockState(), !this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)).isCancelled()) {
++                if (!CraftEventFactory.callEntityChangeBlockEvent(this.mob, blockposition, Blocks.AIR.defaultBlockState(), !this.level.purpurConfig().mobs.sheep.bypassMobGriefing && !this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)).isCancelled()) { // Purpur
+                     this.level.destroyBlock(blockposition, false);
+                 }
+ 
+@@ -79,7 +79,7 @@ public class EatBlockGoal extends Goal {
+ 
+                 if (this.level.getBlockState(blockposition1).is(Blocks.GRASS_BLOCK)) {
+                     // CraftBukkit
+-                    if (!CraftEventFactory.callEntityChangeBlockEvent(this.mob, blockposition1, Blocks.DIRT.defaultBlockState(), !this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)).isCancelled()) { // Paper - Fix wrong block state
++                    if (!CraftEventFactory.callEntityChangeBlockEvent(this.mob, blockposition1, Blocks.DIRT.defaultBlockState(), !this.level.purpurConfig().mobs.sheep.bypassMobGriefing && !this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)).isCancelled()) { // Paper - Fix wrong block state // Purpur
+                         this.level.levelEvent(2001, blockposition1, Block.getId(Blocks.GRASS_BLOCK.defaultBlockState()));
+                         this.level.setBlock(blockposition1, Blocks.DIRT.defaultBlockState(), 2);
+                     }
+diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java b/src/main/java/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
+index bd0cbf4390fc7d00b4bd5008cdf8f6f49df4f69b..7175fe784e0e4f68400594abc2bfe923930f4828 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
++++ b/src/main/java/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
+@@ -40,7 +40,7 @@ public class RemoveBlockGoal extends MoveToBlockGoal {
+ 
+     @Override
+     public boolean canUse() {
+-        if (!this.removerMob.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++        if (!this.removerMob.level.purpurConfig().mobs.zombie.bypassMobGriefing && !this.removerMob.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) { // Purpur
+             return false;
+         } else if (this.nextStartTick > 0) {
+             --this.nextStartTick;
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Fox.java b/src/main/java/net/minecraft/world/entity/animal/Fox.java
+index c66e4df7164738b0545feaf3807cfd4507882e13..f95c31c9b5ac777cc3149642c5cb1f02e3d9bb51 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Fox.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Fox.java
+@@ -1365,7 +1365,7 @@ public class Fox extends Animal {
+         }
+ 
+         protected void onReachedTarget() {
+-            if (Fox.this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++            if (Fox.this.level.purpurConfig().mobs.fox.bypassMobGriefing || Fox.this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) { // Purpur
+                 BlockState iblockdata = Fox.this.level.getBlockState(this.blockPos);
+ 
+                 if (iblockdata.is(Blocks.SWEET_BERRY_BUSH)) {
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Rabbit.java b/src/main/java/net/minecraft/world/entity/animal/Rabbit.java
+index 8159df70cde6c031aa49befc51fbe467a26486cf..abfc212e7dc0ce6249581278f64cace8f1b7ee7d 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Rabbit.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Rabbit.java
+@@ -619,7 +619,7 @@ public class Rabbit extends Animal {
+         @Override
+         public boolean canUse() {
+             if (this.nextStartTick <= 0) {
+-                if (!this.rabbit.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++                if (!this.rabbit.level.purpurConfig().mobs.rabbit.bypassMobGriefing && !this.rabbit.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) { // Purpur
+                     return false;
+                 }
+ 
+diff --git a/src/main/java/net/minecraft/world/entity/animal/SnowGolem.java b/src/main/java/net/minecraft/world/entity/animal/SnowGolem.java
+index 777efbc0d9523a0994c2e0bbccc668138857cf8c..8c5ffc3521aad7c97f5dec8e567c2ca17d43fb1c 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/SnowGolem.java
++++ b/src/main/java/net/minecraft/world/entity/animal/SnowGolem.java
+@@ -133,7 +133,7 @@ public class SnowGolem extends AbstractGolem implements Shearable, RangedAttackM
+                 this.hurt(CraftEventFactory.MELTING, 1.0F); // CraftBukkit - DamageSource.BURN -> CraftEventFactory.MELTING
+             }
+ 
+-            if (!this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++            if (!this.level.purpurConfig().mobs.snowGolem.bypassMobGriefing && !this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) { // Purpur
+                 return;
+             }
+ 
+diff --git a/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java b/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
+index 8f63f6d01654dcb61acd48c9a762a1195da01adf..7aed7b9d8dbfef871e643cc3cda57b3edc8c2faa 100644
+--- a/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
++++ b/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
+@@ -578,7 +578,7 @@ public class EnderDragon extends Mob implements Enemy {
+                     BlockState iblockdata = this.level.getBlockState(blockposition);
+ 
+                     if (!iblockdata.isAir() && !iblockdata.is(BlockTags.DRAGON_TRANSPARENT)) {
+-                        if (this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) && !iblockdata.is(BlockTags.DRAGON_IMMUNE)) {
++                        if ((this.level.purpurConfig().mobs.enderDragon.bypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) && !iblockdata.is(BlockTags.DRAGON_IMMUNE)) { // Purpur
+                             // CraftBukkit start - Add blocks to list rather than destroying them
+                             // flag1 = this.level.removeBlock(blockposition, false) || flag1;
+                             flag1 = true;
+diff --git a/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java b/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
+index 99a8a31ec08eb49050787aab40235a6785a48cf3..340022ed2938c370c6dc77c51f0aa09a81e15d89 100644
+--- a/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
++++ b/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
+@@ -390,7 +390,7 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
+             i = this.getInvulnerableTicks() - 1;
+             this.bossEvent.setProgress(1.0F - (float) i / 220.0F);
+             if (i <= 0) {
+-                Explosion.BlockInteraction explosion_effect = this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) ? Explosion.BlockInteraction.DESTROY : Explosion.BlockInteraction.NONE;
++                Explosion.BlockInteraction explosion_effect = (this.level.purpurConfig().mobs.wither.bypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) ? Explosion.BlockInteraction.DESTROY : Explosion.BlockInteraction.NONE; // Purpur
+                 // CraftBukkit start
+                 // this.level.explode(this, this.getX(), this.getEyeY(), this.getZ(), 7.0F, false, explosion_effect);
+                 ExplosionPrimeEvent event = new ExplosionPrimeEvent(this.getBukkitEntity(), 7.0F, false);
+@@ -486,7 +486,7 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
+ 
+             if (this.destroyBlocksTick > 0) {
+                 --this.destroyBlocksTick;
+-                if (this.destroyBlocksTick == 0 && this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++                if (this.destroyBlocksTick == 0 && (this.level.purpurConfig().mobs.wither.bypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING))) { // Purpur
+                     i = Mth.floor(this.getY());
+                     j = Mth.floor(this.getX());
+                     int i1 = Mth.floor(this.getZ());
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Creeper.java b/src/main/java/net/minecraft/world/entity/monster/Creeper.java
+index 87db25938d769bfa5cfaf47344de16575b1e9cef..f833ed9df9f6f268b4d9975cbdd447e78de5cb9e 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Creeper.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Creeper.java
+@@ -349,7 +349,7 @@ public class Creeper extends Monster implements PowerableMob {
+ 
+     public void explodeCreeper() {
+         if (!this.level.isClientSide) {
+-            Explosion.BlockInteraction explosion_effect = this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) && level.purpurConfig().mobs.creeper.allowGriefing ? Explosion.BlockInteraction.DESTROY : Explosion.BlockInteraction.NONE; // Purpur
++            Explosion.BlockInteraction explosion_effect = (this.level.purpurConfig().mobs.creeper.bypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) && level.purpurConfig().mobs.creeper.allowGriefing ? Explosion.BlockInteraction.DESTROY : Explosion.BlockInteraction.NONE; // Purpur
+             float f = this.isPowered() ? 2.0F : 1.0F;
+ 
+             // CraftBukkit start
+diff --git a/src/main/java/net/minecraft/world/entity/monster/EnderMan.java b/src/main/java/net/minecraft/world/entity/monster/EnderMan.java
+index 3c0fce7cdcb6c1eca6bfe0f34b1378c9e7e72c0f..97c59908aa402e749458c2c175fac237caa11ed7 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/EnderMan.java
++++ b/src/main/java/net/minecraft/world/entity/monster/EnderMan.java
+@@ -519,7 +519,7 @@ public class EnderMan extends Monster implements NeutralMob {
+         @Override
+         public boolean canUse() {
+             if (!enderman.level.purpurConfig().mobs.enderman.allowGriefing) return false; // Purpur
+-            return this.enderman.getCarriedBlock() == null ? false : (!this.enderman.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) ? false : this.enderman.getRandom().nextInt(reducedTickDelay(2000)) == 0);
++            return this.enderman.getCarriedBlock() != null ? false : (!this.enderman.level.purpurConfig().mobs.enderman.bypassMobGriefing && !this.enderman.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) ? false : this.enderman.getRandom().nextInt(reducedTickDelay(2000)) == 0); // Purpur
+         }
+ 
+         @Override
+@@ -567,7 +567,7 @@ public class EnderMan extends Monster implements NeutralMob {
+         @Override
+         public boolean canUse() {
+             if (!enderman.level.purpurConfig().mobs.enderman.allowGriefing) return false; // Purpur
+-            return this.enderman.getCarriedBlock() != null ? false : (!this.enderman.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) ? false : this.enderman.getRandom().nextInt(reducedTickDelay(20)) == 0);
++            return this.enderman.getCarriedBlock() == null ? false : (!this.enderman.level.purpurConfig().mobs.enderman.bypassMobGriefing && !this.enderman.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) ? false : this.enderman.getRandom().nextInt(reducedTickDelay(2000)) == 0); // Purpur
+         }
+ 
+         @Override
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Evoker.java b/src/main/java/net/minecraft/world/entity/monster/Evoker.java
+index 1927be1ae518b28d6fcbfc613743976d03fe009d..900b4a303f2f48a7fbd8965e9f73b2d07061d96a 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Evoker.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Evoker.java
+@@ -339,7 +339,7 @@ public class Evoker extends SpellcasterIllager {
+                 return false;
+             } else if (Evoker.this.tickCount < this.nextAttackTickCount) {
+                 return false;
+-            } else if (!Evoker.this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++            } else if (!Evoker.this.level.purpurConfig().mobs.evoker.bypassMobGriefing && !Evoker.this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) { // Purpur
+                 return false;
+             } else {
+                 List<Sheep> list = Evoker.this.level.getNearbyEntities(Sheep.class, this.wololoTargeting, Evoker.this, Evoker.this.getBoundingBox().inflate(16.0D, 4.0D, 16.0D));
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Ravager.java b/src/main/java/net/minecraft/world/entity/monster/Ravager.java
+index 487ea00a7cac91f58542ad4943ae0c78263bd7dd..df595a9d60d75c45d49ba80c6b8f7ee9ce81c88b 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Ravager.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Ravager.java
+@@ -191,7 +191,7 @@ public class Ravager extends Raider {
+                 this.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(Mth.lerp(0.1D, d1, d0));
+             }
+ 
+-            if (this.horizontalCollision && this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++            if (this.horizontalCollision && (this.level.purpurConfig().mobs.ravager.bypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING))) { // Purpur
+                 boolean flag = false;
+                 AABB axisalignedbb = this.getBoundingBox().inflate(0.2D);
+                 Iterator iterator = BlockPos.betweenClosed(Mth.floor(axisalignedbb.minX), Mth.floor(axisalignedbb.minY), Mth.floor(axisalignedbb.minZ), Mth.floor(axisalignedbb.maxX), Mth.floor(axisalignedbb.maxY), Mth.floor(axisalignedbb.maxZ)).iterator();
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Silverfish.java b/src/main/java/net/minecraft/world/entity/monster/Silverfish.java
+index 60541125db54bc7d5b1d31f967ed3206ff402acc..f869f358401543217b293f87b328e31c962b50c5 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Silverfish.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Silverfish.java
+@@ -204,7 +204,7 @@ public class Silverfish extends Monster {
+                                     continue;
+                                 }
+                                 // CraftBukkit end
+-                                if (world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++                                if (world.purpurConfig().mobs.silverfish.bypassMobGriefing || world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) { // Purpur
+                                     world.destroyBlock(blockposition1, true, this.silverfish);
+                                 } else {
+                                     world.setBlock(blockposition1, ((InfestedBlock) block).hostStateByInfested(world.getBlockState(blockposition1)), 3);
+@@ -242,7 +242,7 @@ public class Silverfish extends Monster {
+             } else {
+                 RandomSource randomsource = this.mob.getRandom();
+ 
+-                if (this.mob.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) && randomsource.nextInt(reducedTickDelay(10)) == 0) {
++                if ((this.mob.level.purpurConfig().mobs.silverfish.bypassMobGriefing || this.mob.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) && randomsource.nextInt(reducedTickDelay(10)) == 0) { // Purpur
+                     this.selectedDirection = Direction.getRandom(randomsource);
+                     BlockPos blockposition = (new BlockPos(this.mob.getX(), this.mob.getY() + 0.5D, this.mob.getZ())).relative(this.selectedDirection);
+                     BlockState iblockdata = this.mob.level.getBlockState(blockposition);
+diff --git a/src/main/java/net/minecraft/world/entity/monster/piglin/Piglin.java b/src/main/java/net/minecraft/world/entity/monster/piglin/Piglin.java
+index b493694ae52bebded339cb0c4d2e94f927c0991f..486387dbeb7c85d06b458504ec4b5b78145741b8 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/piglin/Piglin.java
++++ b/src/main/java/net/minecraft/world/entity/monster/piglin/Piglin.java
+@@ -412,7 +412,7 @@ public class Piglin extends AbstractPiglin implements CrossbowAttackMob, Invento
+ 
+     @Override
+     public boolean wantsToPickUp(ItemStack stack) {
+-        return this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) && this.canPickUpLoot() && PiglinAi.wantsToPickup(this, stack);
++        return (this.level.purpurConfig().mobs.piglin.bypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) && this.canPickUpLoot() && PiglinAi.wantsToPickup(this, stack);
+     }
+ 
+     protected boolean canReplaceCurrentItem(ItemStack stack) {
+diff --git a/src/main/java/net/minecraft/world/entity/projectile/LargeFireball.java b/src/main/java/net/minecraft/world/entity/projectile/LargeFireball.java
+index 031616d246fd9642f6f484c0ff1e02ee5ed4810b..cb860f21835e5e6a93384323ac53b789fef2af42 100644
+--- a/src/main/java/net/minecraft/world/entity/projectile/LargeFireball.java
++++ b/src/main/java/net/minecraft/world/entity/projectile/LargeFireball.java
+@@ -18,20 +18,20 @@ public class LargeFireball extends Fireball {
+ 
+     public LargeFireball(EntityType<? extends LargeFireball> type, Level world) {
+         super(type, world);
+-        isIncendiary = this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING); // CraftBukkit
++        isIncendiary = this.level.purpurConfig().gameplayMechanics.fireballsBypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING); // CraftBukkit // Purpur
+     }
+ 
+     public LargeFireball(Level world, LivingEntity owner, double velocityX, double velocityY, double velocityZ, int explosionPower) {
+         super(EntityType.FIREBALL, owner, velocityX, velocityY, velocityZ, world);
+         this.explosionPower = explosionPower;
+-        isIncendiary = this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING); // CraftBukkit
++        isIncendiary = this.level.purpurConfig().gameplayMechanics.fireballsBypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING); // CraftBukkit // Purpur
+     }
+ 
+     @Override
+     protected void onHit(HitResult hitResult) {
+         super.onHit(hitResult);
+         if (!this.level.isClientSide) {
+-            boolean flag = this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
++            boolean flag = this.level.purpurConfig().gameplayMechanics.fireballsBypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING); // Purpur
+ 
+             // CraftBukkit start - fire ExplosionPrimeEvent
+             ExplosionPrimeEvent event = new ExplosionPrimeEvent((org.bukkit.entity.Explosive) this.getBukkitEntity());
+diff --git a/src/main/java/net/minecraft/world/entity/projectile/Projectile.java b/src/main/java/net/minecraft/world/entity/projectile/Projectile.java
+index a9b958b5630944f0512e113b65c223419abd47f3..d8c63b9c4e772e591368146fcd5eea75860668e5 100644
+--- a/src/main/java/net/minecraft/world/entity/projectile/Projectile.java
++++ b/src/main/java/net/minecraft/world/entity/projectile/Projectile.java
+@@ -298,6 +298,6 @@ public abstract class Projectile extends Entity {
+     public boolean mayInteract(Level world, BlockPos pos) {
+         Entity entity = this.getOwner();
+ 
+-        return entity instanceof Player ? entity.mayInteract(world, pos) : entity == null || world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
++        return entity instanceof Player ? entity.mayInteract(world, pos) : entity == null || world.purpurConfig().gameplayMechanics.projectilesBypassMobGriefing || world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
+     }
+ }
+diff --git a/src/main/java/net/minecraft/world/entity/projectile/SmallFireball.java b/src/main/java/net/minecraft/world/entity/projectile/SmallFireball.java
+index a6fc0478a83ff74bf2ee4962b1e1760352a0fa66..3d0e4c47773b996a3c02bc3136a6fca0f69a142d 100644
+--- a/src/main/java/net/minecraft/world/entity/projectile/SmallFireball.java
++++ b/src/main/java/net/minecraft/world/entity/projectile/SmallFireball.java
+@@ -24,7 +24,7 @@ public class SmallFireball extends Fireball {
+         super(EntityType.SMALL_FIREBALL, owner, velocityX, velocityY, velocityZ, world);
+         // CraftBukkit start
+         if (this.getOwner() != null && this.getOwner() instanceof Mob) {
+-            isIncendiary = this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
++            isIncendiary = this.level.purpurConfig().gameplayMechanics.fireballsBypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING); // Purpur
+         }
+         // CraftBukkit end
+     }
+diff --git a/src/main/java/net/minecraft/world/entity/projectile/WitherSkull.java b/src/main/java/net/minecraft/world/entity/projectile/WitherSkull.java
+index b14643286567381fdfbf2c442c84cf291228ea56..2298e631b106916a4f3816e62791d56b1926dbae 100644
+--- a/src/main/java/net/minecraft/world/entity/projectile/WitherSkull.java
++++ b/src/main/java/net/minecraft/world/entity/projectile/WitherSkull.java
+@@ -93,7 +93,7 @@ public class WitherSkull extends AbstractHurtingProjectile {
+     protected void onHit(HitResult hitResult) {
+         super.onHit(hitResult);
+         if (!this.level.isClientSide) {
+-            Explosion.BlockInteraction explosion_effect = this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) ? Explosion.BlockInteraction.DESTROY : Explosion.BlockInteraction.NONE;
++            Explosion.BlockInteraction explosion_effect = (this.level.purpurConfig().mobs.wither.bypassMobGriefing || this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) ? Explosion.BlockInteraction.DESTROY : Explosion.BlockInteraction.NONE; // Purpur
+ 
+             // CraftBukkit start
+             // this.level.createExplosion(this, this.locX(), this.locY(), this.locZ(), 1.0F, false, explosion_effect);
+diff --git a/src/main/java/net/minecraft/world/entity/raid/Raider.java b/src/main/java/net/minecraft/world/entity/raid/Raider.java
+index 4bb9730b6a42702e91467f980b9f045585039db3..9bf526e2910cb7474889ad72097d8e67bfdffc87 100644
+--- a/src/main/java/net/minecraft/world/entity/raid/Raider.java
++++ b/src/main/java/net/minecraft/world/entity/raid/Raider.java
+@@ -312,7 +312,7 @@ public abstract class Raider extends PatrollingMonster {
+ 
+         @Override
+         public boolean canUse() {
+-            if (!this.mob.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) || !this.mob.canPickUpLoot()) return false; // Paper - respect game and entity rules for picking up items
++            if ((!this.mob.level.purpurConfig().mobs.pillager.bypassMobGriefing && !this.mob.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) || !this.mob.canPickUpLoot()) return false; // Paper - respect game and entity rules for picking up items // Purpur
+             Raid raid = this.mob.getCurrentRaid();
+ 
+             if (this.mob.hasActiveRaid() && !this.mob.getCurrentRaid().isOver() && this.mob.canBeLeader() && !ItemStack.matches(this.mob.getItemBySlot(EquipmentSlot.HEAD), Raid.getLeaderBannerInstance())) {
+diff --git a/src/main/java/net/minecraft/world/level/block/CropBlock.java b/src/main/java/net/minecraft/world/level/block/CropBlock.java
+index 275e5334b1206a2dcafc3772c7e2ad0ebe3693f9..a68bf10353e5c19adfa86c2dd6290f2386af9a9d 100644
+--- a/src/main/java/net/minecraft/world/level/block/CropBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/CropBlock.java
+@@ -164,7 +164,7 @@ public class CropBlock extends BushBlock implements BonemealableBlock {
+     @Override
+     public void entityInside(BlockState state, Level world, BlockPos pos, Entity entity) {
+         if (!new io.papermc.paper.event.entity.EntityInsideBlockEvent(entity.getBukkitEntity(), org.bukkit.craftbukkit.block.CraftBlock.at(world, pos)).callEvent()) { return; } // Paper
+-        if (entity instanceof Ravager && !CraftEventFactory.callEntityChangeBlockEvent(entity, pos, Blocks.AIR.defaultBlockState(), !world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)).isCancelled()) { // CraftBukkit
++        if (entity instanceof Ravager && !CraftEventFactory.callEntityChangeBlockEvent(entity, pos, Blocks.AIR.defaultBlockState(), (!world.purpurConfig.ravagerBypassMobGriefing && !world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING))).isCancelled()) { // CraftBukkit // Purpur
+             world.destroyBlock(pos, true, entity);
+         }
+ 
+diff --git a/src/main/java/net/minecraft/world/level/block/FarmBlock.java b/src/main/java/net/minecraft/world/level/block/FarmBlock.java
+index e20dfe6d593ab7b34f9ba499dea416b02caed4fc..9d643fa7634e57cc827120395e17757b553f221e 100644
+--- a/src/main/java/net/minecraft/world/level/block/FarmBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/FarmBlock.java
+@@ -98,7 +98,7 @@ public class FarmBlock extends Block {
+     @Override
+     public void fallOn(Level world, BlockState state, BlockPos pos, Entity entity, float fallDistance) {
+         super.fallOn(world, state, pos, entity, fallDistance); // CraftBukkit - moved here as game rules / events shouldn't affect fall damage.
+-        if (!world.isClientSide && world.random.nextFloat() < fallDistance - 0.5F && entity instanceof LivingEntity && (entity instanceof Player || world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) && entity.getBbWidth() * entity.getBbWidth() * entity.getBbHeight() > 0.512F) {
++        if (!world.isClientSide && world.random.nextFloat() < fallDistance - 0.5F && entity instanceof LivingEntity && (entity instanceof Player || world.purpurConfig.farmlandBypassMobGriefing || world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) && entity.getBbWidth() * entity.getBbWidth() * entity.getBbHeight() > 0.512F) { // Purpur
+             // CraftBukkit start - Interact soil
+             org.bukkit.event.Cancellable cancellable;
+             if (entity instanceof Player) {
+diff --git a/src/main/java/net/minecraft/world/level/block/PowderSnowBlock.java b/src/main/java/net/minecraft/world/level/block/PowderSnowBlock.java
+index 518d3832c36c9ecf1ed9267ffc1f926dc84b7989..af5933b886abf3fd17bfdb8c1cb1ea63f6f2a757 100644
+--- a/src/main/java/net/minecraft/world/level/block/PowderSnowBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/PowderSnowBlock.java
+@@ -72,7 +72,7 @@ public class PowderSnowBlock extends Block implements BucketPickup {
+         if (!world.isClientSide) {
+             // CraftBukkit start
+             if (entity.isOnFire() && entity.mayInteract(world, pos)) {
+-                if (org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(entity, pos, Blocks.AIR.defaultBlockState(), !(world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING) || entity instanceof Player)).isCancelled()) {
++                if (org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(entity, pos, Blocks.AIR.defaultBlockState(), !((world.purpurConfig.powderSnowBypassMobGriefing || world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) || entity instanceof Player)).isCancelled()) {
+                     return;
+                 }
+                 // CraftBukkit end
+diff --git a/src/main/java/net/minecraft/world/level/block/TurtleEggBlock.java b/src/main/java/net/minecraft/world/level/block/TurtleEggBlock.java
+index a8ba61e23b2a2608e728a3ca70734eeb687ef685..6c29aa5a9beb28a288dd069ec357e77aa8e6b80d 100644
+--- a/src/main/java/net/minecraft/world/level/block/TurtleEggBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/TurtleEggBlock.java
+@@ -209,7 +209,7 @@ public class TurtleEggBlock extends Block {
+             return false;
+         }
+         if (entity instanceof LivingEntity && !(entity instanceof Player)) {
+-            return world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
++            return world.purpurConfig.turtleEggsBypassMobGriefing || world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
+         }
+         return true;
+         // Purpur end
+diff --git a/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java b/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
+index 35857a071a49a55b451f0c008248edaeba70b438..14ee1e6f889c79890c000eda4e57ff359bd12dda 100644
+--- a/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
++++ b/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
+@@ -206,6 +206,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public class Creeper extends ConfigurationPart {
+             public double naturallyChargedChance = 0.0D;
+             public boolean allowGriefing = true;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -303,6 +304,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public EnderDragon enderDragon;
+         public class EnderDragon extends ConfigurationPart {
+             public boolean alwaysDropFullExp = false;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -322,6 +324,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public class Enderman extends ConfigurationPart {
+             public boolean allowGriefing = true;
+             public boolean despawnWithBlock = false;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -353,6 +356,8 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+ 
+         public Evoker evoker;
+         public class Evoker extends ConfigurationPart {
++            public boolean bypassMobGriefing = false;
++
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+                 public boolean enabled = false;
+@@ -370,6 +375,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public class Fox extends ConfigurationPart {
+             public boolean changeTypeWithTulips = false;
+             public int breedingDelay = 6000;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -778,6 +784,8 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+ 
+         public Piglin piglin;
+         public class Piglin extends ConfigurationPart {
++            public boolean bypassMobGriefing = false;
++
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+                 public boolean enabled = false;
+@@ -808,6 +816,8 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+ 
+         public Pillager pillager;
+         public class Pillager extends ConfigurationPart {
++            public boolean bypassMobGriefing = false;
++
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+                 public boolean enabled = false;
+@@ -866,6 +876,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+             public double spawnToastChance = 0.0D;
+             public double spawnKillerChance = 0.0D;
+             public int breedingDelay = 6000;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -882,6 +893,8 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+ 
+         public Ravager ravager;
+         public class Ravager extends ConfigurationPart {
++            public boolean bypassMobGriefing = false;
++
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+                 public boolean enabled = false;
+@@ -912,6 +925,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public Sheep sheep;
+         public class Sheep extends ConfigurationPart {
+             public int breedingDelay = 6000;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -943,6 +957,8 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+ 
+         public Silverfish silverfish;
+         public class Silverfish extends ConfigurationPart {
++            public boolean bypassMobGriefing = false;
++
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+                 public boolean enabled = false;
+@@ -1020,6 +1036,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public class SnowGolem extends ConfigurationPart {
+             public boolean dropsPumpkinWhenSheared = false;
+             public boolean pumpkinCanBeAddedBack = false;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -1186,6 +1203,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+             public int breedingDelay = 6000;
+             public boolean clericsFarmWarts = false;
+             public boolean clericsThrowWarts = true;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -1260,6 +1278,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public class Wither extends ConfigurationPart {
+             public float healthRegenAmount = 1.0F;
+             public int healthRegenDelay = 20;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -1328,6 +1347,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public Zombie zombie;
+         public class Zombie extends ConfigurationPart {
+             public boolean aggressiveToVillagerWhenLagging = true;
++            public boolean bypassMobGriefing = false;
+ 
+             public Ridable ridable;
+             public class Ridable extends ConfigurationPart {
+@@ -1431,6 +1451,9 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public int animalBreedingCooldown = 0;
+         public boolean persistentDroppableEntityDisplayNames = false;
+         public float entityLeftHandedChance = 0.05f;
++        public boolean entityPickupLookBypassMobGriefing = false;
++        public boolean fireballsBypassMobGriefing = false;
++        public boolean projectilesBypassMobGriefing = false;
+ 
+         public Player player;
+         public class Player extends ConfigurationPart {
+@@ -1580,6 +1603,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+             public boolean breakFromExp = true;
+             public boolean breakFromItems = true;
+             public boolean breakFromMinecarts = true;
++            public boolean bypassMobGriefing = false;
+         }
+ 
+         public Sign sign;
+@@ -1591,6 +1615,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public class Farmland extends ConfigurationPart {
+             public boolean moistenFromBelow = false;
+             public boolean useAlphaFarmland = false;
++            public boolean bypassMobGriefing = false;
+         }
+ 
+         public Water water;
+@@ -1652,6 +1677,11 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public class Chest extends ConfigurationPart {
+             public boolean openWithAboveBlock = false;
+         }
++
++        public PowderSnow powderSnow;
++        public class PowderSnow extends ConfigurationPart {
++            public boolean bypassMobGriefing = false;
++        }
+     }
+ 
+     public ArmorStand armorstand;

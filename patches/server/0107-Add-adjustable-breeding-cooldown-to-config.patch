@@ -5,7 +5,7 @@ Subject: [PATCH] Add adjustable breeding cooldown to config
 
 
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Animal.java b/src/main/java/net/minecraft/world/entity/animal/Animal.java
-index 6216513805add7c8f52e1ed6c77e2d26786b3ab5..34e82b97c5b294f0a6423581220403a10264da8b 100644
+index 6216513805add7c8f52e1ed6c77e2d26786b3ab5..7ebbd2b9519ff67f93cf24d69c020f1b0fbd364e 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Animal.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Animal.java
 @@ -150,7 +150,7 @@ public abstract class Animal extends AgeableMob {
@@ -13,7 +13,7 @@ index 6216513805add7c8f52e1ed6c77e2d26786b3ab5..34e82b97c5b294f0a6423581220403a1
              int i = this.getAge();
  
 -            if (!this.level.isClientSide && i == 0 && this.canFallInLove()) {
-+            if (!this.level.isClientSide && i == 0 && this.canFallInLove() && (this.level.purpurConfig.animalBreedingCooldownSeconds <= 0 || !this.level.hasBreedingCooldown(player.getUUID(), this.getClass()))) { // Purpur
++            if (!this.level.isClientSide && i == 0 && this.canFallInLove() && (this.level.purpurConfig().gameplayMechanics.animalBreedingCooldown <= 0 || !this.level.hasBreedingCooldown(player.getUUID(), this.getClass()))) { // Purpur
                  this.usePlayerItem(player, hand, itemstack);
                  this.setInLove(player);
                  return InteractionResult.SUCCESS;
@@ -22,7 +22,7 @@ index 6216513805add7c8f52e1ed6c77e2d26786b3ab5..34e82b97c5b294f0a6423581220403a1
                  entityplayer = other.getLoveCause();
              }
 +            // Purpur start
-+            if (entityplayer != null && world.purpurConfig.animalBreedingCooldownSeconds > 0) {
++            if (entityplayer != null && world.purpurConfig().gameplayMechanics.animalBreedingCooldown > 0) {
 +                if (world.hasBreedingCooldown(entityplayer.getUUID(), this.getClass())) {
 +                    return;
 +                }
@@ -33,10 +33,10 @@ index 6216513805add7c8f52e1ed6c77e2d26786b3ab5..34e82b97c5b294f0a6423581220403a1
              entityageable.setBaby(true);
              entityageable.moveTo(this.getX(), this.getY(), this.getZ(), 0.0F, 0.0F);
 diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
-index 063cde55ad7c4ef294994dc7d16f3f738d62049f..599dbf1cb7d3f658b88879402987613740dd3658 100644
+index b6d756a97c3afdfcd35b2012001494f3f2451ea0..81ebaba6786ec50aea2f495afc481de25a95c4a1 100644
 --- a/src/main/java/net/minecraft/world/level/Level.java
 +++ b/src/main/java/net/minecraft/world/level/Level.java
-@@ -194,6 +194,49 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+@@ -198,6 +198,49 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
      }
      // Paper end - fix and optimise world upgrading
  
@@ -44,7 +44,7 @@ index 063cde55ad7c4ef294994dc7d16f3f738d62049f..599dbf1cb7d3f658b888794029876137
 +    private com.google.common.cache.Cache<BreedingCooldownPair, Object> playerBreedingCooldowns;
 +
 +    private com.google.common.cache.Cache<BreedingCooldownPair, Object> getNewBreedingCooldownCache() {
-+        return com.google.common.cache.CacheBuilder.newBuilder().expireAfterWrite(this.purpurConfig.animalBreedingCooldownSeconds, java.util.concurrent.TimeUnit.SECONDS).build();
++        return com.google.common.cache.CacheBuilder.newBuilder().expireAfterWrite(this.purpurConfig().gameplayMechanics.animalBreedingCooldown, java.util.concurrent.TimeUnit.SECONDS).build();
 +    }
 +
 +    public void resetBreedingCooldowns() {
@@ -86,43 +86,23 @@ index 063cde55ad7c4ef294994dc7d16f3f738d62049f..599dbf1cb7d3f658b888794029876137
      public CraftWorld getWorld() {
          return this.world;
      }
-@@ -278,6 +321,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+@@ -282,6 +325,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
          this.spigotConfig = new org.spigotmc.SpigotWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName()); // Spigot
          this.paperConfig = paperWorldConfigCreator.apply(this.spigotConfig); // Paper
-         this.purpurConfig = new org.purpurmc.purpur.PurpurWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName(), env); // Purpur
+         this.purpurConfig = purpurWorldConfigCreator.apply(this.spigotConfig); // Purpur
 +        this.playerBreedingCooldowns = this.getNewBreedingCooldownCache(); // Purpur
          this.generator = gen;
          this.world = new CraftWorld((ServerLevel) this, gen, biomeProvider, env);
  
-diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 164f9271aab50d23a3bf03877fb5285da3c3a069..7c203f8b0120d07263c0a96422a69173daebd89e 100644
---- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-+++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-@@ -109,6 +109,7 @@ public class PurpurWorldConfig {
-     public double voidDamageHeight = -64.0D;
-     public double voidDamageDealt = 4.0D;
-     public int raidCooldownSeconds = 0;
-+    public int animalBreedingCooldownSeconds = 0;
-     private void miscGameplayMechanicsSettings() {
-         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
-         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
-@@ -119,6 +120,7 @@ public class PurpurWorldConfig {
-         voidDamageHeight = getDouble("gameplay-mechanics.void-damage-height", voidDamageHeight);
-         voidDamageDealt = getDouble("gameplay-mechanics.void-damage-dealt", voidDamageDealt);
-         raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
-+        animalBreedingCooldownSeconds = getInt("gameplay-mechanics.animal-breeding-cooldown-seconds", animalBreedingCooldownSeconds);
-     }
+diff --git a/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java b/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
+index d3c16c002c6e1d2a9c5951a70deb09b687815784..49ae08b28ea1760d5e8f8e3a0196d89a853cb80e 100644
+--- a/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
++++ b/src/main/java/org/purpurmc/purpur/configuration/PurpurWorldConfiguration.java
+@@ -1365,6 +1365,7 @@ public class PurpurWorldConfiguration extends ConfigurationPart {
+         public int entityLifespan = 0;
+         public boolean entitiesCanUsePortals = true;
+         public int raidCooldownSeconds = 0;
++        public int animalBreedingCooldown = 0;
  
-     public int daytimeTicks = 12000;
-diff --git a/src/main/java/org/purpurmc/purpur/command/PurpurCommand.java b/src/main/java/org/purpurmc/purpur/command/PurpurCommand.java
-index afdf04f8b22ad0b7c0b41675e44687b49c2f86d6..2621e54879e9ab0029a875f1d09eee67878b90d5 100644
---- a/src/main/java/org/purpurmc/purpur/command/PurpurCommand.java
-+++ b/src/main/java/org/purpurmc/purpur/command/PurpurCommand.java
-@@ -49,6 +49,7 @@ public class PurpurCommand extends Command {
-             PurpurConfig.init((File) console.options.valueOf("purpur-settings"));
-             for (ServerLevel level : console.getAllLevels()) {
-                 level.purpurConfig.init();
-+                level.resetBreedingCooldowns();
-             }
-             console.server.reloadCount++;
- 
+         public Player player;
+         public class Player extends ConfigurationPart {
