@@ -702,7 +702,7 @@ index 1f85f34c1e50f34fb270d2fac7d307c82a550bfa..324f52edd95b5f9a498e46def8c14435
                  double d = this.wantedX - this.fish.getX();
                  double e = this.wantedY - this.fish.getY();
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Bee.java b/src/main/java/net/minecraft/world/entity/animal/Bee.java
-index bd048cc30046f19f9eee89c6ba45d0816a160e67..2c6e1a970d8922047a186fc7eb82abd7066b1fd9 100644
+index bd048cc30046f19f9eee89c6ba45d0816a160e67..1458079a5ffa8b4a50d30cfc01fa1b27b6a46f37 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Bee.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Bee.java
 @@ -43,6 +43,7 @@ import net.minecraft.world.entity.EntityType;
@@ -717,7 +717,7 @@ index bd048cc30046f19f9eee89c6ba45d0816a160e67..2c6e1a970d8922047a186fc7eb82abd7
      public Bee(EntityType<? extends Bee> type, Level world) {
          super(type, world);
          this.remainingCooldownBeforeLocatingNewFlower = Mth.nextInt(this.random, 20, 60);
-+        final org.purpurmc.purpur.controller.FlyingMoveControllerWASD flyingController = new org.purpurmc.purpur.controller.FlyingMoveControllerWASD(this, 0.25F, false); // Purpur
++        final org.purpurmc.purpur.controller.FlyingMoveControllerWASD flyingController = new org.purpurmc.purpur.controller.FlyingMoveControllerWASD(this, 0.25F, 1.0F, false); // Purpur
          // Paper start - apply gravity to bees when they get stuck in the void, fixes MC-167279
          class BeeFlyingMoveControl extends FlyingMoveControl {
              public BeeFlyingMoveControl(final Mob entity, final int maxPitchChange, final boolean noGravity) {
@@ -2193,6 +2193,61 @@ index 45c3cec839a7c23903dedf6e3e004305da2adceb..248531727dcafb71d7d2d2767205e09a
          this.targetSelector.addGoal(1, new OwnerHurtByTargetGoal(this));
          this.targetSelector.addGoal(2, new OwnerHurtTargetGoal(this));
          this.targetSelector.addGoal(3, (new HurtByTargetGoal(this, new Class[0])).setAlertOthers());
+diff --git a/src/main/java/net/minecraft/world/entity/animal/allay/Allay.java b/src/main/java/net/minecraft/world/entity/animal/allay/Allay.java
+index 765dee56dd3a77e4bce137b84c4139202a5cef84..1fbdf53691670414564171521583b00d719040e4 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/allay/Allay.java
++++ b/src/main/java/net/minecraft/world/entity/animal/allay/Allay.java
+@@ -72,14 +72,49 @@ public class Allay extends PathfinderMob implements InventoryCarrier, VibrationL
+     private final SimpleContainer inventory = new SimpleContainer(1);
+     private float holdingItemAnimationTicks;
+     private float holdingItemAnimationTicks0;
++    private org.purpurmc.purpur.controller.FlyingMoveControllerWASD purpurController; // Purpur
+ 
+     public Allay(EntityType<? extends Allay> type, Level world) {
+         super(type, world);
+-        this.moveControl = new FlyingMoveControl(this, 20, true);
++        // Purpur start
++        this.purpurController = new org.purpurmc.purpur.controller.FlyingMoveControllerWASD(this, 0.1F, 0.5F);
++        this.moveControl = new FlyingMoveControl(this, 20, true) {
++            @Override
++            public void tick() {
++                if (mob.getRider() != null && mob.isControllable()) {
++                    purpurController.purpurTick(mob.getRider());
++                } else {
++                    super.tick();
++                }
++            }
++        };
++        // Purpur end
+         this.setCanPickUpLoot(this.canPickUpLoot());
+         this.dynamicGameEventListener = new DynamicGameEventListener<>(new VibrationListener(new EntityPositionSource(this, this.getEyeHeight()), 16, this, (VibrationListener.ReceivingEvent)null, 0.0F, 0));
+     }
+ 
++    // Purpur start
++    @Override
++    public boolean isRidable() {
++        return level.purpurConfig.allayRidable;
++    }
++
++    @Override
++    public boolean rideableUnderWater() {
++        return level.purpurConfig.allayRidableInWater;
++    }
++
++    @Override
++    public boolean isControllable() {
++        return level.purpurConfig.allayControllable;
++    }
++
++    @Override
++    protected void registerGoals() {
++        this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur
++    }
++    // Purpur end
++
+     @Override
+     protected Brain.Provider<Allay> brainProvider() {
+         return Brain.provider(MEMORY_TYPES, SENSOR_TYPES);
 diff --git a/src/main/java/net/minecraft/world/entity/animal/axolotl/Axolotl.java b/src/main/java/net/minecraft/world/entity/animal/axolotl/Axolotl.java
 index fdd2c63ff0017bafa544a3cff2ee6d2d62c92cb3..32b31e5efb5fc68430b9bcd4cd972494f53accc8 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/axolotl/Axolotl.java
@@ -2261,6 +2316,158 @@ index fdd2c63ff0017bafa544a3cff2ee6d2d62c92cb3..32b31e5efb5fc68430b9bcd4cd972494
              }
  
          }
+diff --git a/src/main/java/net/minecraft/world/entity/animal/frog/Frog.java b/src/main/java/net/minecraft/world/entity/animal/frog/Frog.java
+index 9e17e21a48892686e94a1c21b636695ab84eb7cd..156ab5e6a8e75e55f0f3fbc84c21e397cd1dc589 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/frog/Frog.java
++++ b/src/main/java/net/minecraft/world/entity/animal/frog/Frog.java
+@@ -43,7 +43,6 @@ import net.minecraft.world.entity.SpawnGroupData;
+ import net.minecraft.world.entity.ai.Brain;
+ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+ import net.minecraft.world.entity.ai.attributes.Attributes;
+-import net.minecraft.world.entity.ai.control.LookControl;
+ import net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl;
+ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+ import net.minecraft.world.entity.ai.navigation.AmphibiousPathNavigation;
+@@ -53,6 +52,7 @@ import net.minecraft.world.entity.ai.sensing.SensorType;
+ import net.minecraft.world.entity.animal.Animal;
+ import net.minecraft.world.entity.animal.FrogVariant;
+ import net.minecraft.world.entity.monster.Slime;
++import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.item.ItemStack;
+ import net.minecraft.world.item.Items;
+ import net.minecraft.world.item.crafting.Ingredient;
+@@ -83,16 +83,65 @@ public class Frog extends Animal {
+     public final AnimationState walkAnimationState = new AnimationState();
+     public final AnimationState swimAnimationState = new AnimationState();
+     public final AnimationState swimIdleAnimationState = new AnimationState();
++    private org.purpurmc.purpur.controller.MoveControllerWASD purpurLandController; // Purpur
++    private org.purpurmc.purpur.controller.WaterMoveControllerWASD purpurWaterController; // Purpur
+ 
+     public Frog(EntityType<? extends Animal> type, Level world) {
+         super(type, world);
+         this.lookControl = new Frog.FrogLookControl(this);
+         this.setPathfindingMalus(BlockPathTypes.WATER, 4.0F);
+         this.setPathfindingMalus(BlockPathTypes.TRAPDOOR, -1.0F);
+-        this.moveControl = new SmoothSwimmingMoveControl(this, 85, 10, 0.02F, 0.1F, true);
++        // Purpur start
++        this.purpurLandController = new org.purpurmc.purpur.controller.MoveControllerWASD(this, 0.2F);
++        this.purpurWaterController = new org.purpurmc.purpur.controller.WaterMoveControllerWASD(this, 0.5F);
++        this.moveControl = new SmoothSwimmingMoveControl(this, 85, 10, 0.02F, 0.1F, true) {
++            @Override
++            public void tick() {
++                Player rider = mob.getRider();
++                if (rider != null && mob.isControllable()) {
++                    if (mob.isInWater()) {
++                        purpurWaterController.purpurTick(rider);
++                        mob.setDeltaMovement(mob.getDeltaMovement().add(0.0D, -0.005D, 0.0D));
++                    } else {
++                        purpurLandController.purpurTick(rider);
++                    }
++                } else {
++                    super.tick();
++                }
++            }
++        };
++        // Purpur end
+         this.maxUpStep = 1.0F;
+     }
+ 
++    // Purpur start
++    @Override
++    public boolean isRidable() {
++        return level.purpurConfig.frogRidable;
++    }
++
++    @Override
++    public boolean rideableUnderWater() {
++        return level.purpurConfig.frogRidableInWater;
++    }
++
++    @Override
++    public boolean isControllable() {
++        return level.purpurConfig.frogControllable;
++    }
++
++    @Override
++    protected void registerGoals() {
++        this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur
++        this.targetSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur
++    }
++
++    @Override
++    public float getJumpPower() {
++        return (getRider() != null && isControllable()) ? level.purpurConfig.frogRidableJumpHeight * this.getBlockJumpFactor() : super.getJumpPower();
++    }
++    // Purpur end
++
+     @Override
+     protected Brain.Provider<Frog> brainProvider() {
+         return Brain.provider(MEMORY_TYPES, SENSOR_TYPES);
+@@ -378,7 +427,7 @@ public class Frog extends Animal {
+         return world.getBlockState(pos.below()).is(BlockTags.FROGS_SPAWNABLE_ON) && isBrightEnoughToSpawn(world, pos);
+     }
+ 
+-    class FrogLookControl extends LookControl {
++    class FrogLookControl extends org.purpurmc.purpur.controller.LookControllerWASD { // Purpur
+         FrogLookControl(Mob entity) {
+             super(entity);
+         }
+diff --git a/src/main/java/net/minecraft/world/entity/animal/frog/Tadpole.java b/src/main/java/net/minecraft/world/entity/animal/frog/Tadpole.java
+index 7d093e4cc3357abd205302a98cc7b06cf55229bc..77f19a0f90b62b1423381d87194d0e1ae545cbbe 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/frog/Tadpole.java
++++ b/src/main/java/net/minecraft/world/entity/animal/frog/Tadpole.java
+@@ -43,13 +43,50 @@ public class Tadpole extends AbstractFish {
+     public int age;
+     protected static final ImmutableList<SensorType<? extends Sensor<? super Tadpole>>> SENSOR_TYPES = ImmutableList.of(SensorType.NEAREST_LIVING_ENTITIES, SensorType.NEAREST_PLAYERS, SensorType.HURT_BY, SensorType.FROG_TEMPTATIONS);
+     protected static final ImmutableList<MemoryModuleType<?>> MEMORY_TYPES = ImmutableList.of(MemoryModuleType.LOOK_TARGET, MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES, MemoryModuleType.WALK_TARGET, MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE, MemoryModuleType.PATH, MemoryModuleType.NEAREST_VISIBLE_ADULT, MemoryModuleType.TEMPTATION_COOLDOWN_TICKS, MemoryModuleType.IS_TEMPTED, MemoryModuleType.TEMPTING_PLAYER, MemoryModuleType.BREED_TARGET, MemoryModuleType.IS_PANICKING);
++    private org.purpurmc.purpur.controller.WaterMoveControllerWASD purpurController; // Purpur
+ 
+     public Tadpole(EntityType<? extends AbstractFish> type, Level world) {
+         super(type, world);
+-        this.moveControl = new SmoothSwimmingMoveControl(this, 85, 10, 0.02F, 0.1F, true);
++        // Purpur start
++        this.purpurController = new org.purpurmc.purpur.controller.WaterMoveControllerWASD(this, 0.5F);
++        this.moveControl = new SmoothSwimmingMoveControl(this, 85, 10, 0.02F, 0.1F, true) {
++            @Override
++            public void tick() {
++                Player rider = mob.getRider();
++                if (rider != null && mob.isControllable()) {
++                    purpurController.purpurTick(rider);
++                    mob.setDeltaMovement(mob.getDeltaMovement().add(0.0D, 0.002D, 0.0D));
++                } else {
++                    super.tick();
++                }
++            }
++        };
++        // Purpur end
+         this.lookControl = new SmoothSwimmingLookControl(this, 10);
+     }
+ 
++    // Purpur start
++    @Override
++    public boolean isRidable() {
++        return level.purpurConfig.tadpoleRidable;
++    }
++
++    @Override
++    public boolean rideableUnderWater() {
++        return level.purpurConfig.tadpoleRidableInWater;
++    }
++
++    @Override
++    public boolean isControllable() {
++        return level.purpurConfig.tadpoleControllable;
++    }
++
++    @Override
++    protected void registerGoals() {
++        this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur
++    }
++    // Purpur end
++
+     @Override
+     protected PathNavigation createNavigation(Level world) {
+         return new WaterBoundPathNavigation(this, world);
 diff --git a/src/main/java/net/minecraft/world/entity/animal/goat/Goat.java b/src/main/java/net/minecraft/world/entity/animal/goat/Goat.java
 index f489301701f8abfb8f509d91089c1433db2346f8..ba47201f7b9ebfba28dc2f7ddc89375a8662476d 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/goat/Goat.java
@@ -2725,10 +2932,10 @@ index 219877901fb5fc6401646253d6e5d7bd8416ffe1..079a85f1520cda6a0fb72d0dd7f9e18a
                          this.dragonFight.updateDragon(this);
                      }
 diff --git a/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java b/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
-index 4fb40aa91e0961f1974c74c88fa68359e4ad6b16..dd7bd70e0b905eea690c2d20b8438b9476d2badc 100644
+index 4fb40aa91e0961f1974c74c88fa68359e4ad6b16..7a0653ae3bf1f9c99e3363fb27a9af30cbc2f27a 100644
 --- a/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
 +++ b/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
-@@ -84,6 +84,7 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
+@@ -84,16 +84,30 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
          return entityliving.getMobType() != MobType.UNDEAD && entityliving.attackable();
      };
      private static final TargetingConditions TARGETING_CONDITIONS = TargetingConditions.forCombat().range(20.0D).selector(WitherBoss.LIVING_ENTITY_SELECTOR);
@@ -2736,11 +2943,31 @@ index 4fb40aa91e0961f1974c74c88fa68359e4ad6b16..dd7bd70e0b905eea690c2d20b8438b94
      // Paper start
      private boolean canPortal = false;
  
-@@ -105,16 +106,123 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
-         navigationflying.setCanOpenDoors(false);
-         navigationflying.setCanFloat(true);
-         navigationflying.setCanPassDoors(true);
-+        this.moveControl = new org.purpurmc.purpur.controller.FlyingWithSpacebarMoveControllerWASD(this, 0.1F); // Purpur
+     public void setCanTravelThroughPortals(boolean canPortal) { this.canPortal = canPortal; }
+     // Paper end
++    private org.purpurmc.purpur.controller.FlyingWithSpacebarMoveControllerWASD purpurController; // Purpur
+ 
+     public WitherBoss(EntityType<? extends WitherBoss> type, Level world) {
+         super(type, world);
+         this.bossEvent = (ServerBossEvent) (new ServerBossEvent(this.getDisplayName(), BossEvent.BossBarColor.PURPLE, BossEvent.BossBarOverlay.PROGRESS)).setDarkenScreen(true);
+-        this.moveControl = new FlyingMoveControl(this, 10, false);
++        // Purpur start
++        this.purpurController = new org.purpurmc.purpur.controller.FlyingWithSpacebarMoveControllerWASD(this, 0.1F);
++        this.moveControl = new FlyingMoveControl(this, 10, false) {
++            @Override
++            public void tick() {
++                if (mob.getRider() != null && mob.isControllable()) {
++                    purpurController.purpurTick(mob.getRider());
++                } else {
++                    super.tick();
++                }
++            }
++        };
++        // Purpur end
+         this.setHealth(this.getMaxHealth());
+         this.xpReward = 50;
+     }
+@@ -108,13 +122,119 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
          return navigationflying;
      }
  
@@ -2860,7 +3087,7 @@ index 4fb40aa91e0961f1974c74c88fa68359e4ad6b16..dd7bd70e0b905eea690c2d20b8438b94
          this.targetSelector.addGoal(1, new HurtByTargetGoal(this, new Class[0]));
          this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, LivingEntity.class, 0, false, false, WitherBoss.LIVING_ENTITY_SELECTOR));
      }
-@@ -256,6 +364,16 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
+@@ -256,6 +376,16 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
  
      @Override
      protected void customServerAiStep() {
@@ -2877,7 +3104,7 @@ index 4fb40aa91e0961f1974c74c88fa68359e4ad6b16..dd7bd70e0b905eea690c2d20b8438b94
          int i;
  
          if (this.getInvulnerableTicks() > 0) {
-@@ -583,11 +701,11 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
+@@ -583,11 +713,11 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
      }
  
      public int getAlternativeTarget(int headIndex) {
@@ -4729,6 +4956,51 @@ index 769e4fbaac01a4fe3a45bd9cab5c63b61fc69f53..ff149234a8f3e1c94961e41d5bc81174
          this.getBrain().tick((ServerLevel)this.level, this);
          this.level.getProfiler().pop();
          PiglinBruteAi.updateActivity(this);
+diff --git a/src/main/java/net/minecraft/world/entity/monster/warden/Warden.java b/src/main/java/net/minecraft/world/entity/monster/warden/Warden.java
+index 4366f7ff095c79a1f4444a27198f2613eb01fdc2..5918c35ebdba83dc93414d05b19a9d2b55b1bb7c 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/warden/Warden.java
++++ b/src/main/java/net/minecraft/world/entity/monster/warden/Warden.java
+@@ -118,8 +118,32 @@ public class Warden extends Monster implements VibrationListener.VibrationListen
+         this.setPathfindingMalus(BlockPathTypes.LAVA, 8.0F);
+         this.setPathfindingMalus(BlockPathTypes.DAMAGE_FIRE, 0.0F);
+         this.setPathfindingMalus(BlockPathTypes.DANGER_FIRE, 0.0F);
++        this.moveControl = new org.purpurmc.purpur.controller.MoveControllerWASD(this, 0.5F); // Purpur
+     }
+ 
++    // Purpur start
++    @Override
++    public boolean isRidable() {
++        return level.purpurConfig.wardenRidable;
++    }
++
++    @Override
++    public boolean rideableUnderWater() {
++        return level.purpurConfig.wardenRidableInWater;
++    }
++
++    @Override
++    public boolean isControllable() {
++        return level.purpurConfig.wardenControllable;
++    }
++
++    @Override
++    protected void registerGoals() {
++        this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur
++        this.targetSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur
++    }
++    // Purpur end
++
+     @Override
+     public Packet<?> getAddEntityPacket() {
+         return new ClientboundAddEntityPacket((LivingEntity)this, this.hasPose(Pose.EMERGING) ? 1 : 0);
+@@ -391,6 +415,7 @@ public class Warden extends Monster implements VibrationListener.VibrationListen
+ 
+     @Contract("null->false")
+     public boolean canTargetEntity(@Nullable Entity entity) {
++        if (getRider() != null && isControllable()) return false; // Purpur
+         if (entity instanceof LivingEntity livingEntity) {
+             if (this.level == entity.level && EntitySelector.NO_CREATIVE_OR_SPECTATOR.test(entity) && !this.isAlliedTo(entity) && livingEntity.getType() != EntityType.ARMOR_STAND && livingEntity.getType() != EntityType.WARDEN && !livingEntity.isInvulnerable() && !livingEntity.isDeadOrDying() && this.level.getWorldBorder().isWithinBounds(livingEntity.getBoundingBox())) {
+                 return true;
 diff --git a/src/main/java/net/minecraft/world/entity/npc/Villager.java b/src/main/java/net/minecraft/world/entity/npc/Villager.java
 index 93077e8c6b5a35adc6febb749d1d08be172402f1..a6519bf96f39fa69ecb65ef25dba80261bb03323 100644
 --- a/src/main/java/net/minecraft/world/entity/npc/Villager.java
@@ -4962,10 +5234,10 @@ index b3bfc56859d00f9e27bd1d230dd19b92985b5718..e8150d1bec60f7e32d5475c8402fd7b5
 +    }
  }
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 0ce93836629522c2ff2a57226583009302271daf..969c78aef40aae497a76dd7f3e9c230577a8d31f 100644
+index 0ce93836629522c2ff2a57226583009302271daf..4efbb008bd31a0316d3ceead6be27c6d38dd9f50 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-@@ -88,4 +88,668 @@ public class PurpurWorldConfig {
+@@ -88,4 +88,706 @@ public class PurpurWorldConfig {
          final Map<String, Object> value = PurpurConfig.getMap("world-settings." + worldName + "." + path, null);
          return value.isEmpty() ? fallback : value;
      }
@@ -4977,6 +5249,15 @@ index 0ce93836629522c2ff2a57226583009302271daf..969c78aef40aae497a76dd7f3e9c2305
 +        babiesAreRidable = getBoolean("ridable-settings.babies-are-ridable", babiesAreRidable);
 +        untamedTamablesAreRidable = getBoolean("ridable-settings.untamed-tamables-are-ridable", untamedTamablesAreRidable);
 +        useNightVisionWhenRiding = getBoolean("ridable-settings.use-night-vision", useNightVisionWhenRiding);
++    }
++
++    public boolean allayRidable = false;
++    public boolean allayRidableInWater = false;
++    public boolean allayControllable = true;
++    private void allaySettings() {
++        allayRidable = getBoolean("mobs.allay.ridable", allayRidable);
++        allayRidableInWater = getBoolean("mobs.allay.ridable-in-water", allayRidableInWater);
++        allayControllable = getBoolean("mobs.allay.controllable", allayControllable);
 +    }
 +
 +    public boolean axolotlRidable = false;
@@ -5150,6 +5431,17 @@ index 0ce93836629522c2ff2a57226583009302271daf..969c78aef40aae497a76dd7f3e9c2305
 +        foxRidable = getBoolean("mobs.fox.ridable", foxRidable);
 +        foxRidableInWater = getBoolean("mobs.fox.ridable-in-water", foxRidableInWater);
 +        foxControllable = getBoolean("mobs.fox.controllable", foxControllable);
++    }
++
++    public boolean frogRidable = false;
++    public boolean frogRidableInWater = false;
++    public boolean frogControllable = true;
++    public float frogRidableJumpHeight = 0.65F;
++    private void frogSettings() {
++        frogRidable = getBoolean("mobs.frog.ridable", frogRidable);
++        frogRidableInWater = getBoolean("mobs.frog.ridable-in-water", frogRidableInWater);
++        frogControllable = getBoolean("mobs.frog.controllable", frogControllable);
++        frogRidableJumpHeight = (float) getDouble("mobs.frog.ridable-jump-height", frogRidableJumpHeight);
 +    }
 +
 +    public boolean ghastRidable = false;
@@ -5490,6 +5782,15 @@ index 0ce93836629522c2ff2a57226583009302271daf..969c78aef40aae497a76dd7f3e9c2305
 +        striderControllable = getBoolean("mobs.strider.controllable", striderControllable);
 +    }
 +
++    public boolean tadpoleRidable = false;
++    public boolean tadpoleRidableInWater = false;
++    public boolean tadpoleControllable = true;
++    private void tadpoleSettings() {
++        tadpoleRidable = getBoolean("mobs.tadpole.ridable", tadpoleRidable);
++        tadpoleRidableInWater = getBoolean("mobs.tadpole.ridable-in-water", tadpoleRidableInWater);
++        tadpoleControllable = getBoolean("mobs.tadpole.controllable", tadpoleControllable);
++    }
++
 +    public boolean traderLlamaRidable = false;
 +    public boolean traderLlamaRidableInWater = false;
 +    public boolean traderLlamaControllable = true;
@@ -5551,6 +5852,15 @@ index 0ce93836629522c2ff2a57226583009302271daf..969c78aef40aae497a76dd7f3e9c2305
 +        wanderingTraderRidable = getBoolean("mobs.wandering_trader.ridable", wanderingTraderRidable);
 +        wanderingTraderRidableInWater = getBoolean("mobs.wandering_trader.ridable-in-water", wanderingTraderRidableInWater);
 +        wanderingTraderControllable = getBoolean("mobs.wandering_trader.controllable", wanderingTraderControllable);
++    }
++
++    public boolean wardenRidable = false;
++    public boolean wardenRidableInWater = false;
++    public boolean wardenControllable = true;
++    private void wardenSettings() {
++        wardenRidable = getBoolean("mobs.warden.ridable", wardenRidable);
++        wardenRidableInWater = getBoolean("mobs.warden.ridable-in-water", wardenRidableInWater);
++        wardenControllable = getBoolean("mobs.warden.controllable", wardenControllable);
 +    }
 +
 +    public boolean witchRidable = false;
@@ -5636,10 +5946,10 @@ index 0ce93836629522c2ff2a57226583009302271daf..969c78aef40aae497a76dd7f3e9c2305
  }
 diff --git a/src/main/java/org/purpurmc/purpur/controller/FlyingMoveControllerWASD.java b/src/main/java/org/purpurmc/purpur/controller/FlyingMoveControllerWASD.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..315d76526a1a9e95d29384e4598d8d77a27466c7
+index 0000000000000000000000000000000000000000..ed494e0ad278813a0eb261101447b84cca3ad7aa
 --- /dev/null
 +++ b/src/main/java/org/purpurmc/purpur/controller/FlyingMoveControllerWASD.java
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,71 @@
 +package org.purpurmc.purpur.controller;
 +
 +import net.minecraft.world.entity.Mob;
@@ -5648,21 +5958,27 @@ index 0000000000000000000000000000000000000000..315d76526a1a9e95d29384e4598d8d77
 +
 +public class FlyingMoveControllerWASD extends MoveControllerWASD {
 +    protected final float groundSpeedModifier;
++    protected final float flyingSpeedModifier;
 +    protected int tooHighCooldown = 0;
-+    protected boolean setGravityFlag = true;
++    protected boolean setNoGravityFlag;
 +
 +    public FlyingMoveControllerWASD(Mob entity) {
 +        this(entity, 1.0F);
 +    }
 +
 +    public FlyingMoveControllerWASD(Mob entity, float groundSpeedModifier) {
-+        this(entity, groundSpeedModifier, true);
++        this(entity, groundSpeedModifier, 1.0F, true);
 +    }
 +
-+    public FlyingMoveControllerWASD(Mob entity, float groundSpeedModifier, boolean setGravityFlag) {
++    public FlyingMoveControllerWASD(Mob entity, float groundSpeedModifier, float flyingSpeedModifier) {
++        this(entity, groundSpeedModifier, flyingSpeedModifier, true);
++    }
++
++    public FlyingMoveControllerWASD(Mob entity, float groundSpeedModifier, float flyingSpeedModifier, boolean setNoGravityFlag) {
 +        super(entity);
 +        this.groundSpeedModifier = groundSpeedModifier;
-+        this.setGravityFlag = setGravityFlag;
++        this.flyingSpeedModifier = flyingSpeedModifier;
++        this.setNoGravityFlag = setNoGravityFlag;
 +    }
 +
 +    @Override
@@ -5688,9 +6004,11 @@ index 0000000000000000000000000000000000000000..315d76526a1a9e95d29384e4598d8d77
 +
 +        if (entity.onGround) {
 +            speed *= groundSpeedModifier; // TODO = fix this!
++        } else {
++            speed *= flyingSpeedModifier;
 +        }
 +
-+        if (setGravityFlag) {
++        if (setNoGravityFlag) {
 +            entity.setNoGravity(forward > 0);
 +        }
 +
