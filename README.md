@@ -86,7 +86,7 @@ Yes, this also includes all API provided by Paper, Spigot, and Bukkit.
 ## Building and setting up
 
 #### Initial setup
-Run the following commands in the root directory:
+Run the following command in the root directory:
 
 ```
 ./gradlew applyPatches
