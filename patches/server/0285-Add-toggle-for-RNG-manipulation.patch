@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Encode42 <me@encode42.dev>
+Date: Tue, 12 Jul 2022 14:16:10 -0400
+Subject: [PATCH] Add toggle for RNG manipulation
+
+Paper patches RNG maniplulation by using a shared (and locked) random source.
+This comes with a performance gain, but technical players may prefer the ability to manipulate RNG.
+
+diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
+index 3d4d3ec099a37458d43a0500724eec7594097a41..41ad6375ed19d9f21f131a7cad210254c8a20750 100644
+--- a/src/main/java/net/minecraft/world/entity/Entity.java
++++ b/src/main/java/net/minecraft/world/entity/Entity.java
+@@ -419,7 +419,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+     public int activatedPriority = gg.pufferfish.pufferfish.PufferfishConfig.maximumActivationPrio; // golf score
+     public final BlockPos.MutableBlockPos cachedBlockPos = new BlockPos.MutableBlockPos(); // used where needed
+     // Pufferfish end
+-    
++
+     public float getBukkitYaw() {
+         return this.yRot;
+     }
+@@ -576,7 +576,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+         this.bb = Entity.INITIAL_AABB;
+         this.stuckSpeedMultiplier = Vec3.ZERO;
+         this.nextStep = 1.0F;
+-        this.random = SHARED_RANDOM; // Paper
++        this.random = world.purpurConfig.entitySharedRandom ? SHARED_RANDOM : RandomSource.create(); // Paper // Purpur
+         this.remainingFireTicks = -this.getFireImmuneTicks();
+         this.fluidHeight = new Object2DoubleArrayMap(2);
+         this.fluidOnEyes = new HashSet();
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Squid.java b/src/main/java/net/minecraft/world/entity/animal/Squid.java
+index 21f5304e01e0844f1bbf3e1b2f9d50c01f8bf8fd..8afdb5d4fecbb45bad2ed801fc0e526d15ef07c5 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Squid.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Squid.java
+@@ -46,7 +46,7 @@ public class Squid extends WaterAnimal {
+ 
+     public Squid(EntityType<? extends Squid> type, Level world) {
+         super(type, world);
+-        //this.random.setSeed((long) this.getId()); // Paper - we set the random to shared, do not clobber the seed
++        if (!world.purpurConfig.entitySharedRandom) this.random.setSeed((long) this.getId()); // Paper - we set the random to shared, do not clobber the seed // Purpur
+         this.tentacleSpeed = 1.0F / (this.random.nextFloat() + 1.0F) * 0.2F;
+     }
+ 
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index fad04b8c56d6183bc72f78915847e56c77228106..c75fbe3f3f9f92535e0de92a9fa1fe1ade213192 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -201,9 +201,11 @@ public class PurpurWorldConfig {
+ 
+     public int entityLifeSpan = 0;
+     public float entityLeftHandedChance = 0.05f;
++    public boolean entitySharedRandom = true;
+     private void entitySettings() {
+         entityLifeSpan = getInt("gameplay-mechanics.entity-lifespan", entityLifeSpan);
+         entityLeftHandedChance = (float) getDouble("gameplay-mechanics.entity-left-handed-chance", entityLeftHandedChance);
++        entitySharedRandom = getBoolean("settings.entity.shared-random", entitySharedRandom);
+     }
+ 
+     public boolean infinityWorksWithoutArrows = false;
