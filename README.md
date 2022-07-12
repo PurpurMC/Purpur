@@ -133,4 +133,4 @@ software so we can make Purpur the best it can be.
 
 ### Our Sponsors
 
-[![Purpur's Sponsors](https://opencollective.com/PurpurMC/backers.svg?width=890&button=false)](https://opencollective.com/purpurmc)
+[![Purpur's Sponsors](https://opencollective.com/PurpurMC/backers.svg?width=835&avatarHeight=64&button=false)](https://opencollective.com/purpurmc)
