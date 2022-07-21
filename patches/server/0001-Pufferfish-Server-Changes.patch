@@ -612,10 +612,10 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..a125abc75ed2bbd905c8fdec442416a45264f531
+index 0000000000000000000000000000000000000000..09827eaa9f6adf49385a33aa60b3a6bf4005a982
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
-@@ -0,0 +1,313 @@
+@@ -0,0 +1,335 @@
 +package gg.pufferfish.pufferfish;
 +
 +import gg.pufferfish.pufferfish.simd.SIMDDetection;
@@ -828,6 +828,28 @@ index 0000000000000000000000000000000000000000..a125abc75ed2bbd905c8fdec442416a4
 +		if (!asyncMobSpawningInitialized) {
 +			asyncMobSpawningInitialized = true;
 +			enableAsyncMobSpawning = temp;
++		}
++	}
++	
++	public static boolean enableAsyncEntityTracker;
++	public static boolean enableAsyncEntityTrackerInitialized;
++	private static void asyncEntityTracker() {
++		boolean temp = getBoolean("enable-async-entity-tracker", false,
++				"Whether or not async entity tracking should be enabled.");
++		if (!enableAsyncEntityTrackerInitialized) {
++			enableAsyncEntityTrackerInitialized = true;
++			enableAsyncEntityTracker = temp;
++		}
++	}
++	
++	public static boolean enableAsyncPathfinding;
++	public static boolean enableAsyncPathfindingInitialized;
++	private static void asyncPathfinding() {
++		boolean temp = getBoolean("enable-async-pathfinding", false,
++				"Whether or not async pathfinding should be enabled.");
++		if (!enableAsyncPathfindingInitialized) {
++			enableAsyncPathfindingInitialized = true;
++			enableAsyncPathfinding = temp;
 +		}
 +	}
 +	
@@ -1787,6 +1809,403 @@ index 0000000000000000000000000000000000000000..db15d3fbe2b65fc8035573f5fdbea382
 +        this.report(TILE_ENTITY_COUNT, tileEntityCount);
 +    }
 +}
+diff --git a/src/main/java/gg/pufferfish/pufferfish/path/AsyncPath.java b/src/main/java/gg/pufferfish/pufferfish/path/AsyncPath.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..401645f9f2cccaec4b37c6a91cf930a1fc520301
+--- /dev/null
++++ b/src/main/java/gg/pufferfish/pufferfish/path/AsyncPath.java
+@@ -0,0 +1,280 @@
++package gg.pufferfish.pufferfish.path;
++
++import net.minecraft.core.BlockPos;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.level.pathfinder.Node;
++import net.minecraft.world.level.pathfinder.Path;
++import net.minecraft.world.phys.Vec3;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
++
++import java.util.List;
++import java.util.Set;
++import java.util.concurrent.CompletableFuture;
++import java.util.function.Supplier;
++
++/**
++ * i'll be using this to represent a path that not be processed yet!
++ */
++public class AsyncPath extends Path {
++
++    /**
++     * marks whether this async path has been processed
++     */
++    private volatile boolean processed = false;
++
++    /**
++     * a future representing the processing state of this path
++     */
++    private final @NotNull CompletableFuture<Path> processingFuture;
++
++    /**
++     * a list of positions that this path could path towards
++     */
++    private final Set<BlockPos> positions;
++
++    /**
++     * the supplier of the real processed path
++     */
++    private final Supplier<Path> pathSupplier;
++
++    /*
++     * Processed values
++     */
++
++    /**
++     * this is a reference to the nodes list in the parent `Path` object
++     */
++    private final List<Node> nodes;
++    /**
++     * the block we're trying to path to
++     *
++     * while processing, we have no idea where this is so consumers of `Path` should check that the path is processed before checking the target block
++     */
++    private @Nullable BlockPos target;
++    /**
++     * how far we are to the target
++     *
++     * while processing, the target could be anywhere but theoretically we're always "close" to a theoretical target so default is 0
++     */
++    private float distToTarget = 0;
++    /**
++     * whether we can reach the target
++     *
++     * while processing we can always theoretically reach the target so default is true
++     */
++    private boolean canReach = true;
++
++    public AsyncPath(@NotNull List<Node> emptyNodeList, @NotNull Set<BlockPos> positions, @NotNull Supplier<Path> pathSupplier) {
++        //noinspection ConstantConditions
++        super(emptyNodeList, null, false);
++
++        this.nodes = emptyNodeList;
++        this.positions = positions;
++        this.pathSupplier = pathSupplier;
++
++        this.processingFuture = AsyncPathProcessor.queue(this).thenApply((unused) -> this);
++    }
++
++    @Override
++    public boolean isProcessed() {
++        return this.processed;
++    }
++
++    /**
++     * returns the future representing the processing state of this path
++     * @return a future
++     */
++    public @NotNull CompletableFuture<Path> getProcessingFuture() {
++        return this.processingFuture;
++    }
++
++    /**
++     * an easy way to check if this processing path is the same as an attempted new path
++     *
++     * @param positions - the positions to compare against
++     * @return true if we are processing the same positions
++     */
++    public boolean hasSameProcessingPositions(final Set<BlockPos> positions) {
++        if (this.positions.size() != positions.size()) {
++            return false;
++        }
++
++        return this.positions.containsAll(positions);
++    }
++
++    /**
++     * starts processing this path
++     */
++    public synchronized void process() {
++        if (this.processed) {
++            return;
++        }
++
++        final Path bestPath = this.pathSupplier.get();
++
++        this.nodes.addAll(bestPath.nodes); // we mutate this list to reuse the logic in Path
++        this.target = bestPath.getTarget();
++        this.distToTarget = bestPath.getDistToTarget();
++        this.canReach = bestPath.canReach();
++
++        this.processed = true;
++    }
++
++    /**
++     * if this path is accessed while it hasn't processed, just process it in-place
++     */
++    private void checkProcessed() {
++        if (!this.processed) {
++            this.process();
++        }
++    }
++
++    /*
++     * overrides we need for final fields that we cannot modify after processing
++     */
++
++    @Override
++    public @NotNull BlockPos getTarget() {
++        this.checkProcessed();
++
++        return this.target;
++    }
++
++    @Override
++    public float getDistToTarget() {
++        this.checkProcessed();
++
++        return this.distToTarget;
++    }
++
++    @Override
++    public boolean canReach() {
++        this.checkProcessed();
++
++        return this.canReach;
++    }
++
++    /*
++     * overrides to ensure we're processed first
++     */
++
++    @Override
++    public boolean isDone() {
++        return this.isProcessed() && super.isDone();
++    }
++
++    @Override
++    public void advance() {
++        this.checkProcessed();
++
++        super.advance();
++    }
++
++    @Override
++    public boolean notStarted() {
++        this.checkProcessed();
++
++        return super.notStarted();
++    }
++
++    @Nullable
++    @Override
++    public Node getEndNode() {
++        this.checkProcessed();
++
++        return super.getEndNode();
++    }
++
++    @Override
++    public Node getNode(int index) {
++        this.checkProcessed();
++
++        return super.getNode(index);
++    }
++
++    @Override
++    public void truncateNodes(int length) {
++        this.checkProcessed();
++
++        super.truncateNodes(length);
++    }
++
++    @Override
++    public void replaceNode(int index, Node node) {
++        this.checkProcessed();
++
++        super.replaceNode(index, node);
++    }
++
++    @Override
++    public int getNodeCount() {
++        this.checkProcessed();
++
++        return super.getNodeCount();
++    }
++
++    @Override
++    public int getNextNodeIndex() {
++        this.checkProcessed();
++
++        return super.getNextNodeIndex();
++    }
++
++    @Override
++    public void setNextNodeIndex(int nodeIndex) {
++        this.checkProcessed();
++
++        super.setNextNodeIndex(nodeIndex);
++    }
++
++    @Override
++    public Vec3 getEntityPosAtNode(Entity entity, int index) {
++        this.checkProcessed();
++
++        return super.getEntityPosAtNode(entity, index);
++    }
++
++    @Override
++    public BlockPos getNodePos(int index) {
++        this.checkProcessed();
++
++        return super.getNodePos(index);
++    }
++
++    @Override
++    public Vec3 getNextEntityPos(Entity entity) {
++        this.checkProcessed();
++
++        return super.getNextEntityPos(entity);
++    }
++
++    @Override
++    public BlockPos getNextNodePos() {
++        this.checkProcessed();
++
++        return super.getNextNodePos();
++    }
++
++    @Override
++    public Node getNextNode() {
++        this.checkProcessed();
++
++        return super.getNextNode();
++    }
++
++    @Nullable
++    @Override
++    public Node getPreviousNode() {
++        this.checkProcessed();
++
++        return super.getPreviousNode();
++    }
++
++    @Override
++    public boolean hasNext() {
++        this.checkProcessed();
++
++        return super.hasNext();
++    }
++}
+diff --git a/src/main/java/gg/pufferfish/pufferfish/path/AsyncPathProcessor.java b/src/main/java/gg/pufferfish/pufferfish/path/AsyncPathProcessor.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..08e949d8493284667cd8f1adb710b4e9e9611e28
+--- /dev/null
++++ b/src/main/java/gg/pufferfish/pufferfish/path/AsyncPathProcessor.java
+@@ -0,0 +1,44 @@
++package gg.pufferfish.pufferfish.path;
++
++import com.google.common.util.concurrent.ThreadFactoryBuilder;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.world.level.pathfinder.Path;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
++
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.Executor;
++import java.util.concurrent.Executors;
++import java.util.function.Consumer;
++
++/**
++ * used to handle the scheduling of async path processing
++ */
++public class AsyncPathProcessor {
++
++    private static final Executor mainThreadExecutor = MinecraftServer.getServer();
++    private static final Executor pathProcessingExecutor = Executors.newCachedThreadPool(new ThreadFactoryBuilder()
++            .setNameFormat("puff-path-processor-%d")
++            .setPriority(Thread.NORM_PRIORITY - 2)
++            .build());
++
++    protected static CompletableFuture<Void> queue(@NotNull AsyncPath path) {
++        return CompletableFuture.runAsync(path::process, pathProcessingExecutor);
++    }
++
++    /**
++     * takes a possibly unprocessed path, and waits until it is completed
++     * the consumer will be immediately invoked if the path is already processed
++     * the consumer will always be called on the main thread
++     *
++     * @param path a path to wait on
++     * @param afterProcessing a consumer to be called
++     */
++    public static void awaitProcessing(@Nullable Path path, Consumer<@Nullable Path> afterProcessing) {
++        if (path != null && !path.isProcessed() && path instanceof AsyncPath asyncPath) {
++            asyncPath.getProcessingFuture().thenAcceptAsync(afterProcessing, mainThreadExecutor);
++        } else {
++            afterProcessing.accept(path);
++        }
++    }
++}
+diff --git a/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorCache.java b/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorCache.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9f81dc6e8d198f1be957c1a05c72eb5ba38832ce
+--- /dev/null
++++ b/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorCache.java
+@@ -0,0 +1,39 @@
++package gg.pufferfish.pufferfish.path;
++
++import net.minecraft.world.level.pathfinder.NodeEvaluator;
++import org.apache.commons.lang.Validate;
++import org.jetbrains.annotations.NotNull;
++
++import java.util.Map;
++import java.util.Queue;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.ConcurrentLinkedQueue;
++
++public class NodeEvaluatorCache {
++    private static final Map<NodeEvaluatorGenerator, ConcurrentLinkedQueue<NodeEvaluator>> threadLocalNodeEvaluators = new ConcurrentHashMap<>();
++    private static final Map<NodeEvaluator, NodeEvaluatorGenerator> nodeEvaluatorToGenerator = new ConcurrentHashMap<>();
++
++    private static @NotNull Queue<NodeEvaluator> getDequeForGenerator(@NotNull NodeEvaluatorGenerator generator) {
++        return threadLocalNodeEvaluators.computeIfAbsent(generator, (key) -> new ConcurrentLinkedQueue<>());
++    }
++
++    public static @NotNull NodeEvaluator takeNodeEvaluator(@NotNull NodeEvaluatorGenerator generator) {
++        var nodeEvaluator = getDequeForGenerator(generator).poll();
++
++        if (nodeEvaluator == null) {
++            nodeEvaluator = generator.generate();
++        }
++
++        nodeEvaluatorToGenerator.put(nodeEvaluator, generator);
++
++        return nodeEvaluator;
++    }
++
++    public static void returnNodeEvaluator(@NotNull NodeEvaluator nodeEvaluator) {
++        final var generator = nodeEvaluatorToGenerator.remove(nodeEvaluator);
++        Validate.notNull(generator, "NodeEvaluator already returned");
++
++        getDequeForGenerator(generator).offer(nodeEvaluator);
++    }
++
++}
+diff --git a/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorGenerator.java b/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorGenerator.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..7557f75d2eff3291d5881746ac920d16a241e244
+--- /dev/null
++++ b/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorGenerator.java
+@@ -0,0 +1,10 @@
++package gg.pufferfish.pufferfish.path;
++
++import net.minecraft.world.level.pathfinder.NodeEvaluator;
++import org.jetbrains.annotations.NotNull;
++
++public interface NodeEvaluatorGenerator {
++
++    @NotNull NodeEvaluator generate();
++
++}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/sentry/PufferfishSentryAppender.java b/src/main/java/gg/pufferfish/pufferfish/sentry/PufferfishSentryAppender.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..731ef11c7a025ae95ed8a757b530d834733d0621
@@ -1973,6 +2392,153 @@ index 0000000000000000000000000000000000000000..1b29210ad0bbb4ada150f23357f0c80d
 +		}
 +	}
 +	
++}
+diff --git a/src/main/java/gg/pufferfish/pufferfish/tracker/MultithreadedTracker.java b/src/main/java/gg/pufferfish/pufferfish/tracker/MultithreadedTracker.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..2dfe34a3fd0e460865393d9d8a1bdab71aa47b6b
+--- /dev/null
++++ b/src/main/java/gg/pufferfish/pufferfish/tracker/MultithreadedTracker.java
+@@ -0,0 +1,141 @@
++package gg.pufferfish.pufferfish.tracker;
++
++import com.google.common.util.concurrent.ThreadFactoryBuilder;
++import io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet;
++import io.papermc.paper.world.ChunkEntitySlices;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ChunkMap;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.level.chunk.LevelChunk;
++
++import java.util.concurrent.ConcurrentLinkedQueue;
++import java.util.concurrent.Executor;
++import java.util.concurrent.Executors;
++import java.util.concurrent.atomic.AtomicInteger;
++
++public class MultithreadedTracker {
++
++    private static final int parallelism = Math.max(4, Runtime.getRuntime().availableProcessors());
++    private static final Executor trackerExecutor = Executors.newFixedThreadPool(parallelism, new ThreadFactoryBuilder()
++            .setNameFormat("puff-tracker-%d")
++            .setPriority(Thread.NORM_PRIORITY - 2)
++            .build());
++
++    private final IteratorSafeOrderedReferenceSet<LevelChunk> entityTickingChunks;
++    private final AtomicInteger taskIndex = new AtomicInteger();
++
++    private final ConcurrentLinkedQueue<Runnable> mainThreadTasks;
++    private final ConcurrentLinkedQueue<Runnable> postTrackingTasks = new ConcurrentLinkedQueue<>();
++    private final AtomicInteger finishedTasks = new AtomicInteger();
++
++    public MultithreadedTracker(IteratorSafeOrderedReferenceSet<LevelChunk> entityTickingChunks, ConcurrentLinkedQueue<Runnable> mainThreadTasks) {
++        this.entityTickingChunks = entityTickingChunks;
++        this.mainThreadTasks = mainThreadTasks;
++    }
++
++    public void tick() {
++        int iterator = this.entityTickingChunks.createRawIterator();
++
++        if (iterator == -1) {
++            return;
++        }
++
++        try {
++            this.taskIndex.set(iterator);
++            this.finishedTasks.set(0);
++
++            for (int i = 0; i < parallelism; i++) {
++                trackerExecutor.execute(this::run);
++            }
++
++            while (this.taskIndex.get() < this.entityTickingChunks.getListSize()) {
++                this.runMainThreadTasks();
++                this.handleTasks(5); // assist
++            }
++
++            while (this.finishedTasks.get() != parallelism) {
++                this.runMainThreadTasks();
++            }
++
++            this.runMainThreadTasks(); // finish any remaining tasks
++            this.runPostTrackingTasks(); // run all post-tracking tasks
++        } finally {
++            this.entityTickingChunks.finishRawIterator();
++        }
++    }
++
++    private void runMainThreadTasks() {
++        try {
++            Runnable task;
++            while ((task = this.mainThreadTasks.poll()) != null) {
++                task.run();
++            }
++        } catch (Throwable throwable) {
++            MinecraftServer.LOGGER.warn("Tasks failed while ticking track queue", throwable);
++        }
++    }
++
++    private void runPostTrackingTasks() {
++        try {
++            Runnable task;
++            while ((task = this.postTrackingTasks.poll()) != null) {
++                task.run();
++            }
++        } catch (Throwable throwable) {
++            MinecraftServer.LOGGER.warn("Post-tracking tasks failed while ticking track queue", throwable);
++        }
++    }
++
++    private void run() {
++        try {
++            while (handleTasks(10));
++        } finally {
++            this.finishedTasks.incrementAndGet();
++        }
++    }
++
++    private boolean handleTasks(int tasks) {
++        int index;
++        while ((index = this.taskIndex.getAndAdd(tasks)) < this.entityTickingChunks.getListSize()) {
++            for (int i = index; i < index + tasks && i < this.entityTickingChunks.getListSize(); i++) {
++                LevelChunk chunk = this.entityTickingChunks.rawGet(i);
++                if (chunk != null) {
++                    try {
++                        this.processChunk(chunk);
++                    } catch (Throwable throwable) {
++                        MinecraftServer.LOGGER.warn("Ticking tracker failed", throwable);
++                    }
++
++                }
++            }
++
++            return true;
++        }
++
++        return false;
++    }
++
++    private void processChunk(LevelChunk chunk) {
++        final ChunkEntitySlices entitySlices = chunk.level.entityManager.entitySliceManager.getChunk(chunk.locX, chunk.locZ);
++        if (entitySlices == null) {
++            return;
++        }
++
++        final Entity[] rawEntities = entitySlices.entities.getRawData();
++        final ChunkMap chunkMap = chunk.level.chunkSource.chunkMap;
++
++        for (int i = 0; i < rawEntities.length; i++) {
++            Entity entity = rawEntities[i];
++            if (entity != null) {
++                ChunkMap.TrackedEntity entityTracker = chunkMap.entityMap.get(entity.getId());
++                if (entityTracker != null) {
++                    entityTracker.updatePlayers(entityTracker.entity.getPlayersInTrackRange());
++
++                    // run this on the main thread. This needs to be run after all updatePlayers methods are called.
++                    this.postTrackingTasks.offer(entityTracker.serverEntity::sendChanges);
++                }
++            }
++        }
++    }
++
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/util/AsyncExecutor.java b/src/main/java/gg/pufferfish/pufferfish/util/AsyncExecutor.java
 new file mode 100644
@@ -2183,6 +2749,32 @@ index 456595e4b7e0c7f50617aa2694b0d2dfc368ab81..bc72131afa1ae9986ee311a9b371e97c
              MinecraftTimings.processConfig(this);
          }
      }
+diff --git a/src/main/java/io/papermc/paper/util/maplist/IteratorSafeOrderedReferenceSet.java b/src/main/java/io/papermc/paper/util/maplist/IteratorSafeOrderedReferenceSet.java
+index 0fd814f1d65c111266a2b20f86561839a4cef755..ffc217df0649e85d4a7b3d4b1c2c6a8287de1104 100644
+--- a/src/main/java/io/papermc/paper/util/maplist/IteratorSafeOrderedReferenceSet.java
++++ b/src/main/java/io/papermc/paper/util/maplist/IteratorSafeOrderedReferenceSet.java
+@@ -15,7 +15,7 @@ public final class IteratorSafeOrderedReferenceSet<E> {
+ 
+     /* list impl */
+     protected E[] listElements;
+-    protected int listSize;
++    protected int listSize; public int getListSize() { return this.listSize; } // Pufferfish - expose listSize
+ 
+     protected final double maxFragFactor;
+ 
+diff --git a/src/main/java/io/papermc/paper/world/ChunkEntitySlices.java b/src/main/java/io/papermc/paper/world/ChunkEntitySlices.java
+index 47b5f75d9f27cf3ab947fd1f69cbd609fb9f2749..85882eeb86d7b74db0219aa65783946d8083885d 100644
+--- a/src/main/java/io/papermc/paper/world/ChunkEntitySlices.java
++++ b/src/main/java/io/papermc/paper/world/ChunkEntitySlices.java
+@@ -27,7 +27,7 @@ public final class ChunkEntitySlices {
+     protected final EntityCollectionBySection allEntities;
+     protected final EntityCollectionBySection hardCollidingEntities;
+     protected final Reference2ObjectOpenHashMap<Class<? extends Entity>, EntityCollectionBySection> entitiesByClass;
+-    protected final EntityList entities = new EntityList();
++    public final EntityList entities = new EntityList();
+ 
+     public ChunkHolder.FullChunkStatus status;
+ 
 diff --git a/src/main/java/net/minecraft/server/MCUtil.java b/src/main/java/net/minecraft/server/MCUtil.java
 index 7034af8ad42940c5af6b9032b9873ce36c55a2a7..c0fdc5a79107f8694a514a12d5526bd431fc45e9 100644
 --- a/src/main/java/net/minecraft/server/MCUtil.java
@@ -2248,7 +2840,7 @@ index b42327dcf0cc9feaf4fdb67de949dd36cf71bbaa..ad166788225841927bedc5243dbe9486
          }
      }
 diff --git a/src/main/java/net/minecraft/server/level/ChunkMap.java b/src/main/java/net/minecraft/server/level/ChunkMap.java
-index 638d438824918bf410d66286f3b738c1c1e3311b..95d5c27a2324ef56df08238352172b62fc978ead 100644
+index 638d438824918bf410d66286f3b738c1c1e3311b..b7f56d1909272bb02591b6e08aed78943ab96ba1 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkMap.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkMap.java
 @@ -474,7 +474,7 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
@@ -2260,7 +2852,86 @@ index 638d438824918bf410d66286f3b738c1c1e3311b..95d5c27a2324ef56df08238352172b62
          // Paper start - use distance map to optimise entity tracker
          this.playerEntityTrackerTrackMaps = new com.destroystokyo.paper.util.misc.PlayerAreaMap[TRACKING_RANGE_TYPES.length];
          this.entityTrackerTrackRanges = new int[TRACKING_RANGE_TYPES.length];
-@@ -2403,8 +2403,28 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+@@ -2082,8 +2082,36 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+         entity.tracker = null; // Paper - We're no longer tracked
+     }
+ 
++    // Pufferfish start - multithreaded tracker
++    private @Nullable gg.pufferfish.pufferfish.tracker.MultithreadedTracker multithreadedTracker;
++    private final java.util.concurrent.ConcurrentLinkedQueue<Runnable> trackerMainThreadTasks = new java.util.concurrent.ConcurrentLinkedQueue<>();
++    private boolean multithreadedTrackingInProgress;
++
++    public void runOnTrackerMainThread(final Runnable runnable) {
++        if (multithreadedTrackingInProgress) {
++            this.trackerMainThreadTasks.add(runnable);
++        } else {
++            runnable.run();
++        }
++    }
++
+     // Paper start - optimised tracker
+     private final void processTrackQueue() {
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncEntityTracker) {
++            if (this.multithreadedTracker == null) {
++                this.multithreadedTracker = new gg.pufferfish.pufferfish.tracker.MultithreadedTracker(this.level.chunkSource.entityTickingChunks, this.trackerMainThreadTasks);
++            }
++
++            try {
++                multithreadedTrackingInProgress = true;
++                this.multithreadedTracker.tick();
++            } finally {
++                multithreadedTrackingInProgress = false;
++            }
++            return;
++        }
++        // Pufferfish end
++
+         this.level.timings.tracker1.startTiming();
+         try {
+             for (TrackedEntity tracker : this.entityMap.values()) {
+@@ -2275,11 +2303,11 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+ 
+     public class TrackedEntity {
+ 
+-        final ServerEntity serverEntity;
+-        final Entity entity;
++        public final ServerEntity serverEntity; // Pufferfish - package->public
++        public final Entity entity; // Pufferfish -> public
+         private final int range;
+         SectionPos lastSectionPos;
+-        public final Set<ServerPlayerConnection> seenBy = new ReferenceOpenHashSet<>(); // Paper - optimise map impl
++        public final Set<ServerPlayerConnection> seenBy = it.unimi.dsi.fastutil.objects.ReferenceSets.synchronize(new ReferenceOpenHashSet<>()); // Paper - optimise map impl // Pufferfish - sync
+ 
+         public TrackedEntity(Entity entity, int i, int j, boolean flag) {
+             this.serverEntity = new ServerEntity(ChunkMap.this.level, entity, j, flag, this::broadcast, this.seenBy); // CraftBukkit
+@@ -2291,7 +2319,7 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+         // Paper start - use distance map to optimise tracker
+         com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> lastTrackerCandidates;
+ 
+-        final void updatePlayers(com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newTrackerCandidates) {
++        public final void updatePlayers(com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newTrackerCandidates) { // Pufferfish -> public
+             com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> oldTrackerCandidates = this.lastTrackerCandidates;
+             this.lastTrackerCandidates = newTrackerCandidates;
+ 
+@@ -2363,7 +2391,7 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+         }
+ 
+         public void removePlayer(ServerPlayer player) {
+-            org.spigotmc.AsyncCatcher.catchOp("player tracker clear"); // Spigot
++            //org.spigotmc.AsyncCatcher.catchOp("player tracker clear"); // Spigot // Pufferfish - we can remove async too
+             if (this.seenBy.remove(player.connection)) {
+                 this.serverEntity.removePairing(player);
+             }
+@@ -2371,7 +2399,7 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+         }
+ 
+         public void updatePlayer(ServerPlayer player) {
+-            org.spigotmc.AsyncCatcher.catchOp("player tracker update"); // Spigot
++            //org.spigotmc.AsyncCatcher.catchOp("player tracker update"); // Spigot // Pufferfish - we can update async
+             if (player != this.entity) {
+                 // Paper start - remove allocation of Vec3D here
+                 // Vec3 vec3d = player.position().subtract(this.entity.position());
+@@ -2403,8 +2431,28 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
              return ChunkMap.this.level.getServer().getScaledTrackingDistance(initialDistance);
          }
  
@@ -2289,7 +2960,7 @@ index 638d438824918bf410d66286f3b738c1c1e3311b..95d5c27a2324ef56df08238352172b62
              Iterator iterator = this.entity.getIndirectPassengers().iterator();
  
              while (iterator.hasNext()) {
-@@ -2416,6 +2436,9 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+@@ -2416,6 +2464,9 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
                      i = j;
                  }
              }
@@ -2299,6 +2970,19 @@ index 638d438824918bf410d66286f3b738c1c1e3311b..95d5c27a2324ef56df08238352172b62
  
              return this.scaledRange(i);
          }
+diff --git a/src/main/java/net/minecraft/server/level/ServerBossEvent.java b/src/main/java/net/minecraft/server/level/ServerBossEvent.java
+index ca42c2642a729b90d22b968af7258f3aee72e14b..7613510e5f4c22ee15651f162fe1bca1cfc81be0 100644
+--- a/src/main/java/net/minecraft/server/level/ServerBossEvent.java
++++ b/src/main/java/net/minecraft/server/level/ServerBossEvent.java
+@@ -13,7 +13,7 @@ import net.minecraft.util.Mth;
+ import net.minecraft.world.BossEvent;
+ 
+ public class ServerBossEvent extends BossEvent {
+-    private final Set<ServerPlayer> players = Sets.newHashSet();
++    private final Set<ServerPlayer> players = Sets.newConcurrentHashSet(); // Pufferfish - players can be removed in async tracking
+     private final Set<ServerPlayer> unmodifiablePlayers = Collections.unmodifiableSet(this.players);
+     public boolean visible = true;
+ 
 diff --git a/src/main/java/net/minecraft/server/level/ServerChunkCache.java b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
 index 59acbf6249f8f5285504c0ddea448a3433d1d68d..378cc1f9e19eb9b18037ab8af92f65897e15a405 100644
 --- a/src/main/java/net/minecraft/server/level/ServerChunkCache.java
@@ -2396,7 +3080,7 @@ index 59acbf6249f8f5285504c0ddea448a3433d1d68d..378cc1f9e19eb9b18037ab8af92f6589
  
      private void getFullChunk(long pos, Consumer<LevelChunk> chunkConsumer) {
 diff --git a/src/main/java/net/minecraft/server/level/ServerEntity.java b/src/main/java/net/minecraft/server/level/ServerEntity.java
-index 3b144c820531122eb37d41be06c182b5f5dc0724..1eb912ad97f9663bf6bd336ad739f2552b0a5c9b 100644
+index 3b144c820531122eb37d41be06c182b5f5dc0724..871bce7f5acc1b9a058496f41d962ec2e724f620 100644
 --- a/src/main/java/net/minecraft/server/level/ServerEntity.java
 +++ b/src/main/java/net/minecraft/server/level/ServerEntity.java
 @@ -165,6 +165,7 @@ public class ServerEntity {
@@ -2415,6 +3099,27 @@ index 3b144c820531122eb37d41be06c182b5f5dc0724..1eb912ad97f9663bf6bd336ad739f255
                      } else {
                          this.wasOnGround = this.entity.isOnGround();
                          this.teleportDelay = 0;
+@@ -247,14 +249,18 @@ public class ServerEntity {
+ 
+     public void removePairing(ServerPlayer player) {
+         this.entity.stopSeenByPlayer(player);
+-        player.connection.send(new ClientboundRemoveEntitiesPacket(new int[]{this.entity.getId()}));
++        // Pufferfish start - ensure main thread
++        ((ServerLevel) this.entity.level).chunkSource.chunkMap.runOnTrackerMainThread(() ->
++            player.connection.send(new ClientboundRemoveEntitiesPacket(new int[]{this.entity.getId()}))
++        );
++        // Pufferfish end
+     }
+ 
+     public void addPairing(ServerPlayer player) {
+         ServerGamePacketListenerImpl playerconnection = player.connection;
+ 
+         Objects.requireNonNull(player.connection);
+-        this.sendPairingData(playerconnection::send, player); // CraftBukkit - add player
++        ((ServerLevel) this.entity.level).chunkSource.chunkMap.runOnTrackerMainThread(() -> this.sendPairingData(playerconnection::send, player)); // CraftBukkit - add player // Pufferfish - main thread
+         this.entity.startSeenByPlayer(player);
+     }
+ 
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
 index 1a918eabbaaed26d9bdf5c01e0488b5a117ba516..32a39a150a3d2bbae95a726901f3f46363e34ecf 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
@@ -2948,7 +3653,7 @@ index c770ee21b7b699522941f6a1584d532001c04082..9bce290eb0c2cfef4896a3f2076c80bf
  
      public boolean hasAttribute(Attribute attribute) {
 diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/src/main/java/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-index 43243537b765a2d270be6de3f053fea77ff67d18..bf3b8ccb3e031e0ad24cd51e28ea8cbd4f8a8030 100644
+index 43243537b765a2d270be6de3f053fea77ff67d18..b56bb0ac37a6d51d645b6189af0ae7da01a353fd 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 +++ b/src/main/java/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 @@ -72,6 +72,7 @@ public class AcquirePoi extends Behavior<PathfinderMob> {
@@ -2959,6 +3664,219 @@ index 43243537b765a2d270be6de3f053fea77ff67d18..bf3b8ccb3e031e0ad24cd51e28ea8cbd
          PoiManager poiManager = world.getPoiManager();
          this.batchCache.long2ObjectEntrySet().removeIf((entry) -> {
              return !entry.getValue().isStillValid(time);
+@@ -92,27 +93,60 @@ public class AcquirePoi extends Behavior<PathfinderMob> {
+         io.papermc.paper.util.PoiAccess.findNearestPoiPositions(poiManager, this.poiType, predicate, entity.blockPosition(), 48, 48*48, PoiManager.Occupancy.HAS_SPACE, false, 5, poiposes);
+         Set<Pair<Holder<PoiType>, BlockPos>> set = new java.util.HashSet<>(poiposes);
+         // Paper end - optimise POI access
+-        Path path = findPathToPois(entity, set);
+-        if (path != null && path.canReach()) {
+-            BlockPos blockPos = path.getTarget();
+-            poiManager.getType(blockPos).ifPresent((holder) -> {
+-                poiManager.take(this.poiType, (holderx, blockPos2) -> {
+-                    return blockPos2.equals(blockPos);
+-                }, blockPos, 1);
+-                entity.getBrain().setMemory(this.memoryToAcquire, GlobalPos.of(world.dimension(), blockPos));
+-                this.onPoiAcquisitionEvent.ifPresent((byte_) -> {
+-                    world.broadcastEntityEvent(entity, byte_);
++        // Pufferfish start - await on path async
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++            Path possiblePath = findPathToPois(entity, set);
++    
++            // Pufferfish - wait on the path to be processed
++            gg.pufferfish.pufferfish.path.AsyncPathProcessor.awaitProcessing(possiblePath, path -> {
++                // Pufferfish - readd canReach check
++                if (path == null || !path.canReach()) {
++                    for(Pair<Holder<PoiType>, BlockPos> pair : set) {
++                        this.batchCache.computeIfAbsent(pair.getSecond().asLong(), (m) -> {
++                            return new AcquirePoi.JitteredLinearRetry(entity.level.random, time);
++                        });
++                    }
++                    return;
++                }
++        
++                BlockPos blockPos = path.getTarget();
++                poiManager.getType(blockPos).ifPresent((holder) -> {
++                    poiManager.take(this.poiType, (holderx, blockPos2) -> {
++                        return blockPos2.equals(blockPos);
++                    }, blockPos, 1);
++                    entity.getBrain().setMemory(this.memoryToAcquire, GlobalPos.of(world.dimension(), blockPos));
++                    this.onPoiAcquisitionEvent.ifPresent((byte_) -> {
++                        world.broadcastEntityEvent(entity, byte_);
++                    });
++                    this.batchCache.clear();
++                    DebugPackets.sendPoiTicketCountPacket(world, blockPos);
+                 });
+-                this.batchCache.clear();
+-                DebugPackets.sendPoiTicketCountPacket(world, blockPos);
+             });
+         } else {
+-            for(Pair<Holder<PoiType>, BlockPos> pair : set) {
+-                this.batchCache.computeIfAbsent(pair.getSecond().asLong(), (m) -> {
+-                    return new AcquirePoi.JitteredLinearRetry(entity.level.random, time);
++            Path path = findPathToPois(entity, set);
++            if (path != null && path.canReach()) {
++                BlockPos blockPos = path.getTarget();
++                poiManager.getType(blockPos).ifPresent((holder) -> {
++                    poiManager.take(this.poiType, (holderx, blockPos2) -> {
++                        return blockPos2.equals(blockPos);
++                    }, blockPos, 1);
++                    entity.getBrain().setMemory(this.memoryToAcquire, GlobalPos.of(world.dimension(), blockPos));
++                    this.onPoiAcquisitionEvent.ifPresent((byte_) -> {
++                        world.broadcastEntityEvent(entity, byte_);
++                    });
++                    this.batchCache.clear();
++                    DebugPackets.sendPoiTicketCountPacket(world, blockPos);
+                 });
++            } else {
++                for(Pair<Holder<PoiType>, BlockPos> pair : set) {
++                    this.batchCache.computeIfAbsent(pair.getSecond().asLong(), (m) -> {
++                        return new AcquirePoi.JitteredLinearRetry(entity.level.random, time);
++                    });
++                }
+             }
+         }
++        
++        // Pufferfish end
+ 
+     }
+ 
+diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java b/src/main/java/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
+index 18364ce4c60172529b10bc9e3a813dcedc4b766f..698c46f786689d719ecca0780e220eab594bc45e 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
++++ b/src/main/java/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
+@@ -58,6 +58,7 @@ public class MoveToTargetSink extends Behavior<Mob> {
+ 
+     @Override
+     protected boolean canStillUse(ServerLevel serverLevel, Mob mob, long l) {
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && this.path != null && !this.path.isProcessed()) return true; // Pufferfish - wait for path to process
+         if (this.path != null && this.lastTargetPos != null) {
+             Optional<WalkTarget> optional = mob.getBrain().getMemory(MemoryModuleType.WALK_TARGET);
+             PathNavigation pathNavigation = mob.getNavigation();
+@@ -87,6 +88,8 @@ public class MoveToTargetSink extends Behavior<Mob> {
+ 
+     @Override
+     protected void tick(ServerLevel world, Mob entity, long time) {
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && this.path != null && !this.path.isProcessed()) return; // Pufferfish - wait for processing
++
+         Path path = entity.getNavigation().getPath();
+         Brain<?> brain = entity.getBrain();
+         if (this.path != path) {
+@@ -94,6 +97,12 @@ public class MoveToTargetSink extends Behavior<Mob> {
+             brain.setMemory(MemoryModuleType.PATH, path);
+         }
+ 
++        // Pufferfish start - periodically recall moveTo to ensure we're moving towards the correct path
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && time % 8 == 0) {
++            entity.getNavigation().moveTo(this.path, (double)this.speedModifier);
++        }
++        // Pufferfish end
++
+         if (path != null && this.lastTargetPos != null) {
+             WalkTarget walkTarget = brain.getMemory(MemoryModuleType.WALK_TARGET).get();
+             if (walkTarget.getTarget().currentBlockPosition().distSqr(this.lastTargetPos) > 4.0D && this.tryComputePath(entity, walkTarget, world.getGameTime())) {
+@@ -112,6 +121,24 @@ public class MoveToTargetSink extends Behavior<Mob> {
+         if (this.reachedTarget(entity, walkTarget)) {
+             brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
+         } else {
++            // Pufferfish start - move this out to postProcessPath
++            if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++                gg.pufferfish.pufferfish.path.AsyncPathProcessor.awaitProcessing(this.path, (unusedPath) -> {
++                    this.postProcessPath(entity, walkTarget, time);
++                });
++                return true;
++            } else {
++                return postProcessPath(entity, walkTarget, time);
++            }
++        }
++
++        return false;
++    }
++
++    private boolean postProcessPath(Mob entity, WalkTarget walkTarget, long time) {
++       Brain<?> brain = entity.getBrain();
++       BlockPos blockPos = walkTarget.getTarget().currentBlockPosition();
++
+             boolean bl = this.path != null && this.path.canReach();
+             if (bl) {
+                 brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
+@@ -128,10 +155,19 @@ public class MoveToTargetSink extends Behavior<Mob> {
+                 this.path = entity.getNavigation().createPath(vec3.x, vec3.y, vec3.z, 0);
+                 return this.path != null;
+             }
++
++        // We failed, so erase and move on
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++            brain.eraseMemory(MemoryModuleType.WALK_TARGET);
++            if (bl) {
++                brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
++            }
++            this.path = null;
+         }
+ 
+         return false;
+     }
++    // Pufferfish end
+ 
+     private boolean reachedTarget(Mob entity, WalkTarget walkTarget) {
+         return walkTarget.getTarget().currentBlockPosition().distManhattan(entity.blockPosition()) <= walkTarget.getCloseEnoughDist();
+diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java b/src/main/java/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
+index 9bd6d4f7b86daaaa9cfbad454dde06b797e3f667..2402a8c1067a74a21d9812561df5fb6284670571 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
++++ b/src/main/java/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
+@@ -71,19 +71,41 @@ public class SetClosestHomeAsWalkTarget extends Behavior<LivingEntity> {
+         Set<Pair<Holder<PoiType>, BlockPos>> set = poiManager.findAllWithType((poiType) -> {
+             return poiType.is(PoiTypes.HOME);
+         }, predicate, entity.blockPosition(), 48, PoiManager.Occupancy.ANY).collect(Collectors.toSet());
+-        Path path = AcquirePoi.findPathToPois(pathfinderMob, set);
+-        if (path != null && path.canReach()) {
+-            BlockPos blockPos = path.getTarget();
+-            Optional<Holder<PoiType>> optional = poiManager.getType(blockPos);
+-            if (optional.isPresent()) {
+-                entity.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(blockPos, this.speedModifier, 1));
+-                DebugPackets.sendPoiTicketCountPacket(world, blockPos);
+-            }
+-        } else if (this.triedCount < 5) {
+-            this.batchCache.long2LongEntrySet().removeIf((entry) -> {
+-                return entry.getLongValue() < this.lastUpdate;
++        // Pufferfish start - await on path async
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++            Path possiblePath = AcquirePoi.findPathToPois(pathfinderMob, set);
++    
++            // Pufferfish - wait on the path to be processed
++            gg.pufferfish.pufferfish.path.AsyncPathProcessor.awaitProcessing(possiblePath, path -> {
++                if (path == null || !path.canReach() || this.triedCount < 5) { // Pufferfish - readd canReach check
++                    this.batchCache.long2LongEntrySet().removeIf((entry) -> {
++                        return entry.getLongValue() < this.lastUpdate;
++                    });
++                    return;
++                }
++        
++                BlockPos blockPos = path.getTarget();
++                Optional<Holder<PoiType>> optional = poiManager.getType(blockPos);
++                if (optional.isPresent()) {
++                    entity.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(blockPos, this.speedModifier, 1));
++                    DebugPackets.sendPoiTicketCountPacket(world, blockPos);
++                }
+             });
++        } else {
++            Path path = AcquirePoi.findPathToPois(pathfinderMob, set);
++            if (path != null && path.canReach()) {
++                BlockPos blockPos = path.getTarget();
++                Optional<Holder<PoiType>> optional = poiManager.getType(blockPos);
++                if (optional.isPresent()) {
++                    entity.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(blockPos, this.speedModifier, 1));
++                    DebugPackets.sendPoiTicketCountPacket(world, blockPos);
++                }
++            } else if (this.triedCount < 5) {
++                this.batchCache.long2LongEntrySet().removeIf((entry) -> {
++                    return entry.getLongValue() < this.lastUpdate;
++                });
++            }
+         }
+-
++        // Pufferfish end
+     }
+ }
 diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerPanicTrigger.java b/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerPanicTrigger.java
 index 42d466f7f162943886078eba3db18f2dfc2d7bee..6c0dda1ce018ec6bb2ebb97147045fffae0a89d5 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerPanicTrigger.java
@@ -3007,6 +3925,273 @@ index 26bf383caea68834c654b25653ced9017f1b1b22..615eb55e24d365d994fbfe9d45d2be38
                          if (this.mob.isWithinRestriction(mutableBlockPos) && this.isValidTarget(this.mob.level, mutableBlockPos)) {
                              this.blockPos = mutableBlockPos;
                              setTargetPosition(mutableBlockPos.immutable()); // Paper
+diff --git a/src/main/java/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java b/src/main/java/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
+index 29a872393f2f995b13b4ed26b42c6464ab27ca73..6fda4eebe743dcc88aa253c4d0e539b20ed27a7e 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
++++ b/src/main/java/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
+@@ -8,6 +8,14 @@ import net.minecraft.world.level.pathfinder.PathFinder;
+ import net.minecraft.world.phys.Vec3;
+ 
+ public class AmphibiousPathNavigation extends PathNavigation {
++    // Pufferfish start
++    private static final gg.pufferfish.pufferfish.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = () -> {
++        var nodeEvaluator = new AmphibiousNodeEvaluator(false);
++        nodeEvaluator.setCanPassDoors(true);
++        return nodeEvaluator;
++    };
++    // Pufferfish end
++
+     public AmphibiousPathNavigation(Mob mob, Level world) {
+         super(mob, world);
+     }
+@@ -16,7 +24,13 @@ public class AmphibiousPathNavigation extends PathNavigation {
+     protected PathFinder createPathFinder(int range) {
+         this.nodeEvaluator = new AmphibiousNodeEvaluator(false);
+         this.nodeEvaluator.setCanPassDoors(true);
+-        return new PathFinder(this.nodeEvaluator, range);
++        // Pufferfish start
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++            return new PathFinder(this.nodeEvaluator, range, nodeEvaluatorGenerator);
++        } else {
++            return new PathFinder(this.nodeEvaluator, range);
++        }
++        // Pufferfish end
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/world/entity/ai/navigation/FlyingPathNavigation.java b/src/main/java/net/minecraft/world/entity/ai/navigation/FlyingPathNavigation.java
+index 27cd393e81f6ef9b5690c051624d8d2af50acd34..33bee4233ba159d72a851d67b99836f8f2d66b64 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/navigation/FlyingPathNavigation.java
++++ b/src/main/java/net/minecraft/world/entity/ai/navigation/FlyingPathNavigation.java
+@@ -12,6 +12,15 @@ import net.minecraft.world.level.pathfinder.PathFinder;
+ import net.minecraft.world.phys.Vec3;
+ 
+ public class FlyingPathNavigation extends PathNavigation {
++
++    // Pufferfish start
++    private static final gg.pufferfish.pufferfish.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = () -> {
++        var nodeEvaluator = new FlyNodeEvaluator();
++        nodeEvaluator.setCanPassDoors(true);
++        return nodeEvaluator;
++    };
++    // Pufferfish end
++
+     public FlyingPathNavigation(Mob entity, Level world) {
+         super(entity, world);
+     }
+@@ -20,7 +29,13 @@ public class FlyingPathNavigation extends PathNavigation {
+     protected PathFinder createPathFinder(int range) {
+         this.nodeEvaluator = new FlyNodeEvaluator();
+         this.nodeEvaluator.setCanPassDoors(true);
+-        return new PathFinder(this.nodeEvaluator, range);
++        // Pufferfish start
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++            return new PathFinder(this.nodeEvaluator, range, nodeEvaluatorGenerator);
++        } else {
++            return new PathFinder(this.nodeEvaluator, range);
++        }
++        // Pufferfish end
+     }
+ 
+     @Override
+@@ -45,9 +60,11 @@ public class FlyingPathNavigation extends PathNavigation {
+             this.recomputePath();
+         }
+ 
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && this.path != null && !this.path.isProcessed()) return; // Pufferfish
++
+         if (!this.isDone()) {
+             if (this.canUpdatePath()) {
+-                this.followThePath();
++                this.followThePathSuper(); // Pufferfish
+             } else if (this.path != null && !this.path.isDone()) {
+                 Vec3 vec3 = this.path.getNextEntityPos(this.mob);
+                 if (this.mob.getBlockX() == Mth.floor(vec3.x) && this.mob.getBlockY() == Mth.floor(vec3.y) && this.mob.getBlockZ() == Mth.floor(vec3.z)) {
+diff --git a/src/main/java/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java b/src/main/java/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
+index f610c06d7bb51ec2c63863dd46711712986a106a..4842c0c0fb0e69bcb62b8335c65fc2fd944c83a7 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
++++ b/src/main/java/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
+@@ -15,6 +15,15 @@ import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+ import net.minecraft.world.phys.Vec3;
+ 
+ public class GroundPathNavigation extends PathNavigation {
++
++    // Pufferfish start
++    private static final gg.pufferfish.pufferfish.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = () -> {
++        var nodeEvaluator = new WalkNodeEvaluator();
++        nodeEvaluator.setCanPassDoors(true);
++        return nodeEvaluator;
++    };
++    // Pufferfish end
++
+     private boolean avoidSun;
+ 
+     public GroundPathNavigation(Mob entity, Level world) {
+@@ -25,7 +34,13 @@ public class GroundPathNavigation extends PathNavigation {
+     protected PathFinder createPathFinder(int range) {
+         this.nodeEvaluator = new WalkNodeEvaluator();
+         this.nodeEvaluator.setCanPassDoors(true);
+-        return new PathFinder(this.nodeEvaluator, range);
++        // Pufferfish start
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++            return new PathFinder(this.nodeEvaluator, range, nodeEvaluatorGenerator);
++        } else {
++            return new PathFinder(this.nodeEvaluator, range);
++        }
++        // Pufferfish end
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/src/main/java/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+index 3f672d7c2377fca16a6d8d31cf7aaae4f009fdce..aa3fbdaffd69d65d9522f82fab45d0475cae024f 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/navigation/PathNavigation.java
++++ b/src/main/java/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -151,6 +151,9 @@ public abstract class PathNavigation {
+             return null;
+         } else if (!this.canUpdatePath()) {
+             return null;
++        } else if (this.path instanceof gg.pufferfish.pufferfish.path.AsyncPath asyncPath && !asyncPath.isProcessed() && asyncPath.hasSameProcessingPositions(positions)) { // Pufferfish start - catch early if it's still processing these positions let it keep processing
++            return this.path;
++            // Pufferfish end
+         } else if (this.path != null && !this.path.isDone() && positions.contains(this.targetPos)) {
+             return this.path;
+         } else {
+@@ -177,11 +180,28 @@ public abstract class PathNavigation {
+             PathNavigationRegion pathNavigationRegion = new PathNavigationRegion(this.level, blockPos.offset(-i, -i, -i), blockPos.offset(i, i, i));
+             Path path = this.pathFinder.findPath(pathNavigationRegion, this.mob, positions, followRange, distance, this.maxVisitedNodesMultiplier);
+             this.level.getProfiler().pop();
+-            if (path != null && path.getTarget() != null) {
++            
++            // Pufferfish start
++            if (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++                if (path != null && path.getTarget() != null) {
+                 this.targetPos = path.getTarget();
+                 this.reachRange = distance;
+                 this.resetStuckTimeout();
++                }
++            } else {
++                if (!positions.isEmpty()) this.targetPos = positions.iterator().next(); // Pufferfish - assign early a target position. most calls will only have 1 position
++    
++                gg.pufferfish.pufferfish.path.AsyncPathProcessor.awaitProcessing(path, processedPath -> {
++                    if (processedPath != this.path) return; // Pufferfish - check that processing didn't take so long that we calculated a new path
++        
++                    if (processedPath != null && processedPath.getTarget() != null) {
++                        this.targetPos = processedPath.getTarget();
++                        this.reachRange = distance;
++                        this.resetStuckTimeout();
++                    }
++                });
+             }
++            // Pufferfish end
+ 
+             return path;
+         }
+@@ -228,8 +248,8 @@ public abstract class PathNavigation {
+             if (this.isDone()) {
+                 return false;
+             } else {
+-                this.trimPath();
+-                if (this.path.getNodeCount() <= 0) {
++                if (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding || path.isProcessed()) this.trimPath(); // Pufferfish - only trim if processed
++                if ((!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding || path.isProcessed()) && this.path.getNodeCount() <= 0) { // Pufferfish - only check node count if processed
+                     return false;
+                 } else {
+                     this.speedModifier = speed;
+@@ -253,9 +273,11 @@ public abstract class PathNavigation {
+             this.recomputePath();
+         }
+ 
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && this.path != null && !this.path.isProcessed()) return; // Pufferfish - skip pathfinding if we're still processing
++
+         if (!this.isDone()) {
+             if (this.canUpdatePath()) {
+-                this.followThePath();
++                this.followThePathSuper(); // Pufferfish
+             } else if (this.path != null && !this.path.isDone()) {
+                 Vec3 vec3 = this.getTempMobPos();
+                 Vec3 vec32 = this.path.getNextEntityPos(this.mob);
+@@ -276,6 +298,13 @@ public abstract class PathNavigation {
+         BlockPos blockPos = new BlockPos(pos);
+         return this.level.getBlockState(blockPos.below()).isAir() ? pos.y : WalkNodeEvaluator.getFloorLevel(this.level, blockPos);
+     }
++    
++    // Pufferfish start - this fixes plugin compat by ensuring the isProcessed check is completed properly.
++    protected final void followThePathSuper() {
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && !this.path.isProcessed()) return; // Pufferfish
++        followThePath();
++    }
++    // Pufferfish end
+ 
+     protected void followThePath() {
+         Vec3 vec3 = this.getTempMobPos();
+@@ -440,7 +469,7 @@ public abstract class PathNavigation {
+     // Paper start
+     public boolean isViableForPathRecalculationChecking() {
+         return !this.needsPathRecalculation() &&
+-            (this.path != null && !this.path.isDone() && this.path.getNodeCount() != 0);
++            (this.path != null && (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding || this.path.isProcessed()) && !this.path.isDone() && this.path.getNodeCount() != 0); // Pufferfish
+     }
+     // Paper end
+ }
+diff --git a/src/main/java/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java b/src/main/java/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
+index 8db20db72cd51046213625fac46c35854c59ec5d..52768c8797bf8b03e92840d68b91239835e6c467 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
++++ b/src/main/java/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
+@@ -57,20 +57,42 @@ public class NearestBedSensor extends Sensor<Mob> {
+             java.util.List<Pair<Holder<PoiType>, BlockPos>> poiposes = new java.util.ArrayList<>();
+             // don't ask me why it's unbounded. ask mojang.
+             io.papermc.paper.util.PoiAccess.findAnyPoiPositions(poiManager, type -> type.is(PoiTypes.HOME), predicate, entity.blockPosition(), 48, PoiManager.Occupancy.ANY, false, Integer.MAX_VALUE, poiposes);
+-            Path path = AcquirePoi.findPathToPois(entity, new java.util.HashSet<>(poiposes));
+-            // Paper end - optimise POI access
+-            if (path != null && path.canReach()) {
+-                BlockPos blockPos = path.getTarget();
+-                Optional<Holder<PoiType>> optional = poiManager.getType(blockPos);
+-                if (optional.isPresent()) {
+-                    entity.getBrain().setMemory(MemoryModuleType.NEAREST_BED, blockPos);
+-                }
+-            } else if (this.triedCount < 5) {
+-                this.batchCache.long2LongEntrySet().removeIf((entry) -> {
+-                    return entry.getLongValue() < this.lastUpdate;
++    
++            // Pufferfish start - await on path async
++            if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++                Path possiblePath = AcquirePoi.findPathToPois(entity, new java.util.HashSet<>(poiposes));
++                // Paper end - optimise POI access
++                // Pufferfish - wait on the path to be processed
++                gg.pufferfish.pufferfish.path.AsyncPathProcessor.awaitProcessing(possiblePath, path -> {
++                    // Pufferfish - readd canReach check
++                    if (path == null || !path.canReach()) {
++                        this.batchCache.long2LongEntrySet().removeIf((entry) -> {
++                            return entry.getLongValue() < this.lastUpdate;
++                        });
++                        return;
++                    }
++        
++                    BlockPos blockPos = path.getTarget();
++                    Optional<Holder<PoiType>> optional = poiManager.getType(blockPos);
++                    if (optional.isPresent()) {
++                        entity.getBrain().setMemory(MemoryModuleType.NEAREST_BED, blockPos);
++                    }
+                 });
++            } else {
++                Path path = AcquirePoi.findPathToPois(entity, new java.util.HashSet<>(poiposes));
++                if (path != null && path.canReach()) {
++                    BlockPos blockPos = path.getTarget();
++                    Optional<Holder<PoiType>> optional = poiManager.getType(blockPos);
++                    if (optional.isPresent()) {
++                        entity.getBrain().setMemory(MemoryModuleType.NEAREST_BED, blockPos);
++                    }
++                } else if (this.triedCount < 5) {
++                    this.batchCache.long2LongEntrySet().removeIf((entry) -> {
++                        return entry.getLongValue() < this.lastUpdate;
++                    });
++                }
+             }
+-
++            // Pufferfish end
+         }
+     }
+ }
 diff --git a/src/main/java/net/minecraft/world/entity/ai/targeting/TargetingConditions.java b/src/main/java/net/minecraft/world/entity/ai/targeting/TargetingConditions.java
 index a7575b5ef56af6f53448d391abb4956e130148ca..e752c83df50fb9b670ecea2abc95426c2a009b6f 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/targeting/TargetingConditions.java
@@ -3060,6 +4245,28 @@ index 50d4595b81f24949011c7565c5e3fc8c26c86019..234ad92d666775dcf5a29a60551b17cb
  
      @Override
      protected float getStandingEyeHeight(Pose pose, EntityDimensions dimensions) {
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Bee.java b/src/main/java/net/minecraft/world/entity/animal/Bee.java
+index e5de2c1d11e5de88420caba35bf75c8bbd799db5..23b8c9838b860b132ea043b7507ebc2220a49640 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Bee.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Bee.java
+@@ -1071,7 +1071,7 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
+                         } else {
+                             Bee.this.pathfindRandomlyTowards(Bee.this.hivePos);
+                         }
+-                    } else {
++                    } else if (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding || (navigation.getPath() != null && navigation.getPath().isProcessed())) { // Pufferfish - check processing
+                         boolean flag = this.pathfindDirectlyTowards(Bee.this.hivePos);
+ 
+                         if (!flag) {
+@@ -1133,7 +1133,7 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
+             } else {
+                 Path pathentity = Bee.this.navigation.getPath();
+ 
+-                return pathentity != null && pathentity.getTarget().equals(pos) && pathentity.canReach() && pathentity.isDone();
++                return pathentity != null && (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding || pathentity.isProcessed()) && pathentity.getTarget().equals(pos) && pathentity.canReach() && pathentity.isDone(); // Pufferfish - ensure path is processed
+             }
+         }
+     }
 diff --git a/src/main/java/net/minecraft/world/entity/animal/axolotl/Axolotl.java b/src/main/java/net/minecraft/world/entity/animal/axolotl/Axolotl.java
 index da5e6141f548539cac720aba558e1b6f3a87e474..fdd2c63ff0017bafa544a3cff2ee6d2d62c92cb3 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/axolotl/Axolotl.java
@@ -3076,6 +4283,40 @@ index da5e6141f548539cac720aba558e1b6f3a87e474..fdd2c63ff0017bafa544a3cff2ee6d2d
          this.getBrain().tick((ServerLevel) this.level, this);
          this.level.getProfiler().pop();
          this.level.getProfiler().push("axolotlActivityUpdate");
+diff --git a/src/main/java/net/minecraft/world/entity/animal/frog/Frog.java b/src/main/java/net/minecraft/world/entity/animal/frog/Frog.java
+index bb6063ae7f4438916306ce876057f7488537b444..9a2d1285c207290946ae664915a77b8f9dc00ad7 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/frog/Frog.java
++++ b/src/main/java/net/minecraft/world/entity/animal/frog/Frog.java
+@@ -411,6 +411,14 @@ public class Frog extends Animal {
+     }
+ 
+     static class FrogPathNavigation extends AmphibiousPathNavigation {
++        // Pufferfish start
++        private static final gg.pufferfish.pufferfish.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = () -> {
++            var nodeEvaluator = new Frog.FrogNodeEvaluator(true);
++            nodeEvaluator.setCanPassDoors(true);
++            return nodeEvaluator;
++        };
++        // Pufferfish end
++
+         FrogPathNavigation(Frog frog, Level world) {
+             super(frog, world);
+         }
+@@ -419,7 +427,13 @@ public class Frog extends Animal {
+         protected PathFinder createPathFinder(int range) {
+             this.nodeEvaluator = new Frog.FrogNodeEvaluator(true);
+             this.nodeEvaluator.setCanPassDoors(true);
+-            return new PathFinder(this.nodeEvaluator, range);
++            // Pufferfish start
++            if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
++                return new PathFinder(this.nodeEvaluator, range, nodeEvaluatorGenerator);
++            } else {
++                return new PathFinder(this.nodeEvaluator, range);
++            }
++            // Pufferfish end
+         }
+     }
+ }
 diff --git a/src/main/java/net/minecraft/world/entity/animal/goat/Goat.java b/src/main/java/net/minecraft/world/entity/animal/goat/Goat.java
 index 31be36e6b7b6bd0c0d7fda4e1b03ecd38947f3a5..362f952888f63a453a4352a9f1dc7df799244a3c 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/goat/Goat.java
@@ -3113,6 +4354,19 @@ index 08f15739dd7e2ab80718ab8d983b483a46309deb..64c8eefa0302b04b416cd4912c01c50f
                          }
                      // Paper End
                      this.tryToMerge(entityitem);
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Drowned.java b/src/main/java/net/minecraft/world/entity/monster/Drowned.java
+index 1b1305f5eaf5710b72c57ab4c3953e703a23f1e0..30a67a1eef9238e12e54c57a0608387cc0f763ef 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Drowned.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Drowned.java
+@@ -222,7 +222,7 @@ public class Drowned extends Zombie implements RangedAttackMob {
+     protected boolean closeToNextPos() {
+         Path pathentity = this.getNavigation().getPath();
+ 
+-        if (pathentity != null) {
++        if (pathentity != null && (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding || pathentity.isProcessed())) { // Pufferfish - ensure path is processed
+             BlockPos blockposition = pathentity.getTarget();
+ 
+             if (blockposition != null) {
 diff --git a/src/main/java/net/minecraft/world/entity/monster/EnderMan.java b/src/main/java/net/minecraft/world/entity/monster/EnderMan.java
 index f22e615dba31619c97bf58930da060476a52facf..f5bb64f9f683cf21e772035e9be100ed2ddf8bc6 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/EnderMan.java
@@ -4078,6 +5332,148 @@ index ff40fe323964f173561a6838fb443e79abf9df38..c2c3ed6ba79f9f41497e042571f699a0
  
          return flag;
      }
+diff --git a/src/main/java/net/minecraft/world/level/pathfinder/Path.java b/src/main/java/net/minecraft/world/level/pathfinder/Path.java
+index 2a335f277bd0e4b8ad0f60d8226eb8aaa80a871f..228b11a21735885055d2fb5e0568e21aed32a6cb 100644
+--- a/src/main/java/net/minecraft/world/level/pathfinder/Path.java
++++ b/src/main/java/net/minecraft/world/level/pathfinder/Path.java
+@@ -30,6 +30,17 @@ public class Path {
+         this.reached = reachesTarget;
+     }
+ 
++    // Pufferfish start
++    /**
++     * checks if the path is completely processed in the case of it being computed async
++     *
++     * @return true if the path is processed
++     */
++    public boolean isProcessed() {
++        return true;
++    }
++    // Pufferfish end
++
+     public void advance() {
+         ++this.nextNodeIndex;
+     }
+@@ -104,6 +115,8 @@ public class Path {
+     }
+ 
+     public boolean sameAs(@Nullable Path o) {
++        if (o == this) return true; // Pufferfish - short circuit
++
+         if (o == null) {
+             return false;
+         } else if (o.nodes.size() != this.nodes.size()) {
+diff --git a/src/main/java/net/minecraft/world/level/pathfinder/PathFinder.java b/src/main/java/net/minecraft/world/level/pathfinder/PathFinder.java
+index d23481453717f715124156b5d83f6448f720d049..e6593d081b9349d68d45b645455d28f6f00d7c00 100644
+--- a/src/main/java/net/minecraft/world/level/pathfinder/PathFinder.java
++++ b/src/main/java/net/minecraft/world/level/pathfinder/PathFinder.java
+@@ -25,36 +25,73 @@ public class PathFinder {
+     private static final boolean DEBUG = false;
+     private final BinaryHeap openSet = new BinaryHeap();
+ 
+-    public PathFinder(NodeEvaluator pathNodeMaker, int range) {
++    private final @Nullable gg.pufferfish.pufferfish.path.NodeEvaluatorGenerator nodeEvaluatorGenerator; // Pufferfish - we use this later to generate an evaluator
++
++    // Pufferfish start - add nodeEvaluatorGenerator as optional param
++    public PathFinder(NodeEvaluator pathNodeMaker, int range, @Nullable gg.pufferfish.pufferfish.path.NodeEvaluatorGenerator nodeEvaluatorGenerator) {
+         this.nodeEvaluator = pathNodeMaker;
+         this.maxVisitedNodes = range;
++        this.nodeEvaluatorGenerator = nodeEvaluatorGenerator;
++    }
++
++    public PathFinder(NodeEvaluator pathNodeMaker, int range) {
++        this(pathNodeMaker, range, null);
+     }
++    // Pufferfish end
+ 
+     @Nullable
+     public Path findPath(PathNavigationRegion world, Mob mob, Set<BlockPos> positions, float followRange, int distance, float rangeMultiplier) {
+-        this.openSet.clear();
+-        this.nodeEvaluator.prepare(world, mob);
+-        Node node = this.nodeEvaluator.getStart();
++        if (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) this.openSet.clear(); // Pufferfish - it's always cleared in processPath
++        // Pufferfish start - use a generated evaluator if we have one otherwise run sync
++        var nodeEvaluator = this.nodeEvaluatorGenerator == null ? this.nodeEvaluator : gg.pufferfish.pufferfish.path.NodeEvaluatorCache.takeNodeEvaluator(this.nodeEvaluatorGenerator);
++        nodeEvaluator.prepare(world, mob);
++        Node node = nodeEvaluator.getStart();
+         if (node == null) {
+             return null;
+         } else {
+             // Paper start - remove streams - and optimize collection
+             List<Map.Entry<Target, BlockPos>> map = Lists.newArrayList();
+             for (BlockPos pos : positions) {
+-                map.add(new java.util.AbstractMap.SimpleEntry<>(this.nodeEvaluator.getGoal(pos.getX(), pos.getY(), pos.getZ()), pos));
++                map.add(new java.util.AbstractMap.SimpleEntry<>(nodeEvaluator.getGoal(pos.getX(), pos.getY(), pos.getZ()), pos));
+             }
+             // Paper end
+-            Path path = this.findPath(world.getProfiler(), node, map, followRange, distance, rangeMultiplier);
+-            this.nodeEvaluator.done();
+-            return path;
++
++            // Pufferfish start
++            if (this.nodeEvaluatorGenerator == null) {
++                // run sync :(
++                return this.findPath(world.getProfiler(), node, map, followRange, distance, rangeMultiplier);
++            }
++
++            return new gg.pufferfish.pufferfish.path.AsyncPath(Lists.newArrayList(), positions, () -> {
++                try {
++                    return this.processPath(nodeEvaluator, node, map, followRange, distance, rangeMultiplier);
++                } finally {
++                    nodeEvaluator.done();
++                    gg.pufferfish.pufferfish.path.NodeEvaluatorCache.returnNodeEvaluator(nodeEvaluator);
++                }
++            });
++            // Pufferfish end
+         }
+     }
+ 
+-    @Nullable
++    // Pufferfish start - split pathfinding into the original sync method for compat and processing for delaying
+     // Paper start - optimize collection
+     private Path findPath(ProfilerFiller profiler, Node startNode, List<Map.Entry<Target, BlockPos>> positions, float followRange, int distance, float rangeMultiplier) {
++        // readd the profiler code for sync
+         profiler.push("find_path");
+         profiler.markForCharting(MetricCategory.PATH_FINDING);
++
++        try {
++            return this.processPath(this.nodeEvaluator, startNode, positions, followRange, distance, rangeMultiplier);
++        } finally {
++            this.nodeEvaluator.done();
++        }
++    }
++    // Pufferfish end
++
++    private synchronized @org.jetbrains.annotations.NotNull Path processPath(NodeEvaluator nodeEvaluator, Node startNode, List<Map.Entry<Target, BlockPos>> positions, float followRange, int distance, float rangeMultiplier) { // Pufferfish - sync to only use the caching functions in this class on a single thread
++        org.apache.commons.lang3.Validate.isTrue(!positions.isEmpty()); // ensure that we have at least one position, which means we'll always return a path
++
+         // Set<Target> set = positions.keySet();
+         startNode.g = 0.0F;
+         startNode.h = this.getBestH(startNode, positions); // Paper - optimize collection
+@@ -91,7 +128,7 @@ public class PathFinder {
+             }
+ 
+             if (!(node.distanceTo(startNode) >= followRange)) {
+-                int k = this.nodeEvaluator.getNeighbors(this.neighbors, node);
++                int k = nodeEvaluator.getNeighbors(this.neighbors, node);
+ 
+                 for(int l = 0; l < k; ++l) {
+                     Node node2 = this.neighbors[l];
+@@ -123,9 +160,14 @@ public class PathFinder {
+             if (best == null || comparator.compare(path, best) < 0)
+                 best = path;
+         }
++
++        // Pufferfish start - ignore this warning, we know that the above loop always runs at least once since positions is not empty
++        //noinspection ConstantConditions
+         return best;
+         // Paper end
++        // Pufferfish end
+     }
++    // Pufferfish end
+ 
+     protected float distance(Node a, Node b) {
+         return a.distanceTo(b);
 diff --git a/src/main/java/net/minecraft/world/level/storage/loot/LootContext.java b/src/main/java/net/minecraft/world/level/storage/loot/LootContext.java
 index 842fa4c360146d7a9e27cb7b2cef68c683f4ada6..fc7aae06bbcba84cc8072b2e8df4612ec87ec3ea 100644
 --- a/src/main/java/net/minecraft/world/level/storage/loot/LootContext.java
