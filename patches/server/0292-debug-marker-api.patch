@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: YouHaveTrouble <youhavetrouble@youhavetrouble.me>
+Date: Sat, 23 Jul 2022 14:40:38 +0200
+Subject: [PATCH] debug marker api
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index 619e73ff2270bbfab93c11dabdae95c601362342..d466956167797f339a6ce75a8b89cd9599c1ffda 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -2957,5 +2957,49 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+     public boolean hasFlyingFallDamage() {
+         return getHandle().flyingFallDamage;
+     }
++
++    @Override
++    public void sendBlockHighlight(Location location, String text, int time, org.bukkit.Color color, int transparency) {
++        if (this.getHandle().connection == null) return;
++        io.netty.buffer.ByteBuf packet = io.netty.buffer.Unpooled.buffer();
++        //write location
++        packet.writeLong(((long) location.getX() & 67108863L) << 38 | (long) location.getY() & 4095L | ((long) location.getZ() & 67108863L) << 12);
++        //write color
++        packet.writeInt(new java.awt.Color(color.getRed(), color.getGreen(), color.getBlue(), transparency).getRGB());
++        // write text
++        byte[] string = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
++        int i = string.length;
++        while ((i & -128) != 0) {
++            packet.writeByte(i & 127 | 128);
++            i >>>= 7;
++        }
++        packet.writeByte(i);
++        packet.writeBytes(string);
++        // write time
++        packet.writeInt(time);
++        net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket customPayloadPacket = new net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket(ClientboundCustomPayloadPacket.DEBUG_GAME_TEST_ADD_MARKER, new FriendlyByteBuf(packet));
++        this.getHandle().connection.send(customPayloadPacket);
++    }
++
++    @Override
++    public void sendBlockHighlight(Location location, int time, org.bukkit.Color color, int transparency) {
++        sendBlockHighlight(location, "", time, color, transparency);
++    }
++
++    @Override
++    public void sendBlockHighlight(Location location, String text, int time) {
++        sendBlockHighlight(location, text, time, org.bukkit.Color.LIME, 100);
++    }
++
++    @Override
++    public void sendBlockHighlight(Location location, int time) {
++        sendBlockHighlight(location, "", time, org.bukkit.Color.LIME, 100);
++    }
++
++    @Override
++    public void clearBlockHighlights() {
++        net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket customPayloadPacket = new net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket(ClientboundCustomPayloadPacket.DEBUG_GAME_TEST_CLEAR, new FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(new byte[0])));
++        this.getHandle().connection.send(customPayloadPacket);
++    }
+     // Purpur end
+ }
