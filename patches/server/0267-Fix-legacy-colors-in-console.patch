@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <blake.galbreath@gmail.com>
+Date: Sun, 13 Mar 2022 21:00:02 -0500
+Subject: [PATCH] Fix legacy colors in console
+
+
+diff --git a/src/main/java/io/papermc/paper/console/HexFormattingConverter.java b/src/main/java/io/papermc/paper/console/HexFormattingConverter.java
+index b4d0b7ecd56ab952319946854168c1299cb0b1be..8054b8da82ca455d23b26a53cc568160b14e04ce 100644
+--- a/src/main/java/io/papermc/paper/console/HexFormattingConverter.java
++++ b/src/main/java/io/papermc/paper/console/HexFormattingConverter.java
+@@ -38,6 +38,7 @@ public final class HexFormattingConverter extends LogEventPatternConverter {
+     private static final String ANSI_RESET = "\u001B[m";
+ 
+     private static final char COLOR_CHAR = 0x7f;
++    private static final char LEGACY_CHAR = 0xa7; // Purpur
+     public static final LegacyComponentSerializer SERIALIZER = LegacyComponentSerializer.builder()
+         .hexColors()
+         .flattener(PaperAdventure.FLATTENER)
+@@ -48,6 +49,8 @@ public final class HexFormattingConverter extends LogEventPatternConverter {
+     private static final String RGB_ANSI = "\u001B[38;2;%d;%d;%dm";
+     private static final Pattern NAMED_PATTERN = Pattern.compile(COLOR_CHAR + "[0-9a-fk-orA-FK-OR]");
+     private static final Pattern RGB_PATTERN = Pattern.compile(COLOR_CHAR + "#([0-9a-fA-F]){6}");
++    private static final Pattern LEGACY_RGB_PATTERN = Pattern.compile(LEGACY_CHAR + "x((" + LEGACY_CHAR + "[0-9a-fA-F]){6})"); // Purpur
++    private static final Pattern LEGACY_PATTERN = Pattern.compile(LEGACY_CHAR + "([0-9a-fk-orxA-FK-ORX])"); // Purpur
+ 
+     private static final String[] RGB_ANSI_CODES = new String[]{
+         formatHexAnsi(NamedTextColor.BLACK),         // Black §0
+@@ -133,7 +136,21 @@ public final class HexFormattingConverter extends LogEventPatternConverter {
+     }
+ 
+     private static String convertRGBColors(final String input) {
+-        return RGB_PATTERN.matcher(input).replaceAll(result -> {
++        // Purpur start - lets just shove this back in place
++        Matcher matcher = LEGACY_RGB_PATTERN.matcher(input);
++        StringBuilder buffer = new StringBuilder();
++        while (matcher.find()) {
++            String s = matcher.group().replace(String.valueOf(LEGACY_CHAR), "").replace('x', '#');
++            int hex = Integer.decode(s);
++            int red = (hex >> 16) & 0xFF;
++            int green = (hex >> 8) & 0xFF;
++            int blue = hex & 0xFF;
++            String replacement = String.format(RGB_ANSI, red, green, blue);
++            matcher.appendReplacement(buffer, replacement);
++        }
++        matcher.appendTail(buffer);
++        return RGB_PATTERN.matcher(buffer.toString()).replaceAll(result -> {
++            // Purpur end
+             final int hex = Integer.decode(result.group().substring(1));
+             return formatHexAnsi(hex);
+         });
+@@ -151,10 +168,11 @@ public final class HexFormattingConverter extends LogEventPatternConverter {
+     }
+ 
+     private static String stripRGBColors(final String input) {
+-        return RGB_PATTERN.matcher(input).replaceAll("");
++        return LEGACY_RGB_PATTERN.matcher(RGB_PATTERN.matcher(input).replaceAll("")).replaceAll(""); // Purpur
+     }
+ 
+     static void format(String content, StringBuilder result, int start, boolean ansi) {
++        content = LEGACY_PATTERN.matcher(content).replaceAll(COLOR_CHAR + "$1"); // Purpur
+         int next = content.indexOf(COLOR_CHAR);
+         int last = content.length() - 1;
+         if (next == -1 || next == last) {
