@@ -3,21 +3,6 @@ From: Kevin Raneri <kevin.raneri@gmail.com>
 Date: Wed, 3 Feb 2021 23:02:38 -0600
 Subject: [PATCH] Pufferfish Server Changes
 
-Pufferfish
-Copyright (C) 2022 Pufferfish Studios LLC
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
 index 2374cc9bab5039d0a0dc11d4b2ec573ab75778a7..74c91f79576e85618fefb79be8d313ba871701c7 100644
@@ -612,10 +597,10 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..09827eaa9f6adf49385a33aa60b3a6bf4005a982
+index 0000000000000000000000000000000000000000..38cb29c646ff496ffaa6553f98a565b71155c464
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
-@@ -0,0 +1,335 @@
+@@ -0,0 +1,337 @@
 +package gg.pufferfish.pufferfish;
 +
 +import gg.pufferfish.pufferfish.simd.SIMDDetection;
@@ -945,8 +930,10 @@ index 0000000000000000000000000000000000000000..09827eaa9f6adf49385a33aa60b3a6bf
 +
 +
 +    public static boolean disableMethodProfiler;
++	public static boolean disableOutOfOrderChat;
 +    private static void miscSettings() {
-+        disableMethodProfiler = getBoolean("misc.disable-method-profiler", true);
++		disableMethodProfiler = getBoolean("misc.disable-method-profiler", true);
++		disableOutOfOrderChat = getBoolean("misc.disable-out-of-order-chat", false);
 +        setComment("misc", "Settings for things that don't belong elsewhere");
 +    }
 +
@@ -1811,10 +1798,10 @@ index 0000000000000000000000000000000000000000..db15d3fbe2b65fc8035573f5fdbea382
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/path/AsyncPath.java b/src/main/java/gg/pufferfish/pufferfish/path/AsyncPath.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..401645f9f2cccaec4b37c6a91cf930a1fc520301
+index 0000000000000000000000000000000000000000..dcfe6fa538c54417b90a138b26c451f63b408ff6
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/path/AsyncPath.java
-@@ -0,0 +1,280 @@
+@@ -0,0 +1,282 @@
 +package gg.pufferfish.pufferfish.path;
 +
 +import net.minecraft.core.BlockPos;
@@ -1825,9 +1812,9 @@ index 0000000000000000000000000000000000000000..401645f9f2cccaec4b37c6a91cf930a1
 +import org.jetbrains.annotations.NotNull;
 +import org.jetbrains.annotations.Nullable;
 +
++import java.util.ArrayList;
 +import java.util.List;
 +import java.util.Set;
-+import java.util.concurrent.CompletableFuture;
 +import java.util.function.Supplier;
 +
 +/**
@@ -1841,9 +1828,9 @@ index 0000000000000000000000000000000000000000..401645f9f2cccaec4b37c6a91cf930a1
 +    private volatile boolean processed = false;
 +
 +    /**
-+     * a future representing the processing state of this path
++     * runnables waiting for path to be processed
 +     */
-+    private final @NotNull CompletableFuture<Path> processingFuture;
++    private final @NotNull List<Runnable> postProcessing = new ArrayList<>();
 +
 +    /**
 +     * a list of positions that this path could path towards
@@ -1890,7 +1877,7 @@ index 0000000000000000000000000000000000000000..401645f9f2cccaec4b37c6a91cf930a1
 +        this.positions = positions;
 +        this.pathSupplier = pathSupplier;
 +
-+        this.processingFuture = AsyncPathProcessor.queue(this).thenApply((unused) -> this);
++        AsyncPathProcessor.queue(this);
 +    }
 +
 +    @Override
@@ -1899,11 +1886,11 @@ index 0000000000000000000000000000000000000000..401645f9f2cccaec4b37c6a91cf930a1
 +    }
 +
 +    /**
-+     * returns the future representing the processing state of this path
-+     * @return a future
++     * add a post-processing action
 +     */
-+    public @NotNull CompletableFuture<Path> getProcessingFuture() {
-+        return this.processingFuture;
++    public synchronized void postProcessing(@NotNull Runnable runnable) {
++        if (processed) runnable.run();
++        else postProcessing.add(runnable);
 +    }
 +
 +    /**
@@ -1936,6 +1923,8 @@ index 0000000000000000000000000000000000000000..401645f9f2cccaec4b37c6a91cf930a1
 +        this.canReach = bestPath.canReach();
 +
 +        this.processed = true;
++        
++        this.postProcessing.forEach(Runnable::run);
 +    }
 +
 +    /**
@@ -2097,7 +2086,7 @@ index 0000000000000000000000000000000000000000..401645f9f2cccaec4b37c6a91cf930a1
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/path/AsyncPathProcessor.java b/src/main/java/gg/pufferfish/pufferfish/path/AsyncPathProcessor.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..08e949d8493284667cd8f1adb710b4e9e9611e28
+index 0000000000000000000000000000000000000000..6c8035ef7effd0ccdc887b3792ba09ef6b2a74fa
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/path/AsyncPathProcessor.java
 @@ -0,0 +1,44 @@
@@ -2139,7 +2128,7 @@ index 0000000000000000000000000000000000000000..08e949d8493284667cd8f1adb710b4e9
 +     */
 +    public static void awaitProcessing(@Nullable Path path, Consumer<@Nullable Path> afterProcessing) {
 +        if (path != null && !path.isProcessed() && path instanceof AsyncPath asyncPath) {
-+            asyncPath.getProcessingFuture().thenAcceptAsync(afterProcessing, mainThreadExecutor);
++            asyncPath.postProcessing(() -> mainThreadExecutor.execute(() -> afterProcessing.accept(path)));
 +        } else {
 +            afterProcessing.accept(path);
 +        }
@@ -2147,10 +2136,10 @@ index 0000000000000000000000000000000000000000..08e949d8493284667cd8f1adb710b4e9
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorCache.java b/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorCache.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..9f81dc6e8d198f1be957c1a05c72eb5ba38832ce
+index 0000000000000000000000000000000000000000..a18b967d7a7325885c94a1093cc5800012998f1a
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/path/NodeEvaluatorCache.java
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,43 @@
 +package gg.pufferfish.pufferfish.path;
 +
 +import net.minecraft.world.level.pathfinder.NodeEvaluator;
@@ -2187,6 +2176,10 @@ index 0000000000000000000000000000000000000000..9f81dc6e8d198f1be957c1a05c72eb5b
 +        Validate.notNull(generator, "NodeEvaluator already returned");
 +
 +        getDequeForGenerator(generator).offer(nodeEvaluator);
++    }
++
++    public static void removeNodeEvaluator(@NotNull NodeEvaluator nodeEvaluator) {
++        nodeEvaluatorToGenerator.remove(nodeEvaluator);
 +    }
 +
 +}
@@ -2395,10 +2388,10 @@ index 0000000000000000000000000000000000000000..1b29210ad0bbb4ada150f23357f0c80d
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/tracker/MultithreadedTracker.java b/src/main/java/gg/pufferfish/pufferfish/tracker/MultithreadedTracker.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..2dfe34a3fd0e460865393d9d8a1bdab71aa47b6b
+index 0000000000000000000000000000000000000000..ac541ddf1594ae865de02fd40940e39285043b1f
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/tracker/MultithreadedTracker.java
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,127 @@
 +package gg.pufferfish.pufferfish.tracker;
 +
 +import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -2426,7 +2419,6 @@ index 0000000000000000000000000000000000000000..2dfe34a3fd0e460865393d9d8a1bdab7
 +    private final AtomicInteger taskIndex = new AtomicInteger();
 +
 +    private final ConcurrentLinkedQueue<Runnable> mainThreadTasks;
-+    private final ConcurrentLinkedQueue<Runnable> postTrackingTasks = new ConcurrentLinkedQueue<>();
 +    private final AtomicInteger finishedTasks = new AtomicInteger();
 +
 +    public MultithreadedTracker(IteratorSafeOrderedReferenceSet<LevelChunk> entityTickingChunks, ConcurrentLinkedQueue<Runnable> mainThreadTasks) {
@@ -2459,7 +2451,6 @@ index 0000000000000000000000000000000000000000..2dfe34a3fd0e460865393d9d8a1bdab7
 +            }
 +
 +            this.runMainThreadTasks(); // finish any remaining tasks
-+            this.runPostTrackingTasks(); // run all post-tracking tasks
 +        } finally {
 +            this.entityTickingChunks.finishRawIterator();
 +        }
@@ -2473,17 +2464,6 @@ index 0000000000000000000000000000000000000000..2dfe34a3fd0e460865393d9d8a1bdab7
 +            }
 +        } catch (Throwable throwable) {
 +            MinecraftServer.LOGGER.warn("Tasks failed while ticking track queue", throwable);
-+        }
-+    }
-+
-+    private void runPostTrackingTasks() {
-+        try {
-+            Runnable task;
-+            while ((task = this.postTrackingTasks.poll()) != null) {
-+                task.run();
-+            }
-+        } catch (Throwable throwable) {
-+            MinecraftServer.LOGGER.warn("Post-tracking tasks failed while ticking track queue", throwable);
 +        }
 +    }
 +
@@ -2532,8 +2512,7 @@ index 0000000000000000000000000000000000000000..2dfe34a3fd0e460865393d9d8a1bdab7
 +                if (entityTracker != null) {
 +                    entityTracker.updatePlayers(entityTracker.entity.getPlayersInTrackRange());
 +
-+                    // run this on the main thread. This needs to be run after all updatePlayers methods are called.
-+                    this.postTrackingTasks.offer(entityTracker.serverEntity::sendChanges);
++                    this.mainThreadTasks.offer(entityTracker.serverEntity::sendChanges);
 +                }
 +            }
 +        }
@@ -3080,7 +3059,7 @@ index 59acbf6249f8f5285504c0ddea448a3433d1d68d..378cc1f9e19eb9b18037ab8af92f6589
  
      private void getFullChunk(long pos, Consumer<LevelChunk> chunkConsumer) {
 diff --git a/src/main/java/net/minecraft/server/level/ServerEntity.java b/src/main/java/net/minecraft/server/level/ServerEntity.java
-index 3b144c820531122eb37d41be06c182b5f5dc0724..871bce7f5acc1b9a058496f41d962ec2e724f620 100644
+index 3b144c820531122eb37d41be06c182b5f5dc0724..88152988425b7b02ec5ce229ba4c24b40e030329 100644
 --- a/src/main/java/net/minecraft/server/level/ServerEntity.java
 +++ b/src/main/java/net/minecraft/server/level/ServerEntity.java
 @@ -165,6 +165,7 @@ public class ServerEntity {
@@ -3120,6 +3099,36 @@ index 3b144c820531122eb37d41be06c182b5f5dc0724..871bce7f5acc1b9a058496f41d962ec2
          this.entity.startSeenByPlayer(player);
      }
  
+@@ -360,19 +366,26 @@ public class ServerEntity {
+         SynchedEntityData datawatcher = this.entity.getEntityData();
+ 
+         if (datawatcher.isDirty()) {
+-            this.broadcastAndSend(new ClientboundSetEntityDataPacket(this.entity.getId(), datawatcher, false));
++            ((ServerLevel) this.entity.level).chunkSource.chunkMap.runOnTrackerMainThread(() -> // Pufferfish
++            this.broadcastAndSend(new ClientboundSetEntityDataPacket(this.entity.getId(), datawatcher, false))
++            ); // Pufferfish
+         }
+ 
+         if (this.entity instanceof LivingEntity) {
+             Set<AttributeInstance> set = ((LivingEntity) this.entity).getAttributes().getDirtyAttributes();
+ 
+             if (!set.isEmpty()) {
++                // Pufferfish start
++                List<AttributeInstance> attributesCopy = Lists.newArrayList(set);
++                ((ServerLevel) this.entity.level).chunkSource.chunkMap.runOnTrackerMainThread(() -> {
+                 // CraftBukkit start - Send scaled max health
+                 if (this.entity instanceof ServerPlayer) {
+-                    ((ServerPlayer) this.entity).getBukkitEntity().injectScaledMaxHealth(set, false);
++                    ((ServerPlayer) this.entity).getBukkitEntity().injectScaledMaxHealth(attributesCopy, false); // Pufferfish
+                 }
+                 // CraftBukkit end
+-                this.broadcastAndSend(new ClientboundUpdateAttributesPacket(this.entity.getId(), set));
++                this.broadcastAndSend(new ClientboundUpdateAttributesPacket(this.entity.getId(), attributesCopy)); // Pufferfish
++                });
++                // Pufferfish end
+             }
+ 
+             set.clear();
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
 index 083349794d5ceb50322c5a645dd33fbfcc1c8155..f58873ef4362bfcc618ead099be94ba2dd4d86ed 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
@@ -3178,7 +3187,7 @@ index 083349794d5ceb50322c5a645dd33fbfcc1c8155..f58873ef4362bfcc618ead099be94ba2
              this.getRandomBlockPosition(j, 0, k, 15, blockposition);
              int normalY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, blockposition.getX() & 15, blockposition.getZ() & 15) + 1;
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index ff7df8026f85b7ad51458a0b720a8baf71cd9bd1..32ef30e130c7f6e252ebf5b866fb9e89d7c0d7db 100644
+index ff7df8026f85b7ad51458a0b720a8baf71cd9bd1..8da76daecef969f452960df5577c7bc408ac7acb 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -1215,6 +1215,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
@@ -3189,6 +3198,14 @@ index ff7df8026f85b7ad51458a0b720a8baf71cd9bd1..32ef30e130c7f6e252ebf5b866fb9e89
          // Paper start
          if (!this.cserver.isPrimaryThread()) {
              List<String> pageList = packet.getPages();
+@@ -2349,6 +2350,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+     }
+ 
+     private boolean updateChatOrder(Instant timestamp) {
++        if (gg.pufferfish.pufferfish.PufferfishConfig.disableOutOfOrderChat) return true;
+         Instant instant1;
+ 
+         do {
 diff --git a/src/main/java/net/minecraft/world/CompoundContainer.java b/src/main/java/net/minecraft/world/CompoundContainer.java
 index 241fec02e6869c638d3a160819b32173a081467b..6a8f9e8f5bf108674c47018def28906e2d0a729c 100644
 --- a/src/main/java/net/minecraft/world/CompoundContainer.java
@@ -3741,84 +3758,136 @@ index 43243537b765a2d270be6de3f053fea77ff67d18..b56bb0ac37a6d51d645b6189af0ae7da
      }
  
 diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java b/src/main/java/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
-index 18364ce4c60172529b10bc9e3a813dcedc4b766f..698c46f786689d719ecca0780e220eab594bc45e 100644
+index 18364ce4c60172529b10bc9e3a813dcedc4b766f..72dfb58a7f4586387c2d32cf54fff137b2d26666 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
 +++ b/src/main/java/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
-@@ -58,6 +58,7 @@ public class MoveToTargetSink extends Behavior<Mob> {
+@@ -21,6 +21,7 @@ public class MoveToTargetSink extends Behavior<Mob> {
+     private int remainingCooldown;
+     @Nullable
+     private Path path;
++    private boolean finishedProcessing; // Pufferfish
+     @Nullable
+     private BlockPos lastTargetPos;
+     private float speedModifier;
+@@ -42,9 +43,10 @@ public class MoveToTargetSink extends Behavior<Mob> {
+             Brain<?> brain = entity.getBrain();
+             WalkTarget walkTarget = brain.getMemory(MemoryModuleType.WALK_TARGET).get();
+             boolean bl = this.reachedTarget(entity, walkTarget);
+-            if (!bl && this.tryComputePath(entity, walkTarget, world.getGameTime())) {
++            if (!bl && (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && this.tryComputePath(entity, walkTarget, world.getGameTime()))) { // Pufferfish
+                 this.lastTargetPos = walkTarget.getTarget().currentBlockPosition();
+                 return true;
++            } else if (!bl) { return true; // Pufferfish
+             } else {
+                 brain.eraseMemory(MemoryModuleType.WALK_TARGET);
+                 if (bl) {
+@@ -58,6 +60,7 @@ public class MoveToTargetSink extends Behavior<Mob> {
  
      @Override
      protected boolean canStillUse(ServerLevel serverLevel, Mob mob, long l) {
-+        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && this.path != null && !this.path.isProcessed()) return true; // Pufferfish - wait for path to process
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && !finishedProcessing) return true; // Pufferfish - wait for path to process
          if (this.path != null && this.lastTargetPos != null) {
              Optional<WalkTarget> optional = mob.getBrain().getMemory(MemoryModuleType.WALK_TARGET);
              PathNavigation pathNavigation = mob.getNavigation();
-@@ -87,6 +88,8 @@ public class MoveToTargetSink extends Behavior<Mob> {
+@@ -81,28 +84,96 @@ public class MoveToTargetSink extends Behavior<Mob> {
+ 
+     @Override
+     protected void start(ServerLevel serverLevel, Mob mob, long l) {
++        if (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) { // Pufferfish
+         mob.getBrain().setMemory(MemoryModuleType.PATH, this.path);
+         mob.getNavigation().moveTo(this.path, (double)this.speedModifier);
++        // Pufferfish start
++        } else {
++            Brain<?> brain = mob.getBrain();
++            WalkTarget walkTarget = brain.getMemory(MemoryModuleType.WALK_TARGET).get();
++            
++            this.finishedProcessing = false;
++            this.lastTargetPos = walkTarget.getTarget().currentBlockPosition();
++            this.path = this.computePath(mob, walkTarget);
++        }
++        // Pufferfish end
+     }
  
      @Override
      protected void tick(ServerLevel world, Mob entity, long time) {
 +        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && this.path != null && !this.path.isProcessed()) return; // Pufferfish - wait for processing
 +
-         Path path = entity.getNavigation().getPath();
-         Brain<?> brain = entity.getBrain();
-         if (this.path != path) {
-@@ -94,6 +97,12 @@ public class MoveToTargetSink extends Behavior<Mob> {
-             brain.setMemory(MemoryModuleType.PATH, path);
-         }
- 
-+        // Pufferfish start - periodically recall moveTo to ensure we're moving towards the correct path
-+        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && time % 8 == 0) {
++        // Pufferfish start
++        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && !finishedProcessing) {
++            this.finishedProcessing = true;
++            Brain<?> brain = entity.getBrain();
++            boolean canReach = this.path != null && this.path.canReach();
++            if (canReach) {
++                brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
++            } else if (brain.hasMemoryValue(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE)) {
++                brain.setMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE, time);
++            }
++            
++            if (!canReach) {
++                Optional<WalkTarget> walkTarget = brain.getMemory(MemoryModuleType.WALK_TARGET);
++    
++                if (walkTarget.isPresent()) {
++                    BlockPos blockPos = walkTarget.get().getTarget().currentBlockPosition();
++                    Vec3 vec3 = DefaultRandomPos.getPosTowards((PathfinderMob)entity, 10, 7, Vec3.atBottomCenterOf(blockPos), (double)((float)Math.PI / 2F));
++                    if (vec3 != null) {
++                        // try recalculating the path using a random position
++                        this.path = entity.getNavigation().createPath(vec3.x, vec3.y, vec3.z, 0);
++                        this.finishedProcessing = false;
++                        return;
++                    }
++                }
++                
++                brain.eraseMemory(MemoryModuleType.WALK_TARGET);
++                this.path = null;
++                
++                return;
++            }
++            
++            entity.getBrain().setMemory(MemoryModuleType.PATH, this.path);
 +            entity.getNavigation().moveTo(this.path, (double)this.speedModifier);
 +        }
 +        // Pufferfish end
 +
-         if (path != null && this.lastTargetPos != null) {
-             WalkTarget walkTarget = brain.getMemory(MemoryModuleType.WALK_TARGET).get();
-             if (walkTarget.getTarget().currentBlockPosition().distSqr(this.lastTargetPos) > 4.0D && this.tryComputePath(entity, walkTarget, world.getGameTime())) {
-@@ -112,6 +121,24 @@ public class MoveToTargetSink extends Behavior<Mob> {
-         if (this.reachedTarget(entity, walkTarget)) {
-             brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
-         } else {
-+            // Pufferfish start - move this out to postProcessPath
-+            if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
-+                gg.pufferfish.pufferfish.path.AsyncPathProcessor.awaitProcessing(this.path, (unusedPath) -> {
-+                    this.postProcessPath(entity, walkTarget, time);
-+                });
-+                return true;
-+            } else {
-+                return postProcessPath(entity, walkTarget, time);
-+            }
-+        }
-+
-+        return false;
-+    }
-+
-+    private boolean postProcessPath(Mob entity, WalkTarget walkTarget, long time) {
-+       Brain<?> brain = entity.getBrain();
-+       BlockPos blockPos = walkTarget.getTarget().currentBlockPosition();
-+
-             boolean bl = this.path != null && this.path.canReach();
-             if (bl) {
-                 brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
-@@ -128,10 +155,19 @@ public class MoveToTargetSink extends Behavior<Mob> {
-                 this.path = entity.getNavigation().createPath(vec3.x, vec3.y, vec3.z, 0);
-                 return this.path != null;
-             }
-+
-+        // We failed, so erase and move on
-+        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) {
-+            brain.eraseMemory(MemoryModuleType.WALK_TARGET);
-+            if (bl) {
-+                brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
-+            }
-+            this.path = null;
+         Path path = entity.getNavigation().getPath();
+         Brain<?> brain = entity.getBrain();
+-        if (this.path != path) {
++        if (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding && this.path != path) { // Pufferfish
+             this.path = path;
+             brain.setMemory(MemoryModuleType.PATH, path);
          }
  
-         return false;
+-        if (path != null && this.lastTargetPos != null) {
++        if (path != null && this.lastTargetPos != null && (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding || brain.hasMemoryValue(MemoryModuleType.WALK_TARGET))) { // Pufferfish
+             WalkTarget walkTarget = brain.getMemory(MemoryModuleType.WALK_TARGET).get();
++            if (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncPathfinding) { // Pufferfish
+             if (walkTarget.getTarget().currentBlockPosition().distSqr(this.lastTargetPos) > 4.0D && this.tryComputePath(entity, walkTarget, world.getGameTime())) {
+                 this.lastTargetPos = walkTarget.getTarget().currentBlockPosition();
+                 this.start(world, entity, time);
+             }
++            // Pufferfish start
++            } else {
++                if (walkTarget.getTarget().currentBlockPosition().distSqr(this.lastTargetPos) > 4.0D) this.start(world, entity, time);
++            }
++            // Pufferfish end
++
++        }
++    }
+ 
++    // Pufferfish start
++    private Path computePath(Mob entity, WalkTarget walkTarget) {
++        BlockPos blockPos = walkTarget.getTarget().currentBlockPosition();
++        this.speedModifier = walkTarget.getSpeedModifier();
++        Brain<?> brain = entity.getBrain();
++        if (this.reachedTarget(entity, walkTarget)) {
++            brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
+         }
++    
++        return entity.getNavigation().createPath(blockPos, 0);
      }
 +    // Pufferfish end
  
-     private boolean reachedTarget(Mob entity, WalkTarget walkTarget) {
-         return walkTarget.getTarget().currentBlockPosition().distManhattan(entity.blockPosition()) <= walkTarget.getCloseEnoughDist();
+     private boolean tryComputePath(Mob entity, WalkTarget walkTarget, long time) {
+         BlockPos blockPos = walkTarget.getTarget().currentBlockPosition();
 diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java b/src/main/java/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
 index 9bd6d4f7b86daaaa9cfbad454dde06b797e3f667..2402a8c1067a74a21d9812561df5fb6284670571 100644
 --- a/src/main/java/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
@@ -5364,10 +5433,10 @@ index 2a335f277bd0e4b8ad0f60d8226eb8aaa80a871f..228b11a21735885055d2fb5e0568e21a
              return false;
          } else if (o.nodes.size() != this.nodes.size()) {
 diff --git a/src/main/java/net/minecraft/world/level/pathfinder/PathFinder.java b/src/main/java/net/minecraft/world/level/pathfinder/PathFinder.java
-index d23481453717f715124156b5d83f6448f720d049..e6593d081b9349d68d45b645455d28f6f00d7c00 100644
+index d23481453717f715124156b5d83f6448f720d049..0455c8a7da880da4f0b7ae9d57e83e281a55f0ae 100644
 --- a/src/main/java/net/minecraft/world/level/pathfinder/PathFinder.java
 +++ b/src/main/java/net/minecraft/world/level/pathfinder/PathFinder.java
-@@ -25,36 +25,73 @@ public class PathFinder {
+@@ -25,36 +25,75 @@ public class PathFinder {
      private static final boolean DEBUG = false;
      private final BinaryHeap openSet = new BinaryHeap();
  
@@ -5397,6 +5466,7 @@ index d23481453717f715124156b5d83f6448f720d049..e6593d081b9349d68d45b645455d28f6
 +        nodeEvaluator.prepare(world, mob);
 +        Node node = nodeEvaluator.getStart();
          if (node == null) {
++            gg.pufferfish.pufferfish.path.NodeEvaluatorCache.removeNodeEvaluator(nodeEvaluator);
              return null;
          } else {
              // Paper start - remove streams - and optimize collection
@@ -5413,6 +5483,7 @@ index d23481453717f715124156b5d83f6448f720d049..e6593d081b9349d68d45b645455d28f6
 +            // Pufferfish start
 +            if (this.nodeEvaluatorGenerator == null) {
 +                // run sync :(
++                gg.pufferfish.pufferfish.path.NodeEvaluatorCache.removeNodeEvaluator(nodeEvaluator);
 +                return this.findPath(world.getProfiler(), node, map, followRange, distance, rangeMultiplier);
 +            }
 +
@@ -5450,7 +5521,7 @@ index d23481453717f715124156b5d83f6448f720d049..e6593d081b9349d68d45b645455d28f6
          // Set<Target> set = positions.keySet();
          startNode.g = 0.0F;
          startNode.h = this.getBestH(startNode, positions); // Paper - optimize collection
-@@ -91,7 +128,7 @@ public class PathFinder {
+@@ -91,7 +130,7 @@ public class PathFinder {
              }
  
              if (!(node.distanceTo(startNode) >= followRange)) {
@@ -5459,7 +5530,7 @@ index d23481453717f715124156b5d83f6448f720d049..e6593d081b9349d68d45b645455d28f6
  
                  for(int l = 0; l < k; ++l) {
                      Node node2 = this.neighbors[l];
-@@ -123,9 +160,14 @@ public class PathFinder {
+@@ -123,9 +162,14 @@ public class PathFinder {
              if (best == null || comparator.compare(path, best) < 0)
                  best = path;
          }
