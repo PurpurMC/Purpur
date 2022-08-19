@@ -132,8 +132,8 @@ software so we can make Purpur the best it can be.
 
 ### Our Contributors
 
-[![Purpur's Contributors](https://contrib.rocks/image?repo=PurpurMC/Purpur)](https://github.com/PurpurMC/Purpur/graphs/contributors)
+[![Contributors](https://purpurmc.org/contributors)](https://github.com/PurpurMC/Purpur/graphs/contributors)
 
 ### Our Sponsors
 
-[![Purpur's Sponsors](https://opencollective.com/PurpurMC/backers.svg?width=835&avatarHeight=64&button=false)](https://opencollective.com/purpurmc)
+[![Sponsors](https://opencollective.com/PurpurMC/backers.svg?width=835&avatarHeight=64&button=false)](https://opencollective.com/purpurmc)
