@@ -114,21 +114,33 @@ To install the `purpur-api` and `purpur` dependencies to your local Maven repo, 
 
 Special Thanks To:
 -------------
-### YourKit
 
+<table>
+<tr>
+<td>
+
+### YourKit
 
 ![YourKit-Logo](https://www.yourkit.com/images/yklogo.png)
 
-[YourKit Logo](https://www.yourkit.com/), makers of the outstanding Java profiler,
+[YourKit](https://www.yourkit.com/), makers of the outstanding Java profiler,
 support open source projects of all kinds with their full featured [Java](https://www.yourkit.com/java/profiler)
 and [.NET](https://www.yourkit.com/.net/profiler) application profilers. We thank them for allowing us to use their
 software so we can make Purpur the best it can be.
+
+</td>
+
+<td>
 
 ### JetBrains
 
 [<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo" height="75">](https://www.jetbrains.com)
 
 [JetBrains](https://www.jetbrains.com/), creators of the IntelliJ IDEA, supports Purpur with one of their [Open Source Licenses](https://www.jetbrains.com/opensource/). IntelliJ IDEA is the recommended IDE for working with Purpur, and most of the Purpur team uses it.
+
+</td>
+</tr>
+</table>
 
 ### Our Contributors
 
