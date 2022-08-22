@@ -149,4 +149,7 @@ software so we can make Purpur the best it can be.
 ### Our Sponsors
 
 [![GitHub Sponsors](https://purpurmc.org/svg?type=sponsors&size=64&gap=4&cols=10)](https://github.com/sponsors/PurpurMC)
-[![Sponsors](https://opencollective.com/PurpurMC/backers.svg?width=835&avatarHeight=64&button=false)](https://opencollective.com/purpurmc)
+
+### Our Backers
+
+[![Sponsors](https://purpurmc.org/svg?type=opencollective&size=64&gap=4&cols=10)](https://opencollective.com/purpurmc)
