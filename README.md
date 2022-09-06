@@ -89,11 +89,15 @@ Yes, this also includes all API provided by Paper, Spigot, and Bukkit.
 ## Building and setting up
 
 #### Initial setup
-Run the following command in the root directory:
+First, <u>clone</u> this repository. Do not download it.
+
+Then run the following command in the root directory:
 
 ```
 ./gradlew applyPatches
 ```
+
+The project is now ready for use in your IDE.
 
 #### Creating a patch
 Patches are effectively just commits in either `Purpur-API` or `Purpur-Server`. 
