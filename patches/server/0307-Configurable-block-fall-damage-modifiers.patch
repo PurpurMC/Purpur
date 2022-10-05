@@ -1,0 +1,110 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MelnCat <melncatuwu@gmail.com>
+Date: Sat, 1 Oct 2022 18:06:52 -0700
+Subject: [PATCH] Configurable block fall damage modifiers
+
+
+diff --git a/src/main/java/net/minecraft/world/level/block/BedBlock.java b/src/main/java/net/minecraft/world/level/block/BedBlock.java
+index e1d274a9be856f6fa5be00958c35b7d7c58357a7..1df761d866b10a3fb46d132c0377b58293b0cb07 100644
+--- a/src/main/java/net/minecraft/world/level/block/BedBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/BedBlock.java
+@@ -170,7 +170,7 @@ public class BedBlock extends HorizontalDirectionalBlock implements EntityBlock
+ 
+     @Override
+     public void fallOn(Level world, BlockState state, BlockPos pos, Entity entity, float fallDistance) {
+-        super.fallOn(world, state, pos, entity, fallDistance * 0.5F);
++        super.fallOn(world, state, pos, entity, fallDistance); // Purpur
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/world/level/block/Block.java b/src/main/java/net/minecraft/world/level/block/Block.java
+index ce4127f3701efa7d1c86bcdb4e7804fee11c397c..e94ca6283a0471a49b31942de763472ccb989dcb 100644
+--- a/src/main/java/net/minecraft/world/level/block/Block.java
++++ b/src/main/java/net/minecraft/world/level/block/Block.java
+@@ -98,6 +98,10 @@ public class Block extends BlockBehaviour implements ItemLike {
+     public static final int UPDATE_LIMIT = 512;
+     protected final StateDefinition<Block, BlockState> stateDefinition;
+     private BlockState defaultBlockState;
++    // Purpur start
++    public float fallDamageMultiplier = 1.0F;
++    public float fallDistanceMultiplier = 1.0F;
++    // Purpur end
+     // Paper start
+     public final boolean isDestroyable() {
+         return io.papermc.paper.configuration.GlobalConfiguration.get().unsupportedSettings.allowPermanentBlockBreakExploits ||
+@@ -516,7 +520,7 @@ public class Block extends BlockBehaviour implements ItemLike {
+     }
+ 
+     public void fallOn(Level world, BlockState state, BlockPos pos, Entity entity, float fallDistance) {
+-        entity.causeFallDamage(fallDistance, 1.0F, DamageSource.FALL);
++        entity.causeFallDamage(fallDistance * fallDistanceMultiplier, fallDamageMultiplier, DamageSource.FALL); // Purpur
+     }
+ 
+     public void updateEntityAfterFallOn(BlockGetter world, Entity entity) {
+diff --git a/src/main/java/net/minecraft/world/level/block/HayBlock.java b/src/main/java/net/minecraft/world/level/block/HayBlock.java
+index c316fb1d3081c1fbf4602dd72e96e57491bc8efd..3b054f2bda6fae31e8ab7bce088e228f800b0d43 100644
+--- a/src/main/java/net/minecraft/world/level/block/HayBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/HayBlock.java
+@@ -16,6 +16,6 @@ public class HayBlock extends RotatedPillarBlock {
+ 
+     @Override
+     public void fallOn(Level world, BlockState state, BlockPos pos, Entity entity, float fallDistance) {
+-        entity.causeFallDamage(fallDistance, 0.2F, DamageSource.FALL);
++        super.fallOn(world, state, pos, entity, fallDistance); // Purpur
+     }
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 14844cb8a402ac987f44a91b95d5ebdac73c6dfe..3cfbb4300e82cce409a7a0b53ef98987f166143c 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -588,4 +588,50 @@ public class PurpurConfig {
+             block.explosionResistance = blastResistance.floatValue();
+         });
+     }
++    private static void blockFallMultiplierSettings() {
++        getMap("settings.block-fall-multipliers", Map.ofEntries(
++                Map.entry("minecraft:hay_block", Map.of("damage", 0.2F)),
++                Map.entry("minecraft:white_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:light_gray_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:gray_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:black_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:brown_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:pink_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:red_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:orange_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:yellow_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:green_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:lime_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:cyan_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:light_blue_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:blue_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:purple_bed", Map.of("distance", 0.5F)),
++                Map.entry("minecraft:magenta_bed", Map.of("distance", 0.5F))
++        )).forEach((blockId, value) -> {
++            Block block = Registry.BLOCK.get(new ResourceLocation(blockId));
++            if (block == Blocks.AIR) {
++                log(Level.SEVERE, "Invalid block for `settings.block-fall-multipliers`: " + blockId);
++                return;
++            }
++            if (!(value instanceof Map<?, ?> map)) {
++                log(Level.SEVERE, "Invalid fall multiplier for `settings.block-fall-multipliers." + blockId + "`: " + value
++                        + ", expected a map with keys `damage` and `distance` to floats.");
++                return;
++            }
++            Object rawFallDamageMultiplier = map.get("damage");
++            if (rawFallDamageMultiplier == null) rawFallDamageMultiplier = 1F;
++            if (!(rawFallDamageMultiplier instanceof Number fallDamageMultiplier)) {
++                log(Level.SEVERE, "Invalid multiplier for `settings.block-fall-multipliers." + blockId + ".damage`: " + map.get("damage"));
++                return;
++            }
++            Object rawFallDistanceMultiplier = map.get("distance");
++            if (rawFallDistanceMultiplier == null) rawFallDistanceMultiplier = 1F;
++            if (!(rawFallDistanceMultiplier instanceof Number fallDistanceMultiplier)) {
++                log(Level.SEVERE, "Invalid multiplier for `settings.block-fall-multipliers." + blockId + ".distance`: " + map.get("distance"));
++                return;
++            }
++            block.fallDamageMultiplier = fallDamageMultiplier.floatValue();
++            block.fallDistanceMultiplier = fallDistanceMultiplier.floatValue();
++        });
++    }
+ }
