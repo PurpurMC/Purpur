@@ -1,0 +1,318 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Aniket Joshi <arealronin@gmail.com>
+Date: Thu, 6 Oct 2022 14:11:41 +0530
+Subject: [PATCH] Cure effects food property
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+index 9dca0d694aa8fa7f8bec0d2504986085e0cc6fe9..c3db4c71da1c8bfd5cb099a7af72ca07b8dfbd9d 100644
+--- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
++++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+@@ -4374,6 +4374,7 @@ public abstract class LivingEntity extends Entity {
+         if (stack.isEdible()) {
+             world.playSound((net.minecraft.world.entity.player.Player) null, this.getX(), this.getY(), this.getZ(), this.getEatingSound(stack), SoundSource.NEUTRAL, 1.0F, 1.0F + (world.random.nextFloat() - world.random.nextFloat()) * 0.4F);
+             this.addEatEffect(stack, world, this);
++            this.removeEatEffect(stack, world, this);
+             if (!(this instanceof net.minecraft.world.entity.player.Player) || !((net.minecraft.world.entity.player.Player) this).getAbilities().instabuild) {
+                 stack.shrink(1);
+             }
+@@ -4388,7 +4389,7 @@ public abstract class LivingEntity extends Entity {
+         Item item = stack.getItem();
+ 
+         if (item.isEdible()) {
+-            List<Pair<MobEffectInstance, Float>> list = item.getFoodProperties().getEffects();
++            List<Pair<MobEffectInstance, Float>> list = item.getFoodProperties().getEffectsToAdd();
+             Iterator iterator = list.iterator();
+ 
+             while (iterator.hasNext()) {
+@@ -4402,6 +4403,22 @@ public abstract class LivingEntity extends Entity {
+ 
+     }
+ 
++    private void removeEatEffect(ItemStack stack, Level world, LivingEntity targetEntity) {
++        Item item = stack.getItem();
++        List<MobEffect> list = item.getFoodProperties().getEffectsToCure();
++
++        if (!world.isClientSide && item.isEdible() && !list.isEmpty()) {
++            Map<MobEffect, MobEffectInstance> effects = targetEntity.activeEffects;
++            if (!effects.isEmpty()) {
++                for (MobEffect effect : effects.keySet()) {
++                    if (list.contains(effect))
++                        targetEntity.removeEffect(effect, org.bukkit.event.entity.EntityPotionEffectEvent.Cause.FOOD);
++                }
++            }
++        }
++
++    }
++
+     private static byte entityEventForEquipmentBreak(EquipmentSlot slot) {
+         switch (slot) {
+             case MAINHAND:
+@@ -4511,4 +4528,4 @@ public abstract class LivingEntity extends Entity {
+     public static record Fallsounds(SoundEvent small, SoundEvent big) {
+ 
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/world/food/FoodProperties.java b/src/main/java/net/minecraft/world/food/FoodProperties.java
+index 6c945ae8fe8b1517e312c688f829fab41f12d9f4..770e17097c72e5e7359e5df147f855a6c947a9f5 100644
+--- a/src/main/java/net/minecraft/world/food/FoodProperties.java
++++ b/src/main/java/net/minecraft/world/food/FoodProperties.java
+@@ -5,6 +5,8 @@ import com.mojang.datafixers.util.Pair;
+ 
+ import java.util.ArrayList;
+ import java.util.List;
++
++import net.minecraft.world.effect.MobEffect;
+ import net.minecraft.world.effect.MobEffectInstance;
+ 
+ public class FoodProperties {
+@@ -15,18 +17,20 @@ public class FoodProperties {
+     private boolean canAlwaysEat; public void setCanAlwaysEat(boolean canAlwaysEat) { this.canAlwaysEat = canAlwaysEat; }
+     private boolean fastFood; public void setFastFood(boolean isFastFood) { this.fastFood = isFastFood; }
+     public FoodProperties copy() {
+-        return new FoodProperties(this.nutrition, this.saturationModifier, this.isMeat, this.canAlwaysEat, this.fastFood, new ArrayList<>(this.effects));
++        return new FoodProperties(this.nutrition, this.saturationModifier, this.isMeat, this.canAlwaysEat, this.fastFood, new ArrayList<>(this.effectsToAdd), effectsToCure);
+     }
+     // Purpur end
+-    private final List<Pair<MobEffectInstance, Float>> effects;
++    private final List<Pair<MobEffectInstance, Float>> effectsToAdd;
++    private final List<MobEffect> effectsToCure;
+ 
+-    FoodProperties(int hunger, float saturationModifier, boolean meat, boolean alwaysEdible, boolean snack, List<Pair<MobEffectInstance, Float>> statusEffects) {
++    FoodProperties(int hunger, float saturationModifier, boolean meat, boolean alwaysEdible, boolean snack, List<Pair<MobEffectInstance, Float>> statusEffects, List<MobEffect> effectsToCure) {
+         this.nutrition = hunger;
+         this.saturationModifier = saturationModifier;
+         this.isMeat = meat;
+         this.canAlwaysEat = alwaysEdible;
+         this.fastFood = snack;
+-        this.effects = statusEffects;
++        this.effectsToAdd = statusEffects;
++        this.effectsToCure = effectsToCure;
+     }
+ 
+     public int getNutrition() {
+@@ -49,8 +53,12 @@ public class FoodProperties {
+         return this.fastFood;
+     }
+ 
+-    public List<Pair<MobEffectInstance, Float>> getEffects() {
+-        return this.effects;
++    public List<Pair<MobEffectInstance, Float>> getEffectsToAdd() {
++        return this.effectsToAdd;
++    }
++
++    public List<MobEffect> getEffectsToCure() {
++        return this.effectsToCure;
+     }
+ 
+     public static class Builder {
+@@ -59,7 +67,8 @@ public class FoodProperties {
+         private boolean isMeat;
+         private boolean canAlwaysEat;
+         private boolean fastFood;
+-        private final List<Pair<MobEffectInstance, Float>> effects = Lists.newArrayList();
++        private final List<Pair<MobEffectInstance, Float>> effectsToAdd = Lists.newArrayList();
++        private final List<MobEffect> effectsToCure = new ArrayList<>();
+ 
+         public FoodProperties.Builder nutrition(int hunger) {
+             this.nutrition = hunger;
+@@ -86,13 +95,18 @@ public class FoodProperties {
+             return this;
+         }
+ 
+-        public FoodProperties.Builder effect(MobEffectInstance effect, float chance) {
+-            this.effects.add(Pair.of(effect, chance));
++        public FoodProperties.Builder effectToAdd(MobEffectInstance effect, float chance) {
++            this.effectsToAdd.add(Pair.of(effect, chance));
++            return this;
++        }
++
++        public FoodProperties.Builder effectToCure(MobEffect effect) {
++            this.effectsToCure.add(effect);
+             return this;
+         }
+ 
+         public FoodProperties build() {
+-            return new FoodProperties(this.nutrition, this.saturationModifier, this.isMeat, this.canAlwaysEat, this.fastFood, this.effects);
++            return new FoodProperties(this.nutrition, this.saturationModifier, this.isMeat, this.canAlwaysEat, this.fastFood, this.effectsToAdd, this.effectsToCure);
+         }
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/world/food/Foods.java b/src/main/java/net/minecraft/world/food/Foods.java
+index 71beab673f04cd051c46ea37f8c847316885d38d..2cf57404e55c4a7955aa3efd390c9ec8f8185e8e 100644
+--- a/src/main/java/net/minecraft/world/food/Foods.java
++++ b/src/main/java/net/minecraft/world/food/Foods.java
+@@ -14,7 +14,7 @@ public class Foods {
+     public static final FoodProperties BEETROOT_SOUP = stew(6).build();
+     public static final FoodProperties BREAD = (new FoodProperties.Builder()).nutrition(5).saturationMod(0.6F).build();
+     public static final FoodProperties CARROT = (new FoodProperties.Builder()).nutrition(3).saturationMod(0.6F).build();
+-    public static final FoodProperties CHICKEN = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.3F).effect(new MobEffectInstance(MobEffects.HUNGER, 600, 0), 0.3F).meat().build();
++    public static final FoodProperties CHICKEN = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.3F).effectToAdd(new MobEffectInstance(MobEffects.HUNGER, 600, 0), 0.3F).meat().build();
+     public static final FoodProperties CHORUS_FRUIT = (new FoodProperties.Builder()).nutrition(4).saturationMod(0.3F).alwaysEat().build();
+     public static final FoodProperties COD = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.1F).build();
+     public static final FoodProperties COOKED_BEEF = (new FoodProperties.Builder()).nutrition(8).saturationMod(0.8F).meat().build();
+@@ -26,23 +26,23 @@ public class Foods {
+     public static final FoodProperties COOKED_SALMON = (new FoodProperties.Builder()).nutrition(6).saturationMod(0.8F).build();
+     public static final FoodProperties COOKIE = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.1F).build();
+     public static final FoodProperties DRIED_KELP = (new FoodProperties.Builder()).nutrition(1).saturationMod(0.3F).fast().build();
+-    public static final FoodProperties ENCHANTED_GOLDEN_APPLE = (new FoodProperties.Builder()).nutrition(4).saturationMod(1.2F).effect(new MobEffectInstance(MobEffects.REGENERATION, 400, 1), 1.0F).effect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 6000, 0), 1.0F).effect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 6000, 0), 1.0F).effect(new MobEffectInstance(MobEffects.ABSORPTION, 2400, 3), 1.0F).alwaysEat().build();
+-    public static final FoodProperties GOLDEN_APPLE = (new FoodProperties.Builder()).nutrition(4).saturationMod(1.2F).effect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1), 1.0F).effect(new MobEffectInstance(MobEffects.ABSORPTION, 2400, 0), 1.0F).alwaysEat().build();
++    public static final FoodProperties ENCHANTED_GOLDEN_APPLE = (new FoodProperties.Builder()).nutrition(4).saturationMod(1.2F).effectToAdd(new MobEffectInstance(MobEffects.REGENERATION, 400, 1), 1.0F).effectToAdd(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 6000, 0), 1.0F).effectToAdd(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, 6000, 0), 1.0F).effectToAdd(new MobEffectInstance(MobEffects.ABSORPTION, 2400, 3), 1.0F).alwaysEat().build();
++    public static final FoodProperties GOLDEN_APPLE = (new FoodProperties.Builder()).nutrition(4).saturationMod(1.2F).effectToAdd(new MobEffectInstance(MobEffects.REGENERATION, 100, 1), 1.0F).effectToAdd(new MobEffectInstance(MobEffects.ABSORPTION, 2400, 0), 1.0F).alwaysEat().build();
+     public static final FoodProperties GOLDEN_CARROT = (new FoodProperties.Builder()).nutrition(6).saturationMod(1.2F).build();
+     public static final FoodProperties HONEY_BOTTLE = (new FoodProperties.Builder()).nutrition(6).saturationMod(0.1F).build();
+     public static final FoodProperties MELON_SLICE = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.3F).build();
+     public static final FoodProperties MUSHROOM_STEW = stew(6).build();
+     public static final FoodProperties MUTTON = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.3F).meat().build();
+-    public static final FoodProperties POISONOUS_POTATO = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.3F).effect(new MobEffectInstance(MobEffects.POISON, 100, 0), 0.6F).build();
++    public static final FoodProperties POISONOUS_POTATO = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.3F).effectToAdd(new MobEffectInstance(MobEffects.POISON, 100, 0), 0.6F).build();
+     public static final FoodProperties PORKCHOP = (new FoodProperties.Builder()).nutrition(3).saturationMod(0.3F).meat().build();
+     public static final FoodProperties POTATO = (new FoodProperties.Builder()).nutrition(1).saturationMod(0.3F).build();
+-    public static final FoodProperties PUFFERFISH = (new FoodProperties.Builder()).nutrition(1).saturationMod(0.1F).effect(new MobEffectInstance(MobEffects.POISON, 1200, 1), 1.0F).effect(new MobEffectInstance(MobEffects.HUNGER, 300, 2), 1.0F).effect(new MobEffectInstance(MobEffects.CONFUSION, 300, 0), 1.0F).build();
++    public static final FoodProperties PUFFERFISH = (new FoodProperties.Builder()).nutrition(1).saturationMod(0.1F).effectToAdd(new MobEffectInstance(MobEffects.POISON, 1200, 1), 1.0F).effectToAdd(new MobEffectInstance(MobEffects.HUNGER, 300, 2), 1.0F).effectToAdd(new MobEffectInstance(MobEffects.CONFUSION, 300, 0), 1.0F).build();
+     public static final FoodProperties PUMPKIN_PIE = (new FoodProperties.Builder()).nutrition(8).saturationMod(0.3F).build();
+     public static final FoodProperties RABBIT = (new FoodProperties.Builder()).nutrition(3).saturationMod(0.3F).meat().build();
+     public static final FoodProperties RABBIT_STEW = stew(10).build();
+-    public static final FoodProperties ROTTEN_FLESH = (new FoodProperties.Builder()).nutrition(4).saturationMod(0.1F).effect(new MobEffectInstance(MobEffects.HUNGER, 600, 0), 0.8F).meat().build();
++    public static final FoodProperties ROTTEN_FLESH = (new FoodProperties.Builder()).nutrition(4).saturationMod(0.1F).effectToAdd(new MobEffectInstance(MobEffects.HUNGER, 600, 0), 0.8F).meat().build();
+     public static final FoodProperties SALMON = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.1F).build();
+-    public static final FoodProperties SPIDER_EYE = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.8F).effect(new MobEffectInstance(MobEffects.POISON, 100, 0), 1.0F).build();
++    public static final FoodProperties SPIDER_EYE = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.8F).effectToAdd(new MobEffectInstance(MobEffects.POISON, 100, 0), 1.0F).build();
+     public static final FoodProperties SUSPICIOUS_STEW = stew(6).alwaysEat().build();
+     public static final FoodProperties SWEET_BERRIES = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.1F).build();
+     public static final FoodProperties GLOW_BERRIES = (new FoodProperties.Builder()).nutrition(2).saturationMod(0.1F).build();
+@@ -51,4 +51,4 @@ public class Foods {
+     private static FoodProperties.Builder stew(int hunger) {
+         return (new FoodProperties.Builder()).nutrition(hunger).saturationMod(0.6F);
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/world/item/HoneyBottleItem.java b/src/main/java/net/minecraft/world/item/HoneyBottleItem.java
+index c8d6b5e60b6c8c612fa8580c63a32c4a8f8b0a7b..777f10294e0672a94daa9e49153b116f636ba72e 100644
+--- a/src/main/java/net/minecraft/world/item/HoneyBottleItem.java
++++ b/src/main/java/net/minecraft/world/item/HoneyBottleItem.java
+@@ -70,4 +70,4 @@ public class HoneyBottleItem extends Item {
+     public InteractionResultHolder<ItemStack> use(Level world, Player user, InteractionHand hand) {
+         return ItemUtils.startUsingInstantly(world, user, hand);
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 3cfbb4300e82cce409a7a0b53ef98987f166143c..c1d2dcb43d24ea631e8aa51c0410297bbb58ff17 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -535,10 +535,10 @@ public class PurpurConfig {
+             food.setIsMeat(properties.getBoolean(foodKey + ".is-meat", foodDefaults.isMeat()));
+             food.setCanAlwaysEat(properties.getBoolean(foodKey + ".can-always-eat", foodDefaults.canAlwaysEat()));
+             food.setFastFood(properties.getBoolean(foodKey + ".fast-food", foodDefaults.isFastFood()));
+-            ConfigurationSection effects = properties.getConfigurationSection(foodKey + ".effects");
+-            if (effects != null) {
++            ConfigurationSection effectsToAdd = properties.getConfigurationSection(foodKey + ".effects");
++            if (effectsToAdd != null) {
+                 Map<String, Object> effectDefaults = new HashMap<>();
+-                foodDefaults.getEffects().forEach(pair -> {
++                foodDefaults.getEffectsToAdd().forEach(pair -> {
+                     effectDefaults.put("chance", pair.getSecond());
+                     MobEffectInstance effect = pair.getFirst();
+                     effectDefaults.put("duration", effect.getDuration());
+@@ -547,25 +547,37 @@ public class PurpurConfig {
+                     effectDefaults.put("visible", effect.isVisible());
+                     effectDefaults.put("show-icon", effect.showIcon());
+                 });
+-                effects.getKeys(false).forEach(effectKey -> {
++                effectsToAdd.getKeys(false).forEach(effectKey -> {
+                     MobEffect effect = Registry.MOB_EFFECT.get(new ResourceLocation(effectKey));
+                     if (effect == null) {
+                         PurpurConfig.log(Level.SEVERE, "Invalid food property effect for " + foodKey + ": " + effectKey);
+                         return;
+                     }
+-                    food.getEffects().removeIf(pair -> pair.getFirst().getEffect() == effect);
+-                    float chance = (float) effects.getDouble(effectKey + ".chance", ((Float) effectDefaults.get("chance")).doubleValue());
+-                    int duration = effects.getInt(effectKey + ".duration", (int) effectDefaults.get("duration"));
++                    food.getEffectsToAdd().removeIf(pair -> pair.getFirst().getEffect() == effect);
++                    float chance = (float) effectsToAdd.getDouble(effectKey + ".chance", ((Float) effectDefaults.get("chance")).doubleValue());
++                    int duration = effectsToAdd.getInt(effectKey + ".duration", (int) effectDefaults.get("duration"));
+                     if (chance <= 0.0F || duration < 0) {
+                         return;
+                     }
+-                    int amplifier = effects.getInt(effectKey + ".amplifier", (int) effectDefaults.get("amplifier"));
+-                    boolean ambient = effects.getBoolean(effectKey + ".ambient", (boolean) effectDefaults.get("ambient"));
+-                    boolean visible = effects.getBoolean(effectKey + ".visible", (boolean) effectDefaults.get("visible"));
+-                    boolean showIcon = effects.getBoolean(effectKey + ".show-icon", (boolean) effectDefaults.get("show-icon"));
+-                    food.getEffects().add(Pair.of(new MobEffectInstance(effect, duration, amplifier, ambient, visible, showIcon), chance));
++                    int amplifier = effectsToAdd.getInt(effectKey + ".amplifier", (int) effectDefaults.get("amplifier"));
++                    boolean ambient = effectsToAdd.getBoolean(effectKey + ".ambient", (boolean) effectDefaults.get("ambient"));
++                    boolean visible = effectsToAdd.getBoolean(effectKey + ".visible", (boolean) effectDefaults.get("visible"));
++                    boolean showIcon = effectsToAdd.getBoolean(effectKey + ".show-icon", (boolean) effectDefaults.get("show-icon"));
++                    food.getEffectsToAdd().add(Pair.of(new MobEffectInstance(effect, duration, amplifier, ambient, visible, showIcon), chance));
+                 });
+             }
++            List<String> effectsToCure = properties.getStringList(foodKey + ".cure-effects");
++            if (!effectsToCure.isEmpty()) {
++                effectsToCure.forEach(effectKey -> {
++                    MobEffect effect = Registry.MOB_EFFECT.get(new ResourceLocation(effectKey));
++                    if (effect == null) {
++                        PurpurConfig.log(Level.SEVERE, "Invalid food property cure effect for " + foodKey + ": " + effectKey);
++                        return;
++                    }
++                    food.getEffectsToCure().removeIf(pair -> pair == effect);
++                    food.getEffectsToCure().add(effect);
++                });
++            } else food.getEffectsToCure().clear();
+         });
+     }
+ 
+@@ -634,4 +646,4 @@ public class PurpurConfig {
+             block.fallDistanceMultiplier = fallDistanceMultiplier.floatValue();
+         });
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index a6356d19f0fc664be523f19c2ea1704191a7a73a..8eae296926522c5e0b7e0c10da15b1b266ae70d2 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -13,15 +13,16 @@ import net.minecraft.world.level.Explosion;
+ import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.state.properties.Tilt;
++import org.apache.commons.lang.BooleanUtils;
++import org.bukkit.ChatColor;
++import org.bukkit.World;
++import org.bukkit.configuration.ConfigurationSection;
+ import org.purpurmc.purpur.entity.GlowSquidColor;
+ import org.purpurmc.purpur.tool.Strippable;
+ import org.purpurmc.purpur.tool.Tillable;
+ import org.purpurmc.purpur.tool.Waxable;
+ import org.purpurmc.purpur.tool.Weatherable;
+-import org.apache.commons.lang.BooleanUtils;
+-import org.bukkit.ChatColor;
+-import org.bukkit.World;
+-import org.bukkit.configuration.ConfigurationSection;
++
+ import java.util.ArrayList;
+ import java.util.HashMap;
+ import java.util.List;
+@@ -29,6 +30,7 @@ import java.util.Locale;
+ import java.util.Map;
+ import java.util.function.Predicate;
+ import java.util.logging.Level;
++
+ import static org.purpurmc.purpur.PurpurConfig.log;
+ 
+ @SuppressWarnings("unused")
+@@ -3131,5 +3133,4 @@ public class PurpurWorldConfig {
+         cauldronDripstoneWaterFillChance = (float) getDouble("blocks.cauldron.fill-chances.dripstone-water", cauldronDripstoneWaterFillChance);
+         cauldronDripstoneLavaFillChance = (float) getDouble("blocks.cauldron.fill-chances.dripstone-lava", cauldronDripstoneLavaFillChance);
+     }
+-}
+-
++}
+\ No newline at end of file
