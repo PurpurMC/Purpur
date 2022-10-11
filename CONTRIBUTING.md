@@ -269,7 +269,7 @@ Subject: [PATCH] revert serverside behavior of keepalives
 
 This patch intends to bump up the time that a client has to reply to the
 server back to 30 seconds as per pre 1.12.2, which allowed clients
-more than enough time to reply potentially allowing them to be less
+more than enough time to reply, potentially allowing them to be less
 temperamental due to lag spikes on the network thread, e.g. that caused
 by plugins that are interacting with netty.
 
@@ -428,7 +428,7 @@ file (`CONTRIBUTING.md`), the `LICENSE.md` file, and so forth.
 This only applies if you're running Windows. If you're running a prior Windows
 release, either update to Windows 10 or move to macOS/Linux/BSD.
 
-In order to speed up patching process on Windows, it's recommended you get WSL
+In order to speed up patching process on Windows, it's recommended you get WSL.
 2. This is available in Windows 10 v2004, build 19041 or higher. (You can check
    your version by running `winver` in the run window (Windows key + R)). If you're
    out of date, update your system with the
