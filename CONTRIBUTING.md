@@ -56,7 +56,7 @@ split into different directories which target certain parts of the code. These
 directories are:
 
 - `Purpur-API` - Modifications to `Paper-API`;
-- `Purpur-Server` - Modifications to `Purpur`.
+- `Purpur-Server` - Modifications to `Paper-Server`.
 
 Because the entire structure is based on patches and git, a basic understanding
 of how to use git is required. A basic tutorial can be found here:
