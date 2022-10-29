@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Fri, 29 Nov 2019 22:10:12 -0600
+Subject: [PATCH] Villagers follow emerald blocks
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/TemptGoal.java b/src/main/java/net/minecraft/world/entity/ai/goal/TemptGoal.java
+index 79bb13c5614bab1f0749c5f8f57f762c6216c564..2cbc9adc8e417def48be03d08174a5833068ec65 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/goal/TemptGoal.java
++++ b/src/main/java/net/minecraft/world/entity/ai/goal/TemptGoal.java
+@@ -62,7 +62,7 @@ public class TemptGoal extends Goal {
+     }
+ 
+     private boolean shouldFollow(LivingEntity entity) {
+-        return this.items.test(entity.getMainHandItem()) || this.items.test(entity.getOffhandItem());
++        return (this.items.test(entity.getMainHandItem()) || this.items.test(entity.getOffhandItem())) && (!(this.mob instanceof net.minecraft.world.entity.npc.Villager villager) || !villager.isSleeping()); // Purpur Fix #512
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/world/entity/npc/AbstractVillager.java b/src/main/java/net/minecraft/world/entity/npc/AbstractVillager.java
+index 5eab7d50734551d96128dfebee126a1da4c51375..860b938335966cdd872404dc12b097b7a1cc3b00 100644
+--- a/src/main/java/net/minecraft/world/entity/npc/AbstractVillager.java
++++ b/src/main/java/net/minecraft/world/entity/npc/AbstractVillager.java
+@@ -43,6 +43,7 @@ import org.bukkit.event.entity.VillagerAcquireTradeEvent;
+ // CraftBukkit end
+ 
+ public abstract class AbstractVillager extends AgeableMob implements InventoryCarrier, Npc, Merchant {
++    static final net.minecraft.world.item.crafting.Ingredient TEMPT_ITEMS = net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.level.block.Blocks.EMERALD_BLOCK.asItem()); // Purpur
+ 
+     // CraftBukkit start
+     private CraftMerchant craftMerchant;
+diff --git a/src/main/java/net/minecraft/world/entity/npc/Villager.java b/src/main/java/net/minecraft/world/entity/npc/Villager.java
+index 4cb1cf2b51f1c58e2600996f1d67dcef9e05e3fe..45fb970ec55a13f1f7b2e9858cc3c4d2ce9b0d75 100644
+--- a/src/main/java/net/minecraft/world/entity/npc/Villager.java
++++ b/src/main/java/net/minecraft/world/entity/npc/Villager.java
+@@ -176,6 +176,7 @@ public class Villager extends AbstractVillager implements ReputationEventHandler
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this));
++        if (level.purpurConfig.villagerFollowEmeraldBlock) this.goalSelector.addGoal(3, new net.minecraft.world.entity.ai.goal.TemptGoal(this, 1.0D, TEMPT_ITEMS, false));
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/world/entity/npc/WanderingTrader.java b/src/main/java/net/minecraft/world/entity/npc/WanderingTrader.java
+index 87d2f596ed2c313dd49f3b0c7a1a33d9288844ff..a66a76c8503c24cd57eccecdde220b473ae37bba 100644
+--- a/src/main/java/net/minecraft/world/entity/npc/WanderingTrader.java
++++ b/src/main/java/net/minecraft/world/entity/npc/WanderingTrader.java
+@@ -108,6 +108,7 @@ public class WanderingTrader extends net.minecraft.world.entity.npc.AbstractVill
+         this.goalSelector.addGoal(1, new PanicGoal(this, 0.5D));
+         this.goalSelector.addGoal(1, new LookAtTradingPlayerGoal(this));
+         this.goalSelector.addGoal(2, new WanderingTrader.WanderToPositionGoal(this, 2.0D, 0.35D));
++        if (level.purpurConfig.wanderingTraderFollowEmeraldBlock) this.goalSelector.addGoal(3, new net.minecraft.world.entity.ai.goal.TemptGoal(this, 1.0D, TEMPT_ITEMS, false)); // Purpur
+         this.goalSelector.addGoal(4, new MoveTowardsRestrictionGoal(this, 0.35D));
+         this.goalSelector.addGoal(8, new WaterAvoidingRandomStrollGoal(this, 0.35D));
+         this.goalSelector.addGoal(9, new InteractGoal(this, Player.class, 3.0F, 1.0F));
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 976f65da88ab40d2550591f6685a853fafa23abe..5f0ca014620632ffcb3dacba8468196c4d083dae 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1412,6 +1412,7 @@ public class PurpurWorldConfig {
+     public double villagerMaxHealth = 20.0D;
+     public int villagerBrainTicks = 1;
+     public boolean villagerUseBrainTicksOnlyWhenLagging = true;
++    public boolean villagerFollowEmeraldBlock = false;
+     private void villagerSettings() {
+         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
+         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
+@@ -1424,6 +1425,7 @@ public class PurpurWorldConfig {
+         villagerMaxHealth = getDouble("mobs.villager.attributes.max_health", villagerMaxHealth);
+         villagerBrainTicks = getInt("mobs.villager.brain-ticks", villagerBrainTicks);
+         villagerUseBrainTicksOnlyWhenLagging = getBoolean("mobs.villager.use-brain-ticks-only-when-lagging", villagerUseBrainTicksOnlyWhenLagging);
++        villagerFollowEmeraldBlock = getBoolean("mobs.villager.follow-emerald-blocks", villagerFollowEmeraldBlock);
+     }
+ 
+     public boolean vindicatorRidable = false;
+@@ -1446,6 +1448,7 @@ public class PurpurWorldConfig {
+     public boolean wanderingTraderRidableInWater = false;
+     public boolean wanderingTraderControllable = true;
+     public double wanderingTraderMaxHealth = 20.0D;
++    public boolean wanderingTraderFollowEmeraldBlock = false;
+     private void wanderingTraderSettings() {
+         wanderingTraderRidable = getBoolean("mobs.wandering_trader.ridable", wanderingTraderRidable);
+         wanderingTraderRidableInWater = getBoolean("mobs.wandering_trader.ridable-in-water", wanderingTraderRidableInWater);
+@@ -1456,6 +1459,7 @@ public class PurpurWorldConfig {
+             set("mobs.wandering_trader.attributes.max_health", oldValue);
+         }
+         wanderingTraderMaxHealth = getDouble("mobs.wandering_trader.attributes.max_health", wanderingTraderMaxHealth);
++        wanderingTraderFollowEmeraldBlock = getBoolean("mobs.wandering_trader.follow-emerald-blocks", wanderingTraderFollowEmeraldBlock);
+     }
+ 
+     public boolean wardenRidable = false;

@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <blake.galbreath@gmail.com>
+Date: Tue, 20 Sep 2022 17:56:21 -0500
+Subject: [PATCH] Allay respect item NBT
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/animal/allay/Allay.java b/src/main/java/net/minecraft/world/entity/animal/allay/Allay.java
+index 499a6b84f0db4a7ad881224f445558feae4f893f..8f843b562d96274d7e786f1dc1f04602a7303222 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/allay/Allay.java
++++ b/src/main/java/net/minecraft/world/entity/animal/allay/Allay.java
+@@ -15,6 +15,7 @@ import net.minecraft.core.Vec3i;
+ import net.minecraft.core.particles.ParticleTypes;
+ import net.minecraft.nbt.CompoundTag;
+ import net.minecraft.nbt.NbtOps;
++import net.minecraft.nbt.Tag;
+ import net.minecraft.network.protocol.game.DebugPackets;
+ import net.minecraft.network.syncher.EntityDataAccessor;
+ import net.minecraft.network.syncher.EntityDataSerializers;
+@@ -411,9 +412,31 @@ public class Allay extends PathfinderMob implements InventoryCarrier {
+ 
+     @Override
+     public boolean wantsToPickUp(ItemStack stack) {
+-        ItemStack itemstack1 = this.getItemInHand(InteractionHand.MAIN_HAND);
+-
+-        return !itemstack1.isEmpty() && itemstack1.sameItemStackIgnoreDurability(stack) && this.inventory.canAddItem(stack) && this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
++        // Purpur start
++        if (!this.level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
++            return false;
++        }
++        ItemStack itemStack = this.getItemInHand(InteractionHand.MAIN_HAND);
++        if (itemStack.isEmpty()) {
++            return false;
++        }
++        if (!itemStack.sameItemStackIgnoreDurability(stack)) {
++            return false;
++        }
++        if (!this.inventory.canAddItem(stack)) {
++            return false;
++        }
++        for (String tag : this.level.purpurConfig.allayRespectNBT) {
++            if (stack.hasTag() && itemStack.hasTag()) {
++                Tag tag1 = stack.getTag().get(tag);
++                Tag tag2 = itemStack.getTag().get(tag);
++                if (!Objects.equals(tag1, tag2)) {
++                    return false;
++                }
++            }
++        }
++        return true;
++        // Purpur end
+     }
+ 
+     @Override
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 2cd4b04bf1820b28050f3af492186135b9b69712..5686dfd41dad412cdbef9345eff3542740599462 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1043,10 +1043,13 @@ public class PurpurWorldConfig {
+     public boolean allayRidable = false;
+     public boolean allayRidableInWater = false;
+     public boolean allayControllable = true;
++    public List<String> allayRespectNBT = new ArrayList<>();
+     private void allaySettings() {
+         allayRidable = getBoolean("mobs.allay.ridable", allayRidable);
+         allayRidableInWater = getBoolean("mobs.allay.ridable-in-water", allayRidableInWater);
+         allayControllable = getBoolean("mobs.allay.controllable", allayControllable);
++        allayRespectNBT.clear();
++        getList("mobs.allay.respect-nbt", new ArrayList<>()).forEach(key -> allayRespectNBT.add(key.toString()));
+     }
+ 
+     public boolean axolotlRidable = false;
