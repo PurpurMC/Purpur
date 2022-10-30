@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sun, 14 Jul 2019 19:52:47 -0500
+Subject: [PATCH] Mending mends most damages equipment first
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/ExperienceOrb.java b/src/main/java/net/minecraft/world/entity/ExperienceOrb.java
+index 2d1228670696224452cb432e0279456d8c5fe710..02bc7ccb4db6e9a287b32c887a455976096dcc10 100644
+--- a/src/main/java/net/minecraft/world/entity/ExperienceOrb.java
++++ b/src/main/java/net/minecraft/world/entity/ExperienceOrb.java
+@@ -322,7 +322,7 @@ public class ExperienceOrb extends Entity {
+     }
+ 
+     private int repairPlayerItems(Player player, int amount) {
+-        Entry<EquipmentSlot, ItemStack> entry = EnchantmentHelper.getRandomItemWith(Enchantments.MENDING, player, ItemStack::isDamaged);
++        Entry<EquipmentSlot, ItemStack> entry = level.purpurConfig.useBetterMending ? EnchantmentHelper.getMostDamagedEquipment(Enchantments.MENDING, player) : EnchantmentHelper.getRandomItemWith(Enchantments.MENDING, player, ItemStack::isDamaged); // Purpur
+ 
+         if (entry != null) {
+             ItemStack itemstack = (ItemStack) entry.getValue();
+diff --git a/src/main/java/net/minecraft/world/item/ItemStack.java b/src/main/java/net/minecraft/world/item/ItemStack.java
+index c18a0bc94d0210396046f4475e49a739088593f3..3d1ba3d3b12fe649e451b6c8a3726c6991cfe083 100644
+--- a/src/main/java/net/minecraft/world/item/ItemStack.java
++++ b/src/main/java/net/minecraft/world/item/ItemStack.java
+@@ -535,6 +535,16 @@ public final class ItemStack {
+         return this.isDamageableItem() && this.getDamageValue() > 0;
+     }
+ 
++    // Purpur start
++    public float getDamagePercent() {
++        if (isDamaged()) {
++            return (float) getDamageValue() / (float) getItem().getMaxDamage();
++        } else {
++            return 0F;
++        }
++    }
++    // Purpur end
++
+     public int getDamageValue() {
+         return this.tag == null ? 0 : this.tag.getInt("Damage");
+     }
+diff --git a/src/main/java/net/minecraft/world/item/enchantment/EnchantmentHelper.java b/src/main/java/net/minecraft/world/item/enchantment/EnchantmentHelper.java
+index 22925b2f44fc510832ef07290d3109f0394f7d30..4afa30753a90d9bbd3c71b21cb4a8deadf9ccb3b 100644
+--- a/src/main/java/net/minecraft/world/item/enchantment/EnchantmentHelper.java
++++ b/src/main/java/net/minecraft/world/item/enchantment/EnchantmentHelper.java
+@@ -274,6 +274,29 @@ public class EnchantmentHelper {
+         return getItemEnchantmentLevel(Enchantments.CHANNELING, stack) > 0;
+     }
+ 
++    // Purpur start
++    @Nullable
++    public static Map.Entry<EquipmentSlot, ItemStack> getMostDamagedEquipment(Enchantment enchantment, LivingEntity entity) {
++        Map<EquipmentSlot, ItemStack> map = enchantment.getSlotItems(entity);
++        if (map.isEmpty()) {
++            return null;
++        }
++        Map.Entry<EquipmentSlot, ItemStack> item = null;
++        float maxPercent = 0F;
++        for (Map.Entry<EquipmentSlot, ItemStack> entry : map.entrySet()) {
++            ItemStack itemstack = entry.getValue();
++            if (!itemstack.isEmpty() && itemstack.isDamaged() && getItemEnchantmentLevel(enchantment, itemstack) > 0) {
++                float percent = itemstack.getDamagePercent();
++                if (item == null || percent > maxPercent) {
++                    item = entry;
++                    maxPercent = percent;
++                }
++            }
++        }
++        return item;
++    }
++    // Purpur end
++
+     @Nullable
+     public static Map.Entry<EquipmentSlot, ItemStack> getRandomItemWith(Enchantment enchantment, LivingEntity entity) {
+         return getRandomItemWith(enchantment, entity, (stack) -> {
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index ebb932d4311cd96dcfec98b9be13b75cd725c6f6..602b6841bba07fbaa2dc04a1dff2ffd0cecfb5c1 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -98,6 +98,7 @@ public class PurpurWorldConfig {
+         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
+     }
+ 
++    public boolean useBetterMending = false;
+     public boolean boatEjectPlayersOnLand = false;
+     public boolean disableDropsOnCrammingDeath = false;
+     public boolean milkCuresBadOmen = true;
+@@ -105,6 +106,7 @@ public class PurpurWorldConfig {
+     public double voidDamageHeight = -64.0D;
+     public double voidDamageDealt = 4.0D;
+     private void miscGameplayMechanicsSettings() {
++        useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
+         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
+         disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);
+         milkCuresBadOmen = getBoolean("gameplay-mechanics.milk-cures-bad-omen", milkCuresBadOmen);

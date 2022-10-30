@@ -1,0 +1,107 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Sat, 10 Oct 2020 14:29:55 -0500
+Subject: [PATCH] Configurable daylight cycle
+
+
+diff --git a/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java b/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
+index 689ad22925b2561f7c8db961743eb1f821dbb25f..fa3c960992cc240161817e54659d83fed259f2fe 100644
+--- a/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
++++ b/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
+@@ -5,7 +5,7 @@ import net.minecraft.network.protocol.Packet;
+ 
+ public class ClientboundSetTimePacket implements Packet<ClientGamePacketListener> {
+     private final long gameTime;
+-    private final long dayTime;
++    private long dayTime; public void setDayTime(long dayTime) { this.dayTime = dayTime; } // Purpur
+ 
+     public ClientboundSetTimePacket(long time, long timeOfDay, boolean doDaylightCycle) {
+         this.gameTime = time % 192000; // Paper - fix guardian beam
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 2e17a2c1b536715dd5a38e90615315b8670b1d8b..9b3717176ecb40f4c76a5191956f7d378f3f1478 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1511,7 +1511,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+             long worldTime = world.getGameTime();
+             final ClientboundSetTimePacket worldPacket = new ClientboundSetTimePacket(worldTime, dayTime, doDaylight);
+             for (Player entityhuman : world.players()) {
+-                if (!(entityhuman instanceof ServerPlayer) || (tickCount + entityhuman.getId()) % 20 != 0) {
++                if (!(entityhuman instanceof ServerPlayer) || (!world.isForceTime() && (tickCount + entityhuman.getId()) % 20 != 0)) { // Purpur
+                     continue;
+                 }
+                 ServerPlayer entityplayer = (ServerPlayer) entityhuman;
+diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
+index 444a8207fe3610f4cd5f975c5983efab43ccbfea..656ea698078724362cd1a39d29d40ba763b1c12a 100644
+--- a/src/main/java/net/minecraft/server/level/ServerLevel.java
++++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
+@@ -212,6 +212,8 @@ public class ServerLevel extends Level implements WorldGenLevel {
+     private final StructureManager structureManager;
+     private final StructureCheck structureCheck;
+     private final boolean tickTime;
++    private double preciseTime; // Purpur
++    private boolean forceTime; // Purpur
+     public long lastMidTickExecuteFailure; // Paper - execute chunk tasks mid tick
+ 
+     // CraftBukkit start
+@@ -622,6 +624,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
+ 
+         this.chunkTaskScheduler = new io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler(this, io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler.workerThreads); // Paper - rewrite chunk system
+         this.entityLookup = new io.papermc.paper.chunk.system.entity.EntityLookup(this, new EntityCallbacks()); // Paper - rewrite chunk system
++        this.preciseTime = this.serverLevelData.getDayTime(); // Purpur
+     }
+ 
+     public void setWeatherParameters(int clearDuration, int rainDuration, boolean raining, boolean thundering) {
+@@ -792,6 +795,13 @@ public class ServerLevel extends Level implements WorldGenLevel {
+             this.serverLevelData.setGameTime(i);
+             this.serverLevelData.getScheduledEvents().tick(this.server, i);
+             if (this.levelData.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
++                // Purpur start
++                int incrementTicks = isDay() ? this.purpurConfig.daytimeTicks : this.purpurConfig.nighttimeTicks;
++                if (incrementTicks != 12000) {
++                    this.preciseTime += 12000 / (double) incrementTicks;
++                    this.setDayTime(this.preciseTime);
++                } else
++                // Purpur end
+                 this.setDayTime(this.levelData.getDayTime() + 1L);
+             }
+ 
+@@ -800,7 +810,21 @@ public class ServerLevel extends Level implements WorldGenLevel {
+ 
+     public void setDayTime(long timeOfDay) {
+         this.serverLevelData.setDayTime(timeOfDay);
++        // Purpur start
++        this.preciseTime = timeOfDay;
++        this.forceTime = false;
+     }
++    public void setDayTime(double i) {
++        this.serverLevelData.setDayTime((long) i);
++        this.forceTime = true;
++        // Purpur end
++    }
++
++    // Purpur start
++    public boolean isForceTime() {
++        return this.forceTime;
++    }
++    // Purpur end
+ 
+     public void tickCustomSpawners(boolean spawnMonsters, boolean spawnAnimals) {
+         Iterator iterator = this.customSpawners.iterator();
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 9a160cfffeb3049f256f56e9df8aab42ebe9ec2f..0a8f9082470b3b70fb21ea620d6dce23120cb65b 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -125,6 +125,13 @@ public class PurpurWorldConfig {
+         raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
+     }
+ 
++    public int daytimeTicks = 12000;
++    public int nighttimeTicks = 12000;
++    private void daytimeCycleSettings() {
++        daytimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.daytime", daytimeTicks);
++        nighttimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.nighttime", nighttimeTicks);
++    }
++
+     public int elytraDamagePerSecond = 1;
+     public double elytraDamageMultiplyBySpeed = 0;
+     public boolean elytraIgnoreUnbreaking = false;
