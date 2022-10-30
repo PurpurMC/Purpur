@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Mon, 13 Jul 2020 11:40:00 -0500
+Subject: [PATCH] Add option to teleport to spawn if outside world border
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index adb0f93122be4eb944824d90ed06553a246d7cb5..fb80693c653568ff49167e9fef33ea9627409864 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -2600,4 +2600,26 @@ public class ServerPlayer extends Player {
+         return (CraftPlayer) super.getBukkitEntity();
+     }
+     // CraftBukkit end
++
++    // Purpur start
++    public void teleport(Location to) {
++        this.ejectPassengers();
++        this.stopRiding(true);
++
++        if (this.isSleeping()) {
++            this.stopSleepInBed(true, false);
++        }
++
++        if (this.containerMenu != this.inventoryMenu) {
++            this.closeContainer(org.bukkit.event.inventory.InventoryCloseEvent.Reason.TELEPORT);
++        }
++
++        ServerLevel toLevel = ((CraftWorld) to.getWorld()).getHandle();
++        if (this.level == toLevel) {
++            this.connection.teleport(to);
++        } else {
++            this.server.getPlayerList().respawn(this, toLevel, true, to, !toLevel.paperConfig().environment.disableTeleportationSuffocationCheck);
++        }
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+index 8401577ee010c211c99c174bc70536d606a09b1d..5230e9a58c9fb6f9e9ea9536b2d05cee0a24554a 100644
+--- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
++++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+@@ -411,6 +411,7 @@ public abstract class LivingEntity extends Entity {
+                     double d1 = this.level.getWorldBorder().getDamagePerBlock();
+ 
+                     if (d1 > 0.0D) {
++                        if (level.purpurConfig.teleportIfOutsideBorder && this instanceof ServerPlayer) { ((ServerPlayer) this).teleport(io.papermc.paper.util.MCUtil.toLocation(level, ((ServerLevel) level).getSharedSpawnPos())); return; } // Purpur
+                         this.hurt(DamageSource.IN_WALL, (float) Math.max(1, Mth.floor(-d0 * d1)));
+                     }
+                 }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 0f33736b1daf1d5721cd08abd66c70a9690124b6..be33d4c0c00804547da3f0aa56b52014343dd804 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -247,6 +247,7 @@ public class PurpurWorldConfig {
+     public boolean playerInvulnerableWhileAcceptingResourcePack = false;
+     public String playerDeathExpDropEquation = "expLevel * 7";
+     public int playerDeathExpDropMax = 100;
++    public boolean teleportIfOutsideBorder = false;
+     private void playerSettings() {
+         if (PurpurConfig.version < 19) {
+             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
+@@ -262,6 +263,7 @@ public class PurpurWorldConfig {
+         playerInvulnerableWhileAcceptingResourcePack = getBoolean("gameplay-mechanics.player.invulnerable-while-accepting-resource-pack", playerInvulnerableWhileAcceptingResourcePack);
+         playerDeathExpDropEquation = getString("gameplay-mechanics.player.exp-dropped-on-death.equation", playerDeathExpDropEquation);
+         playerDeathExpDropMax = getInt("gameplay-mechanics.player.exp-dropped-on-death.maximum", playerDeathExpDropMax);
++        teleportIfOutsideBorder = getBoolean("gameplay-mechanics.player.teleport-if-outside-border", teleportIfOutsideBorder);
+     }
+ 
+     public boolean silkTouchEnabled = false;

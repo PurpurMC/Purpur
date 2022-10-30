@@ -1,0 +1,223 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sat, 29 Jun 2019 02:32:40 -0500
+Subject: [PATCH] Minecart settings and WASD controls
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index 6917b4352cacb9890273c9bf1ea5b8ccc7f069af..adb0f93122be4eb944824d90ed06553a246d7cb5 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -1035,6 +1035,7 @@ public class ServerPlayer extends Player {
+         if (this.isInvulnerableTo(source)) {
+             return false;
+         } else {
++            if (source == DamageSource.FALL && getRootVehicle() instanceof net.minecraft.world.entity.vehicle.AbstractMinecart && level.purpurConfig.minecartControllable && !level.purpurConfig.minecartControllableFallDamage) return false; // Purpur
+             boolean flag = this.server.isDedicatedServer() && this.isPvpAllowed() && "fall".equals(source.msgId);
+ 
+             if (!flag && isSpawnInvulnerable() && source != DamageSource.OUT_OF_WORLD) { // Purpur
+diff --git a/src/main/java/net/minecraft/world/entity/vehicle/AbstractMinecart.java b/src/main/java/net/minecraft/world/entity/vehicle/AbstractMinecart.java
+index c71120fe57a76c4638be5dcbda5a756cc2d62ffc..997776ac62d2de1f076a5bc38fcf78a1999748cf 100644
+--- a/src/main/java/net/minecraft/world/entity/vehicle/AbstractMinecart.java
++++ b/src/main/java/net/minecraft/world/entity/vehicle/AbstractMinecart.java
+@@ -107,11 +107,13 @@ public abstract class AbstractMinecart extends Entity {
+     private double flyingY = 0.949999988079071D; // Paper - restore vanilla precision
+     private double flyingZ = 0.949999988079071D; // Paper - restore vanilla precision
+     public double maxSpeed = 0.4D;
++    public double storedMaxSpeed; // Purpur
+     // CraftBukkit end
+ 
+     protected AbstractMinecart(EntityType<?> type, Level world) {
+         super(type, world);
+         this.blocksBuilding = true;
++        if (world != null) maxSpeed = storedMaxSpeed = world.purpurConfig.minecartMaxSpeed; // Purpur
+     }
+ 
+     protected AbstractMinecart(EntityType<?> type, Level world, double x, double y, double z) {
+@@ -334,6 +336,12 @@ public abstract class AbstractMinecart extends Entity {
+ 
+     @Override
+     public void tick() {
++        // Purpur start
++        if (storedMaxSpeed != level.purpurConfig.minecartMaxSpeed) {
++            maxSpeed = storedMaxSpeed = level.purpurConfig.minecartMaxSpeed;
++        }
++        // Purpur end
++
+         // CraftBukkit start
+         double prevX = this.getX();
+         double prevY = this.getY();
+@@ -497,16 +505,63 @@ public abstract class AbstractMinecart extends Entity {
+ 
+     public void activateMinecart(int x, int y, int z, boolean powered) {}
+ 
++    // Purpur start
++    private Double lastSpeed;
++
++    public double getControllableSpeed() {
++        BlockPos pos = new BlockPos(this);
++        Block block = level.getBlockState(pos).getBlock();
++        if (!block.material.isSolid()) {
++            block = level.getBlockState(pos.relative(Direction.DOWN)).getBlock();
++        }
++        Double speed = level.purpurConfig.minecartControllableBlockSpeeds.get(block);
++        if (!block.material.isSolid()) {
++            speed = lastSpeed;
++        }
++        if (speed == null) {
++            speed = level.purpurConfig.minecartControllableBaseSpeed;
++        }
++        return lastSpeed = speed;
++    }
++    // Purpur end
++
+     protected void comeOffTrack() {
+         double d0 = this.getMaxSpeed();
+         Vec3 vec3d = this.getDeltaMovement();
+ 
+         this.setDeltaMovement(Mth.clamp(vec3d.x, -d0, d0), vec3d.y, Mth.clamp(vec3d.z, -d0, d0));
++
++        // Purpur start
++        if (level.purpurConfig.minecartControllable && !isInWater() && !isInLava() && !passengers.isEmpty()) {
++            Entity passenger = passengers.get(0);
++            if (passenger instanceof Player) {
++                Player player = (Player) passenger;
++                if (player.jumping && this.onGround) {
++                    setDeltaMovement(new Vec3(getDeltaMovement().x, level.purpurConfig.minecartControllableHopBoost, getDeltaMovement().z));
++                }
++                if (player.zza != 0.0F) {
++                    Vector velocity = player.getBukkitEntity().getEyeLocation().getDirection().normalize().multiply(getControllableSpeed());
++                    if (player.zza < 0.0) {
++                        velocity.multiply(-0.5);
++                    }
++                    setDeltaMovement(new Vec3(velocity.getX(), getDeltaMovement().y, velocity.getZ()));
++                }
++                this.setYRot(passenger.getYRot() - 90);
++                maxUpStep = level.purpurConfig.minecartControllableStepHeight;
++            } else {
++                maxUpStep = 0.0F;
++            }
++        } else {
++            maxUpStep = 0.0F;
++        }
++        // Purpur end
++
+         if (this.onGround) {
+             // CraftBukkit start - replace magic numbers with our variables
+             this.setDeltaMovement(new Vec3(this.getDeltaMovement().x * this.derailedX, this.getDeltaMovement().y * this.derailedY, this.getDeltaMovement().z * this.derailedZ));
+             // CraftBukkit end
+         }
++        else if (level.purpurConfig.minecartControllable) setDeltaMovement(new Vec3(getDeltaMovement().x * derailedX, getDeltaMovement().y, getDeltaMovement().z * derailedZ)); // Purpur
+ 
+         this.move(MoverType.SELF, this.getDeltaMovement());
+         if (!this.onGround) {
+diff --git a/src/main/java/net/minecraft/world/item/MinecartItem.java b/src/main/java/net/minecraft/world/item/MinecartItem.java
+index 127a799f7848b32664b77bf67847ca6b8ac9a90d..178cd88a7de291136e0486617e8347b72cacaf20 100644
+--- a/src/main/java/net/minecraft/world/item/MinecartItem.java
++++ b/src/main/java/net/minecraft/world/item/MinecartItem.java
+@@ -120,8 +120,9 @@ public class MinecartItem extends Item {
+         BlockState iblockdata = world.getBlockState(blockposition);
+ 
+         if (!iblockdata.is(BlockTags.RAILS)) {
+-            return InteractionResult.FAIL;
+-        } else {
++            if (!world.purpurConfig.minecartPlaceAnywhere) return InteractionResult.FAIL;
++            if (iblockdata.getMaterial().isSolid()) blockposition = blockposition.relative(context.getClickedFace());
++        } // else { // Purpur - place minecarts anywhere
+             ItemStack itemstack = context.getItemInHand();
+ 
+             if (!world.isClientSide) {
+@@ -149,6 +150,6 @@ public class MinecartItem extends Item {
+ 
+             itemstack.shrink(1);
+             return InteractionResult.sidedSuccess(world.isClientSide);
+-        }
++        // } // Purpur - place minecarts anywhere
+     }
+ }
+diff --git a/src/main/java/net/minecraft/world/level/block/state/BlockBehaviour.java b/src/main/java/net/minecraft/world/level/block/state/BlockBehaviour.java
+index b86c17b5572f8f74bfefd0f3c6f9d25187574392..304f0f372d669e3da2e8131c50f2f1246185a56b 100644
+--- a/src/main/java/net/minecraft/world/level/block/state/BlockBehaviour.java
++++ b/src/main/java/net/minecraft/world/level/block/state/BlockBehaviour.java
+@@ -73,7 +73,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
+ public abstract class BlockBehaviour {
+ 
+     protected static final Direction[] UPDATE_SHAPE_ORDER = new Direction[]{Direction.WEST, Direction.EAST, Direction.NORTH, Direction.SOUTH, Direction.DOWN, Direction.UP};
+-    protected final Material material;
++    public final Material material; // Purpur - protected -> public
+     public final boolean hasCollision;
+     protected final float explosionResistance;
+     protected final boolean isRandomlyTicking;
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index dcad4a05c287fc6448eeafaed16d7163b0ae855a..e4b920976dab1d29d686f7948fb3f8bdd643288b 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -98,6 +98,68 @@ public class PurpurWorldConfig {
+         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
+     }
+ 
++    public double minecartMaxSpeed = 0.4D;
++    public boolean minecartPlaceAnywhere = false;
++    public boolean minecartControllable = false;
++    public float minecartControllableStepHeight = 1.0F;
++    public double minecartControllableHopBoost = 0.5D;
++    public boolean minecartControllableFallDamage = true;
++    public double minecartControllableBaseSpeed = 0.1D;
++    public Map<Block, Double> minecartControllableBlockSpeeds = new HashMap<>();
++    private void minecartSettings() {
++        if (PurpurConfig.version < 12) {
++            boolean oldBool = getBoolean("gameplay-mechanics.controllable-minecarts.place-anywhere", minecartPlaceAnywhere);
++            set("gameplay-mechanics.controllable-minecarts.place-anywhere", null);
++            set("gameplay-mechanics.minecart.place-anywhere", oldBool);
++            oldBool = getBoolean("gameplay-mechanics.controllable-minecarts.enabled", minecartControllable);
++            set("gameplay-mechanics.controllable-minecarts.enabled", null);
++            set("gameplay-mechanics.minecart.controllable.enabled", oldBool);
++            double oldDouble = getDouble("gameplay-mechanics.controllable-minecarts.step-height", minecartControllableStepHeight);
++            set("gameplay-mechanics.controllable-minecarts.step-height", null);
++            set("gameplay-mechanics.minecart.controllable.step-height", oldDouble);
++            oldDouble = getDouble("gameplay-mechanics.controllable-minecarts.hop-boost", minecartControllableHopBoost);
++            set("gameplay-mechanics.controllable-minecarts.hop-boost", null);
++            set("gameplay-mechanics.minecart.controllable.hop-boost", oldDouble);
++            oldBool = getBoolean("gameplay-mechanics.controllable-minecarts.fall-damage", minecartControllableFallDamage);
++            set("gameplay-mechanics.controllable-minecarts.fall-damage", null);
++            set("gameplay-mechanics.minecart.controllable.fall-damage", oldBool);
++            oldDouble = getDouble("gameplay-mechanics.controllable-minecarts.base-speed", minecartControllableBaseSpeed);
++            set("gameplay-mechanics.controllable-minecarts.base-speed", null);
++            set("gameplay-mechanics.minecart.controllable.base-speed", oldDouble);
++            ConfigurationSection section = getConfigurationSection("gameplay-mechanics.controllable-minecarts.block-speed");
++            if (section != null) {
++                for (String key : section.getKeys(false)) {
++                    if ("grass-block".equals(key)) key = "grass_block"; // oopsie
++                    oldDouble = section.getDouble(key, minecartControllableBaseSpeed);
++                    set("gameplay-mechanics.controllable-minecarts.block-speed." + key, null);
++                    set("gameplay-mechanics.minecart.controllable.block-speed." + key, oldDouble);
++                }
++                set("gameplay-mechanics.controllable-minecarts.block-speed", null);
++            }
++            set("gameplay-mechanics.controllable-minecarts", null);
++        }
++
++        minecartMaxSpeed = getDouble("gameplay-mechanics.minecart.max-speed", minecartMaxSpeed);
++        minecartPlaceAnywhere = getBoolean("gameplay-mechanics.minecart.place-anywhere", minecartPlaceAnywhere);
++        minecartControllable = getBoolean("gameplay-mechanics.minecart.controllable.enabled", minecartControllable);
++        minecartControllableStepHeight = (float) getDouble("gameplay-mechanics.minecart.controllable.step-height", minecartControllableStepHeight);
++        minecartControllableHopBoost = getDouble("gameplay-mechanics.minecart.controllable.hop-boost", minecartControllableHopBoost);
++        minecartControllableFallDamage = getBoolean("gameplay-mechanics.minecart.controllable.fall-damage", minecartControllableFallDamage);
++        minecartControllableBaseSpeed = getDouble("gameplay-mechanics.minecart.controllable.base-speed", minecartControllableBaseSpeed);
++        ConfigurationSection section = getConfigurationSection("gameplay-mechanics.minecart.controllable.block-speed");
++        if (section != null) {
++            for (String key : section.getKeys(false)) {
++                Block block = Registry.BLOCK.get(new ResourceLocation(key));
++                if (block != Blocks.AIR) {
++                    minecartControllableBlockSpeeds.put(block, section.getDouble(key, minecartControllableBaseSpeed));
++                }
++            }
++        } else {
++            set("gameplay-mechanics.minecart.controllable.block-speed.grass_block", 0.3D);
++            set("gameplay-mechanics.minecart.controllable.block-speed.stone", 0.5D);
++        }
++    }
++
+     public boolean idleTimeoutKick = true;
+     public boolean idleTimeoutTickNearbyEntities = true;
+     public boolean idleTimeoutCountAsSleeping = false;
