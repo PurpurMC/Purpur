@@ -1,0 +1,216 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jason Penilla <11360596+jpenilla@users.noreply.github.com>
+Date: Wed, 30 Sep 2020 14:32:46 -0700
+Subject: [PATCH] Persistent BlockEntity Lore and DisplayName
+
+Makes it so that when a BlockEntity is placed in the world and then broken,
+the dropped ItemStack retains any original custom display name/lore.
+
+diff --git a/src/main/java/net/minecraft/world/item/BlockItem.java b/src/main/java/net/minecraft/world/item/BlockItem.java
+index 72d94c79db5a6d0d41220b34ba6a1787b66a6cfd..fa12a9b6daa82dd032a86f78613a3c3cb32e9660 100644
+--- a/src/main/java/net/minecraft/world/item/BlockItem.java
++++ b/src/main/java/net/minecraft/world/item/BlockItem.java
+@@ -151,7 +151,24 @@ public class BlockItem extends Item {
+     }
+ 
+     protected boolean updateCustomBlockEntityTag(BlockPos pos, Level world, @Nullable Player player, ItemStack stack, BlockState state) {
+-        return BlockItem.updateCustomBlockEntityTag(world, player, pos, stack);
++        // Purpur start
++        boolean handled = updateCustomBlockEntityTag(world, player, pos, stack);
++        if (world.purpurConfig.persistentTileEntityDisplayNames && stack.hasTag()) {
++            CompoundTag display = stack.getTagElement("display");
++            if (display != null) {
++                BlockEntity blockEntity = world.getBlockEntity(pos);
++                if (blockEntity != null) {
++                    if (display.contains("Name", 8)) {
++                        blockEntity.setPersistentDisplayName(display.getString("Name"));
++                    }
++                    if (display.contains("Lore", 9)) {
++                        blockEntity.setPersistentLore(display.getList("Lore", 8));
++                    }
++                }
++            }
++        }
++        return handled;
++        // Purpur end
+     }
+ 
+     @Nullable
+diff --git a/src/main/java/net/minecraft/world/level/block/Block.java b/src/main/java/net/minecraft/world/level/block/Block.java
+index efed0ad72cfbea820bfb454ea4fb893007734908..ce4127f3701efa7d1c86bcdb4e7804fee11c397c 100644
+--- a/src/main/java/net/minecraft/world/level/block/Block.java
++++ b/src/main/java/net/minecraft/world/level/block/Block.java
+@@ -65,6 +65,13 @@ import net.minecraft.world.phys.shapes.Shapes;
+ import net.minecraft.world.phys.shapes.VoxelShape;
+ import org.slf4j.Logger;
+ 
++// Purpur start
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.ListTag;
++import net.minecraft.nbt.StringTag;
++import net.minecraft.world.Nameable;
++// Purpur end
++
+ public class Block extends BlockBehaviour implements ItemLike {
+ 
+     private static final Logger LOGGER = LogUtils.getLogger();
+@@ -327,7 +334,7 @@ public class Block extends BlockBehaviour implements ItemLike {
+     public static void dropResources(BlockState state, LevelAccessor world, BlockPos pos, @Nullable BlockEntity blockEntity) {
+         if (world instanceof ServerLevel) {
+             Block.getDrops(state, (ServerLevel) world, pos, blockEntity).forEach((itemstack) -> {
+-                Block.popResource((ServerLevel) world, pos, itemstack);
++                Block.popResource((ServerLevel) world, pos, applyDisplayNameAndLoreFromTile(itemstack, blockEntity)); // Purpur
+             });
+             state.spawnAfterBreak((ServerLevel) world, pos, ItemStack.EMPTY, true);
+         }
+@@ -343,7 +350,7 @@ public class Block extends BlockBehaviour implements ItemLike {
+             io.papermc.paper.event.block.BlockBreakBlockEvent event = new io.papermc.paper.event.block.BlockBreakBlockEvent(org.bukkit.craftbukkit.block.CraftBlock.at(world, pos), org.bukkit.craftbukkit.block.CraftBlock.at(world, source), items);
+             event.callEvent();
+             for (var drop : event.getDrops()) {
+-                popResource(world.getMinecraftWorld(), pos, org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(drop));
++                popResource(world.getMinecraftWorld(), pos, applyDisplayNameAndLoreFromTile(org.bukkit.craftbukkit.inventory.CraftItemStack.asNMSCopy(drop), blockEntity)); // Purpur
+             }
+             state.spawnAfterBreak(world.getMinecraftWorld(), pos, ItemStack.EMPTY, true);
+         }
+@@ -354,13 +361,53 @@ public class Block extends BlockBehaviour implements ItemLike {
+     public static void dropResources(BlockState state, Level world, BlockPos pos, @Nullable BlockEntity blockEntity, Entity entity, ItemStack stack) {
+         if (world instanceof ServerLevel) {
+             Block.getDrops(state, (ServerLevel) world, pos, blockEntity, entity, stack).forEach((itemstack1) -> {
+-                Block.popResource(world, pos, itemstack1);
++                Block.popResource(world, pos, applyDisplayNameAndLoreFromTile(itemstack1, blockEntity)); // Purpur
+             });
+             state.spawnAfterBreak((ServerLevel) world, pos, stack, true);
+         }
+ 
+     }
+ 
++    // Purpur start
++    private static ItemStack applyDisplayNameAndLoreFromTile(ItemStack stack, BlockEntity blockEntity) {
++        if (stack.getItem() instanceof BlockItem) {
++            if (blockEntity != null && blockEntity.getLevel() instanceof ServerLevel && blockEntity.getLevel().purpurConfig.persistentTileEntityDisplayNames) {
++                String name = blockEntity.getPersistentDisplayName();
++                ListTag lore = blockEntity.getPersistentLore();
++                if (blockEntity instanceof Nameable) {
++                    Nameable namedTile = (Nameable) blockEntity;
++                    if (namedTile.hasCustomName()) {
++                        name = Component.Serializer.toJson(namedTile.getCustomName());
++                    }
++                }
++
++                if (name != null || lore != null) {
++                    CompoundTag display = stack.getTagElement("display");
++                    if (display == null) {
++                        display = new CompoundTag();
++                    }
++
++                    if (name != null) {
++                        display.put("Name", StringTag.valueOf(name));
++                    }
++                    if (lore != null) {
++                        display.put("Lore", lore);
++                    }
++
++                    CompoundTag tag = stack.getTag();
++                    if (tag == null) {
++                        tag = new CompoundTag();
++                    }
++                    tag.put("display", display);
++
++                    stack.setTag(tag);
++                }
++            }
++        }
++        return stack;
++    }
++    // Purpur end
++
+     public static void popResource(Level world, BlockPos pos, ItemStack stack) {
+         float f = EntityType.ITEM.getHeight() / 2.0F;
+         // Paper start - don't convert potentially massive numbers to floats
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/BlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/BlockEntity.java
+index b96d57b0bcf21508f8e03e96b7553eb486fdf212..d3de829a4ab5f5a127fb026a8cb4ef4ed6b9c394 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/BlockEntity.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/BlockEntity.java
+@@ -6,6 +6,8 @@ import net.minecraft.CrashReportCategory;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Registry;
+ import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.ListTag;
++import net.minecraft.nbt.StringTag;
+ import net.minecraft.network.protocol.Packet;
+ import net.minecraft.network.protocol.game.ClientGamePacketListener;
+ import net.minecraft.resources.ResourceLocation;
+@@ -74,10 +76,27 @@ public abstract class BlockEntity {
+         if (persistentDataTag instanceof CompoundTag) {
+             this.persistentDataContainer.putAll((CompoundTag) persistentDataTag);
+         }
++        // Purpur start
++        if (nbt.contains("Purpur.persistentDisplayName")) {
++            this.persistentDisplayName = nbt.getString("Purpur.persistentDisplayName");
++        }
++        if (nbt.contains("Purpur.persistentLore")) {
++            this.persistentLore = nbt.getList("Purpur.persistentLore", 8);
++        }
++        // Purpur end
+     }
+     // CraftBukkit end
+ 
+-    protected void saveAdditional(CompoundTag nbt) {}
++    protected void saveAdditional(CompoundTag nbt) {
++        // Purpur start
++        if (this.persistentDisplayName != null) {
++            nbt.put("Purpur.persistentDisplayName", StringTag.valueOf(this.persistentDisplayName));
++        }
++        if (this.persistentLore != null) {
++            nbt.put("Purpur.persistentLore", this.persistentLore);
++        }
++        // Purpur end
++    }
+ 
+     public final CompoundTag saveWithFullMetadata() {
+         CompoundTag nbttagcompound = this.saveWithoutMetadata();
+@@ -264,4 +283,24 @@ public abstract class BlockEntity {
+     }
+     // Paper end
+ 
++    // Purpur start
++    private String persistentDisplayName = null;
++    private ListTag persistentLore = null;
++
++    public void setPersistentDisplayName(String json) {
++        this.persistentDisplayName = json;
++    }
++
++    public void setPersistentLore(ListTag lore) {
++        this.persistentLore = lore;
++    }
++
++    public String getPersistentDisplayName() {
++        return this.persistentDisplayName;
++    }
++
++    public ListTag getPersistentLore() {
++        return this.persistentLore;
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 08116c757ee7a7ce6536ff196e3f3ee5fe57e37e..2d536be2e7ed910f5e9cad660086efdbf014ad9d 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -133,6 +133,7 @@ public class PurpurWorldConfig {
+     public boolean milkCuresBadOmen = true;
+     public boolean noteBlockIgnoreAbove = false;
+     public boolean persistentDroppableEntityDisplayNames = false;
++    public boolean persistentTileEntityDisplayNames = false;
+     public boolean projectilesBypassMobGriefing = false;
+     public boolean tickFluids = true;
+     public double mobsBlindnessMultiplier = 1;
+@@ -156,6 +157,7 @@ public class PurpurWorldConfig {
+         imposeTeleportRestrictionsOnGateways = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-gateways", imposeTeleportRestrictionsOnGateways);
+         milkCuresBadOmen = getBoolean("gameplay-mechanics.milk-cures-bad-omen", milkCuresBadOmen);
+         noteBlockIgnoreAbove = getBoolean("gameplay-mechanics.note-block-ignore-above", noteBlockIgnoreAbove);
++        persistentTileEntityDisplayNames = getBoolean("gameplay-mechanics.persistent-tileentity-display-names-and-lore", persistentTileEntityDisplayNames);
+         persistentDroppableEntityDisplayNames = getBoolean("gameplay-mechanics.persistent-droppable-entity-display-names", persistentDroppableEntityDisplayNames);
+         projectilesBypassMobGriefing = getBoolean("gameplay-mechanics.projectiles-bypass-mob-griefing", projectilesBypassMobGriefing);
+         tickFluids = getBoolean("gameplay-mechanics.tick-fluids", tickFluids);
