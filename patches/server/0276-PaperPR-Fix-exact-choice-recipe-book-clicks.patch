@@ -1,0 +1,129 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jake Potrebic <jake.m.potrebic@gmail.com>
+Date: Sat, 14 May 2022 15:42:34 -0700
+Subject: [PATCH] PaperPR Fix exact choice recipe book clicks
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/player/StackedContents.java b/src/main/java/net/minecraft/world/entity/player/StackedContents.java
+index 574ebb3a2fcd0e4e426a8a7ee88d722ed3b9c3f5..842b921799111789b37a34b76644c9217bc85794 100644
+--- a/src/main/java/net/minecraft/world/entity/player/StackedContents.java
++++ b/src/main/java/net/minecraft/world/entity/player/StackedContents.java
+@@ -37,8 +37,62 @@ public class StackedContents {
+             int i = getStackingIndex(stack);
+             int j = Math.min(maxCount, stack.getCount());
+             this.put(i, j);
++            // PaperPR start
++            if (stack.hasTag()) {
++                this.put(getExactStackingIndex(stack), j);
++            }
++        }
++
++    }
++    private static final net.minecraft.core.IdMap<ItemStack> EXACT_MATCHES_ID_MAP = new net.minecraft.core.IdMap<>() {
++        private final java.util.concurrent.atomic.AtomicInteger idCounter = new java.util.concurrent.atomic.AtomicInteger(BuiltInRegistries.ITEM.size());
++        private final it.unimi.dsi.fastutil.objects.Object2IntMap<ItemStack> itemstackToId = new it.unimi.dsi.fastutil.objects.Object2IntOpenCustomHashMap<>(new it.unimi.dsi.fastutil.Hash.Strategy<>() {
++            @Override
++            public int hashCode(ItemStack o) {
++                return java.util.Objects.hash(o.getItem(), o.getTag());
++            }
++
++            @Override
++            public boolean equals(@Nullable ItemStack a, @Nullable ItemStack b) {
++                if (a == null || b == null) {
++                    return false;
++                }
++                return ItemStack.tagMatches(a, b);
++            }
++        });
++        private final it.unimi.dsi.fastutil.ints.Int2ObjectMap<net.minecraft.world.item.ItemStack> idToItemstack = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
++
++        @Override
++        public int getId(ItemStack value) {
++            if (!this.itemstackToId.containsKey(value)) {
++                final int id = this.idCounter.incrementAndGet();
++                final ItemStack copy = value.copy();
++                this.itemstackToId.put(copy, id);
++                this.idToItemstack.put(id, copy);
++                return id;
++            }
++            return this.itemstackToId.getInt(value);
++        }
++
++        @Override
++        public @Nullable ItemStack byId(int index) {
++            return this.idToItemstack.get(index);
++        }
++
++        @Override
++        public int size() {
++            return this.itemstackToId.size();
++        }
++
++        @Override
++        public java.util.Iterator<net.minecraft.world.item.ItemStack> iterator() {
++            return this.idToItemstack.values().iterator();
+         }
++    };
+ 
++    public static int getExactStackingIndex(ItemStack stack) {
++        return EXACT_MATCHES_ID_MAP.getId(stack);
++        // PaperPR end
+     }
+ 
+     public static int getStackingIndex(ItemStack stack) {
+@@ -80,6 +134,12 @@ public class StackedContents {
+     }
+ 
+     public static ItemStack fromStackingIndex(int itemId) {
++        // PaperPR start
++        if (itemId > BuiltInRegistries.ITEM.size()) {
++            final ItemStack stack = EXACT_MATCHES_ID_MAP.byId(itemId);
++            return stack == null ? ItemStack.EMPTY : stack.copy();
++        }
++        // PaperPR end
+         return itemId == 0 ? ItemStack.EMPTY : new ItemStack(Item.byId(itemId));
+     }
+ 
+diff --git a/src/main/java/net/minecraft/world/item/ItemStack.java b/src/main/java/net/minecraft/world/item/ItemStack.java
+index dd61a3971d9cd77fc31aadce7dfeceec68b2a157..7222ff43de1b570458f2513fe1a44d97a09d0799 100644
+--- a/src/main/java/net/minecraft/world/item/ItemStack.java
++++ b/src/main/java/net/minecraft/world/item/ItemStack.java
+@@ -108,6 +108,7 @@ import org.bukkit.event.world.StructureGrowEvent;
+ 
+ public final class ItemStack {
+ 
++    public boolean isExactRecipeIngredient = false; // PaperPR
+     public static final Codec<ItemStack> CODEC = RecordCodecBuilder.create((instance) -> {
+         return instance.group(BuiltInRegistries.ITEM.byNameCodec().fieldOf("id").forGetter((itemstack) -> {
+             return itemstack.item;
+diff --git a/src/main/java/net/minecraft/world/item/crafting/Ingredient.java b/src/main/java/net/minecraft/world/item/crafting/Ingredient.java
+index dbc3040bc087a6016a491caf76019663c1cd1b4c..e24034d1ce4bb529de084aab69a531227e0c2f79 100644
+--- a/src/main/java/net/minecraft/world/item/crafting/Ingredient.java
++++ b/src/main/java/net/minecraft/world/item/crafting/Ingredient.java
+@@ -51,7 +51,11 @@ public final class Ingredient implements Predicate<ItemStack> {
+         if (this.itemStacks == null) {
+             this.itemStacks = (ItemStack[]) Arrays.stream(this.values).flatMap((recipeitemstack_provider) -> {
+                 return recipeitemstack_provider.getItems().stream();
+-            }).distinct().toArray((i) -> {
++                // PaperPR start
++            }).distinct().peek(stack -> {
++                stack.isExactRecipeIngredient = this.exact;
++            }).toArray((i) -> {
++                // PaperPR end
+                 return new ItemStack[i];
+             });
+         }
+@@ -106,7 +110,13 @@ public final class Ingredient implements Predicate<ItemStack> {
+             for (int j = 0; j < i; ++j) {
+                 ItemStack itemstack = aitemstack1[j];
+ 
++                // PaperPR start
++                if (itemstack.isExactRecipeIngredient) {
++                    this.stackingIds.add(StackedContents.getExactStackingIndex(itemstack));
++                } else {
++                // PaperPR end
+                 this.stackingIds.add(StackedContents.getStackingIndex(itemstack));
++                } // PaperPR
+             }
+ 
+             this.stackingIds.sort(IntComparators.NATURAL_COMPARATOR);
