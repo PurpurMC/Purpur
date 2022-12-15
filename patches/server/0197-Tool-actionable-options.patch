@@ -1,0 +1,427 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Fri, 2 Jul 2021 20:54:29 -0500
+Subject: [PATCH] Tool actionable options
+
+
+diff --git a/src/main/java/net/minecraft/world/item/AxeItem.java b/src/main/java/net/minecraft/world/item/AxeItem.java
+index 1c096338a90d740a3813274278056017fa1ec844..1075e9e60e3243134483429b40bad8c89705fc9b 100644
+--- a/src/main/java/net/minecraft/world/item/AxeItem.java
++++ b/src/main/java/net/minecraft/world/item/AxeItem.java
+@@ -33,29 +33,32 @@ public class AxeItem extends DiggerItem {
+         BlockPos blockPos = context.getClickedPos();
+         Player player = context.getPlayer();
+         BlockState blockState = level.getBlockState(blockPos);
+-        Optional<BlockState> optional = this.getStripped(blockState);
+-        Optional<BlockState> optional2 = WeatheringCopper.getPrevious(blockState);
+-        Optional<BlockState> optional3 = Optional.ofNullable(HoneycombItem.WAX_OFF_BY_BLOCK.get().get(blockState.getBlock())).map((block) -> {
+-            return block.withPropertiesOf(blockState);
+-        });
++        // Purpur start
++        Block clickedBlock = level.getBlockState(blockPos).getBlock();
++        Optional<org.purpurmc.purpur.tool.Actionable> optional = Optional.ofNullable(level.purpurConfig.axeStrippables.get(blockState.getBlock()));
++        Optional<org.purpurmc.purpur.tool.Actionable> optional2 = Optional.ofNullable(level.purpurConfig.axeWeatherables.get(blockState.getBlock()));
++        Optional<org.purpurmc.purpur.tool.Actionable> optional3 = Optional.ofNullable(level.purpurConfig.axeWaxables.get(blockState.getBlock()));
++        // Purpur end
+         ItemStack itemStack = context.getItemInHand();
+-        Optional<BlockState> optional4 = Optional.empty();
++        Optional<org.purpurmc.purpur.tool.Actionable> optional4 = Optional.empty(); // Purpur
+         if (optional.isPresent()) {
+-            level.playSound(player, blockPos, SoundEvents.AXE_STRIP, SoundSource.BLOCKS, 1.0F, 1.0F);
++            if (!STRIPPABLES.containsKey(clickedBlock)) level.playSound(null, blockPos, SoundEvents.AXE_STRIP, SoundSource.BLOCKS, 1.0F, 1.0F); // Purpur - force sound
+             optional4 = optional;
+         } else if (optional2.isPresent()) {
+-            level.playSound(player, blockPos, SoundEvents.AXE_SCRAPE, SoundSource.BLOCKS, 1.0F, 1.0F);
++            if (!HoneycombItem.WAXABLES.get().containsKey(clickedBlock)) level.playSound(null, blockPos, SoundEvents.AXE_SCRAPE, SoundSource.BLOCKS, 1.0F, 1.0F); // Purpur - force sound
+             level.levelEvent(player, 3005, blockPos, 0);
+             optional4 = optional2;
+         } else if (optional3.isPresent()) {
+-            level.playSound(player, blockPos, SoundEvents.AXE_WAX_OFF, SoundSource.BLOCKS, 1.0F, 1.0F);
++            if (!HoneycombItem.WAX_OFF_BY_BLOCK.get().containsKey(clickedBlock)) level.playSound(null, blockPos, SoundEvents.AXE_WAX_OFF, SoundSource.BLOCKS, 1.0F, 1.0F); // Purpur - force sound
+             level.levelEvent(player, 3004, blockPos, 0);
+             optional4 = optional3;
+         }
+ 
+         if (optional4.isPresent()) {
++            org.purpurmc.purpur.tool.Actionable actionable = optional4.get();
++            BlockState state = actionable.into().withPropertiesOf(blockState); // Purpur
+             // Paper start - EntityChangeBlockEvent
+-            if (org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(player, blockPos, optional4.get()).isCancelled()) {
++            if (org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(player, blockPos, state).isCancelled()) { // Purpur
+                 return InteractionResult.PASS;
+             }
+             // Paper end
+@@ -63,15 +66,22 @@ public class AxeItem extends DiggerItem {
+                 CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger((ServerPlayer)player, blockPos, itemStack);
+             }
+ 
+-            level.setBlock(blockPos, optional4.get(), 11);
+-            level.gameEvent(GameEvent.BLOCK_CHANGE, blockPos, GameEvent.Context.of(player, optional4.get()));
++            // Purpur start
++            level.setBlock(blockPos, state, 11);
++            actionable.drops().forEach((drop, chance) -> {
++                if (level.random.nextDouble() < chance) {
++                    Block.popResourceFromFace(level, blockPos, context.getClickedFace(), new ItemStack(drop));
++                }
++            });
++            level.gameEvent(GameEvent.BLOCK_CHANGE, blockPos, GameEvent.Context.of(player, state));
++            // Purpur end
+             if (player != null) {
+                 itemStack.hurtAndBreak(1, player, (p) -> {
+                     p.broadcastBreakEvent(context.getHand());
+                 });
+             }
+ 
+-            return InteractionResult.sidedSuccess(level.isClientSide);
++            return InteractionResult.SUCCESS; // Purpur - force arm swing
+         } else {
+             return InteractionResult.PASS;
+         }
+diff --git a/src/main/java/net/minecraft/world/item/HoeItem.java b/src/main/java/net/minecraft/world/item/HoeItem.java
+index 180aec596110309aade13d2080f8824d152b07cb..c4aec1e5135a79837918b692e75a7b55d5cffeb0 100644
+--- a/src/main/java/net/minecraft/world/item/HoeItem.java
++++ b/src/main/java/net/minecraft/world/item/HoeItem.java
+@@ -34,15 +34,23 @@ public class HoeItem extends DiggerItem {
+     public InteractionResult useOn(UseOnContext context) {
+         Level level = context.getLevel();
+         BlockPos blockPos = context.getClickedPos();
+-        Pair<Predicate<UseOnContext>, Consumer<UseOnContext>> pair = TILLABLES.get(level.getBlockState(blockPos).getBlock());
+-        if (pair == null) {
+-            return InteractionResult.PASS;
+-        } else {
+-            Predicate<UseOnContext> predicate = pair.getFirst();
+-            Consumer<UseOnContext> consumer = pair.getSecond();
++        // Purpur start
++        Block clickedBlock = level.getBlockState(blockPos).getBlock();
++        var tillable = level.purpurConfig.hoeTillables.get(level.getBlockState(blockPos).getBlock());
++        if (tillable == null) { return InteractionResult.PASS; } else {
++            Predicate<UseOnContext> predicate = tillable.condition().predicate();
++            Consumer<UseOnContext> consumer = (ctx) -> {
++                level.setBlock(blockPos, tillable.into().defaultBlockState(), 11);
++                tillable.drops().forEach((drop, chance) -> {
++                    if (level.random.nextDouble() < chance) {
++                        Block.popResourceFromFace(level, blockPos, ctx.getClickedFace(), new ItemStack(drop));
++                    }
++                });
++            };
++            // Purpur end
+             if (predicate.test(context)) {
+                 Player player = context.getPlayer();
+-                level.playSound(player, blockPos, SoundEvents.HOE_TILL, SoundSource.BLOCKS, 1.0F, 1.0F);
++                if (!TILLABLES.containsKey(clickedBlock)) level.playSound(null, blockPos, SoundEvents.HOE_TILL, SoundSource.BLOCKS, 1.0F, 1.0F); // Purpur - force sound
+                 if (!level.isClientSide) {
+                     consumer.accept(context);
+                     if (player != null) {
+@@ -52,7 +60,7 @@ public class HoeItem extends DiggerItem {
+                     }
+                 }
+ 
+-                return InteractionResult.sidedSuccess(level.isClientSide);
++                return InteractionResult.SUCCESS; // Purpur - force arm swing
+             } else {
+                 return InteractionResult.PASS;
+             }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 3592c0721ab50a0dff3ae6bd3c36316d88e3f57e..2473505b669a23cd9582cc7e9f6de7488824a8d2 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -525,6 +525,159 @@ public class PurpurWorldConfig {
+         });
+     }
+ 
++    public Map<Block, Strippable> axeStrippables = new HashMap<>();
++    public Map<Block, Waxable> axeWaxables = new HashMap<>();
++    public Map<Block, Weatherable> axeWeatherables = new HashMap<>();
++    public Map<Block, Tillable> hoeTillables = new HashMap<>();
++    private void toolSettings() {
++        axeStrippables.clear();
++        axeWaxables.clear();
++        axeWeatherables.clear();
++        hoeTillables.clear();
++        if (PurpurConfig.version < 18) {
++            ConfigurationSection section = PurpurConfig.config.getConfigurationSection("world-settings." + worldName + ".tools.hoe.tilling");
++            if (section != null) {
++                PurpurConfig.config.set("world-settings." + worldName + ".tools.hoe.tillables", section);
++                PurpurConfig.config.set("world-settings." + worldName + ".tools.hoe.tilling", null);
++            }
++            section = PurpurConfig.config.getConfigurationSection("world-settings.default.tools.hoe.tilling");
++            if (section != null) {
++                PurpurConfig.config.set("world-settings.default.tools.hoe.tillables", section);
++                PurpurConfig.config.set("world-settings.default.tools.hoe.tilling", null);
++            }
++        }
++        if (PurpurConfig.version < 29) {
++            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:mangrove_log", Map.of("into", "minecraft:stripped_mangrove_log", "drops", new HashMap<String, Double>()));
++            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:mangrove_wood", Map.of("into", "minecraft:stripped_mangrove_wood", "drops", new HashMap<String, Double>()));
++        }
++        getMap("tools.axe.strippables", Map.ofEntries(
++                Map.entry("minecraft:oak_wood", Map.of("into", "minecraft:stripped_oak_wood", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:oak_log", Map.of("into", "minecraft:stripped_oak_log", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:dark_oak_wood", Map.of("into", "minecraft:stripped_dark_oak_wood", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:dark_oak_log", Map.of("into", "minecraft:stripped_dark_oak_log", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:acacia_wood", Map.of("into", "minecraft:stripped_acacia_wood", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:acacia_log", Map.of("into", "minecraft:stripped_acacia_log", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:birch_wood", Map.of("into", "minecraft:stripped_birch_wood", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:birch_log", Map.of("into", "minecraft:stripped_birch_log", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:jungle_wood", Map.of("into", "minecraft:stripped_jungle_wood", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:jungle_log", Map.of("into", "minecraft:stripped_jungle_log", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:spruce_wood", Map.of("into", "minecraft:stripped_spruce_wood", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:spruce_log", Map.of("into", "minecraft:stripped_spruce_log", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:mangrove_wood", Map.of("into", "minecraft:stripped_mangrove_wood", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:mangrove_log", Map.of("into", "minecraft:stripped_mangrove_log", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:warped_stem", Map.of("into", "minecraft:stripped_warped_stem", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:warped_hyphae", Map.of("into", "minecraft:stripped_warped_hyphae", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:crimson_stem", Map.of("into", "minecraft:stripped_crimson_stem", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:crimson_hyphae", Map.of("into", "minecraft:stripped_crimson_hyphae", "drops", new HashMap<String, Double>())))
++        ).forEach((blockId, obj) -> {
++            Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(blockId));
++            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.strippables`: " + blockId); return; }
++            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.strippables." + blockId + "`"); return; }
++            String intoId = (String) map.get("into");
++            Block into = BuiltInRegistries.BLOCK.get(new ResourceLocation(intoId));
++            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.strippables." + blockId + ".into`: " + intoId); return; }
++            Object dropsObj = map.get("drops");
++            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.strippables." + blockId + ".drops`"); return; }
++            Map<Item, Double> drops = new HashMap<>();
++            dropsMap.forEach((itemId, chance) -> {
++                Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(itemId.toString()));
++                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.strippables." + blockId + ".drops`: " + itemId); return; }
++                drops.put(item, (double) chance);
++            });
++            axeStrippables.put(block, new Strippable(into, drops));
++        });
++        getMap("tools.axe.waxables", Map.ofEntries(
++                Map.entry("minecraft:waxed_copper_block", Map.of("into", "minecraft:copper_block", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_exposed_copper", Map.of("into", "minecraft:exposed_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_weathered_copper", Map.of("into", "minecraft:weathered_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_oxidized_copper", Map.of("into", "minecraft:oxidized_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_cut_copper", Map.of("into", "minecraft:cut_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_exposed_cut_copper", Map.of("into", "minecraft:exposed_cut_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_weathered_cut_copper", Map.of("into", "minecraft:weathered_cut_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_oxidized_cut_copper", Map.of("into", "minecraft:oxidized_cut_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_cut_copper_slab", Map.of("into", "minecraft:cut_copper_slab", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_exposed_cut_copper_slab", Map.of("into", "minecraft:exposed_cut_copper_slab", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_weathered_cut_copper_slab", Map.of("into", "minecraft:weathered_cut_copper_slab", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_oxidized_cut_copper_slab", Map.of("into", "minecraft:oxidized_cut_copper_slab", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_cut_copper_stairs", Map.of("into", "minecraft:cut_copper_stairs", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_exposed_cut_copper_stairs", Map.of("into", "minecraft:exposed_cut_copper_stairs", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_weathered_cut_copper_stairs", Map.of("into", "minecraft:weathered_cut_copper_stairs", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:waxed_oxidized_cut_copper_stairs", Map.of("into", "minecraft:oxidized_cut_copper_stairs", "drops", new HashMap<String, Double>())))
++        ).forEach((blockId, obj) -> {
++            Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(blockId));
++            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.waxables`: " + blockId); return; }
++            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.waxables." + blockId + "`"); return; }
++            String intoId = (String) map.get("into");
++            Block into = BuiltInRegistries.BLOCK.get(new ResourceLocation(intoId));
++            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.waxables." + blockId + ".into`: " + intoId); return; }
++            Object dropsObj = map.get("drops");
++            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.waxables." + blockId + ".drops`"); return; }
++            Map<Item, Double> drops = new HashMap<>();
++            dropsMap.forEach((itemId, chance) -> {
++                Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(itemId.toString()));
++                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.waxables." + blockId + ".drops`: " + itemId); return; }
++                drops.put(item, (double) chance);
++            });
++            axeWaxables.put(block, new Waxable(into, drops));
++        });
++        getMap("tools.axe.weatherables", Map.ofEntries(
++                Map.entry("minecraft:exposed_copper", Map.of("into", "minecraft:copper_block", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:weathered_copper", Map.of("into", "minecraft:exposed_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:oxidized_copper", Map.of("into", "minecraft:weathered_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:exposed_cut_copper", Map.of("into", "minecraft:cut_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:weathered_cut_copper", Map.of("into", "minecraft:exposed_cut_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:oxidized_cut_copper", Map.of("into", "minecraft:weathered_cut_copper", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:exposed_cut_copper_slab", Map.of("into", "minecraft:cut_copper_slab", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:weathered_cut_copper_slab", Map.of("into", "minecraft:exposed_cut_copper_slab", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:oxidized_cut_copper_slab", Map.of("into", "minecraft:weathered_cut_copper_slab", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:exposed_cut_copper_stairs", Map.of("into", "minecraft:cut_copper_stairs", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:weathered_cut_copper_stairs", Map.of("into", "minecraft:exposed_cut_copper_stairs", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:oxidized_cut_copper_stairs", Map.of("into", "minecraft:weathered_cut_copper_stairs", "drops", new HashMap<String, Double>())))
++        ).forEach((blockId, obj) -> {
++            Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(blockId));
++            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.weatherables`: " + blockId); return; }
++            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.weatherables." + blockId + "`"); return; }
++            String intoId = (String) map.get("into");
++            Block into = BuiltInRegistries.BLOCK.get(new ResourceLocation(intoId));
++            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.weatherables." + blockId + ".into`: " + intoId); return; }
++            Object dropsObj = map.get("drops");
++            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.weatherables." + blockId + ".drops`"); return; }
++            Map<Item, Double> drops = new HashMap<>();
++            dropsMap.forEach((itemId, chance) -> {
++                Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(itemId.toString()));
++                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.weatherables." + blockId + ".drops`: " + itemId); return; }
++                drops.put(item, (double) chance);
++            });
++            axeWeatherables.put(block, new Weatherable(into, drops));
++        });
++        getMap("tools.hoe.tillables", Map.ofEntries(
++                Map.entry("minecraft:grass_block", Map.of("condition", "air_above", "into", "minecraft:farmland", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:dirt_path", Map.of("condition", "air_above", "into", "minecraft:farmland", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:dirt", Map.of("condition", "air_above", "into", "minecraft:farmland", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:coarse_dirt", Map.of("condition", "air_above", "into", "minecraft:dirt", "drops", new HashMap<String, Double>())),
++                Map.entry("minecraft:rooted_dirt", Map.of("condition", "always", "into", "minecraft:dirt", "drops", Map.of("minecraft:hanging_roots", 1.0D))))
++        ).forEach((blockId, obj) -> {
++            Block block = BuiltInRegistries.BLOCK.get(new ResourceLocation(blockId));
++            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.hoe.tillables`: " + blockId); return; }
++            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.hoe.tillables." + blockId + "`"); return; }
++            String conditionId = (String) map.get("condition");
++            Tillable.Condition condition = Tillable.Condition.get(conditionId);
++            if (condition == null) { PurpurConfig.log(Level.SEVERE, "Invalid condition for `tools.hoe.tillables." + blockId + ".condition`: " + conditionId); return; }
++            String intoId = (String) map.get("into");
++            Block into = BuiltInRegistries.BLOCK.get(new ResourceLocation(intoId));
++            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.hoe.tillables." + blockId + ".into`: " + intoId); return; }
++            Object dropsObj = map.get("drops");
++            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.hoe.tillables." + blockId + ".drops`"); return; }
++            Map<Item, Double> drops = new HashMap<>();
++            dropsMap.forEach((itemId, chance) -> {
++                Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(itemId.toString()));
++                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.hoe.tillables." + blockId + ".drops`: " + itemId); return; }
++                drops.put(item, (double) chance);
++            });
++            hoeTillables.put(block, new Tillable(condition, into, drops));
++        });
++    }
++
+     public boolean anvilAllowColors = false;
+     public boolean anvilColorsUseMiniMessage;
+     private void anvilSettings() {
+diff --git a/src/main/java/org/purpurmc/purpur/tool/Actionable.java b/src/main/java/org/purpurmc/purpur/tool/Actionable.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e18c37f06730da9d3055d5215e813b1477c1e70e
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/tool/Actionable.java
+@@ -0,0 +1,24 @@
++package org.purpurmc.purpur.tool;
++
++import net.minecraft.world.item.Item;
++import net.minecraft.world.level.block.Block;
++
++import java.util.Map;
++
++public abstract class Actionable {
++    private final Block into;
++    private final Map<Item, Double> drops;
++
++    public Actionable(Block into, Map<Item, Double> drops) {
++        this.into = into;
++        this.drops = drops;
++    }
++
++    public Block into() {
++        return into;
++    }
++
++    public Map<Item, Double> drops() {
++        return drops;
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/tool/Strippable.java b/src/main/java/org/purpurmc/purpur/tool/Strippable.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..bf5402214f41af9c09bd6c5c4f45d330516d742e
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/tool/Strippable.java
+@@ -0,0 +1,12 @@
++package org.purpurmc.purpur.tool;
++
++import net.minecraft.world.item.Item;
++import net.minecraft.world.level.block.Block;
++
++import java.util.Map;
++
++public class Strippable extends Actionable {
++    public Strippable(Block into, Map<Item, Double> drops) {
++        super(into, drops);
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/tool/Tillable.java b/src/main/java/org/purpurmc/purpur/tool/Tillable.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..715f6dd44480347eebced43c11bc364e05727498
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/tool/Tillable.java
+@@ -0,0 +1,50 @@
++package org.purpurmc.purpur.tool;
++
++import net.minecraft.world.item.HoeItem;
++import net.minecraft.world.item.Item;
++import net.minecraft.world.item.context.UseOnContext;
++import net.minecraft.world.level.block.Block;
++
++import java.util.HashMap;
++import java.util.Map;
++import java.util.function.Predicate;
++
++public class Tillable extends Actionable {
++    private final Condition condition;
++
++    public Tillable(Condition condition, Block into, Map<Item, Double> drops) {
++        super(into, drops);
++        this.condition = condition;
++    }
++
++    public Condition condition() {
++        return condition;
++    }
++
++    public enum Condition {
++        AIR_ABOVE(HoeItem::onlyIfAirAbove),
++        ALWAYS((useOnContext) -> true);
++
++        private final Predicate<UseOnContext> predicate;
++
++        Condition(Predicate<UseOnContext> predicate) {
++            this.predicate = predicate;
++        }
++
++        public Predicate<UseOnContext> predicate() {
++            return predicate;
++        }
++
++        private static final Map<String, Condition> BY_NAME = new HashMap<>();
++
++        static {
++            for (Condition condition : values()) {
++                BY_NAME.put(condition.name(), condition);
++            }
++        }
++
++        public static Condition get(String name) {
++            return BY_NAME.get(name.toUpperCase(java.util.Locale.ROOT));
++        }
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/tool/Waxable.java b/src/main/java/org/purpurmc/purpur/tool/Waxable.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..64adb13b29b6757dcf227a55588da70ecabe083f
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/tool/Waxable.java
+@@ -0,0 +1,12 @@
++package org.purpurmc.purpur.tool;
++
++import net.minecraft.world.item.Item;
++import net.minecraft.world.level.block.Block;
++
++import java.util.Map;
++
++public class Waxable extends Actionable {
++    public Waxable(Block into, Map<Item, Double> drops) {
++        super(into, drops);
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/tool/Weatherable.java b/src/main/java/org/purpurmc/purpur/tool/Weatherable.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..b7586f494528f30eb0da82420d3bcf5b83a1a902
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/tool/Weatherable.java
+@@ -0,0 +1,12 @@
++package org.purpurmc.purpur.tool;
++
++import net.minecraft.world.item.Item;
++import net.minecraft.world.level.block.Block;
++
++import java.util.Map;
++
++public class Weatherable extends Actionable {
++    public Weatherable(Block into, Map<Item, Double> drops) {
++        super(into, drops);
++    }
++}

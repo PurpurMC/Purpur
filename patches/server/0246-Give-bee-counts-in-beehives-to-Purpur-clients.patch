@@ -1,0 +1,117 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <blake.galbreath@gmail.com>
+Date: Thu, 30 Dec 2021 09:56:43 -0600
+Subject: [PATCH] Give bee counts in beehives to Purpur clients
+
+
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index d56e19925bff15d26dd40463c6945de468bbbce2..15285d2b132a82a7b7f9c2c558e1157b7585d43f 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1034,6 +1034,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+     }
+     public void safeShutdown(boolean waitForShutdown, boolean isRestarting) {
+         org.purpurmc.purpur.task.BossBarTask.stopAll(); // Purpur
++        org.purpurmc.purpur.task.BeehiveTask.instance().unregister(); // Purpur
+         this.isRestarting = isRestarting;
+         this.hasLoggedStop = true; // Paper
+         if (isDebugging()) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper
+diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+index e5ed4f5e0b92c34a201087af1b1d68d53c460831..f07bc9e76b5bf9025dfdecad7408e8b3cbb8c9d1 100644
+--- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -371,6 +371,7 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
+             if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncMobSpawning) mobSpawnExecutor.start(); // Pufferfish
+ 
+             org.purpurmc.purpur.task.BossBarTask.startAll(); // Purpur
++            org.purpurmc.purpur.task.BeehiveTask.instance().register(); // Purpur
+ 
+             return true;
+         }
+diff --git a/src/main/java/org/purpurmc/purpur/task/BeehiveTask.java b/src/main/java/org/purpurmc/purpur/task/BeehiveTask.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..055dd307e9d5ac0d4623c961164c84bab1edd3bd
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/task/BeehiveTask.java
+@@ -0,0 +1,81 @@
++package org.purpurmc.purpur.task;
++
++import com.google.common.io.ByteArrayDataInput;
++import com.google.common.io.ByteArrayDataOutput;
++import com.google.common.io.ByteStreams;
++import io.netty.buffer.Unpooled;
++import net.minecraft.core.BlockPos;
++import net.minecraft.network.FriendlyByteBuf;
++import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket;
++import net.minecraft.resources.ResourceLocation;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
++import net.minecraft.world.level.block.entity.BlockEntity;
++import org.bukkit.Bukkit;
++import org.bukkit.craftbukkit.entity.CraftPlayer;
++import org.bukkit.craftbukkit.scheduler.MinecraftInternalPlugin;
++import org.bukkit.entity.Player;
++import org.bukkit.plugin.PluginBase;
++import org.bukkit.plugin.messaging.PluginMessageListener;
++import org.jetbrains.annotations.NotNull;
++
++public class BeehiveTask implements PluginMessageListener {
++    public static final ResourceLocation BEEHIVE_C2S = new ResourceLocation("purpur", "beehive_c2s");
++    public static final ResourceLocation BEEHIVE_S2C = new ResourceLocation("purpur", "beehive_s2c");
++
++    private static BeehiveTask instance;
++
++    public static BeehiveTask instance() {
++        if (instance == null) {
++            instance = new BeehiveTask();
++        }
++        return instance;
++    }
++
++    private final PluginBase plugin = new MinecraftInternalPlugin();
++
++    private BeehiveTask() {
++    }
++
++    public void register() {
++        Bukkit.getMessenger().registerOutgoingPluginChannel(this.plugin, BEEHIVE_S2C.toString());
++        Bukkit.getMessenger().registerIncomingPluginChannel(this.plugin, BEEHIVE_C2S.toString(), this);
++    }
++
++    public void unregister() {
++        Bukkit.getMessenger().unregisterOutgoingPluginChannel(this.plugin, BEEHIVE_S2C.toString());
++        Bukkit.getMessenger().unregisterIncomingPluginChannel(this.plugin, BEEHIVE_C2S.toString());
++    }
++
++    @Override
++    public void onPluginMessageReceived(@NotNull String channel, Player player, byte[] bytes) {
++        ByteArrayDataInput in = in(bytes);
++        long packedPos = in.readLong();
++        BlockPos pos = BlockPos.of(packedPos);
++
++        ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
++
++        BlockEntity blockEntity = serverPlayer.level.getBlockEntity(pos);
++        if (!(blockEntity instanceof BeehiveBlockEntity beehive)) {
++            return;
++        }
++
++        ByteArrayDataOutput out = out();
++
++        out.writeInt(beehive.getOccupantCount());
++        out.writeLong(packedPos);
++
++        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.wrappedBuffer(out.toByteArray()));
++        serverPlayer.connection.send(new ClientboundCustomPayloadPacket(BEEHIVE_S2C, buf));
++    }
++
++    @SuppressWarnings("UnstableApiUsage")
++    private static ByteArrayDataOutput out() {
++        return ByteStreams.newDataOutput();
++    }
++
++    @SuppressWarnings("UnstableApiUsage")
++    private static ByteArrayDataInput in(byte[] bytes) {
++        return ByteStreams.newDataInput(bytes);
++    }
++}

@@ -1,0 +1,98 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ben Kerllenevich <ben@omega24.dev>
+Date: Thu, 18 Mar 2021 12:25:29 -0400
+Subject: [PATCH] Allow infinity on crossbows
+
+
+diff --git a/src/main/java/net/minecraft/world/item/CrossbowItem.java b/src/main/java/net/minecraft/world/item/CrossbowItem.java
+index caa5f5f5d58b8ddbca0910412b695cb810570623..fa3ec61b93282a0f1241b0fabc197713e2fafffd 100644
+--- a/src/main/java/net/minecraft/world/item/CrossbowItem.java
++++ b/src/main/java/net/minecraft/world/item/CrossbowItem.java
+@@ -112,7 +112,7 @@ public class CrossbowItem extends ProjectileWeaponItem implements Vanishable {
+         // Paper end
+         int i = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.MULTISHOT, projectile);
+         int j = i == 0 ? 1 : 3;
+-        boolean flag = !consume || shooter instanceof Player && ((Player) shooter).getAbilities().instabuild; // Paper - add consume
++        boolean flag = !consume || shooter instanceof Player && ((Player) shooter).getAbilities().instabuild || (org.purpurmc.purpur.PurpurConfig.allowCrossbowInfinity && EnchantmentHelper.getItemEnchantmentLevel(Enchantments.INFINITY_ARROWS, projectile) > 0); // Paper - add consume // Purpur
+         ItemStack itemstack1 = shooter.getProjectile(projectile);
+         ItemStack itemstack2 = itemstack1.copy();
+ 
+@@ -302,7 +302,7 @@ public class CrossbowItem extends ProjectileWeaponItem implements Vanishable {
+ 
+         for (int i = 0; i < list.size(); ++i) {
+             ItemStack itemstack1 = (ItemStack) list.get(i);
+-            boolean flag = entity instanceof Player && ((Player) entity).getAbilities().instabuild;
++            boolean flag = entity instanceof Player && ((Player) entity).getAbilities().instabuild || (org.purpurmc.purpur.PurpurConfig.allowCrossbowInfinity && EnchantmentHelper.getItemEnchantmentLevel(Enchantments.INFINITY_ARROWS, stack) > 0); // Purpur
+ 
+             if (!itemstack1.isEmpty()) {
+                 if (i == 0) {
+diff --git a/src/main/java/net/minecraft/world/item/enchantment/ArrowInfiniteEnchantment.java b/src/main/java/net/minecraft/world/item/enchantment/ArrowInfiniteEnchantment.java
+index 5cebd7c16b82eea9dbf39c51c671bacb7a974d5c..38703baaef5f04a53081620ce1bf29b45e4d62d1 100644
+--- a/src/main/java/net/minecraft/world/item/enchantment/ArrowInfiniteEnchantment.java
++++ b/src/main/java/net/minecraft/world/item/enchantment/ArrowInfiniteEnchantment.java
+@@ -7,6 +7,14 @@ public class ArrowInfiniteEnchantment extends Enchantment {
+         super(weight, EnchantmentCategory.BOW, slotTypes);
+     }
+ 
++    // Purpur start
++    @Override
++    public boolean canEnchant(net.minecraft.world.item.ItemStack stack) {
++        // we have to cheat the system because this class is loaded before purpur's config is loaded
++        return (org.purpurmc.purpur.PurpurConfig.allowCrossbowInfinity ? EnchantmentCategory.BOW_AND_CROSSBOW : EnchantmentCategory.BOW).canEnchant(stack.getItem());
++    }
++    // Purpur end
++
+     @Override
+     public int getMinCost(int level) {
+         return 20;
+diff --git a/src/main/java/net/minecraft/world/item/enchantment/EnchantmentCategory.java b/src/main/java/net/minecraft/world/item/enchantment/EnchantmentCategory.java
+index 6f6106ca4d74d50a7b74b086adc96c58c7906cb6..d6417c1e77ac8823e18a179dc9f61757a1f339ad 100644
+--- a/src/main/java/net/minecraft/world/item/enchantment/EnchantmentCategory.java
++++ b/src/main/java/net/minecraft/world/item/enchantment/EnchantmentCategory.java
+@@ -97,6 +97,14 @@ public enum EnchantmentCategory {
+         public boolean canEnchant(Item item) {
+             return item instanceof Vanishable || Block.byItem(item) instanceof Vanishable || BREAKABLE.canEnchant(item);
+         }
++    // Purpur start
++    },
++    BOW_AND_CROSSBOW {
++        @Override
++        public boolean canEnchant(Item item) {
++            return item instanceof BowItem || item instanceof CrossbowItem;
++        }
++    // Purpur end
+     };
+ 
+     public abstract boolean canEnchant(Item item);
+diff --git a/src/main/java/org/bukkit/craftbukkit/enchantments/CraftEnchantment.java b/src/main/java/org/bukkit/craftbukkit/enchantments/CraftEnchantment.java
+index 3d0ce0803e1da8a2681a3cb41096ac942ece54a1..bcd075a771c7f43c6d1549aeec2ccb20ee168b57 100644
+--- a/src/main/java/org/bukkit/craftbukkit/enchantments/CraftEnchantment.java
++++ b/src/main/java/org/bukkit/craftbukkit/enchantments/CraftEnchantment.java
+@@ -59,6 +59,7 @@ public class CraftEnchantment extends Enchantment {
+             return EnchantmentTarget.CROSSBOW;
+         case VANISHABLE:
+             return EnchantmentTarget.VANISHABLE;
++        case BOW_AND_CROSSBOW: return EnchantmentTarget.BOW_AND_CROSSBOW; // Purpur
+         default:
+             return null;
+         }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index c8097ec7887ac8e689b6843d9ff7744d6a453478..5717f09d31dbc89b0c3aba8330e593bf5a53b6a4 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -282,6 +282,7 @@ public class PurpurConfig {
+     }
+ 
+     public static boolean allowInfinityMending = false;
++    public static boolean allowCrossbowInfinity = false;
+     private static void enchantmentSettings() {
+         if (version < 5) {
+             boolean oldValue = getBoolean("settings.enchantment.allow-infinite-and-mending-together", false);
+@@ -289,6 +290,7 @@ public class PurpurConfig {
+             set("settings.enchantment.allow-infinite-and-mending-together", null);
+         }
+         allowInfinityMending = getBoolean("settings.enchantment.allow-infinity-and-mending-together", allowInfinityMending);
++        allowCrossbowInfinity = getBoolean("settings.enchantment.allow-infinity-on-crossbow", allowCrossbowInfinity);
+     }
+ 
+     public static boolean endermanShortHeight = false;

@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Encode42 <me@encode42.dev>
+Date: Tue, 9 Feb 2021 21:23:37 -0500
+Subject: [PATCH] Config to always tame in Creative
+
+Adds a configuration option that ensures a player in Creative always tames a tameable entity.
+This essentially allows Creative mode players to tame animals on their first try.
+
+diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/RunAroundLikeCrazyGoal.java b/src/main/java/net/minecraft/world/entity/ai/goal/RunAroundLikeCrazyGoal.java
+index 5c64905e90ccca6e0b347241ddf9cc3f71058b8e..3bd7521b131b2b40f807bdc7ab95e64cf9bcdadc 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/goal/RunAroundLikeCrazyGoal.java
++++ b/src/main/java/net/minecraft/world/entity/ai/goal/RunAroundLikeCrazyGoal.java
+@@ -63,7 +63,7 @@ public class RunAroundLikeCrazyGoal extends Goal {
+                 int j = this.horse.getMaxTemper();
+ 
+                 // CraftBukkit - fire EntityTameEvent
+-                if (j > 0 && this.horse.getRandom().nextInt(j) < i && !org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTameEvent(this.horse, ((org.bukkit.craftbukkit.entity.CraftHumanEntity) this.horse.getBukkitEntity().getPassenger()).getHandle()).isCancelled()) {
++                if ((this.horse.level.purpurConfig.alwaysTameInCreative && ((Player) entity).getAbilities().instabuild) || (j > 0 && this.horse.getRandom().nextInt(j) < i && !org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTameEvent(this.horse, ((org.bukkit.craftbukkit.entity.CraftHumanEntity) this.horse.getBukkitEntity().getPassenger()).getHandle()).isCancelled())) { // Purpur
+                     this.horse.tameWithName((Player) entity);
+                     return;
+                 }
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Cat.java b/src/main/java/net/minecraft/world/entity/animal/Cat.java
+index a166121fd50551cd199b7246dd01df47040eea87..76c99eab479d762120fbb40144a5a3b201c4dd9e 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Cat.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Cat.java
+@@ -473,7 +473,7 @@ public class Cat extends TamableAnimal implements VariantHolder<CatVariant> {
+                 }
+             } else if (this.isFood(itemstack)) {
+                 this.usePlayerItem(player, hand, itemstack);
+-                if (this.random.nextInt(3) == 0 && !org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTameEvent(this, player).isCancelled()) { // CraftBukkit
++                if ((this.level.purpurConfig.alwaysTameInCreative && player.getAbilities().instabuild) || (this.random.nextInt(3) == 0 && !org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTameEvent(this, player).isCancelled())) { // CraftBukkit // Purpur
+                     this.tame(player);
+                     this.setOrderedToSit(true);
+                     this.level.broadcastEntityEvent(this, (byte) 7);
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Parrot.java b/src/main/java/net/minecraft/world/entity/animal/Parrot.java
+index f021c0c872158d463d38629ea4a8c61084be3abd..ab00e8d796ff7c903ea678dedb64cb25cf7e462e 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Parrot.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Parrot.java
+@@ -334,7 +334,7 @@ public class Parrot extends ShoulderRidingEntity implements VariantHolder<Parrot
+             }
+ 
+             if (!this.level.isClientSide) {
+-                if (this.random.nextInt(10) == 0 && !org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTameEvent(this, player).isCancelled()) { // CraftBukkit
++                if ((this.level.purpurConfig.alwaysTameInCreative && player.getAbilities().instabuild) || (this.random.nextInt(10) == 0 && !org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTameEvent(this, player).isCancelled())) { // CraftBukkit // Purpur
+                     this.tame(player);
+                     this.level.broadcastEntityEvent(this, (byte) 7);
+                 } else {
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Wolf.java b/src/main/java/net/minecraft/world/entity/animal/Wolf.java
+index f1d7390e9bbc520fa9c41b09b363996e51c7c911..0656bb44c3ac8a346ebec203239954d980c010e7 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Wolf.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Wolf.java
+@@ -537,7 +537,7 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+                 }
+ 
+                 // CraftBukkit - added event call and isCancelled check.
+-                if (this.random.nextInt(3) == 0 && !CraftEventFactory.callEntityTameEvent(this, player).isCancelled()) {
++                if ((this.level.purpurConfig.alwaysTameInCreative && player.getAbilities().instabuild) || (this.random.nextInt(3) == 0 && !CraftEventFactory.callEntityTameEvent(this, player).isCancelled())) { // Purpur
+                     this.tame(player);
+                     this.navigation.stop();
+                     this.setTarget((LivingEntity) null);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 3819a99e94520810550dd2752916e6f1b5af4537..b5b3661c9b4a7e24d8a62ad7e33f3cd22b56c79b 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -120,6 +120,7 @@ public class PurpurWorldConfig {
+     }
+ 
+     public boolean useBetterMending = false;
++    public boolean alwaysTameInCreative = false;
+     public boolean boatEjectPlayersOnLand = false;
+     public boolean boatsDoFallDamage = true;
+     public boolean disableDropsOnCrammingDeath = false;
+@@ -138,6 +139,7 @@ public class PurpurWorldConfig {
+     public int animalBreedingCooldownSeconds = 0;
+     private void miscGameplayMechanicsSettings() {
+         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
++        alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
+         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
+         boatsDoFallDamage = getBoolean("gameplay-mechanics.boat.do-fall-damage", boatsDoFallDamage);
+         disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);

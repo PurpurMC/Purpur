@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jason Penilla <11360596+jpenilla@users.noreply.github.com>
+Date: Thu, 27 Aug 2020 13:48:52 -0700
+Subject: [PATCH] Raid cooldown setting
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/raid/Raids.java b/src/main/java/net/minecraft/world/entity/raid/Raids.java
+index feb89eb69994bdd1d2f95d2b9992e69251b2bee7..0670775c2de33e69c75644e5d2ff19db08444040 100644
+--- a/src/main/java/net/minecraft/world/entity/raid/Raids.java
++++ b/src/main/java/net/minecraft/world/entity/raid/Raids.java
+@@ -28,6 +28,7 @@ import net.minecraft.world.phys.Vec3;
+ public class Raids extends SavedData {
+ 
+     private static final String RAID_FILE_ID = "raids";
++    public final Map<java.util.UUID, Integer> playerCooldowns = Maps.newHashMap();
+     public final Map<Integer, Raid> raidMap = Maps.newHashMap();
+     private final ServerLevel level;
+     private int nextAvailableID;
+@@ -45,6 +46,17 @@ public class Raids extends SavedData {
+ 
+     public void tick() {
+         ++this.tick;
++        // Purpur start
++        if (level.purpurConfig.raidCooldownSeconds != 0 && this.tick % 20 == 0) {
++            com.google.common.collect.ImmutableMap.copyOf(playerCooldowns).forEach((uuid, i) -> {
++                if (i < 1) {
++                    playerCooldowns.remove(uuid);
++                } else {
++                    playerCooldowns.put(uuid, i - 1);
++                }
++            });
++        }
++        // Purpur end
+         Iterator iterator = this.raidMap.values().iterator();
+ 
+         while (iterator.hasNext()) {
+@@ -129,11 +141,13 @@ public class Raids extends SavedData {
+                 }
+ 
+                 if (flag) {
++                    if (level.purpurConfig.raidCooldownSeconds != 0 && playerCooldowns.containsKey(player.getUUID())) return null; // Purpur
+                     // CraftBukkit start
+                     if (!org.bukkit.craftbukkit.event.CraftEventFactory.callRaidTriggerEvent(raid, player)) {
+                         player.removeEffect(MobEffects.BAD_OMEN);
+                         return null;
+                     }
++                    if (level.purpurConfig.raidCooldownSeconds != 0) playerCooldowns.put(player.getUUID(), level.purpurConfig.raidCooldownSeconds); // Purpur
+ 
+                     if (!this.raidMap.containsKey(raid.getId())) {
+                         this.raidMap.put(raid.getId(), raid);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index f41418152e35b2c01077fd84501b67f9bd46ca11..ebad70a5fdfb4fb705d4542073cf068690294972 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -112,6 +112,7 @@ public class PurpurWorldConfig {
+     public double tridentLoyaltyVoidReturnHeight = 0.0D;
+     public double voidDamageHeight = -64.0D;
+     public double voidDamageDealt = 4.0D;
++    public int raidCooldownSeconds = 0;
+     private void miscGameplayMechanicsSettings() {
+         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
+         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
+@@ -121,6 +122,7 @@ public class PurpurWorldConfig {
+         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
+         voidDamageHeight = getDouble("gameplay-mechanics.void-damage-height", voidDamageHeight);
+         voidDamageDealt = getDouble("gameplay-mechanics.void-damage-dealt", voidDamageDealt);
++        raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
+     }
+ 
+     public int elytraDamagePerSecond = 1;
