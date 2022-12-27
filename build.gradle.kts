@@ -5,8 +5,6 @@ plugins {
     id("io.papermc.paperweight.patcher") version "1.4.0"
 }
 
-val paperMavenPublicUrl = "https://repo.papermc.io/repository/maven-public/"
-
 allprojects {
     apply(plugin = "java")
     apply(plugin = "maven-publish")
@@ -17,6 +15,8 @@ allprojects {
         }
     }
 }
+
+val paperMavenPublicUrl = "https://repo.papermc.io/repository/maven-public/"
 
 subprojects {
     tasks.withType<JavaCompile>().configureEach {
@@ -97,5 +97,17 @@ publishing {
         artifact(tasks.generateDevelopmentBundle) {
             artifactId = "dev-bundle"
         }
+    }
+}
+
+tasks.register("printMinecraftVersion") {
+    doLast {
+        println(providers.gradleProperty("mcVersion").get().trim())
+    }
+}
+
+tasks.register("printPaperVersion") {
+    doLast {
+        println(project.version)
     }
 }

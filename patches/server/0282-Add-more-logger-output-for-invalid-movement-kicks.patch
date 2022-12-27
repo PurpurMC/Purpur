@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <blake.galbreath@gmail.com>
+Date: Wed, 27 Jul 2022 00:42:39 -0500
+Subject: [PATCH] Add more logger output for invalid movement kicks
+
+
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index 731516cc0e7a6a16874b5c9d533f2beb84397e06..be44d43ee9b5fec44f1b3cb27e7180ba370f6de7 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -845,6 +845,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+         if (packet.getId() == this.awaitingTeleport) {
+             if (this.awaitingPositionFromClient == null) {
+                 this.disconnect(Component.translatable("multiplayer.disconnect.invalid_player_movement"), org.bukkit.event.player.PlayerKickEvent.Cause.INVALID_PLAYER_MOVEMENT); // Paper - kick event cause
++                ServerGamePacketListenerImpl.LOGGER.warn("Disconnected on accept teleport packet. Was not expecting position data from client at this time"); // Purpur
+                 return;
+             }
+ 
+@@ -1425,8 +1426,16 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+     @Override
+     public void handleMovePlayer(ServerboundMovePlayerPacket packet) {
+         PacketUtils.ensureRunningOnSameThread(packet, this, this.player.getLevel());
+-        if (ServerGamePacketListenerImpl.containsInvalidValues(packet.getX(0.0D), packet.getY(0.0D), packet.getZ(0.0D), packet.getYRot(0.0F), packet.getXRot(0.0F))) {
++        // Purpur start
++        boolean invalidX = Double.isNaN(packet.getX(0.0D));
++        boolean invalidY = Double.isNaN(packet.getY(0.0D));
++        boolean invalidZ = Double.isNaN(packet.getZ(0.0D));
++        boolean invalidYaw = !Floats.isFinite(packet.getYRot(0.0F));
++        boolean invalidPitch = !Floats.isFinite(packet.getXRot(0.0F));
++        if (invalidX || invalidY || invalidZ || invalidYaw || invalidPitch) {
+             this.disconnect(Component.translatable("multiplayer.disconnect.invalid_player_movement"), org.bukkit.event.player.PlayerKickEvent.Cause.INVALID_PLAYER_MOVEMENT); // Paper - kick event cause
++            ServerGamePacketListenerImpl.LOGGER.warn(String.format("Disconnected on move player packet. Invalid data: x=%b, y=%b, z=%b, yaw=%b, pitch=%b", invalidX, invalidY, invalidZ, invalidYaw, invalidPitch));
++            // Purpur end
+         } else {
+             ServerLevel worldserver = this.player.getLevel();
+ 

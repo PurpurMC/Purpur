@@ -1,0 +1,97 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <blake.galbreath@gmail.com>
+Date: Tue, 28 Dec 2021 16:22:20 -0600
+Subject: [PATCH] Ability for hoe to replant crops and nether warts
+
+
+diff --git a/src/main/java/net/minecraft/world/level/block/BushBlock.java b/src/main/java/net/minecraft/world/level/block/BushBlock.java
+index 03fde6e47c4a347c62fe9b4a3351769aedf874f6..ca906b0250e5332f7ececf1419ca6d2c1d385adc 100644
+--- a/src/main/java/net/minecraft/world/level/block/BushBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/BushBlock.java
+@@ -48,4 +48,24 @@ public class BushBlock extends Block {
+     public boolean isPathfindable(BlockState state, BlockGetter world, BlockPos pos, PathComputationType type) {
+         return type == PathComputationType.AIR && !this.hasCollision ? true : super.isPathfindable(state, world, pos, type);
+     }
++
++    // Purpur start
++    public void playerDestroyAndReplant(net.minecraft.world.level.Level world, net.minecraft.world.entity.player.Player player, BlockPos pos, BlockState state, @javax.annotation.Nullable net.minecraft.world.level.block.entity.BlockEntity blockEntity, net.minecraft.world.item.ItemStack itemInHand, net.minecraft.world.level.ItemLike itemToReplant) {
++        player.awardStat(net.minecraft.stats.Stats.BLOCK_MINED.get(this));
++        player.causeFoodExhaustion(0.005F, org.bukkit.event.entity.EntityExhaustionEvent.ExhaustionReason.BLOCK_MINED);
++        java.util.List<net.minecraft.world.item.ItemStack> dropList = Block.getDrops(state, (net.minecraft.server.level.ServerLevel) world, pos, blockEntity, player, itemInHand);
++
++        boolean planted = false;
++        for (net.minecraft.world.item.ItemStack itemToDrop : dropList) {
++            if (!planted && itemToDrop.getItem() == itemToReplant) {
++                world.setBlock(pos, defaultBlockState(), 3);
++                itemToDrop.setCount(itemToDrop.getCount() - 1);
++                planted = true;
++            }
++            Block.popResource(world, pos, itemToDrop);
++        }
++
++        state.spawnAfterBreak((net.minecraft.server.level.ServerLevel) world, pos, itemInHand, true);
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/world/level/block/CropBlock.java b/src/main/java/net/minecraft/world/level/block/CropBlock.java
+index c0c3bba1555e356c0af7e79e1ecb2aa0de578306..74620e6aee75334498d903c616c090caa615f0b4 100644
+--- a/src/main/java/net/minecraft/world/level/block/CropBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/CropBlock.java
+@@ -199,4 +199,15 @@ public class CropBlock extends BushBlock implements BonemealableBlock {
+     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+         builder.add(CropBlock.AGE);
+     }
++
++    // Purpur start
++    @Override
++    public void playerDestroy(Level world, net.minecraft.world.entity.player.Player player, BlockPos pos, BlockState state, @javax.annotation.Nullable net.minecraft.world.level.block.entity.BlockEntity blockEntity, ItemStack itemInHand) {
++        if (world.purpurConfig.hoeReplantsCrops && itemInHand.getItem() instanceof net.minecraft.world.item.HoeItem) {
++            super.playerDestroyAndReplant(world, player, pos, state, blockEntity, itemInHand, getBaseSeedId());
++        } else {
++            super.playerDestroy(world, player, pos, state, blockEntity, itemInHand);
++        }
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/world/level/block/NetherWartBlock.java b/src/main/java/net/minecraft/world/level/block/NetherWartBlock.java
+index e55720c4d2fbdf6aae526910e87a67c29cf906fd..0e4026e9d39735b840f12e59f84469b9acc2fc77 100644
+--- a/src/main/java/net/minecraft/world/level/block/NetherWartBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/NetherWartBlock.java
+@@ -60,4 +60,15 @@ public class NetherWartBlock extends BushBlock {
+     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+         builder.add(NetherWartBlock.AGE);
+     }
++
++    // Purpur start
++    @Override
++    public void playerDestroy(net.minecraft.world.level.Level world, net.minecraft.world.entity.player.Player player, BlockPos pos, BlockState state, @javax.annotation.Nullable net.minecraft.world.level.block.entity.BlockEntity blockEntity, ItemStack itemInHand) {
++        if (world.purpurConfig.hoeReplantsNetherWarts && itemInHand.getItem() instanceof net.minecraft.world.item.HoeItem) {
++            super.playerDestroyAndReplant(world, player, pos, state, blockEntity, itemInHand, Items.NETHER_WART);
++        } else {
++            super.playerDestroy(world, player, pos, state, blockEntity, itemInHand);
++        }
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 550442ebdd824a799c65efeebf2d2e5e9cdc10e8..d7176a0a2732cbe9b14b0ad852a3531f4a47c3f5 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -560,6 +560,8 @@ public class PurpurWorldConfig {
+     public Map<Block, Waxable> axeWaxables = new HashMap<>();
+     public Map<Block, Weatherable> axeWeatherables = new HashMap<>();
+     public Map<Block, Tillable> hoeTillables = new HashMap<>();
++    public boolean hoeReplantsCrops = false;
++    public boolean hoeReplantsNetherWarts = false;
+     private void toolSettings() {
+         axeStrippables.clear();
+         axeWaxables.clear();
+@@ -707,6 +709,8 @@ public class PurpurWorldConfig {
+             });
+             hoeTillables.put(block, new Tillable(condition, into, drops));
+         });
++        hoeReplantsCrops = getBoolean("tools.hoe.replant-crops", hoeReplantsCrops);
++        hoeReplantsNetherWarts = getBoolean("tools.hoe.replant-nether-warts", hoeReplantsNetherWarts);
+     }
+ 
+     public boolean anvilAllowColors = false;
