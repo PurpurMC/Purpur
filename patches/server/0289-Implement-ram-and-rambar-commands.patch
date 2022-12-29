@@ -1,0 +1,360 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <blake.galbreath@gmail.com>
+Date: Mon, 26 Sep 2022 07:43:30 -0500
+Subject: [PATCH] Implement ram and rambar commands
+
+
+diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
+index a6996259f9fcb2d6520ca45fa42b11c42824ef9d..1a6f3c602437eaedbc96f1d47d08ff3ab25c0469 100644
+--- a/src/main/java/net/minecraft/commands/Commands.java
++++ b/src/main/java/net/minecraft/commands/Commands.java
+@@ -221,6 +221,8 @@ public class Commands {
+             org.purpurmc.purpur.command.UptimeCommand.register(this.dispatcher); // Purpur
+             org.purpurmc.purpur.command.TPSBarCommand.register(this.dispatcher); // Purpur
+             org.purpurmc.purpur.command.CompassCommand.register(this.dispatcher); // Purpur
++            org.purpurmc.purpur.command.RamBarCommand.register(this.dispatcher); // Purpur
++            org.purpurmc.purpur.command.RamCommand.register(this.dispatcher); // Purpur
+         }
+ 
+         if (environment.includeIntegrated) {
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index 48b09b1fe0d316277a46cab700d790a1d35d3fc4..d62bf95fb067c2e2a4fc9b2757c636bd4ee75bea 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -270,6 +270,7 @@ public class ServerPlayer extends Player {
+     public org.bukkit.event.player.PlayerQuitEvent.QuitReason quitReason = null; // Paper - there are a lot of changes to do if we change all methods leading to the event
+     public boolean purpurClient = false; // Purpur
+     public boolean acceptingResourcePack = false; // Purpur
++    private boolean ramBar = false; // Purpur
+     private boolean tpsBar = false; // Purpur
+     private boolean compassBar = false; // Purpur
+ 
+@@ -511,6 +512,7 @@ public class ServerPlayer extends Player {
+             }
+         }
+ 
++        if (nbt.contains("Purpur.RamBar")) { this.ramBar = nbt.getBoolean("Purpur.RamBar"); } // Purpur
+         if (nbt.contains("Purpur.TPSBar")) { this.tpsBar = nbt.getBoolean("Purpur.TPSBar"); } // Purpur
+         if (nbt.contains("Purpur.CompassBar")) { this.compassBar = nbt.getBoolean("Purpur.CompassBar"); } // Purpur
+     }
+@@ -579,6 +581,7 @@ public class ServerPlayer extends Player {
+         }
+         this.getBukkitEntity().setExtraData(nbt); // CraftBukkit
+ 
++        nbt.putBoolean("Purpur.RamBar", this.ramBar); // Purpur
+         nbt.putBoolean("Purpur.TPSBar", this.tpsBar); // Purpur
+         nbt.putBoolean("Purpur.CompassBar", this.compassBar); // Purpur
+     }
+@@ -2692,6 +2695,14 @@ public class ServerPlayer extends Player {
+         }
+     }
+ 
++    public boolean ramBar() {
++        return this.ramBar;
++    }
++
++    public void ramBar(boolean ramBar) {
++        this.ramBar = ramBar;
++    }
++
+     public boolean tpsBar() {
+         return this.tpsBar;
+     }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index ff10dc453f129cae69e0eb3928c049c5f10058aa..fa038cec55c710f7734df91f9dcb1c49739e5b33 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -181,6 +181,8 @@ public class PurpurConfig {
+     public static String creditsCommandOutput = "<green>%s has been shown the end credits";
+     public static String demoCommandOutput = "<green>%s has been shown the demo screen";
+     public static String pingCommandOutput = "<green>%s's ping is %sms";
++    public static String ramCommandOutput = "<green>Ram Usage: <used>/<xmx> (<percent>)";
++    public static String rambarCommandOutput = "<green>Rambar toggled <onoff> for <target>";
+     public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
+     public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
+     public static String uptimeCommandOutput = "<green>Server uptime is <uptime>";
+@@ -196,6 +198,8 @@ public class PurpurConfig {
+         creditsCommandOutput = getString("settings.messages.credits-command-output", creditsCommandOutput);
+         demoCommandOutput = getString("settings.messages.demo-command-output", demoCommandOutput);
+         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
++        ramCommandOutput = getString("settings.messages.ram-command-output", ramCommandOutput);
++        rambarCommandOutput = getString("settings.messages.rambar-command-output", rambarCommandOutput);
+         tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
+         dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
+         uptimeCommandOutput = getString("settings.messages.uptime-command-output", uptimeCommandOutput);
+@@ -243,6 +247,15 @@ public class PurpurConfig {
+         disableGiveCommandDrops = getBoolean("settings.disable-give-dropping", disableGiveCommandDrops);
+     }
+ 
++    public static String commandRamBarTitle = "<gray>Ram<yellow>:</yellow> <used>/<xmx> (<percent>)";
++    public static BossBar.Overlay commandRamBarProgressOverlay = BossBar.Overlay.NOTCHED_20;
++    public static BossBar.Color commandRamBarProgressColorGood = BossBar.Color.GREEN;
++    public static BossBar.Color commandRamBarProgressColorMedium = BossBar.Color.YELLOW;
++    public static BossBar.Color commandRamBarProgressColorLow = BossBar.Color.RED;
++    public static String commandRamBarTextColorGood = "<gradient:#55ff55:#00aa00><text></gradient>";
++    public static String commandRamBarTextColorMedium = "<gradient:#ffff55:#ffaa00><text></gradient>";
++    public static String commandRamBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
++    public static int commandRamBarTickInterval = 20;
+     public static String commandTPSBarTitle = "<gray>TPS<yellow>:</yellow> <tps> MSPT<yellow>:</yellow> <mspt> Ping<yellow>:</yellow> <ping>ms";
+     public static BossBar.Overlay commandTPSBarProgressOverlay = BossBar.Overlay.NOTCHED_20;
+     public static TPSBarTask.FillMode commandTPSBarProgressFillMode = TPSBarTask.FillMode.MSPT;
+@@ -271,6 +284,16 @@ public class PurpurConfig {
+     public static String uptimeSecond = "%02d second";
+     public static String uptimeSeconds = "%02d seconds";
+     private static void commandSettings() {
++        commandRamBarTitle = getString("settings.command.rambar.title", commandRamBarTitle);
++        commandRamBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.rambar.overlay", commandRamBarProgressOverlay.name()));
++        commandRamBarProgressColorGood = BossBar.Color.valueOf(getString("settings.command.rambar.progress-color.good", commandRamBarProgressColorGood.name()));
++        commandRamBarProgressColorMedium = BossBar.Color.valueOf(getString("settings.command.rambar.progress-color.medium", commandRamBarProgressColorMedium.name()));
++        commandRamBarProgressColorLow = BossBar.Color.valueOf(getString("settings.command.rambar.progress-color.low", commandRamBarProgressColorLow.name()));
++        commandRamBarTextColorGood = getString("settings.command.rambar.text-color.good", commandRamBarTextColorGood);
++        commandRamBarTextColorMedium = getString("settings.command.rambar.text-color.medium", commandRamBarTextColorMedium);
++        commandRamBarTextColorLow = getString("settings.command.rambar.text-color.low", commandRamBarTextColorLow);
++        commandRamBarTickInterval = getInt("settings.command.rambar.tick-interval", commandRamBarTickInterval);
++
+         commandTPSBarTitle = getString("settings.command.tpsbar.title", commandTPSBarTitle);
+         commandTPSBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.tpsbar.overlay", commandTPSBarProgressOverlay.name()));
+         commandTPSBarProgressFillMode = TPSBarTask.FillMode.valueOf(getString("settings.command.tpsbar.fill-mode", commandTPSBarProgressFillMode.name()));
+diff --git a/src/main/java/org/purpurmc/purpur/command/RamBarCommand.java b/src/main/java/org/purpurmc/purpur/command/RamBarCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d3f7b4acab1e4502e6ab5d5b2cc400d948e1cef
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/command/RamBarCommand.java
+@@ -0,0 +1,43 @@
++package org.purpurmc.purpur.command;
++
++import com.mojang.brigadier.CommandDispatcher;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.NamedTextColor;
++import net.kyori.adventure.text.minimessage.MiniMessage;
++import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.commands.arguments.EntityArgument;
++import net.minecraft.server.level.ServerPlayer;
++import org.purpurmc.purpur.PurpurConfig;
++import org.purpurmc.purpur.task.RamBarTask;
++
++import java.util.Collection;
++import java.util.Collections;
++
++public class RamBarCommand {
++    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++        dispatcher.register(Commands.literal("rambar")
++                .requires(listener -> listener.hasPermission(2))
++                .executes(context -> execute(context.getSource(), Collections.singleton(context.getSource().getPlayerOrException())))
++                .then(Commands.argument("targets", EntityArgument.players())
++                        .executes((context) -> execute(context.getSource(), EntityArgument.getPlayers(context, "targets")))
++                )
++        ).setPermission("bukkit.command.rambar");
++    }
++
++    private static int execute(CommandSourceStack sender, Collection<ServerPlayer> targets) {
++        for (ServerPlayer player : targets) {
++            boolean result = RamBarTask.instance().togglePlayer(player.getBukkitEntity());
++            player.ramBar(result);
++
++            Component output = MiniMessage.miniMessage().deserialize(PurpurConfig.rambarCommandOutput,
++                    Placeholder.component("onoff", Component.translatable(result ? "options.on" : "options.off")
++                            .color(result ? NamedTextColor.GREEN : NamedTextColor.RED)),
++                    Placeholder.parsed("target", player.getGameProfile().getName()));
++
++            sender.sendSuccess(output, false);
++        }
++        return targets.size();
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/command/RamCommand.java b/src/main/java/org/purpurmc/purpur/command/RamCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..d16263d4ddf6e28fb99a5cd32a28be262f4c36a7
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/command/RamCommand.java
+@@ -0,0 +1,30 @@
++package org.purpurmc.purpur.command;
++
++import com.mojang.brigadier.CommandDispatcher;
++import io.papermc.paper.adventure.PaperAdventure;
++import net.kyori.adventure.text.minimessage.MiniMessage;
++import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import org.purpurmc.purpur.PurpurConfig;
++import org.purpurmc.purpur.task.RamBarTask;
++
++public class RamCommand {
++    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++        dispatcher.register(Commands.literal("ram")
++                .requires(listener -> listener.hasPermission(2))
++                .executes(context -> {
++                    CommandSourceStack sender = context.getSource();
++                    RamBarTask ramBar = RamBarTask.instance();
++                    sender.sendSuccess(PaperAdventure.asVanilla(MiniMessage.miniMessage().deserialize(PurpurConfig.ramCommandOutput,
++                            Placeholder.component("allocated", ramBar.format(ramBar.getAllocated())),
++                            Placeholder.component("used", ramBar.format(ramBar.getUsed())),
++                            Placeholder.component("xmx", ramBar.format(ramBar.getXmx())),
++                            Placeholder.component("xms", ramBar.format(ramBar.getXms())),
++                            Placeholder.unparsed("percent", ((int) (ramBar.getPercent() * 100)) + "%")
++                    )), false);
++                    return 1;
++                })
++        ).setPermission("bukkit.command.ram");
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/task/BossBarTask.java b/src/main/java/org/purpurmc/purpur/task/BossBarTask.java
+index d333334f323049ca97e756324cff0b23eddacd2a..114f273dd7f8b8a3c02f0651f6944859b33a65d4 100644
+--- a/src/main/java/org/purpurmc/purpur/task/BossBarTask.java
++++ b/src/main/java/org/purpurmc/purpur/task/BossBarTask.java
+@@ -89,17 +89,22 @@ public abstract class BossBarTask extends BukkitRunnable {
+     }
+ 
+     public static void startAll() {
++        RamBarTask.instance().start();
+         TPSBarTask.instance().start();
+         CompassTask.instance().start();
+     }
+ 
+     public static void stopAll() {
++        RamBarTask.instance().stop();
+         TPSBarTask.instance().stop();
+         CompassTask.instance().stop();
+     }
+ 
+     public static void addToAll(ServerPlayer player) {
+         Player bukkit = player.getBukkitEntity();
++        if (player.ramBar()) {
++            RamBarTask.instance().addPlayer(bukkit);
++        }
+         if (player.tpsBar()) {
+             TPSBarTask.instance().addPlayer(bukkit);
+         }
+@@ -109,6 +114,7 @@ public abstract class BossBarTask extends BukkitRunnable {
+     }
+ 
+     public static void removeFromAll(Player player) {
++        RamBarTask.instance().removePlayer(player);
+         TPSBarTask.instance().removePlayer(player);
+         CompassTask.instance().removePlayer(player);
+     }
+diff --git a/src/main/java/org/purpurmc/purpur/task/RamBarTask.java b/src/main/java/org/purpurmc/purpur/task/RamBarTask.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8e98c0ae73e2c40002a72b5d0d246ffa0c3ab38f
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/task/RamBarTask.java
+@@ -0,0 +1,117 @@
++package org.purpurmc.purpur.task;
++
++import net.kyori.adventure.bossbar.BossBar;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.minimessage.MiniMessage;
++import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
++import org.bukkit.entity.Player;
++import org.purpurmc.purpur.PurpurConfig;
++
++import java.lang.management.ManagementFactory;
++import java.lang.management.MemoryUsage;
++
++public class RamBarTask extends BossBarTask {
++    private static RamBarTask instance;
++    private long allocated = 0L;
++    private long used = 0L;
++    private long xmx = 0L;
++    private long xms = 0L;
++    private float percent = 0F;
++    private int tick = 0;
++
++    public static RamBarTask instance() {
++        if (instance == null) {
++            instance = new RamBarTask();
++        }
++        return instance;
++    }
++
++    @Override
++    BossBar createBossBar() {
++        return BossBar.bossBar(Component.text(""), 0.0F, instance().getBossBarColor(), PurpurConfig.commandRamBarProgressOverlay);
++    }
++
++    @Override
++    void updateBossBar(BossBar bossbar, Player player) {
++        bossbar.progress(getBossBarProgress());
++        bossbar.color(getBossBarColor());
++        bossbar.name(MiniMessage.miniMessage().deserialize(PurpurConfig.commandRamBarTitle,
++                Placeholder.component("allocated", format(this.allocated)),
++                Placeholder.component("used", format(this.used)),
++                Placeholder.component("xmx", format(this.xmx)),
++                Placeholder.component("xms", format(this.xms)),
++                Placeholder.unparsed("percent", ((int) (this.percent * 100)) + "%")
++        ));
++    }
++
++    @Override
++    public void run() {
++        if (++this.tick < PurpurConfig.commandRamBarTickInterval) {
++            return;
++        }
++        this.tick = 0;
++
++        MemoryUsage heap = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
++
++        this.allocated = heap.getCommitted();
++        this.used = heap.getUsed();
++        this.xmx = heap.getMax();
++        this.xms = heap.getInit();
++        this.percent = Math.max(Math.min((float) this.used / this.xmx, 1.0F), 0.0F);
++
++        super.run();
++    }
++
++    private float getBossBarProgress() {
++        return this.percent;
++    }
++
++    private BossBar.Color getBossBarColor() {
++        if (this.percent < 0.5F) {
++            return PurpurConfig.commandRamBarProgressColorGood;
++        } else if (this.percent < 0.75F) {
++            return PurpurConfig.commandRamBarProgressColorMedium;
++        } else {
++            return PurpurConfig.commandRamBarProgressColorLow;
++        }
++    }
++
++    public Component format(long v) {
++        String color;
++        if (this.percent < 0.60F) {
++            color = PurpurConfig.commandRamBarTextColorGood;
++        } else if (this.percent < 0.85F) {
++            color = PurpurConfig.commandRamBarTextColorMedium;
++        } else {
++            color = PurpurConfig.commandRamBarTextColorLow;
++        }
++        String value;
++        if (v < 1024) {
++            value = v + "B";
++        } else {
++            int z = (63 - Long.numberOfLeadingZeros(v)) / 10;
++            value = String.format("%.1f%s", (double) v / (1L << (z * 10)), "BKMGTPE".charAt(z));
++        }
++        return MiniMessage.miniMessage().deserialize(color, Placeholder.unparsed("text", value));
++    }
++
++    public long getAllocated() {
++        return this.allocated;
++    }
++
++    public long getUsed() {
++        return this.used;
++    }
++
++    public long getXmx() {
++        return this.xmx;
++    }
++
++    public long getXms() {
++        return this.xms;
++    }
++
++    public float getPercent() {
++        return this.percent;
++    }
++}

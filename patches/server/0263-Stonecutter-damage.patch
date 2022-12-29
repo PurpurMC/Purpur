@@ -1,0 +1,112 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Wed, 8 Jun 2022 14:19:35 -0400
+Subject: [PATCH] Stonecutter damage
+
+
+diff --git a/src/main/java/net/minecraft/world/damagesource/DamageSource.java b/src/main/java/net/minecraft/world/damagesource/DamageSource.java
+index 84c668e84635607f005deb6e3859d54c4ee2c4cb..2e1c34d37b4371fcd7f5616ad5cd5876014ebc9d 100644
+--- a/src/main/java/net/minecraft/world/damagesource/DamageSource.java
++++ b/src/main/java/net/minecraft/world/damagesource/DamageSource.java
+@@ -42,6 +42,12 @@ public class DamageSource {
+             return getLocalizedDeathMessage(org.purpurmc.purpur.PurpurConfig.deathMsgRunWithScissors, entity);
+         }
+     }).bypassArmor();
++    public static final DamageSource STONECUTTER = (new DamageSource("stonecutter") {
++        @Override
++        public Component getLocalizedDeathMessage(LivingEntity entity) {
++            return getLocalizedDeathMessage(org.purpurmc.purpur.PurpurConfig.deathMsgStonecutter, entity);
++        }
++    }).bypassArmor();
+     // Purpur end
+     private boolean damageHelmet;
+     private boolean bypassArmor;
+diff --git a/src/main/java/net/minecraft/world/level/block/StonecutterBlock.java b/src/main/java/net/minecraft/world/level/block/StonecutterBlock.java
+index 0a95842c53a9d0286c57bcb42db97e468e30fb7d..b6742a1efcceb0fb950d995101b6be16b0d05978 100644
+--- a/src/main/java/net/minecraft/world/level/block/StonecutterBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/StonecutterBlock.java
+@@ -92,4 +92,16 @@ public class StonecutterBlock extends Block {
+     public boolean isPathfindable(BlockState state, BlockGetter world, BlockPos pos, PathComputationType type) {
+         return false;
+     }
++
++    // Purpur start
++    @Override
++    public void stepOn(Level level, BlockPos pos, BlockState state, net.minecraft.world.entity.Entity entity) {
++        if (level.purpurConfig.stonecutterDamage > 0.0F && entity instanceof net.minecraft.world.entity.LivingEntity) {
++            org.bukkit.craftbukkit.event.CraftEventFactory.blockDamage = level.getWorld().getBlockAt(pos.getX(), pos.getY(), pos.getZ());
++            entity.hurt(net.minecraft.world.damagesource.DamageSource.STONECUTTER, level.purpurConfig.stonecutterDamage);
++            org.bukkit.craftbukkit.event.CraftEventFactory.blockDamage = null;
++        }
++        super.stepOn(level, pos, state, entity);
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/world/level/pathfinder/WalkNodeEvaluator.java b/src/main/java/net/minecraft/world/level/pathfinder/WalkNodeEvaluator.java
+index 6fbac97beacd0f806301c34de4ca6495b5aa705e..365c3d01a59d117ee9f238b1c1ded645d6b758d3 100644
+--- a/src/main/java/net/minecraft/world/level/pathfinder/WalkNodeEvaluator.java
++++ b/src/main/java/net/minecraft/world/level/pathfinder/WalkNodeEvaluator.java
+@@ -475,7 +475,7 @@ public class WalkNodeEvaluator extends NodeEvaluator {
+                             return BlockPathTypes.DANGER_CACTUS;
+                         }
+ 
+-                        if (blockState.is(Blocks.SWEET_BERRY_BUSH)) {
++                        if (blockState.is(Blocks.SWEET_BERRY_BUSH) || blockState.is(Blocks.STONECUTTER)) { // Purpur
+                             return BlockPathTypes.DANGER_OTHER;
+                         }
+ 
+@@ -507,7 +507,7 @@ public class WalkNodeEvaluator extends NodeEvaluator {
+                 return BlockPathTypes.POWDER_SNOW;
+             } else if (blockState.is(Blocks.CACTUS)) {
+                 return BlockPathTypes.DAMAGE_CACTUS;
+-            } else if (blockState.is(Blocks.SWEET_BERRY_BUSH)) {
++            } else if (blockState.is(Blocks.SWEET_BERRY_BUSH) || blockState.is(Blocks.STONECUTTER)) { // Purpur
+                 return BlockPathTypes.DAMAGE_OTHER;
+             } else if (blockState.is(Blocks.HONEY_BLOCK)) {
+                 return BlockPathTypes.STICKY_HONEY;
+diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+index 2d2f3370d4b3e2f5be0d1179ee27dd50544be656..b65c39645aa437fdb1ac745ec18bba11f63f092d 100644
+--- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
++++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+@@ -1057,6 +1057,10 @@ public class CraftEventFactory {
+                 cause = DamageCause.MAGIC;
+             } else if (source == DamageSource.IN_FIRE) {
+                 cause = DamageCause.FIRE;
++            // Purpur start
++            } else if (source == DamageSource.STONECUTTER) {
++                cause = DamageCause.CONTACT;
++            // Purpur end
+             } else {
+                 throw new IllegalStateException(String.format("Unhandled damage of %s by %s from %s", entity, damager, source.msgId));
+             }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index ee62024b694ce6393ff6a04862f1ec888d5d1688..5894b0f3f608c26813e4a41a4a87e1b439b2f0cd 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -205,8 +205,10 @@ public class PurpurConfig {
+     }
+ 
+     public static String deathMsgRunWithScissors = "<player> slipped and fell on their shears";
++    public static String deathMsgStonecutter = "<player> has sawed themself in half";
+     private static void deathMessages() {
+         deathMsgRunWithScissors = getString("settings.messages.death-message.run-with-scissors", deathMsgRunWithScissors);
++        deathMsgStonecutter = getString("settings.messages.death-message.stonecutter", deathMsgStonecutter);
+     }
+ 
+     public static boolean advancementOnlyBroadcastToAffectedPlayer = false;
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 075235e1db1c2261c3917b57d752462cf4fba4d3..148845b0db3f3e2d2eec90db1d30adf02d3aeb2b 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -999,6 +999,11 @@ public class PurpurWorldConfig {
+         spongeAbsorbsLava = getBoolean("blocks.sponge.absorbs-lava", spongeAbsorbsLava);
+     }
+ 
++    public float stonecutterDamage = 0.0F;
++    private void stonecutterSettings() {
++        stonecutterDamage = (float) getDouble("blocks.stonecutter.damage", stonecutterDamage);
++    }
++
+     public boolean turtleEggsBreakFromExpOrbs = true;
+     public boolean turtleEggsBreakFromItems = true;
+     public boolean turtleEggsBreakFromMinecarts = true;

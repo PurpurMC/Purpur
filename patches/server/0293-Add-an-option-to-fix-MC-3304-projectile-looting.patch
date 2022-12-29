@@ -1,0 +1,119 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MelnCat <melncatuwu@gmail.com>
+Date: Sat, 1 Oct 2022 11:33:15 -0700
+Subject: [PATCH] Add an option to fix MC-3304 (projectile looting)
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/projectile/AbstractArrow.java b/src/main/java/net/minecraft/world/entity/projectile/AbstractArrow.java
+index 9da08e020b4e85bc47423c3b91afbed6a11f87bb..3f8e10c33e0f8739602f8327da3a8f66318c5c94 100644
+--- a/src/main/java/net/minecraft/world/entity/projectile/AbstractArrow.java
++++ b/src/main/java/net/minecraft/world/entity/projectile/AbstractArrow.java
+@@ -72,6 +72,7 @@ public abstract class AbstractArrow extends Projectile {
+     private IntOpenHashSet piercingIgnoreEntityIds;
+     @Nullable
+     private List<Entity> piercedAndKilledEntities;
++    public int lootingLevel; // Purpur
+ 
+     // Spigot Start
+     @Override
+@@ -612,6 +613,12 @@ public abstract class AbstractArrow extends Projectile {
+         this.knockback = punch;
+     }
+ 
++    // Purpur start
++    public void setLootingLevel(int looting) {
++        this.lootingLevel = looting;
++    }
++    // Purpur end
++
+     public int getKnockback() {
+         return this.knockback;
+     }
+diff --git a/src/main/java/net/minecraft/world/item/BowItem.java b/src/main/java/net/minecraft/world/item/BowItem.java
+index 220513d3fd5645322886522ea4f6b8c55d043b3c..d45a2f49c82d00801578c34e5f5277fc5e82be87 100644
+--- a/src/main/java/net/minecraft/world/item/BowItem.java
++++ b/src/main/java/net/minecraft/world/item/BowItem.java
+@@ -64,6 +64,13 @@ public class BowItem extends ProjectileWeaponItem implements Vanishable {
+                         if (EnchantmentHelper.getItemEnchantmentLevel(Enchantments.FLAMING_ARROWS, stack) > 0) {
+                             entityarrow.setSecondsOnFire(100);
+                         }
++                        // Purpur start
++                        int lootingLevel = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.MOB_LOOTING, stack);
++
++                        if (lootingLevel > 0) {
++                            entityarrow.setLootingLevel(lootingLevel);
++                        }
++                        // Purpur end
+                         // CraftBukkit start
+                         org.bukkit.event.entity.EntityShootBowEvent event = org.bukkit.craftbukkit.event.CraftEventFactory.callEntityShootBowEvent(entityhuman, stack, itemstack1, entityarrow, entityhuman.getUsedItemHand(), f, !flag1);
+                         if (event.isCancelled()) {
+diff --git a/src/main/java/net/minecraft/world/item/CrossbowItem.java b/src/main/java/net/minecraft/world/item/CrossbowItem.java
+index 8a3c0b52c64c0116872abbcad8f5d743b9aa9bd9..c4942deb963064c61d4ab95c27ed341a6648dcc8 100644
+--- a/src/main/java/net/minecraft/world/item/CrossbowItem.java
++++ b/src/main/java/net/minecraft/world/item/CrossbowItem.java
+@@ -293,6 +293,14 @@ public class CrossbowItem extends ProjectileWeaponItem implements Vanishable {
+             entityarrow.setPierceLevel((byte) i);
+         }
+ 
++        // Purpur start
++        int lootingLevel = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.MOB_LOOTING, crossbow);
++
++        if (lootingLevel > 0) {
++            entityarrow.setLootingLevel(lootingLevel);
++        }
++        // Purpur end
++
+         return entityarrow;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/world/item/TridentItem.java b/src/main/java/net/minecraft/world/item/TridentItem.java
+index 60512d08a45670a164a9b93191aafa40b2c2287c..d35432087c70ce66b74d1e27df19f462f22b1aa1 100644
+--- a/src/main/java/net/minecraft/world/item/TridentItem.java
++++ b/src/main/java/net/minecraft/world/item/TridentItem.java
+@@ -82,6 +82,14 @@ public class TridentItem extends Item implements Vanishable {
+                                 entitythrowntrident.pickup = AbstractArrow.Pickup.CREATIVE_ONLY;
+                             }
+ 
++                            // Purpur start
++                            int lootingLevel = EnchantmentHelper.getItemEnchantmentLevel(net.minecraft.world.item.enchantment.Enchantments.MOB_LOOTING, stack);
++
++                            if (lootingLevel > 0) {
++                                entitythrowntrident.setLootingLevel(lootingLevel);
++                            }
++                            // Purpur end
++
+                             // CraftBukkit start
+                             // Paper start
+                             com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent event = new com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent((org.bukkit.entity.Player) entityhuman.getBukkitEntity(), org.bukkit.craftbukkit.inventory.CraftItemStack.asCraftMirror(stack), (org.bukkit.entity.Projectile) entitythrowntrident.getBukkitEntity());
+diff --git a/src/main/java/net/minecraft/world/level/storage/loot/functions/LootingEnchantFunction.java b/src/main/java/net/minecraft/world/level/storage/loot/functions/LootingEnchantFunction.java
+index 31918fa2eb38e42a5ea5366e559f25ea9d7d59ae..15d8e9261a89da30529ac347462c520920ca4e7d 100644
+--- a/src/main/java/net/minecraft/world/level/storage/loot/functions/LootingEnchantFunction.java
++++ b/src/main/java/net/minecraft/world/level/storage/loot/functions/LootingEnchantFunction.java
+@@ -49,6 +49,13 @@ public class LootingEnchantFunction extends LootItemConditionalFunction {
+ 
+         if (entity instanceof LivingEntity) {
+             int i = EnchantmentHelper.getMobLooting((LivingEntity) entity);
++            // Purpur start
++            if (org.purpurmc.purpur.PurpurConfig.fixProjectileLootingTransfer &&
++                    context.getParamOrNull(LootContextParams.DIRECT_KILLER_ENTITY)
++                        instanceof net.minecraft.world.entity.projectile.AbstractArrow arrow) {
++                i = arrow.lootingLevel;
++            }
++            // Purpur end
+             // CraftBukkit start - use lootingModifier if set by plugin
+             if (context.hasParam(LootContextParams.LOOTING_MOD)) {
+                 i = context.getParamOrNull(LootContextParams.LOOTING_MOD);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index fa038cec55c710f7734df91f9dcb1c49739e5b33..f32daa913a2aaa99fd9a021ee3ace02d7a814277 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -549,4 +549,9 @@ public class PurpurConfig {
+             }
+         });
+     }
++
++    public static boolean fixProjectileLootingTransfer = false;
++    private static void fixProjectileLootingTransfer() {
++        fixProjectileLootingTransfer = getBoolean("settings.fix-projectile-looting-transfer", fixProjectileLootingTransfer);
++    }
+ }
