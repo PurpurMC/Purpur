@@ -1,0 +1,79 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Thu, 24 Jun 2021 21:19:30 -0500
+Subject: [PATCH] Burp delay, burp after eating food fills hunger bar
+ completely
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/player/Player.java b/src/main/java/net/minecraft/world/entity/player/Player.java
+index da42e5d3d4409c9649db48fc90da7904ed2a1e20..daf6bf6db897ea4da18035e46f421ea2b2beba83 100644
+--- a/src/main/java/net/minecraft/world/entity/player/Player.java
++++ b/src/main/java/net/minecraft/world/entity/player/Player.java
+@@ -196,6 +196,8 @@ public abstract class Player extends LivingEntity {
+     // CraftBukkit end
+ 
+     // Purpur start
++    public int burpDelay = 0;
++
+     public abstract void resetLastActionTime();
+ 
+     public void setAfk(boolean afk) {
+@@ -259,6 +261,12 @@ public abstract class Player extends LivingEntity {
+ 
+     @Override
+     public void tick() {
++        // Purpur start
++        if (this.burpDelay > 0 && --this.burpDelay == 0) {
++            this.level.playSound(null, getX(), getY(), getZ(), SoundEvents.PLAYER_BURP, SoundSource.PLAYERS, 1.0F, this.level.random.nextFloat() * 0.1F + 0.9F);
++        }
++        // Purpur end
++
+         this.noPhysics = this.isSpectator();
+         if (this.isSpectator()) {
+             this.onGround = false;
+@@ -2345,7 +2353,7 @@ public abstract class Player extends LivingEntity {
+     public ItemStack eat(Level world, ItemStack stack) {
+         this.getFoodData().eat(stack.getItem(), stack);
+         this.awardStat(Stats.ITEM_USED.get(stack.getItem()));
+-        world.playSound((Player) null, this.getX(), this.getY(), this.getZ(), SoundEvents.PLAYER_BURP, SoundSource.PLAYERS, 0.5F, world.random.nextFloat() * 0.1F + 0.9F);
++        // world.playSound((Player) null, this.getX(), this.getY(), this.getZ(), SoundEvents.PLAYER_BURP, SoundSource.PLAYERS, 0.5F, world.random.nextFloat() * 0.1F + 0.9F); // Purpur - moved to tick()
+         if (this instanceof ServerPlayer) {
+             CriteriaTriggers.CONSUME_ITEM.trigger((ServerPlayer) this, stack);
+         }
+diff --git a/src/main/java/net/minecraft/world/food/FoodData.java b/src/main/java/net/minecraft/world/food/FoodData.java
+index 2934b6de1f1fb914a532ee20184df99d1acd8e65..4c1e9b6f4a52d7b1506b9016cc4d30e583eeab04 100644
+--- a/src/main/java/net/minecraft/world/food/FoodData.java
++++ b/src/main/java/net/minecraft/world/food/FoodData.java
+@@ -34,8 +34,10 @@ public class FoodData {
+     // CraftBukkit end
+ 
+     public void eat(int food, float saturationModifier) {
++        int oldValue = this.foodLevel; // Purpur
+         this.foodLevel = Math.min(food + this.foodLevel, 20);
+         this.saturationLevel = Math.min(this.saturationLevel + (float) food * saturationModifier * 2.0F, (float) this.foodLevel);
++        if (this.entityhuman.level.purpurConfig.playerBurpWhenFull && this.foodLevel == 20 && oldValue < 20) this.entityhuman.burpDelay = this.entityhuman.level.purpurConfig.playerBurpDelay; // Purpur
+     }
+ 
+     public void eat(Item item, ItemStack stack) {
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index e2bcb73a99843dff02b2dcede9b3451262428a31..22baf3d82b2304c27d4a6fc50101478a9d3e7966 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -389,6 +389,8 @@ public class PurpurWorldConfig {
+     public boolean playerSleepNearMonsters = false;
+     public boolean playersSkipNight = true;
+     public double playerCriticalDamageMultiplier = 1.5D;
++    public int playerBurpDelay = 10;
++    public boolean playerBurpWhenFull = false;
+     private void playerSettings() {
+         if (PurpurConfig.version < 19) {
+             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
+@@ -411,6 +413,8 @@ public class PurpurWorldConfig {
+         playerSleepNearMonsters = getBoolean("gameplay-mechanics.player.sleep-ignore-nearby-mobs", playerSleepNearMonsters);
+         playersSkipNight = getBoolean("gameplay-mechanics.player.can-skip-night", playersSkipNight);
+         playerCriticalDamageMultiplier = getDouble("gameplay-mechanics.player.critical-damage-multiplier", playerCriticalDamageMultiplier);
++        playerBurpDelay = getInt("gameplay-mechanics.player.burp-delay", playerBurpDelay);
++        playerBurpWhenFull = getBoolean("gameplay-mechanics.player.burp-when-full", playerBurpWhenFull);
+     }
+ 
+     private static boolean projectileDespawnRateSettingsMigrated = false;
