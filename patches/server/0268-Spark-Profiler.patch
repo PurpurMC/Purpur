@@ -3,54 +3,105 @@ From: Ben Kerllenevich <ben@omega24.dev>
 Date: Sat, 25 Jun 2022 19:40:36 -0400
 Subject: [PATCH] Spark Profiler
 
+Co-authored-by: granny <granny@purpurmc.org>
 
-diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index cd1906a3dcb52de5deed02e1b0005fe83c91f211..97f357a6c8d600daf68b249e04da1f7008b14302 100644
---- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-+++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -434,7 +434,44 @@ public final class CraftServer implements Server {
-             if (!pluginFolder.exists()) {
-                 pluginFolder.mkdirs();
-             }
--            Plugin[] plugins = this.pluginManager.loadPlugins(pluginFolder, this.extraPluginJars());
-+            // Purpur start
-+            List<File> extraJars = this.extraPluginJars();
-+            if (!Boolean.getBoolean("Purpur.IReallyDontWantSpark")) {
-+                try {
-+                    File file = new File("cache", "spark.jar");
-+                    file.getParentFile().mkdirs();
+diff --git a/src/main/java/io/papermc/paper/plugin/provider/source/SparkProviderSource.java b/src/main/java/io/papermc/paper/plugin/provider/source/SparkProviderSource.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..74e3334ec92e3864b84e299b33ca995224eb7c3f
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/provider/source/SparkProviderSource.java
+@@ -0,0 +1,82 @@
++package io.papermc.paper.plugin.provider.source;
 +
-+                    boolean shouldDownload = true;
-+                    if (file.exists()) {
-+                        String fileSha1 = String.format("%040x", new java.math.BigInteger(1, java.security.MessageDigest.getInstance("SHA-1").digest(java.nio.file.Files.readAllBytes(file.toPath()))));
-+                        String sparkSha1;
-+                        java.net.URLConnection urlConnection = new java.net.URL("https://sparkapi.lucko.me/download/bukkit/sha1").openConnection();
-+                        urlConnection.setReadTimeout(5000);
-+                        urlConnection.setConnectTimeout(5000);
-+                        try (java.io.BufferedReader reader = new java.io.BufferedReader(new InputStreamReader(urlConnection.getInputStream()))) {
-+                            sparkSha1 = reader.lines().collect(Collectors.joining(""));
-+                        }
++import com.mojang.logging.LogUtils;
++import io.papermc.paper.plugin.entrypoint.Entrypoint;
++import io.papermc.paper.plugin.entrypoint.EntrypointHandler;
++import io.papermc.paper.plugin.entrypoint.LaunchEntryPointHandler;
++import io.papermc.paper.plugin.provider.PluginProvider;
++import java.io.BufferedReader;
++import java.io.File;
++import java.io.InputStreamReader;
++import java.math.BigInteger;
++import java.net.URL;
++import java.net.URLConnection;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.nio.file.StandardCopyOption;
++import java.security.MessageDigest;
++import java.util.stream.Collectors;
++import org.bukkit.plugin.java.JavaPlugin;
++import org.slf4j.Logger;
 +
-+                        if (fileSha1.equals(sparkSha1)) {
-+                            shouldDownload = false;
-+                        }
++public class SparkProviderSource extends FileProviderSource {
++    public static final SparkProviderSource INSTANCE = new SparkProviderSource();
++
++    private static final Logger LOGGER = LogUtils.getLogger();
++
++    public SparkProviderSource() {
++        super("File '%s' specified by Purpur"::formatted);
++    }
++
++    @Override
++    public void registerProviders(EntrypointHandler entrypointHandler, Path context) throws Exception {
++        if (!Boolean.getBoolean("Purpur.IReallyDontWantSpark")) {
++            try {
++                File file = context.toFile();
++                file.getParentFile().mkdirs();
++
++                boolean shouldDownload = true;
++                if (file.exists()) {
++                    String fileSha1 = String.format("%040x", new BigInteger(1, MessageDigest.getInstance("SHA-1").digest(Files.readAllBytes(file.toPath()))));
++                    String sparkSha1;
++                    URLConnection urlConnection = new URL("https://sparkapi.lucko.me/download/bukkit/sha1").openConnection();
++                    urlConnection.setReadTimeout(5000);
++                    urlConnection.setConnectTimeout(5000);
++                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()))) {
++                        sparkSha1 = reader.lines().collect(Collectors.joining(""));
 +                    }
 +
-+                    if (shouldDownload) {
-+                        java.net.URLConnection urlConnection = new java.net.URL("https://sparkapi.lucko.me/download/bukkit").openConnection();
-+                        urlConnection.setReadTimeout(5000);
-+                        urlConnection.setConnectTimeout(5000);
-+                        java.nio.file.Files.copy(urlConnection.getInputStream(), file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
++                    if (fileSha1.equals(sparkSha1)) {
++                        shouldDownload = false;
 +                    }
-+
-+                    extraJars.add(file);
-+                } catch (Exception e) {
-+                    getLogger().severe("Purpur: Failed to download and install spark plugin");
-+                    e.printStackTrace();
 +                }
++
++                if (shouldDownload) {
++                    URLConnection urlConnection = new URL("https://sparkapi.lucko.me/download/bukkit").openConnection();
++                    urlConnection.setReadTimeout(5000);
++                    urlConnection.setConnectTimeout(5000);
++                    Files.copy(urlConnection.getInputStream(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
++                }
++
++                if (hasSpark()) {
++                     LOGGER.info("Purpur: Using user-provided spark plugin instead of our own.");
++                } else {
++                    super.registerProviders(entrypointHandler, context);
++                }
++
++            } catch (Exception e) {
++                LOGGER.error("Purpur: Failed to download and install spark plugin");
++                e.printStackTrace();
 +            }
-+            Plugin[] plugins = this.pluginManager.loadPlugins(pluginFolder, extraJars);
-+            // Purpur end
++        }
++    }
++
++    private static boolean hasSpark() {
++        for (PluginProvider<JavaPlugin> provider : LaunchEntryPointHandler.INSTANCE.get(Entrypoint.PLUGIN).getRegisteredProviders()) {
++            if (provider.getMeta().getName().equalsIgnoreCase("spark")) {
++                return true;
++            }
++        }
++        return false;
++    }
++}
+diff --git a/src/main/java/net/minecraft/server/Main.java b/src/main/java/net/minecraft/server/Main.java
+index a821cb33fbc29109aec68f9d6a0eb2efc121ee13..066b18444e92508908dd823c8d928721e338d06d 100644
+--- a/src/main/java/net/minecraft/server/Main.java
++++ b/src/main/java/net/minecraft/server/Main.java
+@@ -122,6 +122,7 @@ public class Main {
+             // Register plugins from the flag
+             io.papermc.paper.plugin.util.EntrypointUtil.registerProvidersFromSource(io.papermc.paper.plugin.provider.source.PluginFlagProviderSource.INSTANCE, files);
              // Paper end
-             for (Plugin plugin : plugins) {
-                 try {
++            io.papermc.paper.plugin.util.EntrypointUtil.registerProvidersFromSource(io.papermc.paper.plugin.provider.source.SparkProviderSource.INSTANCE, new File("cache", "spark.jar").toPath()); // Purpur
+             Bootstrap.bootStrap();
+             Bootstrap.validate();
+             Util.startTimerHackThread();
