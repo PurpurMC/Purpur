@@ -29,10 +29,6 @@ subprojects {
     tasks.withType<ProcessResources> {
         filteringCharset = Charsets.UTF_8.name()
     }
-    tasks.withType<Test> {
-        minHeapSize = "2g"
-        maxHeapSize = "2g"
-    }
 
     repositories {
         mavenCentral()
