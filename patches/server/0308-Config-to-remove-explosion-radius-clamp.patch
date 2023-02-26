@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Nico314159 <nicolino.will@gmail.com>
+Date: Mon, 9 Jan 2023 19:45:55 -0500
+Subject: [PATCH] Config to remove explosion radius clamp
+
+Co-authored-by: Encode42 <me@encode42.dev>
+
+diff --git a/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java b/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
+index 1e2304347fc369e5d9fe5d4c3cca8856766f5c1a..84b230d979a91dd776e180e5b828b26bdc98ef12 100644
+--- a/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
++++ b/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
+@@ -98,7 +98,7 @@ public class EnderDragon extends Mob implements Enemy {
+     private final Node[] nodes = new Node[24];
+     private final int[] nodeAdjacency = new int[24];
+     private final BinaryHeap openSet = new BinaryHeap();
+-    private Explosion explosionSource = new Explosion(null, this, null, null, Double.NaN, Double.NaN, Double.NaN, Float.NaN, true, Explosion.BlockInteraction.DESTROY); // CraftBukkit - reusable source for CraftTNTPrimed.getSource()
++    private Explosion explosionSource; // CraftBukkit - reusable source for CraftTNTPrimed.getSource() // Purpur - moved instantiation to ctor
+     // Paper start - add var for save custom podium
+     @Nullable
+     private BlockPos podium;
+@@ -107,6 +107,7 @@ public class EnderDragon extends Mob implements Enemy {
+ 
+     public EnderDragon(EntityType<? extends EnderDragon> entitytypes, Level world) {
+         super(EntityType.ENDER_DRAGON, world);
++        this.explosionSource = new Explosion(this.level, this, null, null, Double.NaN, Double.NaN, Double.NaN, Float.NaN, true, Explosion.BlockInteraction.DESTROY); // Purpur - moved instantiation from field
+         this.subEntities = new EnderDragonPart[]{this.head, this.neck, this.body, this.tail1, this.tail2, this.tail3, this.wing1, this.wing2};
+         this.setHealth(this.getMaxHealth());
+         this.noPhysics = true;
+diff --git a/src/main/java/net/minecraft/world/level/Explosion.java b/src/main/java/net/minecraft/world/level/Explosion.java
+index c0d39afe5b80159ed9aaca4ddd4763d707882f2e..3c9e0cee78deeae6b47a186f1bfc47f3956ec9c7 100644
+--- a/src/main/java/net/minecraft/world/level/Explosion.java
++++ b/src/main/java/net/minecraft/world/level/Explosion.java
+@@ -86,7 +86,7 @@ public class Explosion {
+         this.hitPlayers = Maps.newHashMap();
+         this.level = world;
+         this.source = entity;
+-        this.radius = (float) Math.max(power, 0.0); // CraftBukkit - clamp bad values
++        this.radius = (float) (world.purpurConfig.explosionClampRadius ? Math.max(power, 0.0) : power); // CraftBukkit - clamp bad values // Purpur
+         this.x = x;
+         this.y = y;
+         this.z = z;
+@@ -137,7 +137,7 @@ public class Explosion {
+ 
+     public void explode() {
+         // CraftBukkit start
+-        if (this.radius < 0.1F) {
++        if (this.level.purpurConfig.explosionClampRadius && this.radius < 0.1F) { // Purpur
+             return;
+         }
+         // CraftBukkit end
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 7ab958c14162ce49173e62d77092d09ce8cd9b74..4cd080a0db99a5c36394bcf54526b96fe22a206a 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -216,6 +216,11 @@ public class PurpurWorldConfig {
+         entitySharedRandom = getBoolean("settings.entity.shared-random", entitySharedRandom);
+     }
+ 
++    public boolean explosionClampRadius = true;
++    private void explosionSettings() {
++        explosionClampRadius = getBoolean("gameplay-mechanics.clamp-explosion-radius", explosionClampRadius);
++    }
++
+     public boolean infinityWorksWithoutArrows = false;
+     public boolean infinityWorksWithNormalArrows = true;
+     public boolean infinityWorksWithSpectralArrows = false;
