@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 7ba2b08b8c5eb405a64f9edfa72195dcf48f82bd..d351ae66db72208a78ee6c522201693f19f68ef5 100644
+index 9421e45653e68922a51cf0071792e6fa7999d0b8..181e9cd8623995f40e696ccfe49754dc340405d8 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
 @@ -41,6 +41,7 @@ dependencies {
@@ -29,8 +29,8 @@ index 7ba2b08b8c5eb405a64f9edfa72195dcf48f82bd..d351ae66db72208a78ee6c522201693f
      api("org.slf4j:slf4j-api:1.8.0-beta4")
 +    api("io.sentry:sentry:5.4.0") // Pufferfish
  
-     implementation("org.ow2.asm:asm:9.2")
-     implementation("org.ow2.asm:asm-commons:9.2")
+     implementation("org.ow2.asm:asm:9.4")
+     implementation("org.ow2.asm:asm-commons:9.4")
 @@ -84,6 +85,13 @@ val generateApiVersioningFile by tasks.registering {
      }
  }
@@ -47,7 +47,7 @@ index 7ba2b08b8c5eb405a64f9edfa72195dcf48f82bd..d351ae66db72208a78ee6c522201693f
          into("META-INF/maven/${project.group}/${project.name}")
 diff --git a/src/main/java/gg/pufferfish/pufferfish/sentry/SentryContext.java b/src/main/java/gg/pufferfish/pufferfish/sentry/SentryContext.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8eb08fb68a
+index 0000000000000000000000000000000000000000..cfbc75a4525b0596547db496eabe867975081642
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/sentry/SentryContext.java
 @@ -0,0 +1,161 @@
@@ -69,21 +69,21 @@ index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8e
 +import org.jetbrains.annotations.Nullable;
 +
 +public class SentryContext {
-+	
++
 +	private static final Gson GSON = new Gson();
-+	
++
 +	public static void setPluginContext(@Nullable Plugin plugin) {
 +		if (plugin != null) {
 +			ThreadContext.put("pufferfishsentry_pluginname", plugin.getName());
 +			ThreadContext.put("pufferfishsentry_pluginversion", plugin.getDescription().getVersion());
 +		}
 +	}
-+	
++
 +	public static void removePluginContext() {
 +		ThreadContext.remove("pufferfishsentry_pluginname");
 +		ThreadContext.remove("pufferfishsentry_pluginversion");
 +	}
-+	
++
 +	public static void setSenderContext(@Nullable CommandSender sender) {
 +		if (sender != null) {
 +			ThreadContext.put("pufferfishsentry_playername", sender.getName());
@@ -92,15 +92,15 @@ index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8e
 +			}
 +		}
 +	}
-+	
++
 +	public static void removeSenderContext() {
 +		ThreadContext.remove("pufferfishsentry_playername");
 +		ThreadContext.remove("pufferfishsentry_playerid");
 +	}
-+	
++
 +	public static void setEventContext(Event event, RegisteredListener registration) {
 +		setPluginContext(registration.getPlugin());
-+		
++
 +		try {
 +			// Find the player that was involved with this event
 +			Player player = null;
@@ -108,36 +108,36 @@ index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8e
 +				player = ((PlayerEvent) event).getPlayer();
 +			} else {
 +				Class<? extends Event> eventClass = event.getClass();
-+				
++
 +				Field playerField = null;
-+				
++
 +				for (Field field : eventClass.getDeclaredFields()) {
 +					if (field.getType().equals(Player.class)) {
 +						playerField = field;
 +						break;
 +					}
 +				}
-+				
++
 +				if (playerField != null) {
 +					playerField.setAccessible(true);
 +					player = (Player) playerField.get(event);
 +				}
 +			}
-+			
++
 +			if (player != null) {
 +				setSenderContext(player);
 +			}
 +		} catch (Exception e) {} // We can't really safely log exceptions.
-+		
++
 +		ThreadContext.put("pufferfishsentry_eventdata", GSON.toJson(serializeFields(event)));
 +	}
-+	
++
 +	public static void removeEventContext() {
 +		removePluginContext();
 +		removeSenderContext();
 +		ThreadContext.remove("pufferfishsentry_eventdata");
 +	}
-+	
++
 +	private static Map<String, String> serializeFields(Object object) {
 +		Map<String, String> fields = new TreeMap<>();
 +		fields.put("_class", object.getClass().getName());
@@ -146,7 +146,7 @@ index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8e
 +				if (Modifier.isStatic(declaredField.getModifiers())) {
 +					continue;
 +				}
-+				
++
 +				String fieldName = declaredField.getName();
 +				if (fieldName.equals("handlers")) {
 +					continue;
@@ -162,47 +162,47 @@ index 0000000000000000000000000000000000000000..10310fdd53de28efb8a8250f6d3b0c8e
 +		}
 +		return fields;
 +	}
-+	
++
 +	public static class State {
-+		
++
 +		private Plugin plugin;
 +		private Command command;
 +		private String commandLine;
 +		private Event event;
 +		private RegisteredListener registeredListener;
-+		
++
 +		public Plugin getPlugin() {
 +			return plugin;
 +		}
-+		
++
 +		public void setPlugin(Plugin plugin) {
 +			this.plugin = plugin;
 +		}
-+		
++
 +		public Command getCommand() {
 +			return command;
 +		}
-+		
++
 +		public void setCommand(Command command) {
 +			this.command = command;
 +		}
-+		
++
 +		public String getCommandLine() {
 +			return commandLine;
 +		}
-+		
++
 +		public void setCommandLine(String commandLine) {
 +			this.commandLine = commandLine;
 +		}
-+		
++
 +		public Event getEvent() {
 +			return event;
 +		}
-+		
++
 +		public void setEvent(Event event) {
 +			this.event = event;
 +		}
-+		
++
 +		public RegisteredListener getRegisteredListener() {
 +			return registeredListener;
 +		}
@@ -452,20 +452,24 @@ index 2b8308989fce7f8a16907f8711b362e671fdbfb6..bd4d1a40f53784662174d426533ef4b5
                      callEvent(new com.destroystokyo.paper.event.server.ServerExceptionEvent(new com.destroystokyo.paper.exception.ServerEventException(msg, ex, registration.getPlugin(), registration.getListener(), event)));
                  }
 diff --git a/src/main/java/org/bukkit/plugin/java/JavaPluginLoader.java b/src/main/java/org/bukkit/plugin/java/JavaPluginLoader.java
-index eaefbb00e9993d54906cc8cf35cf753c0d6c7707..6efa6732e5559c3192d08b8631911be7cdaf15b4 100644
+index eaefbb00e9993d54906cc8cf35cf753c0d6c7707..301e82369603f3dd6e6c1bd380da4bacacd7ef6c 100644
 --- a/src/main/java/org/bukkit/plugin/java/JavaPluginLoader.java
 +++ b/src/main/java/org/bukkit/plugin/java/JavaPluginLoader.java
-@@ -336,7 +336,9 @@ public final class JavaPluginLoader implements PluginLoader {
+@@ -336,7 +336,13 @@ public final class JavaPluginLoader implements PluginLoader {
              try {
                  jPlugin.setEnabled(true);
              } catch (Throwable ex) {
 +                gg.pufferfish.pufferfish.sentry.SentryContext.setPluginContext(plugin); // Pufferfish
                  server.getLogger().log(Level.SEVERE, "Error occurred while enabling " + plugin.getDescription().getFullName() + " (Is it up to date?)", ex);
 +                gg.pufferfish.pufferfish.sentry.SentryContext.removePluginContext(); // Pufferfish
++                // Paper start - Disable plugins that fail to load
++                this.server.getPluginManager().disablePlugin(jPlugin);
++                return;
++                // Paper end
              }
  
              // Perhaps abort here, rather than continue going, but as it stands,
-@@ -361,7 +363,9 @@ public final class JavaPluginLoader implements PluginLoader {
+@@ -361,7 +367,9 @@ public final class JavaPluginLoader implements PluginLoader {
              try {
                  jPlugin.setEnabled(false);
              } catch (Throwable ex) {
