@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Thu, 27 May 2021 04:04:23 -0500
+Subject: [PATCH] ShulkerBox allow oversized stacks
+
+This fixes PaperMC/Paper#4748 where breaking a shulkerbox in survival mode
+with oversized itemstacks would cause a "chunk ban". This fixes it by always
+creating an itemstack using the TileEntity's NBT data (how it handles it for
+creative players) instead of routing it through the LootableBuilder.
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java b/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
+index 0034831358550491d57360966b1458b34b0908e2..88c8f2c53c024021e7bad1e4666e3438b53ab588 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
+@@ -420,7 +420,7 @@ public class ServerPlayerGameMode {
+ 
+                 ItemStack mainHandStack = null; // Paper
+                 boolean isCorrectTool = false; // Paper
+-                if (this.isCreative()) {
++                if (this.isCreative() || (this.level.purpurConfig.shulkerBoxAllowOversizedStacks && block instanceof net.minecraft.world.level.block.ShulkerBoxBlock)) { // Purpur
+                     // return true; // CraftBukkit
+                 } else {
+                     ItemStack itemstack = this.player.getMainHandItem();
+diff --git a/src/main/java/net/minecraft/world/level/block/ShulkerBoxBlock.java b/src/main/java/net/minecraft/world/level/block/ShulkerBoxBlock.java
+index c89978ecbc5a13dda6f76ea6d1cc3056efc9a174..39868ad3ee4bb573a4dd562894d93f64be4ee5ac 100644
+--- a/src/main/java/net/minecraft/world/level/block/ShulkerBoxBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/ShulkerBoxBlock.java
+@@ -138,7 +138,7 @@ public class ShulkerBoxBlock extends BaseEntityBlock {
+     public void playerWillDestroy(Level world, BlockPos pos, BlockState state, Player player) {
+         BlockEntity blockEntity = world.getBlockEntity(pos);
+         if (blockEntity instanceof ShulkerBoxBlockEntity shulkerBoxBlockEntity) {
+-            if (!world.isClientSide && player.isCreative() && !shulkerBoxBlockEntity.isEmpty()) {
++            if (world.purpurConfig.shulkerBoxAllowOversizedStacks || (!world.isClientSide && player.isCreative() && !shulkerBoxBlockEntity.isEmpty())) { // Purpur
+                 ItemStack itemStack = getColoredItemStack(this.getColor());
+                 blockEntity.saveToItem(itemStack);
+                 if (shulkerBoxBlockEntity.hasCustomName()) {
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index a4cad3dd976320c16520ebef4de977391b613809..26d97b1a483f4fd7a301b2bc7eb7c897fc9c0a62 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -674,6 +674,11 @@ public class PurpurWorldConfig {
+         }
+     }
+ 
++    public boolean shulkerBoxAllowOversizedStacks = false;
++    private void shulkerBoxSettings() {
++        shulkerBoxAllowOversizedStacks = getBoolean("blocks.shulker_box.allow-oversized-stacks", shulkerBoxAllowOversizedStacks);
++    }
++
+     public boolean signRightClickEdit = false;
+     private void signSettings() {
+         signRightClickEdit = getBoolean("blocks.sign.right-click-edit", signRightClickEdit);

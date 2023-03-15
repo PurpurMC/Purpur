@@ -1,0 +1,150 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: JustDoom <justdoomdev@gmail.com>
+Date: Fri, 5 Mar 2021 14:23:16 -0500
+Subject: [PATCH] Dont run with scissors!
+
+
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index e28bc6ad060b487b2223379e0187c082c0e69f7f..2b8d8dafc0df272ad095130021795cfa7716ef46 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -1686,6 +1686,13 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+                                     this.player.resetFallDistance();
+                                 }
+ 
++                                // Purpur Start
++                                if (this.player.level.purpurConfig.dontRunWithScissors && this.player.isSprinting() && (isScissor(this.player.getItemInHand(InteractionHand.MAIN_HAND)) || isScissor(this.player.getItemInHand(InteractionHand.OFF_HAND))) && (int) (Math.random() * 10) == 0) {
++                                    this.player.hurt(this.player.damageSources().scissors(), (float) this.player.level.purpurConfig.scissorsRunningDamage);
++                                    if (!org.purpurmc.purpur.PurpurConfig.dontRunWithScissors.isBlank()) this.player.sendActionBarMessage(org.purpurmc.purpur.PurpurConfig.dontRunWithScissors);
++                                }
++                                // Purpur End
++
+                                 this.player.checkMovementStatistics(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5);
+                                 this.lastGoodX = this.player.getX();
+                                 this.lastGoodY = this.player.getY();
+@@ -1719,6 +1726,12 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+     }
+     // Paper end - optimise out extra getCubes
+ 
++    // Purpur start
++    public boolean isScissor(ItemStack stack) {
++        return stack.is(Items.SHEARS) && (stack.getTag() == null || stack.getTag().getInt("CustomModelData") == 0);
++    }
++    // Purpur end
++
+     private boolean isPlayerCollidingWithAnythingNew(LevelReader world, AABB box) {
+         Iterable<VoxelShape> iterable = world.getCollisions(this.player, this.player.getBoundingBox().deflate(9.999999747378752E-6D));
+         VoxelShape voxelshape = Shapes.create(box.deflate(9.999999747378752E-6D));
+diff --git a/src/main/java/net/minecraft/world/damagesource/DamageSources.java b/src/main/java/net/minecraft/world/damagesource/DamageSources.java
+index d3d9bb2cdcaa3d671370ee3014341fe741275743..dc8d1a5edd415724b1b5417a1bb3cca13c47d28f 100644
+--- a/src/main/java/net/minecraft/world/damagesource/DamageSources.java
++++ b/src/main/java/net/minecraft/world/damagesource/DamageSources.java
+@@ -39,6 +39,7 @@ public class DamageSources {
+     private final DamageSource sweetBerryBush;
+     private final DamageSource freeze;
+     private final DamageSource stalagmite;
++    private final DamageSource scissors;
+     // CraftBukkit start
+     public final DamageSource melting;
+     public final DamageSource poison;
+@@ -69,6 +70,7 @@ public class DamageSources {
+         this.sweetBerryBush = this.source(DamageTypes.SWEET_BERRY_BUSH);
+         this.freeze = this.source(DamageTypes.FREEZE);
+         this.stalagmite = this.source(DamageTypes.STALAGMITE);
++        this.scissors = this.source(DamageTypes.SCISSORS);
+     }
+ 
+     private DamageSource source(ResourceKey<DamageType> key) {
+@@ -167,6 +169,10 @@ public class DamageSources {
+         return this.stalagmite;
+     }
+ 
++    public DamageSource scissors() {
++        return this.scissors;
++    }
++
+     public DamageSource fallingBlock(Entity attacker) {
+         return this.source(DamageTypes.FALLING_BLOCK, attacker);
+     }
+diff --git a/src/main/java/net/minecraft/world/damagesource/DamageTypes.java b/src/main/java/net/minecraft/world/damagesource/DamageTypes.java
+index 0b80bf3e30a83c8c284d196980340542bfca3ded..7bbfa2f8ac29dd32b100d356b285b5e5bd6615fe 100644
+--- a/src/main/java/net/minecraft/world/damagesource/DamageTypes.java
++++ b/src/main/java/net/minecraft/world/damagesource/DamageTypes.java
+@@ -27,6 +27,7 @@ public interface DamageTypes {
+     ResourceKey<DamageType> SWEET_BERRY_BUSH = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation("sweet_berry_bush"));
+     ResourceKey<DamageType> FREEZE = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation("freeze"));
+     ResourceKey<DamageType> STALAGMITE = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation("stalagmite"));
++    ResourceKey<DamageType> SCISSORS = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation("scissors"));
+     ResourceKey<DamageType> FALLING_BLOCK = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation("falling_block"));
+     ResourceKey<DamageType> FALLING_ANVIL = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation("falling_anvil"));
+     ResourceKey<DamageType> FALLING_STALACTITE = ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation("falling_stalactite"));
+@@ -71,6 +72,7 @@ public interface DamageTypes {
+         damageTypeRegisterable.register(SWEET_BERRY_BUSH, new DamageType("sweetBerryBush", 0.1F, DamageEffects.POKING));
+         damageTypeRegisterable.register(FREEZE, new DamageType("freeze", 0.0F, DamageEffects.FREEZING));
+         damageTypeRegisterable.register(STALAGMITE, new DamageType("stalagmite", 0.0F));
++        damageTypeRegisterable.register(SCISSORS, new DamageType("scissors", DamageScaling.NEVER, 0.0F, DamageEffects.HURT, DeathMessageType.INTENTIONAL_GAME_DESIGN));
+         damageTypeRegisterable.register(FALLING_BLOCK, new DamageType("fallingBlock", 0.1F));
+         damageTypeRegisterable.register(FALLING_ANVIL, new DamageType("anvil", 0.1F));
+         damageTypeRegisterable.register(FALLING_STALACTITE, new DamageType("fallingStalactite", 0.1F));
+diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+index fb1555641047175060f381bf797c4a6fce75837a..15dabf8da91c003ee69934b7c59ef123a9ebc535 100644
+--- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
++++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+@@ -1133,6 +1133,10 @@ public class CraftEventFactory {
+             cause = DamageCause.FREEZE;
+         } else {
+             cause = DamageCause.CUSTOM;
++        // Purpur start
++        } else if (source == DamageSource.SCISSORS) {
++            cause = DamageCause.SUICIDE;
++        // Purpur end
+         }
+ 
+         if (cause != null) {
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 5b0625955e2a65f689c8a128d73170bc1f0c8025..c8097ec7887ac8e689b6843d9ff7744d6a453478 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -182,6 +182,7 @@ public class PurpurConfig {
+     public static String demoCommandOutput = "<green>%s has been shown the demo screen";
+     public static String pingCommandOutput = "<green>%s's ping is %sms";
+     public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
++    public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
+     private static void messages() {
+         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
+         afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
+@@ -192,6 +193,12 @@ public class PurpurConfig {
+         demoCommandOutput = getString("settings.messages.demo-command-output", demoCommandOutput);
+         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
+         tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
++        dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
++    }
++
++    public static String deathMsgRunWithScissors = "<player> slipped and fell on their shears";
++    private static void deathMessages() {
++        deathMsgRunWithScissors = getString("settings.messages.death-message.run-with-scissors", deathMsgRunWithScissors);
+     }
+ 
+     public static String serverModName = "Purpur";
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index d4c78ebd34109b8364e51089ed383ee06f18e48a..0eef3049df089ec17c213e4a4ab4c23815775dc4 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -199,6 +199,8 @@ public class PurpurWorldConfig {
+     public List<Item> itemImmuneToExplosion = new ArrayList<>();
+     public List<Item> itemImmuneToFire = new ArrayList<>();
+     public List<Item> itemImmuneToLightning = new ArrayList<>();
++    public boolean dontRunWithScissors = false;
++    public double scissorsRunningDamage = 1D;
+     private void itemSettings() {
+         itemImmuneToCactus.clear();
+         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
+@@ -236,6 +238,8 @@ public class PurpurWorldConfig {
+             Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(key.toString()));
+             if (item != Items.AIR) itemImmuneToLightning.add(item);
+         });
++        dontRunWithScissors = getBoolean("gameplay-mechanics.item.shears.damage-if-sprinting", dontRunWithScissors);
++        scissorsRunningDamage = getDouble("gameplay-mechanics.item.shears.sprinting-damage", scissorsRunningDamage);
+     }
+ 
+     public double minecartMaxSpeed = 0.4D;
