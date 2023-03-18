@@ -1,0 +1,6 @@
+- [ ] make Sniffer ridable
+- [ ] fix ridables around water
+- [ ] test player ridable underwater
+- [ ] OPTIONAL: custom damage type instead of magic for scissors & stone cutter patch
+- [ ] re-introduce armor equipable through right-click patch, flip the boolean to follow vanilla feature parity
+- [ ] flip the boolean in the "display names from item forms of entities to entities" patch to keep feature parity with vanilla
