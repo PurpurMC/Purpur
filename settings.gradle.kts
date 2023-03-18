@@ -32,9 +32,8 @@ if (!file(".git").exists()) {
 }
 
 rootProject.name = "purpur"
-
 for (name in listOf("Purpur-API", "Purpur-Server")) {
-    val projName = name.toLowerCase(Locale.ENGLISH)
+    val projName = name.lowercase(Locale.ENGLISH)
     include(projName)
     findProject(":$projName")!!.projectDir = file(name)
 }
