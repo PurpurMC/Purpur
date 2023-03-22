@@ -1,5 +1,5 @@
 - [x] make Sniffer ridable
-- [ ] give Sniffer entity attributes config
+- [x] give Sniffer entity attributes config
 - [ ] fix ridables around water
 - [ ] test player ridable underwater
 - [ ] OPTIONAL: custom damage type instead of magic for scissors & stone cutter patch
