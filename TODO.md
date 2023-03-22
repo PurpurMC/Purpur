@@ -5,15 +5,15 @@
 - [ ] OPTIONAL: custom damage type instead of magic for scissors & stone cutter patch
 - [x] flip the boolean in the "display names from item forms of entities to entities" patch to keep feature parity with vanilla
 - [ ] uncomment if conditions when including Pufferfish
-- [ ] entity attributes patch
-  - [ ] re-implement options for camel
-  - [ ] re-implement options for donkey
-  - [ ] re-implement options for horse
-  - [ ] re-implement options for llama
-  - [ ] re-implement options for mule
-  - [ ] re-implement options for skeleton horse
-  - [ ] re-implement options for trader llama
-  - [ ] re-implement options for zombie horse
+- [x] entity attributes patch
+  - [x] re-implement options for camel
+  - [x] re-implement options for donkey
+  - [x] re-implement options for horse
+  - [x] re-implement options for llama
+  - [x] re-implement options for mule
+  - [x] re-implement options for skeleton horse
+  - [x] re-implement options for trader llama
+  - [x] re-implement options for zombie horse
 
 ### once above is complete:
 - [ ] make announcement about changes
