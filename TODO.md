@@ -4,7 +4,7 @@
 - [x] test player ridable underwater
 - [ ] OPTIONAL: custom damage type instead of magic for scissors & stone cutter patch
 - [x] flip the boolean in the "display names from item forms of entities to entities" patch to keep feature parity with vanilla
-- [ ] uncomment if conditions when including Pufferfish
+- [x] uncomment if conditions when including Pufferfish
 - [x] entity attributes patch
   - [x] re-implement options for camel
   - [x] re-implement options for donkey
