@@ -1,6 +1,6 @@
 - [x] make Sniffer ridable
 - [x] give Sniffer entity attributes config
-- [ ] fix ridables around water
+- [x] fix ridables around water
 - [ ] test player ridable underwater
 - [ ] OPTIONAL: custom damage type instead of magic for scissors & stone cutter patch
 - [x] flip the boolean in the "display names from item forms of entities to entities" patch to keep feature parity with vanilla
@@ -16,4 +16,6 @@
   - [ ] re-implement options for zombie horse
 
 ### once above is complete:
-- [ ] make announcement about flipped defaults ("persistent-droppable-entity-display-names", "set-name-visible-when-placing-with-custom-name")
+- [ ] make announcement about changes
+  - flipped defaults ("persistent-droppable-entity-display-names", "set-name-visible-when-placing-with-custom-name")
+  - must disable `ridable-settings.use-dismounts-underwater-tag` for `<Mob>RidableInWater` options to work, updated default values to reflect `DismountsUnderwaterTag`.
