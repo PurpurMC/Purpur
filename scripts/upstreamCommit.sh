@@ -3,7 +3,7 @@
 # requires curl & jq
 
 # upstreamCommit --paper HASH --pufferfish HASH
-# flag: --paper HASH - the commit hash to use for comparing commits between paper (PaperMC/Paper/compare/HASH...HEAD)
+# flag: --paper HASH - (Optional) the commit hash to use for comparing commits between paper (PaperMC/Paper/compare/HASH...HEAD)
 # flag: --pufferfish HASH - the commit hash to use for comparing commits between pufferfish (pufferfish-gg/Pufferfish/compare/HASH...HEAD)
 
 function getCommits() {
@@ -14,7 +14,7 @@ function getCommits() {
 set -e
 PS1="$"
 
-paperHash=""
+paperHash=$(git diff gradle.properties | awk '/^-paperCommit =/{print $NF}')
 pufferfishHash=""
 
 TEMP=$(getopt --long paper:,pufferfish: -o "" -- "$@")
@@ -69,6 +69,8 @@ fi
 
 disclaimer="Upstream has released updates that appear to apply and compile correctly"
 log="Updated Upstream ($updated)\n\n${disclaimer}${logsuffix}"
+
+git add gradle.properties
 
 echo -e "$log" | git commit -F -
 
