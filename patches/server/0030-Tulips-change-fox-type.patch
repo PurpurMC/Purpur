@@ -1,0 +1,96 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sat, 13 Jul 2019 15:56:22 -0500
+Subject: [PATCH] Tulips change fox type
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Fox.java b/src/main/java/net/minecraft/world/entity/animal/Fox.java
+index 5de86c59bf857e6697bb768e3dd71a05739fb3d2..d5f536eb87163c946815ace610ba99ad2a0b16c5 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Fox.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Fox.java
+@@ -35,6 +35,7 @@ import net.minecraft.util.RandomSource;
+ import net.minecraft.util.StringRepresentable;
+ import net.minecraft.world.DifficultyInstance;
+ import net.minecraft.world.InteractionHand;
++import net.minecraft.world.InteractionResult;
+ import net.minecraft.world.damagesource.DamageSource;
+ import net.minecraft.world.entity.AgeableMob;
+ import net.minecraft.world.entity.Entity;
+@@ -88,6 +89,7 @@ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.CaveVines;
+ import net.minecraft.world.level.block.SweetBerryBushBlock;
+ import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.gameevent.GameEvent;
+ import net.minecraft.world.level.pathfinder.BlockPathTypes;
+ import net.minecraft.world.phys.Vec3;
+ 
+@@ -387,6 +389,11 @@ public class Fox extends Animal implements VariantHolder<Fox.Type> {
+     }
+ 
+     private void setTargetGoals() {
++        // Purpur start - do not add duplicate goals
++        this.targetSelector.removeGoal(this.landTargetGoal);
++        this.targetSelector.removeGoal(this.turtleEggTargetGoal);
++        this.targetSelector.removeGoal(this.fishTargetGoal);
++        // Purpur end
+         if (this.getVariant() == Fox.Type.RED) {
+             this.targetSelector.addGoal(4, this.landTargetGoal);
+             this.targetSelector.addGoal(4, this.turtleEggTargetGoal);
+@@ -420,6 +427,7 @@ public class Fox extends Animal implements VariantHolder<Fox.Type> {
+ 
+     public void setVariant(Fox.Type variant) {
+         this.entityData.set(Fox.DATA_TYPE_ID, variant.getId());
++        this.setTargetGoals(); // Purpur - fix API bug not updating pathfinders on type change
+     }
+ 
+     List<UUID> getTrustedUUIDs() {
+@@ -756,6 +764,29 @@ public class Fox extends Animal implements VariantHolder<Fox.Type> {
+         return this.getTrustedUUIDs().contains(uuid);
+     }
+ 
++    // Purpur start
++    @Override
++    public InteractionResult mobInteract(Player player, InteractionHand hand) {
++        if (level.purpurConfig.foxTypeChangesWithTulips) {
++            ItemStack itemstack = player.getItemInHand(hand);
++            if (getVariant() == Type.RED && itemstack.getItem() == Items.WHITE_TULIP) {
++                setVariant(Type.SNOW);
++                if (!player.getAbilities().instabuild) {
++                    itemstack.shrink(1);
++                }
++                return InteractionResult.SUCCESS;
++            } else if (getVariant() == Type.SNOW && itemstack.getItem() == Items.ORANGE_TULIP) {
++                setVariant(Type.RED);
++                if (!player.getAbilities().instabuild) {
++                    itemstack.shrink(1);
++                }
++                return InteractionResult.SUCCESS;
++            }
++        }
++        return super.mobInteract(player, hand);
++    }
++    // Purpur end
++
+     @Override
+     // Paper start - Cancellable death event
+     protected org.bukkit.event.entity.EntityDeathEvent dropAllDeathLoot(DamageSource source) {
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index ca4f635ac65dcbdf5ebbe8d351623f64dded41e0..470833e60081dd32a58d5efacad1ecff5b5b1812 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -506,6 +506,7 @@ public class PurpurWorldConfig {
+     public boolean foxRidableInWater = true;
+     public boolean foxControllable = true;
+     public double foxMaxHealth = 10.0D;
++    public boolean foxTypeChangesWithTulips = false;
+     private void foxSettings() {
+         foxRidable = getBoolean("mobs.fox.ridable", foxRidable);
+         foxRidableInWater = getBoolean("mobs.fox.ridable-in-water", foxRidableInWater);
+@@ -516,6 +517,7 @@ public class PurpurWorldConfig {
+             set("mobs.fox.attributes.max_health", oldValue);
+         }
+         foxMaxHealth = getDouble("mobs.fox.attributes.max_health", foxMaxHealth);
++        foxTypeChangesWithTulips = getBoolean("mobs.fox.tulips-change-type", foxTypeChangesWithTulips);
+     }
+ 
+     public boolean frogRidable = false;

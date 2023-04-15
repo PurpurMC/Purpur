@@ -1,0 +1,204 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jason Penilla <11360596+jpenilla@users.noreply.github.com>
+Date: Sat, 5 Dec 2020 01:20:16 -0800
+Subject: [PATCH] Option for Villager Clerics to farm Nether Wart
+
+Adds an option so that Villagers with the Cleric profession are able to
+farm Nether Wart. Reimplemented based on a feature of the carpet-extra
+mod.
+
+diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java b/src/main/java/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
+index 7ad71f2c139c2288b49d6b0fde3f8b8013f5e095..ed67d2adf06f7ae9c451648e30945ad289ceae38 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
++++ b/src/main/java/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
+@@ -34,6 +34,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+     private long nextOkStartTime;
+     private int timeWorkedSoFar;
+     private final List<BlockPos> validFarmlandAroundVillager = Lists.newArrayList();
++    private boolean clericWartFarmer = false; // Purpur
+ 
+     public HarvestFarmland() {
+         super(ImmutableMap.of(MemoryModuleType.LOOK_TARGET, MemoryStatus.VALUE_ABSENT, MemoryModuleType.WALK_TARGET, MemoryStatus.VALUE_ABSENT, MemoryModuleType.SECONDARY_JOB_SITE, MemoryStatus.VALUE_PRESENT));
+@@ -42,9 +43,10 @@ public class HarvestFarmland extends Behavior<Villager> {
+     protected boolean checkExtraStartConditions(ServerLevel world, Villager entity) {
+         if (!world.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+             return false;
+-        } else if (entity.getVillagerData().getProfession() != VillagerProfession.FARMER) {
++        } else if (entity.getVillagerData().getProfession() != VillagerProfession.FARMER && !(world.purpurConfig.villagerClericsFarmWarts && entity.getVillagerData().getProfession() == VillagerProfession.CLERIC)) { // Purpur
+             return false;
+         } else {
++            if (!this.clericWartFarmer && entity.getVillagerData().getProfession() == VillagerProfession.CLERIC) this.clericWartFarmer = true; // Purpur
+             BlockPos.MutableBlockPos blockposition_mutableblockposition = entity.blockPosition().mutable();
+ 
+             this.validFarmlandAroundVillager.clear();
+@@ -75,6 +77,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+         Block block = iblockdata.getBlock();
+         Block block1 = world.getBlockState(pos.below()).getBlock();
+ 
++        if (this.clericWartFarmer) return block == Blocks.NETHER_WART && iblockdata.getValue(net.minecraft.world.level.block.NetherWartBlock.AGE) == 3 || iblockdata.isAir() && block1 == Blocks.SOUL_SAND; // Purpur
+         return block instanceof CropBlock && ((CropBlock) block).isMaxAge(iblockdata) || iblockdata.isAir() && block1 instanceof FarmBlock;
+     }
+ 
+@@ -100,7 +103,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+                 Block block = iblockdata.getBlock();
+                 Block block1 = world.getBlockState(this.aboveFarmlandPos.below()).getBlock();
+ 
+-                if (block instanceof CropBlock && ((CropBlock) block).isMaxAge(iblockdata)) {
++                if (block instanceof CropBlock && ((CropBlock) block).isMaxAge(iblockdata) && !this.clericWartFarmer || this.clericWartFarmer && block == Blocks.NETHER_WART && iblockdata.getValue(net.minecraft.world.level.block.NetherWartBlock.AGE) == 3) { // Purpur
+                     // CraftBukkit start
+                     if (!org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(entity, this.aboveFarmlandPos, Blocks.AIR.defaultBlockState()).isCancelled()) {
+                         world.destroyBlock(this.aboveFarmlandPos, true, entity);
+@@ -108,7 +111,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+                     // CraftBukkit end
+                 }
+ 
+-                if (iblockdata.isAir() && block1 instanceof FarmBlock && entity.hasFarmSeeds()) {
++                if (iblockdata.isAir() && (block1 instanceof FarmBlock && !this.clericWartFarmer || this.clericWartFarmer && block1 == Blocks.SOUL_SAND) && entity.hasFarmSeeds()) { // Purpur
+                     SimpleContainer inventorysubcontainer = entity.getInventory();
+ 
+                     for (int j = 0; j < inventorysubcontainer.getContainerSize(); ++j) {
+@@ -119,6 +122,12 @@ public class HarvestFarmland extends Behavior<Villager> {
+                             BlockState iblockdata1;
+ 
+                             // CraftBukkit start
++                            // Purpur start
++                            if (this.clericWartFarmer && itemstack.getItem() == Items.NETHER_WART) {
++                                iblockdata1 = Blocks.NETHER_WART.defaultBlockState();
++                                flag = true;
++                            } else
++                            // Purpur end
+                             if (itemstack.is(Items.WHEAT_SEEDS)) {
+                                 iblockdata1 = Blocks.WHEAT.defaultBlockState();
+                                 flag = true;
+@@ -145,7 +154,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+                         }
+ 
+                         if (flag) {
+-                            world.playSound((Player) null, (double) this.aboveFarmlandPos.getX(), (double) this.aboveFarmlandPos.getY(), (double) this.aboveFarmlandPos.getZ(), SoundEvents.CROP_PLANTED, SoundSource.BLOCKS, 1.0F, 1.0F);
++                            world.playSound((Player) null, (double) this.aboveFarmlandPos.getX(), (double) this.aboveFarmlandPos.getY(), (double) this.aboveFarmlandPos.getZ(), this.clericWartFarmer ? SoundEvents.NETHER_WART_PLANTED : SoundEvents.CROP_PLANTED, SoundSource.BLOCKS, 1.0F, 1.0F); // Purpur
+                             itemstack.shrink(1);
+                             if (itemstack.isEmpty()) {
+                                 inventorysubcontainer.setItem(j, ItemStack.EMPTY);
+diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java b/src/main/java/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
+index 3af715e2f3f3949af614a8fcebbc4a835d48ca49..ade1e411ea1f3b4c9a417265e77b0d6861b222f9 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
++++ b/src/main/java/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
+@@ -56,6 +56,12 @@ public class TradeWithVillager extends Behavior<Villager> {
+                 throwHalfStack(entity, ImmutableSet.of(Items.WHEAT), villager);
+             }
+ 
++            // Purpur start
++            if (world.purpurConfig.villagerClericsFarmWarts && world.purpurConfig.villagerClericFarmersThrowWarts && entity.getVillagerData().getProfession() == VillagerProfession.CLERIC && entity.getInventory().countItem(Items.NETHER_WART) > Items.NETHER_WART.getMaxStackSize() / 2) {
++                throwHalfStack(entity, ImmutableSet.of(Items.NETHER_WART), villager);
++            }
++            // Purpur end
++
+             if (!this.trades.isEmpty() && entity.getInventory().hasAnyOf(this.trades)) {
+                 throwHalfStack(entity, this.trades, villager);
+             }
+diff --git a/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerGoalPackages.java b/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerGoalPackages.java
+index cd7a90ec1073b2b452ca70decefe6a594445003b..47672e48c1cae73cffe532d622b296343fc12ef0 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerGoalPackages.java
++++ b/src/main/java/net/minecraft/world/entity/ai/behavior/VillagerGoalPackages.java
+@@ -30,8 +30,13 @@ public class VillagerGoalPackages {
+     }
+ 
+     public static ImmutableList<Pair<Integer, ? extends BehaviorControl<? super Villager>>> getWorkPackage(VillagerProfession profession, float speed) {
++        // Purpur start
++        return getWorkPackage(profession, speed, false);
++    }
++    public static ImmutableList<Pair<Integer, ? extends BehaviorControl<? super Villager>>> getWorkPackage(VillagerProfession profession, float speed, boolean clericsFarmWarts) {
++        // Purpur end
+         WorkAtPoi workAtPoi;
+-        if (profession == VillagerProfession.FARMER) {
++        if (profession == VillagerProfession.FARMER || (clericsFarmWarts && profession == VillagerProfession.CLERIC)) { // Purpur
+             workAtPoi = new WorkAtComposter();
+         } else {
+             workAtPoi = new WorkAtPoi();
+diff --git a/src/main/java/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java b/src/main/java/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java
+index cb1d91f9fe98f21c2afbe3894dfd9bca3bdd3ba6..d2703432af207c74ea8d298a784329c3219d2f13 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java
++++ b/src/main/java/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java
+@@ -22,6 +22,13 @@ public class SecondaryPoiSensor extends Sensor<Villager> {
+ 
+     @Override
+     protected void doTick(ServerLevel world, Villager entity) {
++        // Purpur start - make sure clerics don't wander to soul sand when the option is off
++        Brain<?> brain = entity.getBrain();
++        if (!world.purpurConfig.villagerClericsFarmWarts && entity.getVillagerData().getProfession() == net.minecraft.world.entity.npc.VillagerProfession.CLERIC) {
++            brain.eraseMemory(MemoryModuleType.SECONDARY_JOB_SITE);
++            return;
++        }
++        // Purpur end
+         ResourceKey<Level> resourceKey = world.dimension();
+         BlockPos blockPos = entity.blockPosition();
+         List<GlobalPos> list = Lists.newArrayList();
+@@ -38,7 +45,7 @@ public class SecondaryPoiSensor extends Sensor<Villager> {
+             }
+         }
+ 
+-        Brain<?> brain = entity.getBrain();
++        //Brain<?> brain = entity.getBrain(); // Purpur - moved up
+         if (!list.isEmpty()) {
+             brain.setMemory(MemoryModuleType.SECONDARY_JOB_SITE, list);
+         } else {
+diff --git a/src/main/java/net/minecraft/world/entity/npc/Villager.java b/src/main/java/net/minecraft/world/entity/npc/Villager.java
+index aa95cd7e04e25dec63c172d219f1f16cd6c9c4b5..8e2015fc122a93015482a81b2bbfa1127d6a0db6 100644
+--- a/src/main/java/net/minecraft/world/entity/npc/Villager.java
++++ b/src/main/java/net/minecraft/world/entity/npc/Villager.java
+@@ -222,7 +222,7 @@ public class Villager extends AbstractVillager implements ReputationEventHandler
+             brain.addActivity(Activity.PLAY, VillagerGoalPackages.getPlayPackage(0.5F));
+         } else {
+             brain.setSchedule(Schedule.VILLAGER_DEFAULT);
+-            brain.addActivityWithConditions(Activity.WORK, VillagerGoalPackages.getWorkPackage(villagerprofession, 0.5F), ImmutableSet.of(Pair.of(MemoryModuleType.JOB_SITE, MemoryStatus.VALUE_PRESENT)));
++            brain.addActivityWithConditions(Activity.WORK, VillagerGoalPackages.getWorkPackage(villagerprofession, 0.5F, this.level.purpurConfig.villagerClericsFarmWarts), ImmutableSet.of(Pair.of(MemoryModuleType.JOB_SITE, MemoryStatus.VALUE_PRESENT))); // Purpur
+         }
+ 
+         brain.addActivity(Activity.CORE, VillagerGoalPackages.getCorePackage(villagerprofession, 0.5F));
+@@ -972,6 +972,11 @@ public class Villager extends AbstractVillager implements ReputationEventHandler
+     }
+ 
+     public boolean hasFarmSeeds() {
++        // Purpur start
++        if (this.level.purpurConfig.villagerClericsFarmWarts && this.getVillagerData().getProfession() == VillagerProfession.CLERIC) {
++            return this.getInventory().hasAnyOf(ImmutableSet.of(Items.NETHER_WART));
++        }
++        // Purpur end
+         return this.getInventory().hasAnyOf(ImmutableSet.of(Items.WHEAT_SEEDS, Items.POTATO, Items.CARROT, Items.BEETROOT_SEEDS));
+     }
+ 
+diff --git a/src/main/java/net/minecraft/world/entity/npc/VillagerProfession.java b/src/main/java/net/minecraft/world/entity/npc/VillagerProfession.java
+index ac70c2c03241e73943bd517a8c69dd05e0873634..0318663a824d2a9515f867a075d148c3fcb1a907 100644
+--- a/src/main/java/net/minecraft/world/entity/npc/VillagerProfession.java
++++ b/src/main/java/net/minecraft/world/entity/npc/VillagerProfession.java
+@@ -26,7 +26,7 @@ public record VillagerProfession(String name, Predicate<Holder<PoiType>> heldJob
+     public static final VillagerProfession ARMORER = register("armorer", PoiTypes.ARMORER, SoundEvents.VILLAGER_WORK_ARMORER);
+     public static final VillagerProfession BUTCHER = register("butcher", PoiTypes.BUTCHER, SoundEvents.VILLAGER_WORK_BUTCHER);
+     public static final VillagerProfession CARTOGRAPHER = register("cartographer", PoiTypes.CARTOGRAPHER, SoundEvents.VILLAGER_WORK_CARTOGRAPHER);
+-    public static final VillagerProfession CLERIC = register("cleric", PoiTypes.CLERIC, SoundEvents.VILLAGER_WORK_CLERIC);
++    public static final VillagerProfession CLERIC = register("cleric", PoiTypes.CLERIC, ImmutableSet.of(Items.NETHER_WART), ImmutableSet.of(Blocks.SOUL_SAND), SoundEvents.VILLAGER_WORK_CLERIC); // Purpur
+     public static final VillagerProfession FARMER = register("farmer", PoiTypes.FARMER, ImmutableSet.of(Items.WHEAT, Items.WHEAT_SEEDS, Items.BEETROOT_SEEDS, Items.BONE_MEAL), ImmutableSet.of(Blocks.FARMLAND), SoundEvents.VILLAGER_WORK_FARMER);
+     public static final VillagerProfession FISHERMAN = register("fisherman", PoiTypes.FISHERMAN, SoundEvents.VILLAGER_WORK_FISHERMAN);
+     public static final VillagerProfession FLETCHER = register("fletcher", PoiTypes.FLETCHER, SoundEvents.VILLAGER_WORK_FLETCHER);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 496b797910b1248662289fab16ed5fa3390d0c4d..1ffdd96306b525f217a630b4f8f05e16c0e8b7cd 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1810,6 +1810,8 @@ public class PurpurWorldConfig {
+     public boolean villagerCanBeLeashed = false;
+     public boolean villagerCanBreed = true;
+     public int villagerBreedingTicks = 6000;
++    public boolean villagerClericsFarmWarts = false;
++    public boolean villagerClericFarmersThrowWarts = true;
+     private void villagerSettings() {
+         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
+         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
+@@ -1824,6 +1826,8 @@ public class PurpurWorldConfig {
+         villagerCanBeLeashed = getBoolean("mobs.villager.can-be-leashed", villagerCanBeLeashed);
+         villagerCanBreed = getBoolean("mobs.villager.can-breed", villagerCanBreed);
+         villagerBreedingTicks = getInt("mobs.villager.breeding-delay-ticks", villagerBreedingTicks);
++        villagerClericsFarmWarts = getBoolean("mobs.villager.clerics-farm-warts", villagerClericsFarmWarts);
++        villagerClericFarmersThrowWarts = getBoolean("mobs.villager.cleric-wart-farmers-throw-warts-at-villagers", villagerClericFarmersThrowWarts);
+     }
+ 
+     public boolean vindicatorRidable = false;
