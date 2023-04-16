@@ -7,7 +7,7 @@
 # flag: --pufferfish HASH - the commit hash to use for comparing commits between pufferfish (pufferfish-gg/Pufferfish/compare/HASH...HEAD)
 
 function getCommits() {
-    curl -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/"$1"/compare/"$2"...HEAD | jq -r '.commits[] | "'"$1"'@\(.sha[:7]) \(.commit.message | split("\r\n")[0] | split("\n")[0])"'
+    curl -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/"$1"/compare/"$2"..."$3" | jq -r '.commits[] | "'"$1"'@\(.sha[:7]) \(.commit.message | split("\r\n")[0] | split("\n")[0])"'
 }
 
 (
@@ -42,7 +42,8 @@ logsuffix=""
 
 # Paper updates
 if [ -n "$paperHash" ]; then
-    paper=$(getCommits "PaperMC/Paper" "$paperHash")
+    newHash=$(git diff gradle.properties | awk '/^+paperCommit =/{print $NF}')
+    paper=$(getCommits "PaperMC/Paper" "$paperHash" $(echo $newHash | grep . -q && echo $newHash || echo "HEAD"))
 
     # Updates found
     if [ -n "$paper" ]; then
@@ -53,7 +54,7 @@ fi
 
 # Pufferfish updates
 if [ -n "$pufferfishHash" ]; then
-    pufferfish=$(getCommits "pufferfish-gg/Pufferfish" "$pufferfishHash")
+    pufferfish=$(getCommits "pufferfish-gg/Pufferfish" "$pufferfishHash" "HEAD")
 
     # Updates found
     if [ -n "$pufferfish" ]; then
