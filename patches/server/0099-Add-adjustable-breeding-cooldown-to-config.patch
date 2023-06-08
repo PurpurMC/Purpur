@@ -5,38 +5,47 @@ Subject: [PATCH] Add adjustable breeding cooldown to config
 
 
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Animal.java b/src/main/java/net/minecraft/world/entity/animal/Animal.java
-index 3c4d142e982c34a23bdb5da1f51c8dcacc0532c1..f185215b826c4b50a819c8454089cb8ccdb0ed3a 100644
+index 80598d4e679999138f6aca9f6f847e9509fa68da..e3a0a2914db92c95c894174e3815e3eca8d70826 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Animal.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Animal.java
-@@ -150,7 +150,7 @@ public abstract class Animal extends AgeableMob {
+@@ -151,7 +151,7 @@ public abstract class Animal extends AgeableMob {
          if (this.isFood(itemstack)) {
              int i = this.getAge();
  
--            if (!this.level.isClientSide && i == 0 && this.canFallInLove()) {
-+            if (!this.level.isClientSide && i == 0 && this.canFallInLove() && (this.level.purpurConfig.animalBreedingCooldownSeconds <= 0 || !this.level.hasBreedingCooldown(player.getUUID(), this.getClass()))) { // Purpur
+-            if (!this.level().isClientSide && i == 0 && this.canFallInLove()) {
++            if (!this.level().isClientSide && i == 0 && this.canFallInLove() && (this.level().purpurConfig.animalBreedingCooldownSeconds <= 0 || !this.level().hasBreedingCooldown(player.getUUID(), this.getClass()))) { // Purpur
                  this.usePlayerItem(player, hand, itemstack);
                  this.setInLove(player);
                  return InteractionResult.SUCCESS;
-@@ -237,6 +237,14 @@ public abstract class Animal extends AgeableMob {
-             if (entityplayer == null && other.getLoveCause() != null) {
-                 entityplayer = other.getLoveCause();
-             }
+@@ -233,12 +233,20 @@ public abstract class Animal extends AgeableMob {
+         AgeableMob entityageable = this.getBreedOffspring(world, other);
+ 
+         if (entityageable != null) {
+-            entityageable.setBaby(true);
+-            entityageable.moveTo(this.getX(), this.getY(), this.getZ(), 0.0F, 0.0F);
+-            // CraftBukkit start - call EntityBreedEvent
 +            // Purpur start
-+            if (entityplayer != null && world.purpurConfig.animalBreedingCooldownSeconds > 0) {
-+                if (world.hasBreedingCooldown(entityplayer.getUUID(), this.getClass())) {
+             ServerPlayer breeder = Optional.ofNullable(this.getLoveCause()).or(() -> {
+                 return Optional.ofNullable(other.getLoveCause());
+             }).orElse(null);
++            if (breeder != null && world.purpurConfig.animalBreedingCooldownSeconds > 0) {
++                if (world.hasBreedingCooldown(breeder.getUUID(), this.getClass())) {
 +                    return;
 +                }
-+                world.addBreedingCooldown(entityplayer.getUUID(), this.getClass());
++                world.addBreedingCooldown(breeder.getUUID(), this.getClass());
 +            }
++            entityageable.setBaby(true);
++            entityageable.moveTo(this.getX(), this.getY(), this.getZ(), 0.0F, 0.0F);
++            // CraftBukkit start - call EntityBreedEvent
 +            // Purpur end
-             // CraftBukkit start - call EntityBreedEvent
-             entityageable.setBaby(true);
-             entityageable.moveTo(this.getX(), this.getY(), this.getZ(), 0.0F, 0.0F);
+             int experience = this.getRandom().nextInt(7) + 1;
+             org.bukkit.event.entity.EntityBreedEvent entityBreedEvent = org.bukkit.craftbukkit.event.CraftEventFactory.callEntityBreedEvent(entityageable, this, other, breeder, this.breedItem, experience);
+             if (entityBreedEvent.isCancelled()) {
 diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
-index d0e0ce953dd0cdd6b54bb00224e82dca62f793cd..52d2fa575a29ec36280bb4dbcab6954ac468d2a1 100644
+index 8673d325bd866704ae90ac31eb54f78097eac952..10cff85dd4a59558dd487a3c5c7871a026835ceb 100644
 --- a/src/main/java/net/minecraft/world/level/Level.java
 +++ b/src/main/java/net/minecraft/world/level/Level.java
-@@ -195,6 +195,49 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+@@ -193,6 +193,49 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
      }
      // Paper end - fix and optimise world upgrading
  
@@ -86,7 +95,7 @@ index d0e0ce953dd0cdd6b54bb00224e82dca62f793cd..52d2fa575a29ec36280bb4dbcab6954a
      public CraftWorld getWorld() {
          return this.world;
      }
-@@ -290,6 +333,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+@@ -277,6 +320,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
          this.spigotConfig = new org.spigotmc.SpigotWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName()); // Spigot
          this.paperConfig = paperWorldConfigCreator.apply(this.spigotConfig); // Paper
          this.purpurConfig = new org.purpurmc.purpur.PurpurWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName(), env); // Purpur
@@ -95,7 +104,7 @@ index d0e0ce953dd0cdd6b54bb00224e82dca62f793cd..52d2fa575a29ec36280bb4dbcab6954a
          this.world = new CraftWorld((ServerLevel) this, gen, biomeProvider, env);
  
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 00e4930d899b547f4a410fae3bc91dfe16259ed6..f3e623890c29726d2bfa7713ab5183a788664ed7 100644
+index fbde69170f19333faa02552f0bccc4fbaf04ef14..0780e76f12cd36744e5682860cf399634d4d137c 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 @@ -117,6 +117,7 @@ public class PurpurWorldConfig {
