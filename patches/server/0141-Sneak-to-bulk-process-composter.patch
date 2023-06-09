@@ -1,0 +1,107 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Sun, 7 May 2023 22:26:59 -0700
+Subject: [PATCH] Sneak to bulk process composter
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java b/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
+index bb7ad618fad7f11a02d7e088e2c05bfffaf0b41d..b9041e46a4fafeac004cf8a0ef9d7daaa9bfb0ff 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
+@@ -575,7 +575,7 @@ public class ServerPlayerGameMode {
+             boolean flag1 = player.isSecondaryUseActive() && flag;
+             ItemStack itemstack1 = stack.copy();
+ 
+-            if (!flag1) {
++            if (!flag1 || (player.level.purpurConfig.composterBulkProcess && iblockdata.is(Blocks.COMPOSTER))) { // Purpur
+                 enuminteractionresult = iblockdata.use(world, player, hand, hitResult);
+ 
+                 if (enuminteractionresult.consumesAction()) {
+diff --git a/src/main/java/net/minecraft/world/level/block/ComposterBlock.java b/src/main/java/net/minecraft/world/level/block/ComposterBlock.java
+index 87153b5576fed05103183a9860d804c2c8cfbe1c..e8ee608aa5e352d741694f50cdf77f0645892150 100644
+--- a/src/main/java/net/minecraft/world/level/block/ComposterBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/ComposterBlock.java
+@@ -230,20 +230,28 @@ public class ComposterBlock extends Block implements WorldlyContainerHolder {
+         ItemStack itemstack = player.getItemInHand(hand);
+ 
+         if (i < 8 && ComposterBlock.COMPOSTABLES.containsKey(itemstack.getItem())) {
+-            if (i < 7 && !world.isClientSide) {
+-                BlockState iblockdata1 = ComposterBlock.addItem(player, state, world, pos, itemstack);
+-                // Paper start - handle cancelled events
+-                if (iblockdata1 == null) {
+-                    return InteractionResult.PASS;
+-                }
+-                // Paper end
++            // Purpur start
++            BlockState newState = process(i, state, world, itemstack, pos, player);
++            if (newState == null) {
++                return InteractionResult.PASS;
++            }
+ 
+-                world.levelEvent(1500, pos, state != iblockdata1 ? 1 : 0);
+-                player.awardStat(Stats.ITEM_USED.get(itemstack.getItem()));
+-                if (!player.getAbilities().instabuild) {
+-                    itemstack.shrink(1);
+-                }
++            if (world.purpurConfig.composterBulkProcess && player.isShiftKeyDown() && newState != state) {
++                BlockState oldState;
++                int oldCount, newCount, oldLevel, newLevel;
++                do {
++                    oldState = newState;
++                    oldCount = itemstack.getCount();
++                    oldLevel = oldState.getValue(ComposterBlock.LEVEL);
++                    newState = process(oldLevel, oldState, world, itemstack, pos, player);
++                    if (newState == null) {
++                        return InteractionResult.PASS;
++                    }
++                    newCount = itemstack.getCount();
++                    newLevel = newState.getValue(ComposterBlock.LEVEL);
++                } while (newCount > 0 && (newCount != oldCount || newLevel != oldLevel || newState != oldState));
+             }
++            // Purpur end
+ 
+             return InteractionResult.sidedSuccess(world.isClientSide);
+         } else if (i == 8) {
+@@ -254,6 +262,26 @@ public class ComposterBlock extends Block implements WorldlyContainerHolder {
+         }
+     }
+ 
++    private static BlockState process(int level, BlockState state, Level world, ItemStack itemstack, BlockPos pos, Player player) {
++        if (level < 7 && !world.isClientSide) {
++            BlockState iblockdata1 = ComposterBlock.addItem(player, state, world, pos, itemstack);
++            // Paper start - handle cancelled events
++            if (iblockdata1 == null) {
++                return iblockdata1;
++            }
++            // Paper end
++
++            world.levelEvent(1500, pos, state != iblockdata1 ? 1 : 0);
++            player.awardStat(Stats.ITEM_USED.get(itemstack.getItem()));
++            if (!player.getAbilities().instabuild) {
++                itemstack.shrink(1);
++            }
++            return iblockdata1;
++        }
++        return state;
++    }
++    // Purpur end
++
+     public static BlockState insertItem(Entity user, BlockState state, ServerLevel world, ItemStack stack, BlockPos pos) {
+         int i = (Integer) state.getValue(ComposterBlock.LEVEL);
+ 
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index dc2363808b6041ac1e60829e4e9a6a6c459a159b..4531d6d54eab78c87961641a0b023117e685aa5b 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -485,6 +485,11 @@ public class PurpurWorldConfig {
+         chestOpenWithBlockOnTop = getBoolean("blocks.chest.open-with-solid-block-on-top", chestOpenWithBlockOnTop);
+     }
+ 
++    public boolean composterBulkProcess = false;
++    private void composterSettings() {
++        composterBulkProcess = getBoolean("blocks.composter.sneak-to-bulk-process", composterBulkProcess);
++    }
++
+     public boolean dispenserApplyCursedArmor = true;
+     public boolean dispenserPlaceAnvils = false;
+     private void dispenserSettings() {

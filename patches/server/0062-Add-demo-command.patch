@@ -1,0 +1,79 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Mon, 30 Nov 2020 03:12:04 -0600
+Subject: [PATCH] Add demo command
+
+
+diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
+index aadc9fc53b0f495664d90c40f30f9a128c3b4c95..54f9dd8d666b2b45190681f4362fce457e8e8ef2 100644
+--- a/src/main/java/net/minecraft/commands/Commands.java
++++ b/src/main/java/net/minecraft/commands/Commands.java
+@@ -224,6 +224,7 @@ public class Commands {
+             SetPlayerIdleTimeoutCommand.register(this.dispatcher);
+             StopCommand.register(this.dispatcher);
+             WhitelistCommand.register(this.dispatcher);
++            org.purpurmc.purpur.command.DemoCommand.register(this.dispatcher); // Purpur
+             org.purpurmc.purpur.command.PingCommand.register(this.dispatcher); // Purpur
+         }
+ 
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index a74932163207506e779c941c819eb663b98bd18c..235db276a07017bf89e6311a0b84291e8a0af06b 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -179,6 +179,7 @@ public class PurpurConfig {
+     public static boolean afkBroadcastUseDisplayName = false;
+     public static String afkTabListPrefix = "[AFK] ";
+     public static String afkTabListSuffix = "";
++    public static String demoCommandOutput = "<green>%s has been shown the demo screen";
+     public static String pingCommandOutput = "<green>%s's ping is %sms";
+     private static void messages() {
+         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
+@@ -187,6 +188,7 @@ public class PurpurConfig {
+         afkBroadcastUseDisplayName = getBoolean("settings.messages.afk-broadcast-use-display-name", afkBroadcastUseDisplayName);
+         afkTabListPrefix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-prefix", afkTabListPrefix)));
+         afkTabListSuffix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-suffix", afkTabListSuffix)));
++        demoCommandOutput = getString("settings.messages.demo-command-output", demoCommandOutput);
+         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
+     }
+ 
+diff --git a/src/main/java/org/purpurmc/purpur/command/DemoCommand.java b/src/main/java/org/purpurmc/purpur/command/DemoCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..235f3cd89f675b70a6152a00534608c0902f19fd
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/command/DemoCommand.java
+@@ -0,0 +1,35 @@
++package org.purpurmc.purpur.command;
++
++import com.mojang.brigadier.CommandDispatcher;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.commands.arguments.EntityArgument;
++import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
++import net.minecraft.server.level.ServerPlayer;
++import org.purpurmc.purpur.PurpurConfig;
++
++import java.util.Collection;
++import java.util.Collections;
++
++public class DemoCommand {
++    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++        dispatcher.register(Commands.literal("demo")
++                .requires((listener) -> listener.hasPermission(2, "bukkit.command.demo"))
++                .executes((context) -> execute(context.getSource(), Collections.singleton(context.getSource().getPlayerOrException())))
++                .then(Commands.argument("targets", EntityArgument.players())
++                        .requires(listener -> listener.hasPermission(2, "bukkit.command.demo.other"))
++                        .executes((context) -> execute(context.getSource(), EntityArgument.getPlayers(context, "targets")))
++                )
++        );
++    }
++
++    private static int execute(CommandSourceStack sender, Collection<ServerPlayer> targets) {
++        for (ServerPlayer player : targets) {
++            ClientboundGameEventPacket packet = new ClientboundGameEventPacket(ClientboundGameEventPacket.DEMO_EVENT, 0);
++            player.connection.send(packet);
++            String output = String.format(PurpurConfig.demoCommandOutput, player.getGameProfile().getName());
++            sender.sendSuccess(output, false);
++        }
++        return targets.size();
++    }
++}
