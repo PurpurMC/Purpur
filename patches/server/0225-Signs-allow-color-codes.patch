@@ -1,0 +1,84 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: granny <granny@purpurmc.org>
+Date: Fri, 9 Jun 2023 02:26:42 -0700
+Subject: [PATCH] Signs allow color codes
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index 68d9ba56c15ce68edd773d2309eca428dadffe83..a155e61a95c0fe4fc16d6d18a02a83b6d5b2a930 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -1570,6 +1570,7 @@ public class ServerPlayer extends Player {
+ 
+     @Override
+     public void openTextEdit(SignBlockEntity sign, boolean front) {
++        if (level().purpurConfig.signAllowColors) this.connection.send(sign.getTranslatedUpdatePacket(textFilteringEnabled, front)); // Purpur
+         this.connection.send(new ClientboundBlockUpdatePacket(this.level(), sign.getBlockPos()));
+         this.connection.send(new ClientboundOpenSignEditorPacket(sign.getBlockPos(), front));
+     }
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
+index ba6f0ba00cd2635bcd19889dca0349b363b079fe..86fc8079faa4b110387e98c100d423485aae0ea0 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
+@@ -203,11 +203,18 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
+             FilteredText filteredtext = (FilteredText) list.get(i);
+             Style chatmodifier = signtext.getMessage(i, entityhuman.isTextFilteringEnabled()).getStyle();
+ 
+-            if (entityhuman.isTextFilteringEnabled()) {
+-                signtext = signtext.setMessage(i, Component.literal(net.minecraft.SharedConstants.filterText(filteredtext.filteredOrEmpty())).setStyle(chatmodifier)); // Paper - filter sign text to chat only
++            // Purpur start TODO: This is probably wrong but we'll see what happens
++            org.bukkit.entity.Player player =  (org.bukkit.craftbukkit.entity.CraftPlayer) entityhuman.getBukkitEntity();
++            String line = net.minecraft.SharedConstants.filterText(entityhuman.isTextFilteringEnabled() ? filteredtext.filteredOrEmpty() : filteredtext.raw());
++            if (level.purpurConfig.signAllowColors) {
++                if (player.hasPermission("purpur.sign.color")) line = line.replaceAll("(?i)&([0-9a-fr])", "\u00a7$1");
++                if (player.hasPermission("purpur.sign.style")) line = line.replaceAll("(?i)&([l-or])", "\u00a7$1");
++                if (player.hasPermission("purpur.sign.magic")) line = line.replaceAll("(?i)&([kr])", "\u00a7$1");
++                signtext = signtext.setMessage(i, io.papermc.paper.adventure.PaperAdventure.asVanilla(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(line)).copy().setStyle(chatmodifier));
+             } else {
+-                signtext = signtext.setMessage(i, Component.literal(net.minecraft.SharedConstants.filterText(filteredtext.raw())).setStyle(chatmodifier), Component.literal(net.minecraft.SharedConstants.filterText(filteredtext.filteredOrEmpty())).setStyle(chatmodifier)); // Paper - filter sign text to chat only
++                signtext = signtext.setMessage(i, io.papermc.paper.adventure.PaperAdventure.asVanilla(net.kyori.adventure.text.Component.text(line)).copy().setStyle(chatmodifier));
+             }
++            // Purpur end
+         }
+ 
+         // CraftBukkit start
+@@ -345,6 +352,23 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
+         return ClientboundBlockEntityDataPacket.create(this);
+     }
+ 
++    // Purpur start
++    public ClientboundBlockEntityDataPacket getTranslatedUpdatePacket(boolean filtered, boolean front) {
++        final CompoundTag nbt = new CompoundTag();
++        this.saveAdditional(nbt);
++        final Component[] lines = front ? frontText.getMessages(filtered) : backText.getMessages(filtered);
++        for (int i = 0; i < 4; i++) {
++            final var component = io.papermc.paper.adventure.PaperAdventure.asAdventure(lines[i]);
++            final String line = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().serialize(component);
++            final var text = net.kyori.adventure.text.Component.text(line);
++            final String json = net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson().serialize(text);
++            nbt.putString("Text" + (i + 1), json);
++        }
++        nbt.putString("PurpurEditor", "true");
++        return ClientboundBlockEntityDataPacket.create(this, entity -> nbt);
++    }
++    // Purpur end
++
+     @Override
+     public CompoundTag getUpdateTag() {
+         return this.saveWithoutMetadata();
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index a4642b8a922a664df3535874a23c1f6f357f1fe7..cfe5b900d20e2060b3d6633b406f2ea290ba0e66 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -959,6 +959,11 @@ public class PurpurWorldConfig {
+         shulkerBoxAllowOversizedStacks = getBoolean("blocks.shulker_box.allow-oversized-stacks", shulkerBoxAllowOversizedStacks);
+     }
+ 
++    public boolean signAllowColors = false;
++    private void signSettings() {
++        signAllowColors = getBoolean("blocks.sign.allow-colors", signAllowColors);
++    }
++
+     public boolean slabHalfBreak = false;
+     private void slabSettings() {
+         slabHalfBreak = getBoolean("blocks.slab.break-individual-slabs-when-sneaking", slabHalfBreak);

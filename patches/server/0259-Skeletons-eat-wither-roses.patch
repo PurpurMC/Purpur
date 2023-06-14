@@ -1,0 +1,115 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ben Kerllenevich <ben@omega24.dev>
+Date: Sat, 25 Jun 2022 00:18:33 -0400
+Subject: [PATCH] Skeletons eat wither roses
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Skeleton.java b/src/main/java/net/minecraft/world/entity/monster/Skeleton.java
+index 9b43150a00d7fac85aa69f5a2dbffd0dfdae4b86..f4a47ac2c86cc95178922cce7320ba1ef5121b57 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Skeleton.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Skeleton.java
+@@ -14,6 +14,16 @@ import net.minecraft.world.item.Items;
+ import net.minecraft.world.level.ItemLike;
+ import net.minecraft.world.level.Level;
+ 
++// Purpur start
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.level.block.Blocks;
++import org.bukkit.craftbukkit.event.CraftEventFactory;
++import net.minecraft.world.InteractionHand;
++import net.minecraft.world.InteractionResult;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.core.particles.ParticleTypes;
++// Purpur end
++
+ public class Skeleton extends AbstractSkeleton {
+ 
+     private static final int TOTAL_CONVERSION_TIME = 300;
+@@ -174,4 +184,67 @@ public class Skeleton extends AbstractSkeleton {
+         }
+ 
+     }
++
++    // Purpur start
++    private int witherRosesFed = 0;
++
++    @Override
++    public InteractionResult mobInteract(Player player, InteractionHand hand) {
++        ItemStack stack = player.getItemInHand(hand);
++
++        if (level().purpurConfig.skeletonFeedWitherRoses > 0 && this.getType() != EntityType.WITHER_SKELETON && stack.getItem() == Blocks.WITHER_ROSE.asItem()) {
++            return this.feedWitherRose(player, stack);
++        }
++
++        return super.mobInteract(player, hand);
++    }
++
++    private InteractionResult feedWitherRose(Player player, ItemStack stack) {
++        if (++witherRosesFed < level().purpurConfig.skeletonFeedWitherRoses) {
++            if (!player.getAbilities().instabuild) {
++                stack.shrink(1);
++            }
++            return InteractionResult.CONSUME;
++        }
++
++        WitherSkeleton skeleton = EntityType.WITHER_SKELETON.create(level());
++        if (skeleton == null) {
++            return InteractionResult.PASS;
++        }
++
++        skeleton.moveTo(this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot());
++        skeleton.setHealth(this.getHealth());
++        skeleton.setAggressive(this.isAggressive());
++        skeleton.copyPosition(this);
++        skeleton.setYBodyRot(this.yBodyRot);
++        skeleton.setYHeadRot(this.getYHeadRot());
++        skeleton.yRotO = this.yRotO;
++        skeleton.xRotO = this.xRotO;
++
++        if (this.hasCustomName()) {
++            skeleton.setCustomName(this.getCustomName());
++        }
++
++        if (CraftEventFactory.callEntityTransformEvent(this, skeleton, org.bukkit.event.entity.EntityTransformEvent.TransformReason.INFECTION).isCancelled()) {
++            return InteractionResult.PASS;
++        }
++
++        if (!new com.destroystokyo.paper.event.entity.EntityTransformedEvent(this.getBukkitEntity(), skeleton.getBukkitEntity(), com.destroystokyo.paper.event.entity.EntityTransformedEvent.TransformedReason.INFECTED).callEvent()) {
++            return InteractionResult.PASS;
++        }
++
++        this.level().addFreshEntity(skeleton);
++        this.remove(RemovalReason.DISCARDED);
++        if (!player.getAbilities().instabuild) {
++            stack.shrink(1);
++        }
++
++        for (int i = 0; i < 15; ++i) {
++            ((ServerLevel) level()).sendParticles(((ServerLevel) level()).players(), null, ParticleTypes.HAPPY_VILLAGER,
++                    getX() + random.nextFloat(), getY() + (random.nextFloat() * 2), getZ() + random.nextFloat(), 1,
++                    random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, 0, true);
++        }
++        return InteractionResult.SUCCESS;
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 856c2ada861d87e53d49dc7f82d1707b946f7ba8..4818b532a6d5f1525a0d09f94f99a99734b334c7 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -2409,6 +2409,7 @@ public class PurpurWorldConfig {
+     public boolean skeletonTakeDamageFromWater = false;
+     public boolean skeletonAlwaysDropExp = false;
+     public double skeletonHeadVisibilityPercent = 0.5D;
++    public int skeletonFeedWitherRoses = 0;
+     private void skeletonSettings() {
+         skeletonRidable = getBoolean("mobs.skeleton.ridable", skeletonRidable);
+         skeletonRidableInWater = getBoolean("mobs.skeleton.ridable-in-water", skeletonRidableInWater);
+@@ -2422,6 +2423,7 @@ public class PurpurWorldConfig {
+         skeletonTakeDamageFromWater = getBoolean("mobs.skeleton.takes-damage-from-water", skeletonTakeDamageFromWater);
+         skeletonAlwaysDropExp = getBoolean("mobs.skeleton.always-drop-exp", skeletonAlwaysDropExp);
+         skeletonHeadVisibilityPercent = getDouble("mobs.skeleton.head-visibility-percent", skeletonHeadVisibilityPercent);
++        skeletonFeedWitherRoses = getInt("mobs.skeleton.feed-wither-roses", skeletonFeedWitherRoses);
+     }
+ 
+     public boolean skeletonHorseRidableInWater = true;
