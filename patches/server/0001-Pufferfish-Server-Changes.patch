@@ -1666,9 +1666,18 @@ index 488a253e218409b5f0b4a872cee0928578fa7582..6e3b2863f04419ee6914ac3fd4f12a4f
  
      private void getFullChunk(long pos, Consumer<LevelChunk> chunkConsumer) {
 diff --git a/src/main/java/net/minecraft/server/level/ServerEntity.java b/src/main/java/net/minecraft/server/level/ServerEntity.java
-index 6670e657e08e130f7e0368f418379fd1ece00cdf..e921b6db8905a8676a45e36564d877075afb081f 100644
+index 6670e657e08e130f7e0368f418379fd1ece00cdf..4c5f90fdb534d8aeb7dd077a13b1ebed016e4947 100644
 --- a/src/main/java/net/minecraft/server/level/ServerEntity.java
 +++ b/src/main/java/net/minecraft/server/level/ServerEntity.java
+@@ -108,7 +108,7 @@ public class ServerEntity {
+ 
+         Entity entity = this.entity;
+ 
+-        if (entity instanceof ItemFrame) {
++        if (!this.trackedPlayers.isEmpty() && entity instanceof ItemFrame) { // Paper - Only tick item frames if players can see it
+             ItemFrame entityitemframe = (ItemFrame) entity;
+ 
+             if (true || this.tickCount % 10 == 0) { // CraftBukkit - Moved below, should always enter this block
 @@ -180,7 +180,8 @@ public class ServerEntity {
                      long i1 = this.positionCodec.encodeZ(vec3d);
                      boolean flag6 = k < -32768L || k > 32767L || l < -32768L || l > 32767L || i1 < -32768L || i1 > 32767L;
@@ -1752,6 +1761,42 @@ index 18aac3da3c88f33b1a71a5920a8daa27e9723913..eac31c3fcc9161711328588ac852fcae
              // Paper start - optimise chunk ticking
              this.getRandomBlockPosition(j, 0, k, 15, blockposition);
              int normalY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, blockposition.getX() & 15, blockposition.getZ() & 15) + 1;
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index 9d46536f80b5b3e6641fd377c02166a431edfd77..8a1fde50b82a8b0718ae04124c2611b7cff4bcd6 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -1245,6 +1245,7 @@ public class ServerPlayer extends Player {
+                 this.setServerLevel(worldserver);
+                 this.connection.teleport(exit); // CraftBukkit - use internal teleport without event
+                 this.connection.resetPosition();
++                this.mainSupportingBlockPos = Optional.empty(); // Pufferfish - Fix paper 9372
+                 worldserver.addDuringPortalTeleport(this);
+                 worldserver1.getProfiler().pop();
+                 this.triggerDimensionChangeTriggers(worldserver1);
+@@ -1907,6 +1908,7 @@ public class ServerPlayer extends Player {
+     public void moveTo(double x, double y, double z) {
+         super.moveTo(x, y, z);
+         this.connection.resetPosition();
++        this.mainSupportingBlockPos = Optional.empty(); // Pufferfish - Fix paper 9372
+     }
+ 
+     @Override
+@@ -2143,6 +2145,7 @@ public class ServerPlayer extends Player {
+ 
+             this.connection.send(new ClientboundSetCameraPacket(this.camera));
+             this.connection.resetPosition();
++            this.mainSupportingBlockPos = Optional.empty(); // Pufferfish - Fix paper 9372
+         }
+     }
+ 
+@@ -2595,6 +2598,7 @@ public class ServerPlayer extends Player {
+     public void forceSetPositionRotation(double x, double y, double z, float yaw, float pitch) {
+         this.moveTo(x, y, z, yaw, pitch);
+         this.connection.resetPosition();
++        this.mainSupportingBlockPos = Optional.empty(); // Pufferfish - Fix paper 9372
+     }
+ 
+     @Override
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 index 2a609e43370e68943c580083f7f7d8c9b0972955..309a3e42ec48a1a7684b62ea372bfa984df6a0fb 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
@@ -1885,7 +1930,7 @@ index 04b1531572e8fff1e46fe1c94e7fc863841e0f66..47ddc42f2b63d9d3fae5ae6ea93d4183
      int LARGE_MAX_STACK_SIZE = 64;
      int DEFAULT_DISTANCE_LIMIT = 8;
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 513c34aa02d63f7e3c178eade818e156af4541db..641c4af6bd13c87c26f7932dd5f6f4d2ee20e3c0 100644
+index 513c34aa02d63f7e3c178eade818e156af4541db..1aa184cf7a97364d7b9e4d628c0a6c1dc769ba6e 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
 @@ -306,7 +306,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
@@ -1958,19 +2003,19 @@ index 513c34aa02d63f7e3c178eade818e156af4541db..641c4af6bd13c87c26f7932dd5f6f4d2
  
          return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this));
      }
-@@ -810,6 +838,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
-     // CraftBukkit end
+@@ -797,6 +825,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+     }
  
-     public void baseTick() {
+     public void tick() {
 +        // Pufferfish start - entity TTL
 +        if (type != EntityType.PLAYER && type.ttl >= 0 && this.tickCount >= type.ttl) {
-+            remove(RemovalReason.DISCARDED);
++            discard();
 +            return;
 +        }
 +        // Pufferfish end - entity TTL
-         this.level().getProfiler().push("entityBaseTick");
-         if (firstTick && this instanceof net.minecraft.world.entity.NeutralMob neutralMob) neutralMob.tickInitialPersistentAnger(level); // Paper - Update last hurt when ticking
-         this.feetBlockState = null;
+         this.baseTick();
+     }
+ 
 @@ -4306,16 +4340,18 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
      }
  
