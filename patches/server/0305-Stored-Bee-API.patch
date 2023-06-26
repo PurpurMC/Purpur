@@ -1,0 +1,271 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: EOT3000 <egor.tolstenkov@outlook.com>
+Date: Sat, 10 Jun 2023 20:27:12 -0400
+Subject: [PATCH] Stored Bee API
+
+
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
+index 7b82842b97ce795745cf6ee6399f618c55acbbf3..5344393f62af19c3591f54a6ebc40b2e4c3b6226 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
+@@ -130,6 +130,36 @@ public class BeehiveBlockEntity extends BlockEntity {
+         return list;
+     }
+ 
++    // Purpur start
++    public List<Entity> releaseBees(BlockState iblockdata, Level level, BeehiveBlockEntity.BeeReleaseStatus tileentitybeehive_releasestatus, boolean force) {
++        List<Entity> list = Lists.newArrayList();
++
++        this.stored.removeIf((tileentitybeehive_hivebee) -> {
++            return BeehiveBlockEntity.releaseBee(level, this.worldPosition, iblockdata, tileentitybeehive_hivebee, list, tileentitybeehive_releasestatus, this.savedFlowerPos, force);
++        });
++
++        if (!list.isEmpty()) {
++            super.setChanged();
++        }
++
++        return list;
++    }
++
++    public List<Entity> releaseBee(BlockState iblockdata, Level level, BeeData data, BeehiveBlockEntity.BeeReleaseStatus tileentitybeehive_releasestatus, boolean force) {
++        List<Entity> list = Lists.newArrayList();
++
++        BeehiveBlockEntity.releaseBee(level, this.worldPosition, iblockdata, data, list, tileentitybeehive_releasestatus, this.savedFlowerPos, force);
++
++        if (!list.isEmpty()) {
++            stored.remove(data);
++
++            super.setChanged();
++        }
++
++        return list;
++    }
++    // Purpur end
++
+     public void addOccupant(Entity entity, boolean hasNectar) {
+         this.addOccupantWithPresetTicks(entity, hasNectar, 0);
+     }
+@@ -139,6 +169,12 @@ public class BeehiveBlockEntity extends BlockEntity {
+         return this.stored.size();
+     }
+ 
++    // Purpur start
++    public List<BeeData> getStored() {
++        return stored;
++    }
++    // Purpur end
++
+     // Paper start - Add EntityBlockStorage clearEntities
+     public void clearBees() {
+         this.stored.clear();
+@@ -425,9 +461,9 @@ public class BeehiveBlockEntity extends BlockEntity {
+         private BeeReleaseStatus() {}
+     }
+ 
+-    private static class BeeData {
++    public static class BeeData { // Purpur - change from private to public
+ 
+-        final CompoundTag entityData;
++        public final CompoundTag entityData; // Purpur - make public
+         int ticksInHive;
+         int exitTickCounter; // Paper - separate counter for checking if bee should exit to reduce exit attempts
+         final int minOccupationTicks;
+diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
+index 380897c010521f368848a3e6986d307cf47ff319..3c5eae31dc229b8c5f15215be9462410bcb41f07 100644
+--- a/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
++++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
+@@ -16,8 +16,15 @@ import org.bukkit.entity.Bee;
+ 
+ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> implements Beehive {
+ 
++    private final List<org.purpurmc.purpur.entity.StoredEntity<Bee>> storage = new ArrayList<>(); // Purpur
++
+     public CraftBeehive(World world, BeehiveBlockEntity tileEntity) {
+         super(world, tileEntity);
++        // Purpur start - load bees to be able to modify them individually
++        for(BeehiveBlockEntity.BeeData data : getSnapshot().getStored()) {
++            storage.add(new org.purpurmc.purpur.entity.PurpurStoredBee(data, this));
++        }
++        // Purpur end
+     }
+ 
+     @Override
+@@ -66,25 +73,67 @@ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> impl
+         List<Bee> bees = new ArrayList<>();
+ 
+         if (isPlaced()) {
+-            BeehiveBlockEntity beehive = ((BeehiveBlockEntity) this.getTileEntityFromWorld());
+-            for (Entity bee : beehive.releaseBees(this.getHandle(), BeeReleaseStatus.BEE_RELEASED, true)) {
++            // Purpur start - change which releaseBees method is called, and use beehive snapshot
++            BeehiveBlockEntity beehive = ((BeehiveBlockEntity) this.getSnapshot());
++            for (Entity bee : beehive.releaseBees(this.getHandle(), getWorldHandle().getMinecraftWorld(), BeeReleaseStatus.BEE_RELEASED, true)) {
++                // Purpur end
+                 bees.add((Bee) bee.getBukkitEntity());
+             }
+         }
+-
++        storage.clear(); // Purpur
+         return bees;
+     }
+ 
++    // Purpur start
++    @Override
++    public Bee releaseEntity(org.purpurmc.purpur.entity.StoredEntity<Bee> entity) {
++        ensureNoWorldGeneration();
++
++        if(!getEntities().contains(entity)) {
++            return null;
++        }
++
++        if(isPlaced()) {
++            BeehiveBlockEntity beehive = this.getSnapshot();
++            BeehiveBlockEntity.BeeData data = ((org.purpurmc.purpur.entity.PurpurStoredBee) entity).getHandle();
++
++            List<Entity> list = beehive.releaseBee(getHandle(), getWorldHandle().getMinecraftWorld(), data, BeeReleaseStatus.BEE_RELEASED, true);
++
++            if (list.size() == 1) {
++                storage.remove(entity);
++
++                return (Bee) list.get(0).getBukkitEntity();
++            }
++        }
++
++        return null;
++    }
++
++    @Override
++    public List<org.purpurmc.purpur.entity.StoredEntity<Bee>> getEntities() {
++        return new ArrayList<>(storage);
++    }
++    // Purpur end
++
+     @Override
+     public void addEntity(Bee entity) {
+         Preconditions.checkArgument(entity != null, "Entity must not be null");
+ 
++        int length = getSnapshot().getStored().size();  // Purpur
+         getSnapshot().addOccupant(((CraftBee) entity).getHandle(), false);
++
++        // Purpur start - check if new bee was added, and if yes, add to stored bees
++        List<BeehiveBlockEntity.BeeData> s = getSnapshot().getStored();
++        if(length < s.size()) {
++            storage.add(new org.purpurmc.purpur.entity.PurpurStoredBee(s.get(s.size() - 1), this));
++        }
++        // Purpur end
+     }
+     // Paper start - Add EntityBlockStorage clearEntities
+     @Override
+     public void clearEntities() {
+         getSnapshot().clearBees();
++        storage.clear(); // Purpur
+     }
+     // Paper end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/entity/PurpurStoredBee.java b/src/main/java/org/purpurmc/purpur/entity/PurpurStoredBee.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8efca1d91188ac4db911a8eb0fa9ea2cc3c48e28
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/entity/PurpurStoredBee.java
+@@ -0,0 +1,102 @@
++package org.purpurmc.purpur.entity;
++
++import io.papermc.paper.adventure.PaperAdventure;
++import net.kyori.adventure.text.Component;
++import net.minecraft.nbt.Tag;
++import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
++import org.bukkit.block.EntityBlockStorage;
++import org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer;
++import org.bukkit.craftbukkit.persistence.CraftPersistentDataTypeRegistry;
++import org.bukkit.entity.Bee;
++import org.bukkit.entity.EntityType;
++import org.bukkit.persistence.PersistentDataContainer;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
++
++import java.util.Locale;
++
++public class PurpurStoredBee implements StoredEntity<Bee> {
++    private static final CraftPersistentDataTypeRegistry DATA_TYPE_REGISTRY = new CraftPersistentDataTypeRegistry();
++
++    private final EntityBlockStorage<Bee> blockStorage;
++    private final BeehiveBlockEntity.BeeData handle;
++    private final CraftPersistentDataContainer persistentDataContainer = new CraftPersistentDataContainer(PurpurStoredBee.DATA_TYPE_REGISTRY);
++
++    private Component customName;
++
++    public PurpurStoredBee(BeehiveBlockEntity.BeeData data, EntityBlockStorage<Bee> blockStorage) {
++        this.handle = data;
++        this.blockStorage = blockStorage;
++
++        this.customName = handle.entityData.contains("CustomName", Tag.TAG_STRING)
++                ? PaperAdventure.asAdventure(net.minecraft.network.chat.Component.Serializer.fromJson(handle.entityData.getString("CustomName")))
++                : null;
++
++        if(handle.entityData.contains("BukkitValues", Tag.TAG_COMPOUND)) {
++            this.persistentDataContainer.putAll(handle.entityData.getCompound("BukkitValues"));
++        }
++    }
++
++    public BeehiveBlockEntity.BeeData getHandle() {
++        return handle;
++    }
++
++    @Override
++    public @Nullable Component customName() {
++        return customName;
++    }
++
++    @Override
++    public void customName(@Nullable Component customName) {
++        this.customName = customName;
++    }
++
++    @Override
++    public @Nullable String getCustomName() {
++        return PaperAdventure.asPlain(customName, Locale.US);
++    }
++
++    @Override
++    public void setCustomName(@Nullable String name) {
++        customName(name != null ? Component.text(name) : null);
++    }
++
++    @Override
++    public @NotNull PersistentDataContainer getPersistentDataContainer() {
++        return persistentDataContainer;
++    }
++
++    @Override
++    public boolean hasBeenReleased() {
++        return !blockStorage.getEntities().contains(this);
++    }
++
++    @Override
++    public @Nullable Bee release() {
++        return blockStorage.releaseEntity(this);
++    }
++
++    @Override
++    public @Nullable EntityBlockStorage<Bee> getBlockStorage() {
++        if(hasBeenReleased()) {
++            return null;
++        }
++
++        return blockStorage;
++    }
++
++    @Override
++    public @NotNull EntityType getType() {
++        return EntityType.BEE;
++    }
++
++    @Override
++    public void update() {
++        handle.entityData.put("BukkitValues", this.persistentDataContainer.toTagCompound());
++        if(customName == null) {
++            handle.entityData.remove("CustomName");
++        } else {
++            handle.entityData.putString("CustomName", net.minecraft.network.chat.Component.Serializer.toJson(PaperAdventure.asVanilla(customName)));
++        }
++    }
++}
