@@ -616,10 +616,10 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..0dd3374468e05f7a312ba5856b9cf8a4787dfa59
+index 0000000000000000000000000000000000000000..95d1a8a5b349f7849c040026bfa3469d03d92bfd
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
-@@ -0,0 +1,293 @@
+@@ -0,0 +1,295 @@
 +package gg.pufferfish.pufferfish;
 +
 +import gg.pufferfish.pufferfish.simd.SIMDDetection;
@@ -906,9 +906,11 @@ index 0000000000000000000000000000000000000000..0dd3374468e05f7a312ba5856b9cf8a4
 +
 +    public static boolean disableMethodProfiler;
 +	public static boolean disableOutOfOrderChat;
++	public static boolean suppressNullIdDisconnections;
 +    private static void miscSettings() {
 +		disableMethodProfiler = getBoolean("misc.disable-method-profiler", true);
 +		disableOutOfOrderChat = getBoolean("misc.disable-out-of-order-chat", false);
++		suppressNullIdDisconnections = getBoolean("misc.suppress-null-id-disconnections", false);
 +        setComment("misc", "Settings for things that don't belong elsewhere");
 +    }
 +
@@ -1467,7 +1469,7 @@ index 2d11a67bdc82088abf0b3ca134f352f155c8eb1f..8bd24c8eef3169a765d42a6769034460
  
      public static long getCoordinateKey(final ChunkPos pair) {
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 912affb0ab1c4c40f7a655194e95ec6f0ebf1fcd..7f391d66796952e8af6b29b71cf3a91641aeacea 100644
+index 3238cbcba567b1242c77e41f6b6f19a8d157fb4e..7ca6c81afc99d42d2f39b4b6d7f5e8a18b58fba3 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -311,6 +311,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -1479,7 +1481,7 @@ index 912affb0ab1c4c40f7a655194e95ec6f0ebf1fcd..7f391d66796952e8af6b29b71cf3a916
  
      public static <S extends MinecraftServer> S spin(Function<Thread, S> serverFactory) {
          AtomicReference<S> atomicreference = new AtomicReference();
-@@ -1691,7 +1693,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1693,7 +1695,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
  
      @DontObfuscate
      public String getServerModName() {
@@ -1488,7 +1490,7 @@ index 912affb0ab1c4c40f7a655194e95ec6f0ebf1fcd..7f391d66796952e8af6b29b71cf3a916
      }
  
      public SystemReport fillSystemReport(SystemReport details) {
-@@ -2270,6 +2272,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -2272,6 +2274,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      }
  
      public ProfilerFiller getProfiler() {
@@ -1666,18 +1668,9 @@ index 488a253e218409b5f0b4a872cee0928578fa7582..6e3b2863f04419ee6914ac3fd4f12a4f
  
      private void getFullChunk(long pos, Consumer<LevelChunk> chunkConsumer) {
 diff --git a/src/main/java/net/minecraft/server/level/ServerEntity.java b/src/main/java/net/minecraft/server/level/ServerEntity.java
-index 6670e657e08e130f7e0368f418379fd1ece00cdf..4c5f90fdb534d8aeb7dd077a13b1ebed016e4947 100644
+index acaf9f392660d618472aea7bce967d374eb5d549..4c5f90fdb534d8aeb7dd077a13b1ebed016e4947 100644
 --- a/src/main/java/net/minecraft/server/level/ServerEntity.java
 +++ b/src/main/java/net/minecraft/server/level/ServerEntity.java
-@@ -108,7 +108,7 @@ public class ServerEntity {
- 
-         Entity entity = this.entity;
- 
--        if (entity instanceof ItemFrame) {
-+        if (!this.trackedPlayers.isEmpty() && entity instanceof ItemFrame) { // Paper - Only tick item frames if players can see it
-             ItemFrame entityitemframe = (ItemFrame) entity;
- 
-             if (true || this.tickCount % 10 == 0) { // CraftBukkit - Moved below, should always enter this block
 @@ -180,7 +180,8 @@ public class ServerEntity {
                      long i1 = this.positionCodec.encodeZ(vec3d);
                      boolean flag6 = k < -32768L || k > 32767L || l < -32768L || l > 32767L || i1 < -32768L || i1 > 32767L;
@@ -1817,6 +1810,18 @@ index 2a609e43370e68943c580083f7f7d8c9b0972955..309a3e42ec48a1a7684b62ea372bfa98
          Instant instant1;
  
          do {
+diff --git a/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+index 2ff578e4a953ffcf5176815ba8e3f06f73499989..878001928327d92423d5f7f6d5ce8772d6fa477f 100644
+--- a/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+@@ -204,6 +204,7 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener,
+ 
+     @Override
+     public void onDisconnect(Component reason) {
++        if (gg.pufferfish.pufferfish.PufferfishConfig.suppressNullIdDisconnections && this.gameProfile != null && this.gameProfile.getId() == null && "Disconnected".equals(reason.getString())) return; // Pufferfish
+         ServerLoginPacketListenerImpl.LOGGER.info("{} lost connection: {}", this.getUserName(), reason.getString());
+     }
+ 
 diff --git a/src/main/java/net/minecraft/world/CompoundContainer.java b/src/main/java/net/minecraft/world/CompoundContainer.java
 index 241fec02e6869c638d3a160819b32173a081467b..6a8f9e8f5bf108674c47018def28906e2d0a729c 100644
 --- a/src/main/java/net/minecraft/world/CompoundContainer.java
@@ -1930,7 +1935,7 @@ index 04b1531572e8fff1e46fe1c94e7fc863841e0f66..47ddc42f2b63d9d3fae5ae6ea93d4183
      int LARGE_MAX_STACK_SIZE = 64;
      int DEFAULT_DISTANCE_LIMIT = 8;
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 513c34aa02d63f7e3c178eade818e156af4541db..1aa184cf7a97364d7b9e4d628c0a6c1dc769ba6e 100644
+index 6abaf7ef99800a238b29dbbb85de8c970c0806a7..e4beab69b116874baf29cfbbad6b9cd102ad92c4 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
 @@ -306,7 +306,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
