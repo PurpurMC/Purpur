@@ -4,6 +4,97 @@ Date: Thu, 16 Jan 2020 14:59:16 -0600
 Subject: [PATCH] Make GUI Great Again
 
 
+diff --git a/src/log4jPlugins/java/org/purpurmc/purpur/gui/HighlightErrorConverter.java b/src/log4jPlugins/java/org/purpurmc/purpur/gui/HighlightErrorConverter.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..15a226e3854d731f7724025ea3459c8ace07630c
+--- /dev/null
++++ b/src/log4jPlugins/java/org/purpurmc/purpur/gui/HighlightErrorConverter.java
+@@ -0,0 +1,85 @@
++package org.purpurmc.purpur.gui.util;
++
++import org.apache.logging.log4j.Level;
++import org.apache.logging.log4j.core.LogEvent;
++import org.apache.logging.log4j.core.config.Configuration;
++import org.apache.logging.log4j.core.config.plugins.Plugin;
++import org.apache.logging.log4j.core.layout.PatternLayout;
++import org.apache.logging.log4j.core.pattern.ConverterKeys;
++import org.apache.logging.log4j.core.pattern.LogEventPatternConverter;
++import org.apache.logging.log4j.core.pattern.PatternConverter;
++import org.apache.logging.log4j.core.pattern.PatternFormatter;
++import org.apache.logging.log4j.core.pattern.PatternParser;
++import org.apache.logging.log4j.util.PerformanceSensitive;
++
++import java.util.List;
++
++@Plugin(name = "highlightGUIError", category = PatternConverter.CATEGORY)
++@ConverterKeys({"highlightGUIError"})
++@PerformanceSensitive("allocation")
++public final class HighlightErrorConverter extends LogEventPatternConverter {
++    private static final String ERROR = "\u00A74\u00A7l"; // Bold Red
++    private static final String WARN = "\u00A7e\u00A7l"; // Bold Yellow
++
++    private final List<PatternFormatter> formatters;
++
++    private HighlightErrorConverter(List<PatternFormatter> formatters) {
++        super("highlightGUIError", null);
++        this.formatters = formatters;
++    }
++
++    @Override
++    public void format(LogEvent event, StringBuilder toAppendTo) {
++        Level level = event.getLevel();
++        if (level.isMoreSpecificThan(Level.ERROR)) {
++            format(ERROR, event, toAppendTo);
++            return;
++        } else if (level.isMoreSpecificThan(Level.WARN)) {
++            format(WARN, event, toAppendTo);
++            return;
++        }
++        for (PatternFormatter formatter : formatters) {
++            formatter.format(event, toAppendTo);
++        }
++    }
++
++    private void format(String style, LogEvent event, StringBuilder toAppendTo) {
++        int start = toAppendTo.length();
++        toAppendTo.append(style);
++        int end = toAppendTo.length();
++
++        for (PatternFormatter formatter : formatters) {
++            formatter.format(event, toAppendTo);
++        }
++
++        if (toAppendTo.length() == end) {
++            toAppendTo.setLength(start);
++        }
++    }
++
++    @Override
++    public boolean handlesThrowable() {
++        for (final PatternFormatter formatter : formatters) {
++            if (formatter.handlesThrowable()) {
++                return true;
++            }
++        }
++        return false;
++    }
++
++    public static HighlightErrorConverter newInstance(Configuration config, String[] options) {
++        if (options.length != 1) {
++            LOGGER.error("Incorrect number of options on highlightGUIError. Expected 1 received " + options.length);
++            return null;
++        }
++
++        if (options[0] == null) {
++            LOGGER.error("No pattern supplied on highlightGUIError");
++            return null;
++        }
++
++        PatternParser parser = PatternLayout.createPatternParser(config);
++        List<PatternFormatter> formatters = parser.parse(options[0]);
++        return new HighlightErrorConverter(formatters);
++    }
++}
 diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
 index 41db72915baa4c02b11a701dfdde09b66ba72476..12124d6fbc0406bb62bd95a0f7bab68afa43377c 100644
 --- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
@@ -297,99 +388,8 @@ index 0000000000000000000000000000000000000000..33e89b4c00fa8318506b36cbe49fe4e4
 +        }
 +    }
 +}
-diff --git a/src/main/java/org/purpurmc/purpur/gui/util/HighlightErrorConverter.java b/src/main/java/org/purpurmc/purpur/gui/util/HighlightErrorConverter.java
-new file mode 100644
-index 0000000000000000000000000000000000000000..15a226e3854d731f7724025ea3459c8ace07630c
---- /dev/null
-+++ b/src/main/java/org/purpurmc/purpur/gui/util/HighlightErrorConverter.java
-@@ -0,0 +1,85 @@
-+package org.purpurmc.purpur.gui.util;
-+
-+import org.apache.logging.log4j.Level;
-+import org.apache.logging.log4j.core.LogEvent;
-+import org.apache.logging.log4j.core.config.Configuration;
-+import org.apache.logging.log4j.core.config.plugins.Plugin;
-+import org.apache.logging.log4j.core.layout.PatternLayout;
-+import org.apache.logging.log4j.core.pattern.ConverterKeys;
-+import org.apache.logging.log4j.core.pattern.LogEventPatternConverter;
-+import org.apache.logging.log4j.core.pattern.PatternConverter;
-+import org.apache.logging.log4j.core.pattern.PatternFormatter;
-+import org.apache.logging.log4j.core.pattern.PatternParser;
-+import org.apache.logging.log4j.util.PerformanceSensitive;
-+
-+import java.util.List;
-+
-+@Plugin(name = "highlightGUIError", category = PatternConverter.CATEGORY)
-+@ConverterKeys({"highlightGUIError"})
-+@PerformanceSensitive("allocation")
-+public final class HighlightErrorConverter extends LogEventPatternConverter {
-+    private static final String ERROR = "\u00A74\u00A7l"; // Bold Red
-+    private static final String WARN = "\u00A7e\u00A7l"; // Bold Yellow
-+
-+    private final List<PatternFormatter> formatters;
-+
-+    private HighlightErrorConverter(List<PatternFormatter> formatters) {
-+        super("highlightGUIError", null);
-+        this.formatters = formatters;
-+    }
-+
-+    @Override
-+    public void format(LogEvent event, StringBuilder toAppendTo) {
-+        Level level = event.getLevel();
-+        if (level.isMoreSpecificThan(Level.ERROR)) {
-+            format(ERROR, event, toAppendTo);
-+            return;
-+        } else if (level.isMoreSpecificThan(Level.WARN)) {
-+            format(WARN, event, toAppendTo);
-+            return;
-+        }
-+        for (PatternFormatter formatter : formatters) {
-+            formatter.format(event, toAppendTo);
-+        }
-+    }
-+
-+    private void format(String style, LogEvent event, StringBuilder toAppendTo) {
-+        int start = toAppendTo.length();
-+        toAppendTo.append(style);
-+        int end = toAppendTo.length();
-+
-+        for (PatternFormatter formatter : formatters) {
-+            formatter.format(event, toAppendTo);
-+        }
-+
-+        if (toAppendTo.length() == end) {
-+            toAppendTo.setLength(start);
-+        }
-+    }
-+
-+    @Override
-+    public boolean handlesThrowable() {
-+        for (final PatternFormatter formatter : formatters) {
-+            if (formatter.handlesThrowable()) {
-+                return true;
-+            }
-+        }
-+        return false;
-+    }
-+
-+    public static HighlightErrorConverter newInstance(Configuration config, String[] options) {
-+        if (options.length != 1) {
-+            LOGGER.error("Incorrect number of options on highlightGUIError. Expected 1 received " + options.length);
-+            return null;
-+        }
-+
-+        if (options[0] == null) {
-+            LOGGER.error("No pattern supplied on highlightGUIError");
-+            return null;
-+        }
-+
-+        PatternParser parser = PatternLayout.createPatternParser(config);
-+        List<PatternFormatter> formatters = parser.parse(options[0]);
-+        return new HighlightErrorConverter(formatters);
-+    }
-+}
 diff --git a/src/main/resources/log4j2.xml b/src/main/resources/log4j2.xml
-index 675cd61221e807aadf28322b46c3daa1370241b5..ed4965b6db250090b0a9f6175e116bbe9c71fef3 100644
+index 675cd61221e807aadf28322b46c3daa1370241b5..0769f5c4711a3b7f59489e611ed01ad8367e5db1 100644
 --- a/src/main/resources/log4j2.xml
 +++ b/src/main/resources/log4j2.xml
 @@ -2,7 +2,16 @@
@@ -399,11 +399,11 @@ index 675cd61221e807aadf28322b46c3daa1370241b5..ed4965b6db250090b0a9f6175e116bbe
 -            <PatternLayout pattern="[%d{HH:mm:ss} %level]: %msg%n" />
 +            <!-- Purpur start - copied from TerminalConsole -->
 +            <PatternLayout>
-+                <LoggerNamePatternSelector defaultPattern="%highlightGUIError{[%d{HH:mm:ss} %level]: [%logger] %msg%n%xEx{full}}">
++                <LoggerNamePatternSelector defaultPattern="%highlightGUIError{[%d{HH:mm:ss} %level]: [%logger] %stripAnsi{%msg}%n%xEx{full}}">
 +                    <!-- Log root, Minecraft, Mojang and Bukkit loggers without prefix -->
 +                    <!-- Disable prefix for various plugins that bypass the plugin logger -->
 +                    <PatternMatch key=",net.minecraft.,Minecraft,com.mojang.,com.sk89q.,ru.tehkode.,Minecraft.AWE"
-+                                  pattern="%highlightGUIError{[%d{HH:mm:ss} %level]: %msg%n%xEx{full}}" />
++                                  pattern="%highlightGUIError{[%d{HH:mm:ss} %level]: %stripAnsi{%msg}%n%xEx{full}}" />
 +                </LoggerNamePatternSelector>
 +            </PatternLayout>
 +            <!-- Purpur end -->
