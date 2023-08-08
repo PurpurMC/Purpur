@@ -69,10 +69,10 @@ index 31f5ed9dd1727eee24804a384817d2b76a45676b..5fbb13ebef0ca66419f3e5006d19e4a5
      }
  }
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
-index fb029141ff0b12ca21d49769dc3a890787b630e9..81d672b7f3cdae0f887fb978327573285f326e8e 100644
+index fb029141ff0b12ca21d49769dc3a890787b630e9..64d56bdbe943a1d37a28c0d332e3acf258bf1fe5 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
-@@ -464,4 +464,56 @@ public class PurpurConfig {
+@@ -464,4 +464,75 @@ public class PurpurConfig {
          String setPattern = getString("settings.username-valid-characters", defaultPattern);
          usernameValidCharactersPattern = java.util.regex.Pattern.compile(setPattern == null || setPattern.isBlank() ? defaultPattern : setPattern);
      }
@@ -83,6 +83,17 @@ index fb029141ff0b12ca21d49769dc3a890787b630e9..81d672b7f3cdae0f887fb97832757328
 +            config.addDefault("settings.food-properties", new HashMap<>());
 +            return;
 +        }
++
++        Map<MobEffect, Map<String, Object>> effectDefaults = new HashMap<>();
++        Map<String, Object> EFFECT_DEFAULT = Map.of(
++            "chance", 0.0F,
++            "duration", 0,
++            "amplifier", 0,
++            "ambient", false,
++            "visible", true,
++            "show-icon", true
++        );
++
 +        properties.getKeys(false).forEach(foodKey -> {
 +            FoodProperties food = Foods.ALL_PROPERTIES.get(foodKey);
 +            if (food == null) {
@@ -97,15 +108,17 @@ index fb029141ff0b12ca21d49769dc3a890787b630e9..81d672b7f3cdae0f887fb97832757328
 +            food.setFastFood(properties.getBoolean(foodKey + ".fast-food", foodDefaults.isFastFood()));
 +            ConfigurationSection effects = properties.getConfigurationSection(foodKey + ".effects");
 +            if (effects != null) {
-+                Map<String, Object> effectDefaults = new HashMap<>();
++                effectDefaults.clear();
 +                foodDefaults.getEffects().forEach(pair -> {
-+                    effectDefaults.put("chance", pair.getSecond());
 +                    MobEffectInstance effect = pair.getFirst();
-+                    effectDefaults.put("duration", effect.getDuration());
-+                    effectDefaults.put("amplifier", effect.getAmplifier());
-+                    effectDefaults.put("ambient", effect.isAmbient());
-+                    effectDefaults.put("visible", effect.isVisible());
-+                    effectDefaults.put("show-icon", effect.showIcon());
++                    effectDefaults.put(effect.getEffect(), Map.of(
++                            "chance", pair.getSecond(),
++                            "duration", effect.getDuration(),
++                            "amplifier", effect.getAmplifier(),
++                            "ambient", effect.isAmbient(),
++                            "visible", effect.isVisible(),
++                            "show-icon", effect.showIcon()
++                    ));
 +                });
 +                effects.getKeys(false).forEach(effectKey -> {
 +                    MobEffect effect = BuiltInRegistries.MOB_EFFECT.get(new ResourceLocation(effectKey));
@@ -113,16 +126,22 @@ index fb029141ff0b12ca21d49769dc3a890787b630e9..81d672b7f3cdae0f887fb97832757328
 +                        PurpurConfig.log(Level.SEVERE, "Invalid food property effect for " + foodKey + ": " + effectKey);
 +                        return;
 +                    }
++
++                    Map<String, Object> effectDefault = effectDefaults.get(effect);
++                    if (effectDefault == null) {
++                        effectDefault = EFFECT_DEFAULT;
++                    }
++
 +                    food.getEffects().removeIf(pair -> pair.getFirst().getEffect() == effect);
-+                    float chance = (float) effects.getDouble(effectKey + ".chance", ((Float) effectDefaults.get("chance")).doubleValue());
-+                    int duration = effects.getInt(effectKey + ".duration", (int) effectDefaults.get("duration"));
++                    float chance = (float) effects.getDouble(effectKey + ".chance", ((Float) effectDefault.get("chance")).doubleValue());
++                    int duration = effects.getInt(effectKey + ".duration", (int) effectDefault.get("duration"));
 +                    if (chance <= 0.0F || duration < 0) {
 +                        return;
 +                    }
-+                    int amplifier = effects.getInt(effectKey + ".amplifier", (int) effectDefaults.get("amplifier"));
-+                    boolean ambient = effects.getBoolean(effectKey + ".ambient", (boolean) effectDefaults.get("ambient"));
-+                    boolean visible = effects.getBoolean(effectKey + ".visible", (boolean) effectDefaults.get("visible"));
-+                    boolean showIcon = effects.getBoolean(effectKey + ".show-icon", (boolean) effectDefaults.get("show-icon"));
++                    int amplifier = effects.getInt(effectKey + ".amplifier", (int) effectDefault.get("amplifier"));
++                    boolean ambient = effects.getBoolean(effectKey + ".ambient", (boolean) effectDefault.get("ambient"));
++                    boolean visible = effects.getBoolean(effectKey + ".visible", (boolean) effectDefault.get("visible"));
++                    boolean showIcon = effects.getBoolean(effectKey + ".show-icon", (boolean) effectDefault.get("show-icon"));
 +                    food.getEffects().add(Pair.of(new MobEffectInstance(effect, duration, amplifier, ambient, visible, showIcon), chance));
 +                });
 +            }
