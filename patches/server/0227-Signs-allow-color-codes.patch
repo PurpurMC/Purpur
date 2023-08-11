@@ -5,7 +5,7 @@ Subject: [PATCH] Signs allow color codes
 
 
 diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-index 5b54ca77202ae90fd439ea29572e15858c0a0bab..c8c43454a936dd04d71fd82c955191f709a6c010 100644
+index 83541ef2f3c27e13ebf244b056d2f40e1c60e96a..7b962da50664abedc676e931a422e6789b0e4dbf 100644
 --- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
 +++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
 @@ -1571,6 +1571,7 @@ public class ServerPlayer extends Player {
@@ -17,32 +17,44 @@ index 5b54ca77202ae90fd439ea29572e15858c0a0bab..c8c43454a936dd04d71fd82c955191f7
          this.connection.send(new ClientboundOpenSignEditorPacket(sign.getBlockPos(), front));
      }
 diff --git a/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
-index f356196aaeb498a6d2c9ad2112329cef5a3103d6..fe25ef1d32e369409ac094aa0fb013f9506a1c9d 100644
+index 38cde466714e5663cd416b6afd5d2558e139ec09..46b599539afee09a043de993006d025a8a104ff3 100644
 --- a/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
 +++ b/src/main/java/net/minecraft/world/level/block/entity/SignBlockEntity.java
-@@ -208,11 +208,18 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
+@@ -202,16 +202,31 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
+         return this.setText((SignText) textChanger.apply(signtext), front);
+     }
+ 
++    // Purpur start
++    private Component translateColors(org.bukkit.entity.Player player, String line, Style style) {
++        if (level.purpurConfig.signAllowColors) {
++            if (player.hasPermission("purpur.sign.color")) line = line.replaceAll("(?i)&([0-9a-fr])", "\u00a7$1");
++            if (player.hasPermission("purpur.sign.style")) line = line.replaceAll("(?i)&([l-or])", "\u00a7$1");
++            if (player.hasPermission("purpur.sign.magic")) line = line.replaceAll("(?i)&([kr])", "\u00a7$1");
++
++            return io.papermc.paper.adventure.PaperAdventure.asVanilla(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(line));
++        } else {
++            return Component.literal(line).setStyle(style);
++        }
++    }
++    // Purpur end
++
+     private SignText setMessages(net.minecraft.world.entity.player.Player entityhuman, List<FilteredText> list, SignText signtext, boolean front) { // CraftBukkit
+         SignText originalText = signtext; // CraftBukkit
+         for (int i = 0; i < list.size(); ++i) {
              FilteredText filteredtext = (FilteredText) list.get(i);
              Style chatmodifier = signtext.getMessage(i, entityhuman.isTextFilteringEnabled()).getStyle();
  
--            if (entityhuman.isTextFilteringEnabled()) {
++            org.bukkit.entity.Player player =  (org.bukkit.craftbukkit.entity.CraftPlayer) entityhuman.getBukkitEntity(); // Purpur
+             if (entityhuman.isTextFilteringEnabled()) {
 -                signtext = signtext.setMessage(i, Component.literal(net.minecraft.SharedConstants.filterText(filteredtext.filteredOrEmpty())).setStyle(chatmodifier)); // Paper - filter sign text to chat only
-+            // Purpur start TODO: This is probably wrong but we'll see what happens
-+            org.bukkit.entity.Player player =  (org.bukkit.craftbukkit.entity.CraftPlayer) entityhuman.getBukkitEntity();
-+            String line = net.minecraft.SharedConstants.filterText(entityhuman.isTextFilteringEnabled() ? filteredtext.filteredOrEmpty() : filteredtext.raw());
-+            if (level.purpurConfig.signAllowColors) {
-+                if (player.hasPermission("purpur.sign.color")) line = line.replaceAll("(?i)&([0-9a-fr])", "\u00a7$1");
-+                if (player.hasPermission("purpur.sign.style")) line = line.replaceAll("(?i)&([l-or])", "\u00a7$1");
-+                if (player.hasPermission("purpur.sign.magic")) line = line.replaceAll("(?i)&([kr])", "\u00a7$1");
-+                signtext = signtext.setMessage(i, io.papermc.paper.adventure.PaperAdventure.asVanilla(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(line)).copy().setStyle(chatmodifier));
++                signtext = signtext.setMessage(i, translateColors(player, net.minecraft.SharedConstants.filterText(filteredtext.filteredOrEmpty()), chatmodifier)); // Paper - filter sign text to chat only // Purpur
              } else {
 -                signtext = signtext.setMessage(i, Component.literal(net.minecraft.SharedConstants.filterText(filteredtext.raw())).setStyle(chatmodifier), Component.literal(net.minecraft.SharedConstants.filterText(filteredtext.filteredOrEmpty())).setStyle(chatmodifier)); // Paper - filter sign text to chat only
-+                signtext = signtext.setMessage(i, io.papermc.paper.adventure.PaperAdventure.asVanilla(net.kyori.adventure.text.Component.text(line)).copy().setStyle(chatmodifier));
++                signtext = signtext.setMessage(i, translateColors(player, net.minecraft.SharedConstants.filterText(filteredtext.raw()), chatmodifier), translateColors(player, net.minecraft.SharedConstants.filterText(filteredtext.filteredOrEmpty()), chatmodifier)); // Paper - filter sign text to chat only // Purpur
              }
-+            // Purpur end
          }
  
-         // CraftBukkit start
-@@ -351,6 +358,23 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
+@@ -351,6 +366,23 @@ public class SignBlockEntity extends BlockEntity implements CommandSource { // C
          return ClientboundBlockEntityDataPacket.create(this);
      }
  
@@ -67,7 +79,7 @@ index f356196aaeb498a6d2c9ad2112329cef5a3103d6..fe25ef1d32e369409ac094aa0fb013f9
      public CompoundTag getUpdateTag() {
          return this.saveWithoutMetadata();
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 465f76f7e1474696c7f953e21efc08d3d0a936cc..bdee0132b087dd6f87e0bdbeddd04e0754135ba0 100644
+index 272bbeddc66db1dfed67478f4ee79511db30376f..15de61b4201f991e0b8c2d844ac30cc429bfb6c8 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 @@ -958,6 +958,11 @@ public class PurpurWorldConfig {
