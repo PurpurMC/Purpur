@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MelnCat <melncatuwu@gmail.com>
+Date: Sat, 24 Sep 2022 09:56:28 -0700
+Subject: [PATCH] Add item packet serialize event
+
+
+diff --git a/src/main/java/net/minecraft/network/FriendlyByteBuf.java b/src/main/java/net/minecraft/network/FriendlyByteBuf.java
+index 9938bb90bef84cf784f9a1ceb02a1a45aa8b48a1..1f4b64a5f812376c499c98cb4be62469bd0b7dbe 100644
+--- a/src/main/java/net/minecraft/network/FriendlyByteBuf.java
++++ b/src/main/java/net/minecraft/network/FriendlyByteBuf.java
+@@ -98,6 +98,8 @@ public class FriendlyByteBuf extends ByteBuf {
+     private static final int MAX_PUBLIC_KEY_LENGTH = 512;
+     private static final Gson GSON = new Gson();
+ 
++    public static boolean hasItemSerializeEvent = false; // Purpur
++
+     public FriendlyByteBuf(ByteBuf parent) {
+         this.source = parent;
+     }
+@@ -679,6 +681,17 @@ public class FriendlyByteBuf extends ByteBuf {
+             this.writeBoolean(false);
+         } else {
+             this.writeBoolean(true);
++            // Purpur start
++            if (hasItemSerializeEvent) {
++                var event = new org.purpurmc.purpur.event.packet.NetworkItemSerializeEvent(stack.asBukkitCopy());
++                event.callEvent();
++                ItemStack newStack = ItemStack.fromBukkitCopy(event.getItemStack());
++                if (org.purpurmc.purpur.PurpurConfig.fixNetworkSerializedItemsInCreative && !ItemStack.matches(stack, newStack)) {
++                    stack.save(newStack.getOrCreateTagElement("Purpur.OriginalItem"));
++                }
++                stack = newStack;
++            }
++            // Purpur end
+             Item item = stack.getItem();
+ 
+             this.writeId(BuiltInRegistries.ITEM, item);
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 5e4486c4b273b26afb82a97f914358b6a6c18229..6afdf37406d7dae04a7fec94e0c39d5136521730 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1559,6 +1559,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+         //MinecraftTimings.timeUpdateTimer.stopTiming(); // Spigot // Paper // Purpur
+ 
+         this.isIteratingOverLevels = true; // Paper
++        net.minecraft.network.FriendlyByteBuf.hasItemSerializeEvent = org.purpurmc.purpur.event.packet.NetworkItemSerializeEvent.getHandlerList().getRegisteredListeners().length > 0; // Purpur
+         Iterator iterator = this.getAllLevels().iterator(); // Paper - move down
+         while (iterator.hasNext()) {
+             ServerLevel worldserver = (ServerLevel) iterator.next();
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index b2f7ed77758a6c0a38cebf9b38b32508b6496fcf..ac70ab790f73e35fd5ec880f5a884da935d8cd7b 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -3532,6 +3532,12 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+                     }
+                 }
+             }
++            // Purpur start
++            if (org.purpurmc.purpur.PurpurConfig.fixNetworkSerializedItemsInCreative) {
++                var tag = itemstack.getTagElement("Purpur.OriginalItem");
++                if (tag != null) itemstack = ItemStack.of(tag);
++            }
++            // Purpur end
+ 
+             boolean flag1 = packet.getSlotNum() >= 1 && packet.getSlotNum() <= 45;
+             boolean flag2 = itemstack.isEmpty() || itemstack.getDamageValue() >= 0 && itemstack.getCount() <= 64 && !itemstack.isEmpty();
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index a509f6362801e70236599d0f70add59c2855bc4f..d2e30ccf010225facfe04d604a1fc98f57a4660e 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -566,4 +566,9 @@ public class PurpurConfig {
+             }
+         });
+     }
++
++    public static boolean fixNetworkSerializedItemsInCreative = false;
++    private static void fixNetworkSerializedCreativeItems() {
++        fixNetworkSerializedItemsInCreative = getBoolean("settings.fix-network-serialized-items-in-creative", fixNetworkSerializedItemsInCreative);
++    }
+ }
