@@ -1,0 +1,134 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: JustDoom <justdoomdev@gmail.com>
+Date: Fri, 5 Mar 2021 14:23:16 -0500
+Subject: [PATCH] Dont run with scissors!
+
+
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index 6c5b0d1d8fe7fae29dc1ed449e0412c9f449acf9..7ac39b9f7a0afabe4a6fde954a85f0d4f53a01df 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -1741,6 +1741,13 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+                                     this.player.resetFallDistance();
+                                 }
+ 
++                                // Purpur Start
++                                if (this.player.level().purpurConfig.dontRunWithScissors && this.player.isSprinting() && !(this.player.level().purpurConfig.ignoreScissorsInWater && this.player.isInWater()) && !(this.player.level().purpurConfig.ignoreScissorsInLava && this.player.isInLava()) && (isScissor(this.player.getItemInHand(InteractionHand.MAIN_HAND)) || isScissor(this.player.getItemInHand(InteractionHand.OFF_HAND))) && (int) (Math.random() * 10) == 0) {
++                                    this.player.hurt(this.player.damageSources().scissors(), (float) this.player.level().purpurConfig.scissorsRunningDamage);
++                                    if (!org.purpurmc.purpur.PurpurConfig.dontRunWithScissors.isBlank()) this.player.sendActionBarMessage(org.purpurmc.purpur.PurpurConfig.dontRunWithScissors);
++                                }
++                                // Purpur End
++
+                                 this.player.checkMovementStatistics(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5);
+                                 this.lastGoodX = this.player.getX();
+                                 this.lastGoodY = this.player.getY();
+@@ -1785,6 +1792,13 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+         }
+     }
+     // Paper end - optimise out extra getCubes
++
++    // Purpur start
++    public boolean isScissor(ItemStack stack) {
++        return stack.is(Items.SHEARS) && (stack.getTag() == null || stack.getTag().getInt("CustomModelData") == 0);
++    }
++    // Purpur end
++
+     private boolean isPlayerCollidingWithAnythingNew(LevelReader world, AABB box, double newX, double newY, double newZ) {
+         AABB axisalignedbb1 = this.player.getBoundingBox().move(newX - this.player.getX(), newY - this.player.getY(), newZ - this.player.getZ());
+         Iterable<VoxelShape> iterable = world.getCollisions(this.player, axisalignedbb1.deflate(9.999999747378752E-6D));
+diff --git a/src/main/java/net/minecraft/world/damagesource/CombatTracker.java b/src/main/java/net/minecraft/world/damagesource/CombatTracker.java
+index c12d7bacf2c54f268b1bc5e46250a083ca041415..c6f8ae130b75fbb0ad41f9a5917e934e33fd3043 100644
+--- a/src/main/java/net/minecraft/world/damagesource/CombatTracker.java
++++ b/src/main/java/net/minecraft/world/damagesource/CombatTracker.java
+@@ -99,6 +99,11 @@ public class CombatTracker {
+                 Component component = ComponentUtils.wrapInSquareBrackets(Component.translatable(string + ".link")).withStyle(INTENTIONAL_GAME_DESIGN_STYLE);
+                 return Component.translatable(string + ".message", this.mob.getDisplayName(), component);
+             } else {
++                // Purpur start
++                if (damageSource.isScissors) {
++                    return damageSource.getLocalizedDeathMessage(org.purpurmc.purpur.PurpurConfig.deathMsgRunWithScissors, this.mob);
++                }
++                // Purpur end
+                 return damageSource.getLocalizedDeathMessage(this.mob);
+             }
+         }
+diff --git a/src/main/java/net/minecraft/world/damagesource/DamageSource.java b/src/main/java/net/minecraft/world/damagesource/DamageSource.java
+index 14fcfd7c1d3a62833978e163f4e0d6f9b2203042..33210bc66dcc5fdf03fbf438ce8734b31c4e7975 100644
+--- a/src/main/java/net/minecraft/world/damagesource/DamageSource.java
++++ b/src/main/java/net/minecraft/world/damagesource/DamageSource.java
+@@ -54,6 +54,8 @@ public class DamageSource {
+     // CraftBukkit end
+     public @Nullable org.bukkit.block.BlockState explodedBlockState; // Paper - add exploded state
+ 
++    public boolean isScissors; // Purpur
++
+     public String toString() {
+         return "DamageSource (" + this.type().msgId() + ")";
+     }
+diff --git a/src/main/java/net/minecraft/world/damagesource/DamageSources.java b/src/main/java/net/minecraft/world/damagesource/DamageSources.java
+index 4604f8b38460e9113e966889a679d4547f24aff6..813916852774d6482791989252ecb67b945a8f84 100644
+--- a/src/main/java/net/minecraft/world/damagesource/DamageSources.java
++++ b/src/main/java/net/minecraft/world/damagesource/DamageSources.java
+@@ -267,4 +267,11 @@ public class DamageSources {
+     public DamageSource genericKill() {
+         return this.genericKill;
+     }
++    // Purpur start
++    public DamageSource scissors() {
++        DamageSource source = new DamageSource(this.damageTypes.getHolderOrThrow(DamageTypes.MAGIC));
++        source.isScissors = true;
++        return source;
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 61e3bce901bdbf111ffc06521b0e6d5369fce051..ea9d99990b718beaef4bee3ff75340656f3c76c5 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -183,6 +183,7 @@ public class PurpurConfig {
+     public static String demoCommandOutput = "<green>%s has been shown the demo screen";
+     public static String pingCommandOutput = "<green>%s's ping is %sms";
+     public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
++    public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
+     private static void messages() {
+         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
+         afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
+@@ -194,6 +195,12 @@ public class PurpurConfig {
+         demoCommandOutput = getString("settings.messages.demo-command-output", demoCommandOutput);
+         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
+         tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
++        dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
++    }
++
++    public static String deathMsgRunWithScissors = "<player> slipped and fell on their shears";
++    private static void deathMessages() {
++        deathMsgRunWithScissors = getString("settings.messages.death-message.run-with-scissors", deathMsgRunWithScissors);
+     }
+ 
+     public static String serverModName = "Purpur";
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index fd2865f5be6bffd8fcbbac35151e9dde2149ab8d..dec3823baee9264ea5257993d9b30df337e2d9bd 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -197,6 +197,10 @@ public class PurpurWorldConfig {
+     public List<Item> itemImmuneToExplosion = new ArrayList<>();
+     public List<Item> itemImmuneToFire = new ArrayList<>();
+     public List<Item> itemImmuneToLightning = new ArrayList<>();
++    public boolean dontRunWithScissors = false;
++    public boolean ignoreScissorsInWater = false;
++    public boolean ignoreScissorsInLava = false;
++    public double scissorsRunningDamage = 1D;
+     private void itemSettings() {
+         itemImmuneToCactus.clear();
+         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
+@@ -234,6 +238,10 @@ public class PurpurWorldConfig {
+             Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(key.toString()));
+             if (item != Items.AIR) itemImmuneToLightning.add(item);
+         });
++        dontRunWithScissors = getBoolean("gameplay-mechanics.item.shears.damage-if-sprinting", dontRunWithScissors);
++        ignoreScissorsInWater = getBoolean("gameplay-mechanics.item.shears.ignore-in-water", ignoreScissorsInWater);
++        ignoreScissorsInLava = getBoolean("gameplay-mechanics.item.shears.ignore-in-lava", ignoreScissorsInLava);
++        scissorsRunningDamage = getDouble("gameplay-mechanics.item.shears.sprinting-damage", scissorsRunningDamage);
+     }
+ 
+     public double minecartMaxSpeed = 0.4D;

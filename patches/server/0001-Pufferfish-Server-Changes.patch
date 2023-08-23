@@ -1520,7 +1520,7 @@ index 9f422cbeaa52b3e6a0a27af4f8ad4ddb7808483f..28af96ce4f9f1a83316b6fd9e1625c71
          }
      }
 diff --git a/src/main/java/net/minecraft/server/level/ChunkMap.java b/src/main/java/net/minecraft/server/level/ChunkMap.java
-index 469083208110d5735e1bbda7a15c55a032d0e8cc..68ac88b150ae5fa5e18958a5e2a83b00a26258ae 100644
+index 65d947df910d60f478e7a449eb161e5105e2c0c9..3770ced0b227f7eea1f04d6afd5c14331f6a1480 100644
 --- a/src/main/java/net/minecraft/server/level/ChunkMap.java
 +++ b/src/main/java/net/minecraft/server/level/ChunkMap.java
 @@ -342,7 +342,7 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
@@ -1532,7 +1532,7 @@ index 469083208110d5735e1bbda7a15c55a032d0e8cc..68ac88b150ae5fa5e18958a5e2a83b00
          // Paper start - use distance map to optimise entity tracker
          this.playerEntityTrackerTrackMaps = new com.destroystokyo.paper.util.misc.PlayerAreaMap[TRACKING_RANGE_TYPES.length];
          this.entityTrackerTrackRanges = new int[TRACKING_RANGE_TYPES.length];
-@@ -1556,8 +1556,28 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+@@ -1593,8 +1593,28 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
              return ChunkMap.this.level.getServer().getScaledTrackingDistance(initialDistance);
          }
  
@@ -1561,7 +1561,7 @@ index 469083208110d5735e1bbda7a15c55a032d0e8cc..68ac88b150ae5fa5e18958a5e2a83b00
              Iterator iterator = this.entity.getIndirectPassengers().iterator();
  
              while (iterator.hasNext()) {
-@@ -1569,6 +1589,9 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
+@@ -1606,6 +1626,9 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
                      i = j;
                  }
              }
@@ -1572,19 +1572,19 @@ index 469083208110d5735e1bbda7a15c55a032d0e8cc..68ac88b150ae5fa5e18958a5e2a83b00
              return this.scaledRange(i);
          }
 diff --git a/src/main/java/net/minecraft/server/level/ServerChunkCache.java b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
-index 488a253e218409b5f0b4a872cee0928578fa7582..6e3b2863f04419ee6914ac3fd4f12a4fe78d16b7 100644
+index acbcdc8cb1523044b1657e03a141fae6389a3686..ef6c98c7949d2feb3ec2a0b2be161978989b6771 100644
 --- a/src/main/java/net/minecraft/server/level/ServerChunkCache.java
 +++ b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
-@@ -76,6 +76,9 @@ public class ServerChunkCache extends ChunkSource {
-     final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LevelChunk> loadedChunkMap = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>(8192, 0.5f);
+@@ -77,6 +77,9 @@ public class ServerChunkCache extends ChunkSource {
  
      private final LevelChunk[] lastLoadedChunks = new LevelChunk[4 * 4];
-+    
+ 
 +    public boolean firstRunSpawnCounts = true; // Pufferfish
 +    public final java.util.concurrent.atomic.AtomicBoolean _pufferfish_spawnCountsReady = new java.util.concurrent.atomic.AtomicBoolean(false); // Pufferfish - optimize countmobs
- 
++
      private static int getChunkCacheKey(int x, int z) {
          return x & 3 | ((z & 3) << 2);
+     }
 @@ -553,6 +556,7 @@ public class ServerChunkCache extends ChunkSource {
              ProfilerFiller gameprofilerfiller = this.level.getProfiler();
  
@@ -1593,20 +1593,38 @@ index 488a253e218409b5f0b4a872cee0928578fa7582..6e3b2863f04419ee6914ac3fd4f12a4f
              int k = this.level.getGameRules().getInt(GameRules.RULE_RANDOMTICKING);
              boolean flag1 = level.ticksPerSpawnCategory.getLong(org.bukkit.entity.SpawnCategory.ANIMAL) != 0L && worlddata.getGameTime() % level.ticksPerSpawnCategory.getLong(org.bukkit.entity.SpawnCategory.ANIMAL) == 0L; // CraftBukkit
  
-@@ -562,18 +566,25 @@ public class ServerChunkCache extends ChunkSource {
+@@ -562,28 +566,35 @@ public class ServerChunkCache extends ChunkSource {
              // Paper start - per player mob spawning
              NaturalSpawner.SpawnState spawnercreature_d; // moved down
              if ((this.spawnFriendlies || this.spawnEnemies) && this.chunkMap.playerMobDistanceMap != null) { // don't count mobs when animals and monsters are disabled
 -                // re-set mob counts
 -                for (ServerPlayer player : this.level.players) {
--                    Arrays.fill(player.mobCounts, 0);
+-                    // Paper start - per player mob spawning backoff
+-                    for (int ii = 0; ii < ServerPlayer.MOBCATEGORY_TOTAL_ENUMS; ii++) {
+-                        player.mobCounts[ii] = 0;
+-
+-                        int newBackoff = player.mobBackoffCounts[ii] - 1; // TODO make configurable bleed // TODO use nonlinear algorithm?
+-                        if (newBackoff < 0) {
+-                            newBackoff = 0;
 +                // Pufferfish start - moved down when async processing
 +                if (!gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncMobSpawning) {
 +                    // re-set mob counts
 +                    for (ServerPlayer player : this.level.players) {
-+                        Arrays.fill(player.mobCounts, 0);
-+                    }
-+                    lastSpawnState = NaturalSpawner.createState(l, this.level.getAllEntities(), this::getFullChunk, null, true);
++                        // Paper start - per player mob spawning backoff
++                        for (int ii = 0; ii < ServerPlayer.MOBCATEGORY_TOTAL_ENUMS; ii++) {
++                            player.mobCounts[ii] = 0;
++
++                            int newBackoff = player.mobBackoffCounts[ii] - 1; // TODO make configurable bleed // TODO use nonlinear algorithm?
++                            if (newBackoff < 0) {
++                                newBackoff = 0;
++                            }
++                            player.mobBackoffCounts[ii] = newBackoff;
+                         }
+-                        player.mobBackoffCounts[ii] = newBackoff;
++                        // Paper end - per player mob spawning backoff
++                        lastSpawnState = NaturalSpawner.createState(l, this.level.getAllEntities(), this::getFullChunk, null, true);
+                     }
+-                    // Paper end - per player mob spawning backoff
                  }
 -                spawnercreature_d = NaturalSpawner.createState(l, this.level.getAllEntities(), this::getFullChunk, null, true);
 +                // Pufferfish end
@@ -1625,7 +1643,7 @@ index 488a253e218409b5f0b4a872cee0928578fa7582..6e3b2863f04419ee6914ac3fd4f12a4f
              gameprofilerfiller.popPush("filteringLoadedChunks");
              // Paper - moved down
              this.level.timings.chunkTicks.startTiming(); // Paper
-@@ -612,8 +623,8 @@ public class ServerChunkCache extends ChunkSource {
+@@ -622,8 +633,8 @@ public class ServerChunkCache extends ChunkSource {
  
                  if ((true || this.level.isNaturalSpawningAllowed(chunkcoordintpair)) && this.chunkMap.anyPlayerCloseEnoughForSpawning(holder, chunkcoordintpair, false)) { // Paper - optimise anyPlayerCloseEnoughForSpawning // Paper - the chunk is known ticking
                      chunk1.incrementInhabitedTime(j);
@@ -1636,11 +1654,11 @@ index 488a253e218409b5f0b4a872cee0928578fa7582..6e3b2863f04419ee6914ac3fd4f12a4f
                      }
  
                      if (true || this.level.shouldTickBlocksAt(chunkcoordintpair.toLong())) { // Paper - the chunk is known ticking
-@@ -675,6 +686,30 @@ public class ServerChunkCache extends ChunkSource {
+@@ -685,6 +696,30 @@ public class ServerChunkCache extends ChunkSource {
              }
              // Paper end - controlled flush for entity tracker packets
          }
-+    
++
 +        // Pufferfish start - optimize mob spawning
 +        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncMobSpawning) {
 +            for (ServerPlayer player : this.level.players) {
@@ -1755,10 +1773,10 @@ index 18aac3da3c88f33b1a71a5920a8daa27e9723913..eac31c3fcc9161711328588ac852fcae
              this.getRandomBlockPosition(j, 0, k, 15, blockposition);
              int normalY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, blockposition.getX() & 15, blockposition.getZ() & 15) + 1;
 diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-index dc5fda83a66afbfeb7897fc20b4742899d8aca08..1f49a53033a6f7f0e70b655531f2fbb4117f687b 100644
+index 161c40692e8d469fad4169908b9353be0f85d0d8..271de9d39dd765e4b4153670daa5cf6a4df22456 100644
 --- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
 +++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-@@ -1245,6 +1245,7 @@ public class ServerPlayer extends Player {
+@@ -1246,6 +1246,7 @@ public class ServerPlayer extends Player {
                  this.setServerLevel(worldserver);
                  this.connection.teleport(exit); // CraftBukkit - use internal teleport without event
                  this.connection.resetPosition();
@@ -1766,7 +1784,7 @@ index dc5fda83a66afbfeb7897fc20b4742899d8aca08..1f49a53033a6f7f0e70b655531f2fbb4
                  worldserver.addDuringPortalTeleport(this);
                  worldserver1.getProfiler().pop();
                  this.triggerDimensionChangeTriggers(worldserver1);
-@@ -1907,6 +1908,7 @@ public class ServerPlayer extends Player {
+@@ -1908,6 +1909,7 @@ public class ServerPlayer extends Player {
      public void moveTo(double x, double y, double z) {
          super.moveTo(x, y, z);
          this.connection.resetPosition();
@@ -1774,7 +1792,7 @@ index dc5fda83a66afbfeb7897fc20b4742899d8aca08..1f49a53033a6f7f0e70b655531f2fbb4
      }
  
      @Override
-@@ -2143,6 +2145,7 @@ public class ServerPlayer extends Player {
+@@ -2144,6 +2146,7 @@ public class ServerPlayer extends Player {
  
              this.connection.send(new ClientboundSetCameraPacket(this.camera));
              this.connection.resetPosition();
@@ -1782,7 +1800,7 @@ index dc5fda83a66afbfeb7897fc20b4742899d8aca08..1f49a53033a6f7f0e70b655531f2fbb4
          }
      }
  
-@@ -2595,6 +2598,7 @@ public class ServerPlayer extends Player {
+@@ -2596,6 +2599,7 @@ public class ServerPlayer extends Player {
      public void forceSetPositionRotation(double x, double y, double z, float yaw, float pitch) {
          this.moveTo(x, y, z, yaw, pitch);
          this.connection.resetPosition();
@@ -1791,10 +1809,10 @@ index dc5fda83a66afbfeb7897fc20b4742899d8aca08..1f49a53033a6f7f0e70b655531f2fbb4
  
      @Override
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 721243ebf0fb126cf5c0de76c6bd990807f097f4..e27dc373b8fda4a3a9a3dc6034b8aa5124ff4a6c 100644
+index 3c0651fa5a5db880202c9a3805a6455269c5f16d..776c7df81d2b71a5610fe90475f4e8044850beab 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -1221,6 +1221,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -1233,6 +1233,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
  
      @Override
      public void handleEditBook(ServerboundEditBookPacket packet) {
@@ -1802,7 +1820,7 @@ index 721243ebf0fb126cf5c0de76c6bd990807f097f4..e27dc373b8fda4a3a9a3dc6034b8aa51
          // Paper start
          if (!this.cserver.isPrimaryThread()) {
              List<String> pageList = packet.getPages();
-@@ -2408,6 +2409,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
+@@ -2420,6 +2421,7 @@ public class ServerGamePacketListenerImpl implements ServerPlayerConnection, Tic
      }
  
      private boolean updateChatOrder(Instant timestamp) {
@@ -1935,7 +1953,7 @@ index 04b1531572e8fff1e46fe1c94e7fc863841e0f66..47ddc42f2b63d9d3fae5ae6ea93d4183
      int LARGE_MAX_STACK_SIZE = 64;
      int DEFAULT_DISTANCE_LIMIT = 8;
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 2edab21bb271405f200de5a19e9c748bb14aba7d..886c01e4df3c6d301d4603e6c097fe55fdfbae75 100644
+index e8485fb900b25e911a858678a833852731cb2ace..36795968f4c296f680f79cc5a795391ae13c64e4 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
 @@ -306,7 +306,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
@@ -1947,7 +1965,7 @@ index 2edab21bb271405f200de5a19e9c748bb14aba7d..886c01e4df3c6d301d4603e6c097fe55
      private ChunkPos chunkPosition;
      private Vec3 deltaMovement;
      private float yRot;
-@@ -433,6 +433,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+@@ -434,6 +434,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
          return this.originWorld;
      }
      // Paper end
@@ -1960,7 +1978,7 @@ index 2edab21bb271405f200de5a19e9c748bb14aba7d..886c01e4df3c6d301d4603e6c097fe55
      public float getBukkitYaw() {
          return this.yRot;
      }
-@@ -507,17 +513,36 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+@@ -508,17 +514,36 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
          this.isLegacyTrackingEntity = isLegacyTrackingEntity;
      }
  
@@ -1998,7 +2016,7 @@ index 2edab21bb271405f200de5a19e9c748bb14aba7d..886c01e4df3c6d301d4603e6c097fe55
          for (Entity passenger : passengers) {
              org.spigotmc.TrackingRange.TrackingRangeType passengerType = passenger.trackingRangeType;
              int passengerRange = chunkMap.getEntityTrackerRange(passengerType.ordinal());
-@@ -526,6 +551,9 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+@@ -527,6 +552,9 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
                  range = passengerRange;
              }
          }
@@ -2008,7 +2026,7 @@ index 2edab21bb271405f200de5a19e9c748bb14aba7d..886c01e4df3c6d301d4603e6c097fe55
  
          return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this));
      }
-@@ -796,6 +824,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+@@ -798,6 +826,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
      }
  
      public void tick() {
@@ -2021,7 +2039,7 @@ index 2edab21bb271405f200de5a19e9c748bb14aba7d..886c01e4df3c6d301d4603e6c097fe55
          this.baseTick();
      }
  
-@@ -4293,16 +4327,18 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+@@ -4283,16 +4317,18 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
      }
  
      public boolean updateFluidHeightAndDoFluidPushing(TagKey<Fluid> tag, double speed) {
@@ -2047,7 +2065,7 @@ index 2edab21bb271405f200de5a19e9c748bb14aba7d..886c01e4df3c6d301d4603e6c097fe55
              double d1 = 0.0D;
              boolean flag = this.isPushedByFluid();
              boolean flag1 = false;
-@@ -4310,14 +4346,61 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+@@ -4300,14 +4336,61 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
              int k1 = 0;
              BlockPos.MutableBlockPos blockposition_mutableblockposition = new BlockPos.MutableBlockPos();
  
@@ -2115,7 +2133,7 @@ index 2edab21bb271405f200de5a19e9c748bb14aba7d..886c01e4df3c6d301d4603e6c097fe55
  
                              if (d2 >= axisalignedbb.minY) {
                                  flag1 = true;
-@@ -4339,9 +4422,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
+@@ -4329,9 +4412,12 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource {
                                  // CraftBukkit end
                              }
                          }
@@ -2608,10 +2626,10 @@ index e30d5ae3e2900f43d7cafde71b8196f26e872841..c4ddf2661bca728d504918171295e10e
          if (this.assignProfessionWhenSpawned) {
              this.assignProfessionWhenSpawned = false;
 diff --git a/src/main/java/net/minecraft/world/entity/player/Inventory.java b/src/main/java/net/minecraft/world/entity/player/Inventory.java
-index 395cecc385e4126a7534ac9aeb15cf323efab03e..089166d9e6121df3069b2b71d6b556ae37520a26 100644
+index 96d664c28738d6090f7067761c2978dd1aa0fd0e..b1c24a02b87aca7b180a6efbce177f2300db49c1 100644
 --- a/src/main/java/net/minecraft/world/entity/player/Inventory.java
 +++ b/src/main/java/net/minecraft/world/entity/player/Inventory.java
-@@ -681,6 +681,8 @@ public class Inventory implements Container, Nameable {
+@@ -687,6 +687,8 @@ public class Inventory implements Container, Nameable {
      }
  
      public boolean contains(ItemStack stack) {
@@ -2620,7 +2638,7 @@ index 395cecc385e4126a7534ac9aeb15cf323efab03e..089166d9e6121df3069b2b71d6b556ae
          Iterator iterator = this.compartments.iterator();
  
          while (iterator.hasNext()) {
-@@ -695,6 +697,18 @@ public class Inventory implements Container, Nameable {
+@@ -701,6 +703,18 @@ public class Inventory implements Container, Nameable {
                  }
              }
          }
@@ -2961,10 +2979,10 @@ index f39ab10c5b0b8d86b579a5b683491204c51db70b..d8d4a1ca2eb062af8b2de4ab44503983
      }
  
 diff --git a/src/main/java/net/minecraft/world/level/NaturalSpawner.java b/src/main/java/net/minecraft/world/level/NaturalSpawner.java
-index 089dd93d4cd4c1f72e63c4944b3b82c1e2ba732d..5d19ef5231752c6cccc73b9adfb67e53e87baf7a 100644
+index e85ddf92b4f6f044e2b5834a172f37d78e702ef3..49de1fca183b2c6a0a5399025abfc0e47f314315 100644
 --- a/src/main/java/net/minecraft/world/level/NaturalSpawner.java
 +++ b/src/main/java/net/minecraft/world/level/NaturalSpawner.java
-@@ -417,12 +417,12 @@ public final class NaturalSpawner {
+@@ -431,12 +431,12 @@ public final class NaturalSpawner {
          }
      }
  
