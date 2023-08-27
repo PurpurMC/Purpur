@@ -616,10 +616,10 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..95d1a8a5b349f7849c040026bfa3469d03d92bfd
+index 0000000000000000000000000000000000000000..3d4bb28fe686a9ad2e4c0f75f21e6289c2ea5cf9
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
-@@ -0,0 +1,295 @@
+@@ -0,0 +1,296 @@
 +package gg.pufferfish.pufferfish;
 +
 +import gg.pufferfish.pufferfish.simd.SIMDDetection;
@@ -903,6 +903,7 @@ index 0000000000000000000000000000000000000000..95d1a8a5b349f7849c040026bfa3469d
 +				"will prevent the server from performing an expensive search to attempt respawning",
 +				"the ender dragon whenever a player places an end crystal.");
 +	}
++
 +
 +    public static boolean disableMethodProfiler;
 +	public static boolean disableOutOfOrderChat;
@@ -1572,19 +1573,19 @@ index 65d947df910d60f478e7a449eb161e5105e2c0c9..3770ced0b227f7eea1f04d6afd5c1433
              return this.scaledRange(i);
          }
 diff --git a/src/main/java/net/minecraft/server/level/ServerChunkCache.java b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
-index acbcdc8cb1523044b1657e03a141fae6389a3686..ef6c98c7949d2feb3ec2a0b2be161978989b6771 100644
+index acbcdc8cb1523044b1657e03a141fae6389a3686..fe1a9c646b09d11e7fa2186afbeb70b680ad2b57 100644
 --- a/src/main/java/net/minecraft/server/level/ServerChunkCache.java
 +++ b/src/main/java/net/minecraft/server/level/ServerChunkCache.java
-@@ -77,6 +77,9 @@ public class ServerChunkCache extends ChunkSource {
+@@ -76,6 +76,9 @@ public class ServerChunkCache extends ChunkSource {
+     final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LevelChunk> loadedChunkMap = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>(8192, 0.5f);
  
      private final LevelChunk[] lastLoadedChunks = new LevelChunk[4 * 4];
- 
++    
 +    public boolean firstRunSpawnCounts = true; // Pufferfish
 +    public final java.util.concurrent.atomic.AtomicBoolean _pufferfish_spawnCountsReady = new java.util.concurrent.atomic.AtomicBoolean(false); // Pufferfish - optimize countmobs
-+
+ 
      private static int getChunkCacheKey(int x, int z) {
          return x & 3 | ((z & 3) << 2);
-     }
 @@ -553,6 +556,7 @@ public class ServerChunkCache extends ChunkSource {
              ProfilerFiller gameprofilerfiller = this.level.getProfiler();
  
@@ -1622,9 +1623,9 @@ index acbcdc8cb1523044b1657e03a141fae6389a3686..ef6c98c7949d2feb3ec2a0b2be161978
                          }
 -                        player.mobBackoffCounts[ii] = newBackoff;
 +                        // Paper end - per player mob spawning backoff
-+                        lastSpawnState = NaturalSpawner.createState(l, this.level.getAllEntities(), this::getFullChunk, null, true);
                      }
 -                    // Paper end - per player mob spawning backoff
++                    lastSpawnState = NaturalSpawner.createState(l, this.level.getAllEntities(), this::getFullChunk, null, true);
                  }
 -                spawnercreature_d = NaturalSpawner.createState(l, this.level.getAllEntities(), this::getFullChunk, null, true);
 +                // Pufferfish end
@@ -1654,15 +1655,25 @@ index acbcdc8cb1523044b1657e03a141fae6389a3686..ef6c98c7949d2feb3ec2a0b2be161978
                      }
  
                      if (true || this.level.shouldTickBlocksAt(chunkcoordintpair.toLong())) { // Paper - the chunk is known ticking
-@@ -685,6 +696,30 @@ public class ServerChunkCache extends ChunkSource {
+@@ -685,6 +696,40 @@ public class ServerChunkCache extends ChunkSource {
              }
              // Paper end - controlled flush for entity tracker packets
          }
-+
++    
 +        // Pufferfish start - optimize mob spawning
 +        if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncMobSpawning) {
 +            for (ServerPlayer player : this.level.players) {
-+                Arrays.fill(player.mobCounts, 0);
++                // Paper start - per player mob spawning backoff
++                for (int ii = 0; ii < ServerPlayer.MOBCATEGORY_TOTAL_ENUMS; ii++) {
++                    player.mobCounts[ii] = 0;
++
++                    int newBackoff = player.mobBackoffCounts[ii] - 1; // TODO make configurable bleed // TODO use nonlinear algorithm?
++                    if (newBackoff < 0) {
++                        newBackoff = 0;
++                    }
++                    player.mobBackoffCounts[ii] = newBackoff;
++                }
++                // Paper end - per player mob spawning backoff
 +            }
 +            if (firstRunSpawnCounts) {
 +                firstRunSpawnCounts = false;
@@ -1772,42 +1783,6 @@ index 18aac3da3c88f33b1a71a5920a8daa27e9723913..eac31c3fcc9161711328588ac852fcae
              // Paper start - optimise chunk ticking
              this.getRandomBlockPosition(j, 0, k, 15, blockposition);
              int normalY = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, blockposition.getX() & 15, blockposition.getZ() & 15) + 1;
-diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-index 161c40692e8d469fad4169908b9353be0f85d0d8..271de9d39dd765e4b4153670daa5cf6a4df22456 100644
---- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
-+++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-@@ -1246,6 +1246,7 @@ public class ServerPlayer extends Player {
-                 this.setServerLevel(worldserver);
-                 this.connection.teleport(exit); // CraftBukkit - use internal teleport without event
-                 this.connection.resetPosition();
-+                this.mainSupportingBlockPos = Optional.empty(); // Pufferfish - Fix paper 9372
-                 worldserver.addDuringPortalTeleport(this);
-                 worldserver1.getProfiler().pop();
-                 this.triggerDimensionChangeTriggers(worldserver1);
-@@ -1908,6 +1909,7 @@ public class ServerPlayer extends Player {
-     public void moveTo(double x, double y, double z) {
-         super.moveTo(x, y, z);
-         this.connection.resetPosition();
-+        this.mainSupportingBlockPos = Optional.empty(); // Pufferfish - Fix paper 9372
-     }
- 
-     @Override
-@@ -2144,6 +2146,7 @@ public class ServerPlayer extends Player {
- 
-             this.connection.send(new ClientboundSetCameraPacket(this.camera));
-             this.connection.resetPosition();
-+            this.mainSupportingBlockPos = Optional.empty(); // Pufferfish - Fix paper 9372
-         }
-     }
- 
-@@ -2596,6 +2599,7 @@ public class ServerPlayer extends Player {
-     public void forceSetPositionRotation(double x, double y, double z, float yaw, float pitch) {
-         this.moveTo(x, y, z, yaw, pitch);
-         this.connection.resetPosition();
-+        this.mainSupportingBlockPos = Optional.empty(); // Pufferfish - Fix paper 9372
-     }
- 
-     @Override
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 index 3c0651fa5a5db880202c9a3805a6455269c5f16d..776c7df81d2b71a5610fe90475f4e8044850beab 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
@@ -2746,7 +2721,7 @@ index 272095d7a09ab41227d741172735f66fd2798ce1..47692d6db44b58bb724c87128279bd0d
      }
  
 diff --git a/src/main/java/net/minecraft/world/item/EndCrystalItem.java b/src/main/java/net/minecraft/world/item/EndCrystalItem.java
-index ca1edc083847b47bb450b291723aca778a5912dc..dc695c518beed770e787d61bcda7e1cd28bc43eb 100644
+index 5a19875cbc603acea95193d969d2e1dc1e0bfd78..3688e9f8c6c6d1239095e3a87060ccca90386d0c 100644
 --- a/src/main/java/net/minecraft/world/item/EndCrystalItem.java
 +++ b/src/main/java/net/minecraft/world/item/EndCrystalItem.java
 @@ -55,7 +55,7 @@ public class EndCrystalItem extends Item {
@@ -2755,7 +2730,7 @@ index ca1edc083847b47bb450b291723aca778a5912dc..dc695c518beed770e787d61bcda7e1cd
  
 -                        if (enderdragonbattle != null) {
 +                        if (enderdragonbattle != null && gg.pufferfish.pufferfish.PufferfishConfig.allowEndCrystalRespawn) { // Pufferfish
-                             enderdragonbattle.tryRespawn();
+                             enderdragonbattle.tryRespawn(aboveBlockPosition); // Paper - pass placed end crystal position to pre-check proximity to portal
                          }
                      }
 diff --git a/src/main/java/net/minecraft/world/item/crafting/ShapelessRecipe.java b/src/main/java/net/minecraft/world/item/crafting/ShapelessRecipe.java
