@@ -5,131 +5,97 @@ Subject: [PATCH] lightning affects blocks
 
 
 diff --git a/src/main/java/net/minecraft/world/entity/LightningBolt.java b/src/main/java/net/minecraft/world/entity/LightningBolt.java
-index a01a8ba27534d2b0d544423bc2c48fd29d0a6d64..fe90d51a2ca4de65219e53ca9a52257e06b65192 100644
+index a01a8ba27534d2b0d544423bc2c48fd29d0a6d64..977cb69f8ada7459a9d2308ef07e445706f243f6 100644
 --- a/src/main/java/net/minecraft/world/entity/LightningBolt.java
 +++ b/src/main/java/net/minecraft/world/entity/LightningBolt.java
-@@ -83,6 +83,49 @@ public class LightningBolt extends Entity {
+@@ -83,6 +83,46 @@ public class LightningBolt extends Entity {
  
      }
  
-+    // Purpur start
-+    private void transformBlocks() {
++    private void transformSandToGlass() {
 +        BlockPos blockposition = this.getStrikePosition();
 +        BlockState iblockdata = this.level().getBlockState(blockposition);
-+        BlockPos blockposition2;
-+        BlockState iblockdata2;
 +
 +        if (iblockdata.is(Blocks.LIGHTNING_ROD)) {
-+            blockposition2 = blockposition.below();
-+            iblockdata2 = this.level().getBlockState(blockposition2);
-+        } else {
-+            iblockdata2 = iblockdata;
-+            blockposition2 = blockposition;
++            blockposition = blockposition.below();
++            iblockdata = this.level().getBlockState(blockposition);
 +        }
 +
-+        if (level().purpurConfig.lightningTurnsNearbySandIntoGlass && iblockdata2.is(Blocks.SAND)) {
-+            level().setBlock(blockposition2, Blocks.GLASS.defaultBlockState(), 2);
-+        } else if (level().purpurConfig.lightningTurnsStoneIntoObsidian && iblockdata2.is(Blocks.STONE)) {
-+            level().setBlock(blockposition2, Blocks.OBSIDIAN.defaultBlockState(), 2);
-+        } else if (level().purpurConfig.lightningTurnsWaterIntoStone && iblockdata2.is(Blocks.WATER)) {
-+            level().setBlock(blockposition2, Blocks.STONE.defaultBlockState(), 2);
++        if (iblockdata.is(Blocks.SAND)) {
++            level().setBlock(blockposition, Blocks.GLASS.defaultBlockState(), 2);
++        } else if (iblockdata.is(Blocks.STONE)) {
++            level().setBlock(blockposition, Blocks.OBSIDIAN.defaultBlockState(), 2);
++        } else if (iblockdata.is(Blocks.WATER)) {
++            level().setBlock(blockposition, Blocks.STONE.defaultBlockState(), 2);
 +        } else {
 +            return;
 +        }
 +
++        final BlockPos finalBlockposition = blockposition;
 +        org.bukkit.craftbukkit.util.BlockStateListPopulator blockList = new org.bukkit.craftbukkit.util.BlockStateListPopulator(level());
-+        net.minecraft.world.level.block.SpongeBlock.removeBlocksBreadthFirstSearch(level(), blockposition2, level().purpurConfig.lightningTurnsNearbySandIntoGlassMaxDepth, level().purpurConfig.lightningTurnsNearbySandIntoGlassMaxIterations, blockList, (blockposition1) -> {
-+            if (blockposition1.equals(blockposition)) {
++        net.minecraft.world.level.block.SpongeBlock.removeBlockBreadthFirstSearch(level(), blockposition, 3, 6, (blockposition1) -> {
++            if (blockposition1.equals(finalBlockposition)) {
 +                return true;
 +            } else {
-+                BlockState iblockdata3 = blockList.getBlockState(blockposition1);
++                BlockState iblockdata2 = blockList.getBlockState(blockposition1);
++                net.minecraft.world.level.material.FluidState fluid = blockList.getFluidState(blockposition1);
 +
-+                if (!iblockdata3.is(Blocks.SAND)) { // Purpur
++                if (!iblockdata2.is(Blocks.SAND) && !iblockdata2.is(Blocks.STONE) && !fluid.is(net.minecraft.tags.FluidTags.WATER)) { // Purpur
 +                    return false;
 +                } else {
-+                    blockList.setBlock(blockposition1, Blocks.GLASS.defaultBlockState(), 3);
++                    if (iblockdata2.is(Blocks.SAND)) {
++                        blockList.setBlock(blockposition1, Blocks.GLASS.defaultBlockState(), 3);
++                    }
 +                    return true;
 +                }
 +            }
-+        });
++        }, blockList);
 +    }
-+    // Purpur end
 +
      @Override
      public void tick() {
          super.tick();
-@@ -98,6 +141,7 @@ public class LightningBolt extends Entity {
+@@ -98,6 +138,7 @@ public class LightningBolt extends Entity {
                  }
  
                  this.powerLightningRod();
-+                if (level().purpurConfig.lightningTransformsBlocks) this.transformBlocks(); // Purpur
++                this.transformSandToGlass(); // Purpur
                  LightningBolt.clearCopperOnLightningStrike(this.level(), this.getStrikePosition(), this); // Paper - transmit LightningBolt instance to call EntityChangeBlockEvent
                  this.gameEvent(GameEvent.LIGHTNING_STRIKE);
              }
 diff --git a/src/main/java/net/minecraft/world/level/block/SpongeBlock.java b/src/main/java/net/minecraft/world/level/block/SpongeBlock.java
-index 2276fed1feb4fea59b5bd49b5e4586d49478b3cc..5dfbe20bc660dedac6cb0af799176f1735950df5 100644
+index 2276fed1feb4fea59b5bd49b5e4586d49478b3cc..a65abad0dbf08e16a8e00b3c9657687a051c1e18 100644
 --- a/src/main/java/net/minecraft/world/level/block/SpongeBlock.java
 +++ b/src/main/java/net/minecraft/world/level/block/SpongeBlock.java
-@@ -47,8 +47,12 @@ public class SpongeBlock extends Block {
+@@ -47,8 +47,11 @@ public class SpongeBlock extends Block {
      }
  
      private boolean removeWaterBreadthFirstSearch(Level world, BlockPos pos) {
 -        BlockStateListPopulator blockList = new BlockStateListPopulator(world); // CraftBukkit - Use BlockStateListPopulator
 -        BlockPos.breadthFirstTraversal(pos, world.purpurConfig.spongeAbsorptionRadius, world.purpurConfig.spongeAbsorptionArea, (blockposition1, consumer) -> { // Purpur
-+    // Purpur start
-+        return removeBlocksBreadthFirstSearch(world, pos, world.purpurConfig.spongeAbsorptionRadius, world.purpurConfig.spongeAbsorptionArea, new BlockStateListPopulator(world), null);
++        return removeBlockBreadthFirstSearch(world, pos, world.purpurConfig.spongeAbsorptionRadius, world.purpurConfig.spongeAbsorptionArea, null, new BlockStateListPopulator(world));
 +    }
-+    public static boolean removeBlocksBreadthFirstSearch(Level world, BlockPos pos, int maxDepth, int maxIterations, BlockStateListPopulator blockList, @org.jetbrains.annotations.Nullable java.util.function.Predicate<BlockPos> customCallback) {
++    public static boolean removeBlockBreadthFirstSearch(Level world, BlockPos pos, int maxDepth, int maxIterations, java.util.function.Predicate<BlockPos> callback, BlockStateListPopulator blockList) {
++        // BlockStateListPopulator blockList = new BlockStateListPopulator(world); // CraftBukkit - Use BlockStateListPopulator
 +        BlockPos.breadthFirstTraversal(pos, maxDepth, maxIterations, (blockposition1, consumer) -> { // Purpur
-+    // Purpur end
              Direction[] aenumdirection = SpongeBlock.ALL_DIRECTIONS;
              int i = aenumdirection.length;
  
-@@ -58,7 +62,7 @@ public class SpongeBlock extends Block {
+@@ -58,7 +61,7 @@ public class SpongeBlock extends Block {
                  consumer.accept(blockposition1.relative(enumdirection));
              }
  
 -        }, (blockposition1) -> {
-+        }, customCallback == null ? (blockposition1) -> { // Purpur
++        }, callback == null ? (blockposition1) -> { // Purpur
              if (blockposition1.equals(pos)) {
                  return true;
              } else {
-@@ -102,7 +106,7 @@ public class SpongeBlock extends Block {
+@@ -102,7 +105,7 @@ public class SpongeBlock extends Block {
                      return true;
                  }
              }
 -        });
-+        } : customCallback); // Purpur
++        } : callback); // Purpur
          // CraftBukkit start
          List<CraftBlockState> blocks = blockList.getList(); // Is a clone
          if (!blocks.isEmpty()) {
-diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 078102e636803f38facc049952813ff2f8b63594..eed225bc3e0568a2b0a5c3370f81d1f1235334b6 100644
---- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-+++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-@@ -145,6 +145,12 @@ public class PurpurWorldConfig {
-     public boolean rainStopsAfterSleep = true;
-     public boolean thunderStopsAfterSleep = true;
-     public int mobLastHurtByPlayerTime = 100;
-+    public boolean lightningTransformsBlocks = false;
-+    public boolean lightningTurnsNearbySandIntoGlass = true;
-+    public int lightningTurnsNearbySandIntoGlassMaxDepth = 3;
-+    public int lightningTurnsNearbySandIntoGlassMaxIterations = 6;
-+    public boolean lightningTurnsWaterIntoStone = true;
-+    public boolean lightningTurnsStoneIntoObsidian = true;
-     private void miscGameplayMechanicsSettings() {
-         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
-         mendingMultiplier = getDouble("gameplay-mechanics.mending-multiplier", mendingMultiplier);
-@@ -173,6 +179,12 @@ public class PurpurWorldConfig {
-         rainStopsAfterSleep = getBoolean("gameplay-mechanics.rain-stops-after-sleep", rainStopsAfterSleep);
-         thunderStopsAfterSleep = getBoolean("gameplay-mechanics.thunder-stops-after-sleep", thunderStopsAfterSleep);
-         mobLastHurtByPlayerTime = getInt("gameplay-mechanics.mob-last-hurt-by-player-time", mobLastHurtByPlayerTime);
-+        lightningTransformsBlocks = getBoolean("gameplay-mechanics.lightning-transforms-blocks.enabled", lightningTransformsBlocks);
-+        lightningTurnsNearbySandIntoGlass = getBoolean("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.enabled", lightningTurnsNearbySandIntoGlass);
-+        lightningTurnsNearbySandIntoGlassMaxDepth = getInt("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.max-depth", lightningTurnsNearbySandIntoGlassMaxDepth);
-+        lightningTurnsNearbySandIntoGlassMaxIterations = getInt("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.max-iteration", lightningTurnsNearbySandIntoGlassMaxIterations);
-+        lightningTurnsWaterIntoStone = getBoolean("gameplay-mechanics.lightning-transforms-blocks.water-into-stone", lightningTurnsWaterIntoStone);
-+        lightningTurnsStoneIntoObsidian = getBoolean("gameplay-mechanics.lightning-transforms-blocks.stone-into-obsidian", lightningTurnsStoneIntoObsidian);
-     }
- 
-     public int daytimeTicks = 12000;
