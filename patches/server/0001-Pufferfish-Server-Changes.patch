@@ -616,10 +616,10 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..3d4bb28fe686a9ad2e4c0f75f21e6289c2ea5cf9
+index 0000000000000000000000000000000000000000..95d1a8a5b349f7849c040026bfa3469d03d92bfd
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,295 @@
 +package gg.pufferfish.pufferfish;
 +
 +import gg.pufferfish.pufferfish.simd.SIMDDetection;
@@ -903,7 +903,6 @@ index 0000000000000000000000000000000000000000..3d4bb28fe686a9ad2e4c0f75f21e6289
 +				"will prevent the server from performing an expensive search to attempt respawning",
 +				"the ender dragon whenever a player places an end crystal.");
 +	}
-+
 +
 +    public static boolean disableMethodProfiler;
 +	public static boolean disableOutOfOrderChat;
@@ -2135,7 +2134,7 @@ index 9afc81ccb237c3655d64cdbe8a0db9a4d7791043..aa5cec6d56d7a8e80861aa4c9b4a74ca
      private String descriptionId;
      @Nullable
 diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
-index e11d7283662834047b2ff81a2fd25a4263792deb..e9a31314424d9db911cd9806741222397c3072d7 100644
+index e11d7283662834047b2ff81a2fd25a4263792deb..e07140ef2f4c5b0019550eb3100c724699e7a05c 100644
 --- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
 +++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
 @@ -142,7 +142,6 @@ import org.bukkit.event.entity.EntityTeleportEvent;
@@ -2151,11 +2150,11 @@ index e11d7283662834047b2ff81a2fd25a4263792deb..e9a31314424d9db911cd980674122239
  
              if (!this.level().isClientSide) {
 -                if (this.isInWall()) {
-+                if ((!gg.pufferfish.pufferfish.PufferfishConfig.enableSuffocationOptimization || (tickCount % 10 == 0 && couldPossiblyBeHurt(1.0F))) && this.isInWall()) { // Pufferfish - optimize suffocation
++                if (shouldCheckForSuffocation() && this.isInWall()) { // Pufferfish - optimize suffocation
                      this.hurt(this.damageSources().inWall(), 1.0F);
                  } else if (flag && !this.level().getWorldBorder().isWithinBounds(this.getBoundingBox())) {
                      double d0 = this.level().getWorldBorder().getDistanceToBorder(this) + this.level().getWorldBorder().getDamageSafeZone();
-@@ -1369,6 +1368,15 @@ public abstract class LivingEntity extends Entity implements Attackable {
+@@ -1369,6 +1368,19 @@ public abstract class LivingEntity extends Entity implements Attackable {
          return this.getHealth() <= 0.0F;
      }
  
@@ -2166,12 +2165,16 @@ index e11d7283662834047b2ff81a2fd25a4263792deb..e9a31314424d9db911cd980674122239
 +        }
 +        return true;
 +    }
++
++    public boolean shouldCheckForSuffocation() {
++        return !gg.pufferfish.pufferfish.PufferfishConfig.enableSuffocationOptimization || (tickCount % 10 == 0 && couldPossiblyBeHurt(1.0F));
++    }
 +    // Pufferfish end
 +
      @Override
      public boolean hurt(DamageSource source, float amount) {
          if (this.isInvulnerableTo(source)) {
-@@ -1965,6 +1973,20 @@ public abstract class LivingEntity extends Entity implements Attackable {
+@@ -1965,6 +1977,20 @@ public abstract class LivingEntity extends Entity implements Attackable {
          return this.lastClimbablePos;
      }
  
@@ -2192,7 +2195,7 @@ index e11d7283662834047b2ff81a2fd25a4263792deb..e9a31314424d9db911cd980674122239
      public boolean onClimbable() {
          if (this.isSpectator()) {
              return false;
-@@ -3651,7 +3673,10 @@ public abstract class LivingEntity extends Entity implements Attackable {
+@@ -3651,7 +3677,10 @@ public abstract class LivingEntity extends Entity implements Attackable {
              Vec3 vec3d1 = new Vec3(entity.getX(), entity.getEyeY(), entity.getZ());
  
              // Paper - diff on change - used in CraftLivingEntity#hasLineOfSight(Location) and CraftWorld#lineOfSightExists
@@ -2471,6 +2474,24 @@ index 247aca0b612f5079a0596350e8311c385df8ab1c..7f21d1d400c8a5615ed1a787dcb06803
          this.getBrain().tick((ServerLevel) this.level(), this);
          this.level().getProfiler().pop();
          this.level().getProfiler().push("goatActivityUpdate");
+diff --git a/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java b/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
+index 1e07febcf7a3dfb281728cc5e3e4f15dd776d7e0..c65ab566c6241dd6a44bd11a449ef0c4b2f6dc65 100644
+--- a/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
++++ b/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
+@@ -150,6 +150,13 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
+         this.bossEvent.setName(this.getDisplayName());
+     }
+ 
++    // Pufferfish start - optimize suffocation
++    @Override
++    public boolean shouldCheckForSuffocation() {
++        return true;
++    }
++    // Pufferfish end
++
+     @Override
+     protected SoundEvent getAmbientSound() {
+         return SoundEvents.WITHER_AMBIENT;
 diff --git a/src/main/java/net/minecraft/world/entity/item/ItemEntity.java b/src/main/java/net/minecraft/world/entity/item/ItemEntity.java
 index 52196431a6538872755344859a0454a0e50c3b6e..80fc7918cb294b0d88a293bd6a920441cb55c3ad 100644
 --- a/src/main/java/net/minecraft/world/entity/item/ItemEntity.java
