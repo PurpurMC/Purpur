@@ -1,0 +1,73 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Fri, 11 Oct 2019 00:17:39 -0500
+Subject: [PATCH] Alternative Keepalive Handling
+
+
+diff --git a/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
+index 566a9449cf8a10fff9266a4384cfeb9492f4666e..9bc03cd18bf30bc71f79a6c11f3f30664cf6b822 100644
+--- a/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
+@@ -51,6 +51,7 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+     private long keepAliveTime = Util.getMillis(); // Paper
+     private boolean keepAlivePending;
+     private long keepAliveChallenge;
++    private it.unimi.dsi.fastutil.longs.LongList keepAlives = new it.unimi.dsi.fastutil.longs.LongArrayList(); // Purpur
+     private int latency;
+     private volatile boolean suspendFlushingOnServerThread = false;
+     private static final long KEEPALIVE_LIMIT = Long.getLong("paper.playerconnection.keepalive", 30) * 1000; // Paper - provide property to set keepalive limit
+@@ -92,6 +93,16 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+ 
+     @Override
+     public void handleKeepAlive(ServerboundKeepAlivePacket packet) {
++        // Purpur start
++        if (org.purpurmc.purpur.PurpurConfig.useAlternateKeepAlive) {
++            long id = packet.getId();
++            if (keepAlives.size() > 0 && keepAlives.contains(id)) {
++                int ping = (int) (Util.getMillis() - id);
++                player.latency = (player.latency * 3 + ping) / 4;
++                keepAlives.clear(); // we got a valid response, lets roll with it and forget the rest
++            }
++        } else
++        // Purpur end
+         //PacketUtils.ensureRunningOnSameThread(packet, this, this.player.serverLevel()); // CraftBukkit // Paper - This shouldn't be on the main thread
+         if (this.keepAlivePending && packet.getId() == this.keepAliveChallenge) {
+             int i = (int) (Util.getMillis() - this.keepAliveTime);
+@@ -207,6 +218,21 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+         long currentTime = Util.getMillis();
+         long elapsedTime = currentTime - this.keepAliveTime;
+ 
++        // Purpur start
++        if (org.purpurmc.purpur.PurpurConfig.useAlternateKeepAlive) {
++            if (elapsedTime >= 1000L) { // 1 second
++                if (!processedDisconnect && keepAlives.size() * 1000L >= KEEPALIVE_LIMIT) {
++                    LOGGER.warn("{} was kicked due to keepalive timeout!", this.player.getScoreboardName());
++                    disconnect(Component.translatable("disconnect.timeout"), org.bukkit.event.player.PlayerKickEvent.Cause.TIMEOUT);
++                } else {
++                    keepAliveTime = currentTime; // hijack this field for 1 second intervals
++                    keepAlives.add(currentTime); // currentTime is ID
++                    send(new ClientboundKeepAlivePacket(currentTime));
++                }
++            }
++        } else
++        // Purpur end
++
+         if (this.keepAlivePending) {
+             if (!this.processedDisconnect && elapsedTime >= KEEPALIVE_LIMIT) { // check keepalive limit, don't fire if already disconnected
+                 ServerGamePacketListenerImpl.LOGGER.warn("{} was kicked due to keepalive timeout!", this.player.getScoreboardName()); // more info
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 34afed28faeb56352b48faf8078a5fb07912eb5e..ad239ba9259c5a63b40261ebc44224893496b47d 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -198,6 +198,11 @@ public class PurpurConfig {
+         laggingThreshold = getDouble("settings.lagging-threshold", laggingThreshold);
+     }
+ 
++    public static boolean useAlternateKeepAlive = false;
++    private static void useAlternateKeepAlive() {
++        useAlternateKeepAlive = getBoolean("settings.use-alternate-keepalive", useAlternateKeepAlive);
++    }
++
+     public static int barrelRows = 3;
+     public static boolean enderChestSixRows = false;
+     public static boolean enderChestPermissionRows = false;
