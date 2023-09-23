@@ -1,0 +1,107 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Sat, 10 Oct 2020 14:29:55 -0500
+Subject: [PATCH] Configurable daylight cycle
+
+
+diff --git a/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java b/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
+index 9ec6145fe04ec64bbee8ec6a837719caebdbc6f5..358d610ad020cada1bb83e393deeeaaec05a2791 100644
+--- a/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
++++ b/src/main/java/net/minecraft/network/protocol/game/ClientboundSetTimePacket.java
+@@ -5,7 +5,7 @@ import net.minecraft.network.protocol.Packet;
+ 
+ public class ClientboundSetTimePacket implements Packet<ClientGamePacketListener> {
+     private final long gameTime;
+-    private final long dayTime;
++    private long dayTime; public void setDayTime(long dayTime) { this.dayTime = dayTime; } // Purpur
+ 
+     public ClientboundSetTimePacket(long time, long timeOfDay, boolean doDaylightCycle) {
+         this.gameTime = time;
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 5c9eda3f59998a7d7cebadd1d67c316643614796..58bd3a05621a2a513efdaa81d63e6c3fff1b3b35 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1518,7 +1518,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+             long worldTime = level.getGameTime();
+             final ClientboundSetTimePacket worldPacket = new ClientboundSetTimePacket(worldTime, dayTime, doDaylight);
+             for (Player entityhuman : level.players()) {
+-                if (!(entityhuman instanceof ServerPlayer) || (tickCount + entityhuman.getId()) % 20 != 0) {
++                if (!(entityhuman instanceof ServerPlayer) || (!level.isForceTime() && (tickCount + entityhuman.getId()) % 20 != 0)) { // Purpur
+                     continue;
+                 }
+                 ServerPlayer entityplayer = (ServerPlayer) entityhuman;
+diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
+index b2360029a0fbbea6cb47a13f93cba584d4349829..3d890b71e4b5f44cd822fb0036d87bc5a6014d4e 100644
+--- a/src/main/java/net/minecraft/server/level/ServerLevel.java
++++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
+@@ -214,6 +214,8 @@ public class ServerLevel extends Level implements WorldGenLevel {
+     private final StructureManager structureManager;
+     private final StructureCheck structureCheck;
+     private final boolean tickTime;
++    private double preciseTime; // Purpur
++    private boolean forceTime; // Purpur
+     private final RandomSequences randomSequences;
+     public long lastMidTickExecuteFailure; // Paper - execute chunk tasks mid tick
+ 
+@@ -666,6 +668,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
+ 
+         this.chunkTaskScheduler = new io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler(this, io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler.workerThreads); // Paper - rewrite chunk system
+         this.entityLookup = new io.papermc.paper.chunk.system.entity.EntityLookup(this, new EntityCallbacks()); // Paper - rewrite chunk system
++        this.preciseTime = this.serverLevelData.getDayTime(); // Purpur
+     }
+ 
+     // Paper start
+@@ -827,6 +830,13 @@ public class ServerLevel extends Level implements WorldGenLevel {
+             this.serverLevelData.setGameTime(i);
+             this.serverLevelData.getScheduledEvents().tick(this.server, i);
+             if (this.levelData.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
++                // Purpur start
++                int incrementTicks = isDay() ? this.purpurConfig.daytimeTicks : this.purpurConfig.nighttimeTicks;
++                if (incrementTicks != 12000) {
++                    this.preciseTime += 12000 / (double) incrementTicks;
++                    this.setDayTime(this.preciseTime);
++                } else
++                // Purpur end
+                 this.setDayTime(this.levelData.getDayTime() + 1L);
+             }
+ 
+@@ -835,7 +845,21 @@ public class ServerLevel extends Level implements WorldGenLevel {
+ 
+     public void setDayTime(long timeOfDay) {
+         this.serverLevelData.setDayTime(timeOfDay);
++        // Purpur start
++        this.preciseTime = timeOfDay;
++        this.forceTime = false;
+     }
++    public void setDayTime(double i) {
++        this.serverLevelData.setDayTime((long) i);
++        this.forceTime = true;
++        // Purpur end
++    }
++
++    // Purpur start
++    public boolean isForceTime() {
++        return this.forceTime;
++    }
++    // Purpur end
+ 
+     public void tickCustomSpawners(boolean spawnMonsters, boolean spawnAnimals) {
+         Iterator iterator = this.customSpawners.iterator();
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 598a9f2dae899513cf10e33c8baad5991597b55c..7e8816a3bd9c60844ca0fbb8674abf6c53b4d81c 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -122,6 +122,13 @@ public class PurpurWorldConfig {
+         raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
+     }
+ 
++    public int daytimeTicks = 12000;
++    public int nighttimeTicks = 12000;
++    private void daytimeCycleSettings() {
++        daytimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.daytime", daytimeTicks);
++        nighttimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.nighttime", nighttimeTicks);
++    }
++
+     public int elytraDamagePerSecond = 1;
+     public double elytraDamageMultiplyBySpeed = 0;
+     public boolean elytraIgnoreUnbreaking = false;
