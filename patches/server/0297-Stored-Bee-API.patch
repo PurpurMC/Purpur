@@ -5,35 +5,18 @@ Subject: [PATCH] Stored Bee API
 
 
 diff --git a/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
-index 7b82842b97ce795745cf6ee6399f618c55acbbf3..82bdd430f1640e44d25af54354bba27b190fa1ba 100644
+index 7b82842b97ce795745cf6ee6399f618c55acbbf3..d6316aec8860ed3e579c1adb0b4578517ce0b885 100644
 --- a/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
 +++ b/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
-@@ -117,10 +117,15 @@ public class BeehiveBlockEntity extends BlockEntity {
-     }
- 
-     public List<Entity> releaseBees(BlockState iblockdata, BeehiveBlockEntity.BeeReleaseStatus tileentitybeehive_releasestatus, boolean force) {
-+    // Purpur start
-+        return this.releaseBees(iblockdata, this.level, tileentitybeehive_releasestatus, force);
-+    }
-+    public List<Entity> releaseBees(BlockState iblockdata, Level level, BeehiveBlockEntity.BeeReleaseStatus tileentitybeehive_releasestatus, boolean force) {
-+    // Purpur end
-         List<Entity> list = Lists.newArrayList();
- 
-         this.stored.removeIf((tileentitybeehive_hivebee) -> {
--            return BeehiveBlockEntity.releaseBee(this.level, this.worldPosition, iblockdata, tileentitybeehive_hivebee, list, tileentitybeehive_releasestatus, this.savedFlowerPos, force);
-+            return BeehiveBlockEntity.releaseBee(level, this.worldPosition, iblockdata, tileentitybeehive_hivebee, list, tileentitybeehive_releasestatus, this.savedFlowerPos, force); // Purpur
-             // CraftBukkit end
-         });
-         if (!list.isEmpty()) {
-@@ -130,6 +135,22 @@ public class BeehiveBlockEntity extends BlockEntity {
+@@ -130,6 +130,22 @@ public class BeehiveBlockEntity extends BlockEntity {
          return list;
      }
  
 +    // Purpur start
-+    public List<Entity> releaseBee(BlockState iblockdata, Level level, BeeData data, BeehiveBlockEntity.BeeReleaseStatus tileentitybeehive_releasestatus, boolean force) {
++    public List<Entity> releaseBee(BlockState iblockdata, BeeData data, BeehiveBlockEntity.BeeReleaseStatus tileentitybeehive_releasestatus, boolean force) {
 +        List<Entity> list = Lists.newArrayList();
 +
-+        BeehiveBlockEntity.releaseBee(level, this.worldPosition, iblockdata, data, list, tileentitybeehive_releasestatus, this.savedFlowerPos, force);
++        BeehiveBlockEntity.releaseBee(this.level, this.worldPosition, iblockdata, data, list, tileentitybeehive_releasestatus, this.savedFlowerPos, force);
 +
 +        if (!list.isEmpty()) {
 +            stored.remove(data);
@@ -48,7 +31,7 @@ index 7b82842b97ce795745cf6ee6399f618c55acbbf3..82bdd430f1640e44d25af54354bba27b
      public void addOccupant(Entity entity, boolean hasNectar) {
          this.addOccupantWithPresetTicks(entity, hasNectar, 0);
      }
-@@ -139,6 +160,12 @@ public class BeehiveBlockEntity extends BlockEntity {
+@@ -139,6 +155,12 @@ public class BeehiveBlockEntity extends BlockEntity {
          return this.stored.size();
      }
  
@@ -61,7 +44,7 @@ index 7b82842b97ce795745cf6ee6399f618c55acbbf3..82bdd430f1640e44d25af54354bba27b
      // Paper start - Add EntityBlockStorage clearEntities
      public void clearBees() {
          this.stored.clear();
-@@ -425,9 +452,9 @@ public class BeehiveBlockEntity extends BlockEntity {
+@@ -425,9 +447,9 @@ public class BeehiveBlockEntity extends BlockEntity {
          private BeeReleaseStatus() {}
      }
  
@@ -74,7 +57,7 @@ index 7b82842b97ce795745cf6ee6399f618c55acbbf3..82bdd430f1640e44d25af54354bba27b
          int exitTickCounter; // Paper - separate counter for checking if bee should exit to reduce exit attempts
          final int minOccupationTicks;
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
-index 2b906fccdb0a5ecddaf487ee931d05b511f84351..2bf30db1c4af5291edc19451108437a39d9a6ec8 100644
+index 2b906fccdb0a5ecddaf487ee931d05b511f84351..7011f0c22b4ede8423ed702d5adb9674aa8a315c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
 @@ -16,8 +16,15 @@ import org.bukkit.entity.Bee;
@@ -86,23 +69,14 @@ index 2b906fccdb0a5ecddaf487ee931d05b511f84351..2bf30db1c4af5291edc19451108437a3
      public CraftBeehive(World world, BeehiveBlockEntity tileEntity) {
          super(world, tileEntity);
 +        // Purpur start - load bees to be able to modify them individually
-+        for(BeehiveBlockEntity.BeeData data : getSnapshot().getStored()) {
++        for(BeehiveBlockEntity.BeeData data : tileEntity.getStored()) {
 +            storage.add(new org.purpurmc.purpur.entity.PurpurStoredBee(data, this));
 +        }
 +        // Purpur end
      }
  
      protected CraftBeehive(CraftBeehive state) {
-@@ -70,20 +77,61 @@ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> impl
-         List<Bee> bees = new ArrayList<>();
- 
-         if (isPlaced()) {
--            BeehiveBlockEntity beehive = ((BeehiveBlockEntity) this.getTileEntityFromWorld());
--            for (Entity bee : beehive.releaseBees(this.getHandle(), BeeReleaseStatus.BEE_RELEASED, true)) {
-+            // Purpur start - change which releaseBees method is called, and use beehive snapshot
-+            BeehiveBlockEntity beehive = ((BeehiveBlockEntity) this.getSnapshot());
-+            for (Entity bee : beehive.releaseBees(this.getHandle(), world.getHandle(), BeeReleaseStatus.BEE_RELEASED, true)) {
-+            // Purpur end
+@@ -75,15 +82,54 @@ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> impl
                  bees.add((Bee) bee.getBukkitEntity());
              }
          }
@@ -121,10 +95,10 @@ index 2b906fccdb0a5ecddaf487ee931d05b511f84351..2bf30db1c4af5291edc19451108437a3
 +        }
 +
 +        if(isPlaced()) {
-+            BeehiveBlockEntity beehive = this.getSnapshot();
++            BeehiveBlockEntity beehive = ((BeehiveBlockEntity) this.getTileEntityFromWorld());
 +            BeehiveBlockEntity.BeeData data = ((org.purpurmc.purpur.entity.PurpurStoredBee) entity).getHandle();
 +
-+            List<Entity> list = beehive.releaseBee(getHandle(), getWorldHandle().getMinecraftWorld(), data, BeeReleaseStatus.BEE_RELEASED, true);
++            List<Entity> list = beehive.releaseBee(getHandle(), data, BeeReleaseStatus.BEE_RELEASED, true);
 +
 +            if (list.size() == 1) {
 +                storage.remove(entity);
@@ -158,7 +132,7 @@ index 2b906fccdb0a5ecddaf487ee931d05b511f84351..2bf30db1c4af5291edc19451108437a3
      }
  
      @Override
-@@ -95,6 +143,7 @@ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> impl
+@@ -95,6 +141,7 @@ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> impl
      @Override
      public void clearEntities() {
          getSnapshot().clearBees();
