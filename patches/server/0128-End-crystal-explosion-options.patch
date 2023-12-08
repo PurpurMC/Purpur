@@ -1,0 +1,102 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ben Kerllenevich <ben@omega24.dev>
+Date: Sat, 13 Feb 2021 09:28:56 -0500
+Subject: [PATCH] End crystal explosion options
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/boss/enderdragon/EndCrystal.java b/src/main/java/net/minecraft/world/entity/boss/enderdragon/EndCrystal.java
+index ef0098e46bda8abc456f2bb5929d874c6aeb8698..564d17bc460e2a04947ff9676fbf4c8b1569659c 100644
+--- a/src/main/java/net/minecraft/world/entity/boss/enderdragon/EndCrystal.java
++++ b/src/main/java/net/minecraft/world/entity/boss/enderdragon/EndCrystal.java
+@@ -48,6 +48,22 @@ public class EndCrystal extends Entity {
+         this.setPos(x, y, z);
+     }
+ 
++    public boolean shouldExplode() {
++        return showsBottom() ? level().purpurConfig.basedEndCrystalExplode : level().purpurConfig.baselessEndCrystalExplode;
++    }
++
++    public float getExplosionPower() {
++        return (float) (showsBottom() ? level().purpurConfig.basedEndCrystalExplosionPower : level().purpurConfig.baselessEndCrystalExplosionPower);
++    }
++
++    public boolean hasExplosionFire() {
++        return showsBottom() ? level().purpurConfig.basedEndCrystalExplosionFire : level().purpurConfig.baselessEndCrystalExplosionFire;
++    }
++
++    public Level.ExplosionInteraction getExplosionEffect() {
++        return showsBottom() ? level().purpurConfig.basedEndCrystalExplosionEffect : level().purpurConfig.baselessEndCrystalExplosionEffect;
++    }
++
+     @Override
+     protected Entity.MovementEmission getMovementEmission() {
+         return Entity.MovementEmission.NONE;
+@@ -173,16 +189,18 @@ public class EndCrystal extends Entity {
+                 // CraftBukkit end
+                 this.remove(Entity.RemovalReason.KILLED);
+                 if (!source.is(DamageTypeTags.IS_EXPLOSION)) {
++                    if (shouldExplode()) {// Purpur
+                     DamageSource damagesource1 = source.getEntity() != null ? this.damageSources().explosion(this, source.getEntity()) : null;
+ 
+                     // CraftBukkit start
+-                    ExplosionPrimeEvent event = CraftEventFactory.callExplosionPrimeEvent(this, 6.0F, false);
++                    ExplosionPrimeEvent event = CraftEventFactory.callExplosionPrimeEvent(this, getExplosionPower(), hasExplosionFire()); // Purpur
+                     if (event.isCancelled()) {
+                         this.unsetRemoved();
+                         return false;
+                     }
+-                    this.level().explode(this, damagesource1, (ExplosionDamageCalculator) null, this.getX(), this.getY(), this.getZ(), event.getRadius(), event.getFire(), Level.ExplosionInteraction.BLOCK);
++                    this.level().explode(this, damagesource1, (ExplosionDamageCalculator) null, this.getX(), this.getY(), this.getZ(), event.getRadius(), event.getFire(), getExplosionEffect()); // Purpur
+                     // CraftBukkit end
++                    } else this.unsetRemoved(); // Purpur
+                 }
+ 
+                 this.onDestroyedBy(source);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index bab096e2c073510f4e91ab34c4555fad966b7141..f7ca9e256524e1b080631d7cda5ed80edeeaf73b 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -464,6 +464,43 @@ public class PurpurWorldConfig {
+         dispenserPlaceAnvils = getBoolean("blocks.dispenser.place-anvils", dispenserPlaceAnvils);
+     }
+ 
++    public boolean baselessEndCrystalExplode = true;
++    public double baselessEndCrystalExplosionPower = 6.0D;
++    public boolean baselessEndCrystalExplosionFire = false;
++    public net.minecraft.world.level.Level.ExplosionInteraction baselessEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
++    public boolean basedEndCrystalExplode = true;
++    public double basedEndCrystalExplosionPower = 6.0D;
++    public boolean basedEndCrystalExplosionFire = false;
++    public net.minecraft.world.level.Level.ExplosionInteraction basedEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
++    private void endCrystalSettings() {
++        if (PurpurConfig.version < 31) {
++            if ("DESTROY".equals(getString("blocks.end-crystal.baseless.explosion-effect", baselessEndCrystalExplosionEffect.name()))) {
++                set("blocks.end-crystal.baseless.explosion-effect", "BLOCK");
++            }
++            if ("DESTROY".equals(getString("blocks.end-crystal.base.explosion-effect", basedEndCrystalExplosionEffect.name()))) {
++                set("blocks.end-crystal.base.explosion-effect", "BLOCK");
++            }
++        }
++        baselessEndCrystalExplode = getBoolean("blocks.end-crystal.baseless.explode", baselessEndCrystalExplode);
++        baselessEndCrystalExplosionPower = getDouble("blocks.end-crystal.baseless.explosion-power", baselessEndCrystalExplosionPower);
++        baselessEndCrystalExplosionFire = getBoolean("blocks.end-crystal.baseless.explosion-fire", baselessEndCrystalExplosionFire);
++        try {
++            baselessEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.valueOf(getString("blocks.end-crystal.baseless.explosion-effect", baselessEndCrystalExplosionEffect.name()));
++        } catch (IllegalArgumentException e) {
++            log(Level.SEVERE, "Unknown value for `blocks.end-crystal.baseless.explosion-effect`! Using default of `BLOCK`");
++            baselessEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
++        }
++        basedEndCrystalExplode = getBoolean("blocks.end-crystal.base.explode", basedEndCrystalExplode);
++        basedEndCrystalExplosionPower = getDouble("blocks.end-crystal.base.explosion-power", basedEndCrystalExplosionPower);
++        basedEndCrystalExplosionFire = getBoolean("blocks.end-crystal.base.explosion-fire", basedEndCrystalExplosionFire);
++        try {
++            basedEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.valueOf(getString("blocks.end-crystal.base.explosion-effect", basedEndCrystalExplosionEffect.name()));
++        } catch (IllegalArgumentException e) {
++            log(Level.SEVERE, "Unknown value for `blocks.end-crystal.base.explosion-effect`! Using default of `BLOCK`");
++            basedEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
++        }
++    }
++
+     public boolean farmlandBypassMobGriefing = false;
+     public boolean farmlandGetsMoistFromBelow = false;
+     public boolean farmlandAlpha = false;

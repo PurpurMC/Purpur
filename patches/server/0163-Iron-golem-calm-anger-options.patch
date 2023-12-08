@@ -1,0 +1,145 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Thu, 13 May 2021 21:22:51 -0500
+Subject: [PATCH] Iron golem calm anger options
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/animal/IronGolem.java b/src/main/java/net/minecraft/world/entity/animal/IronGolem.java
+index 58539d29b8e2a8c0676cc574f64e7d61613e1451..1ffb8e1c386fc85796432281ac407a935169b186 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/IronGolem.java
++++ b/src/main/java/net/minecraft/world/entity/animal/IronGolem.java
+@@ -96,6 +96,7 @@ public class IronGolem extends AbstractGolem implements NeutralMob {
+     @Override
+     protected void registerGoals() {
+         if (level().purpurConfig.ironGolemCanSwim) this.goalSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.FloatGoal(this)); // Purpur
++        if (this.level().purpurConfig.ironGolemPoppyCalm) this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.ReceiveFlower(this)); // Purpur
+         this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur
+         this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.0D, true));
+         this.goalSelector.addGoal(2, new MoveTowardsTargetGoal(this, 0.9D, 32.0F));
+@@ -315,6 +316,7 @@ public class IronGolem extends AbstractGolem implements NeutralMob {
+                     itemstack.shrink(1);
+                 }
+ 
++                if (this.level().purpurConfig.ironGolemHealCalm && isAngry() && getHealth() == getMaxHealth()) stopBeingAngry(); // Purpur
+                 return InteractionResult.sidedSuccess(this.level().isClientSide);
+             }
+         }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 59cb375fce3f2917d86617854a18dfa55766daf4..9d03449e5d939e8dfa0ce57d89688da8bc36ee4d 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1386,6 +1386,8 @@ public class PurpurWorldConfig {
+     public boolean ironGolemCanSwim = false;
+     public double ironGolemMaxHealth = 100.0D;
+     public boolean ironGolemTakeDamageFromWater = false;
++    public boolean ironGolemPoppyCalm = false;
++    public boolean ironGolemHealCalm = false;
+     private void ironGolemSettings() {
+         ironGolemRidable = getBoolean("mobs.iron_golem.ridable", ironGolemRidable);
+         ironGolemRidableInWater = getBoolean("mobs.iron_golem.ridable-in-water", ironGolemRidableInWater);
+@@ -1398,6 +1400,8 @@ public class PurpurWorldConfig {
+         }
+         ironGolemMaxHealth = getDouble("mobs.iron_golem.attributes.max_health", ironGolemMaxHealth);
+         ironGolemTakeDamageFromWater = getBoolean("mobs.iron_golem.takes-damage-from-water", ironGolemTakeDamageFromWater);
++        ironGolemPoppyCalm = getBoolean("mobs.iron_golem.poppy-calms-anger", ironGolemPoppyCalm);
++        ironGolemHealCalm = getBoolean("mobs.iron_golem.healing-calms-anger", ironGolemHealCalm);
+     }
+ 
+     public boolean llamaRidable = false;
+diff --git a/src/main/java/org/purpurmc/purpur/entity/ai/ReceiveFlower.java b/src/main/java/org/purpurmc/purpur/entity/ai/ReceiveFlower.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9660716f4162a4441c6e1b0baddef8f5086566c5
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/entity/ai/ReceiveFlower.java
+@@ -0,0 +1,91 @@
++package org.purpurmc.purpur.entity.ai;
++
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.InteractionHand;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.entity.ai.goal.Goal;
++import net.minecraft.world.entity.animal.IronGolem;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.level.block.Blocks;
++
++import java.util.EnumSet;
++import java.util.UUID;
++
++public class ReceiveFlower extends Goal {
++    private final IronGolem irongolem;
++    private ServerPlayer target;
++    private int cooldown;
++
++    public ReceiveFlower(IronGolem entity) {
++        this.irongolem = entity;
++        setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
++    }
++
++    @Override
++    public boolean canUse() {
++        if (this.irongolem.getOfferFlowerTick() > 0) {
++            return false;
++        }
++        if (!this.irongolem.isAngry()) {
++            return false;
++        }
++        UUID uuid = this.irongolem.getPersistentAngerTarget();
++        if (uuid == null) {
++            return false;
++        }
++        Entity target = ((ServerLevel) this.irongolem.level()).getEntity(uuid);
++        if (!(target instanceof ServerPlayer player)) {
++            return false;
++        }
++        InteractionHand hand = getPoppyHand(player);
++        if (hand == null) {
++            return false;
++        }
++        removeFlower(player, hand);
++        this.target = player;
++        return true;
++    }
++
++    @Override
++    public boolean canContinueToUse() {
++        return this.cooldown > 0;
++    }
++
++    @Override
++    public void start() {
++        this.cooldown = 100;
++        this.irongolem.stopBeingAngry();
++        this.irongolem.offerFlower(true);
++    }
++
++    @Override
++    public void stop() {
++        this.irongolem.offerFlower(false);
++        this.target = null;
++    }
++
++    @Override
++    public void tick() {
++        this.irongolem.getLookControl().setLookAt(this.target, 30.0F, 30.0F);
++        --this.cooldown;
++    }
++
++    private InteractionHand getPoppyHand(ServerPlayer player) {
++        if (isPoppy(player.getMainHandItem())) {
++            return InteractionHand.MAIN_HAND;
++        }
++        if (isPoppy(player.getOffhandItem())) {
++            return InteractionHand.OFF_HAND;
++        }
++        return null;
++    }
++
++    private void removeFlower(ServerPlayer player, InteractionHand hand) {
++        player.setItemInHand(hand, ItemStack.EMPTY);
++    }
++
++    private boolean isPoppy(ItemStack item) {
++        return item.getItem() == Blocks.POPPY.asItem();
++    }
++}
