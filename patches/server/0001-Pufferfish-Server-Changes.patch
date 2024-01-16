@@ -625,10 +625,10 @@ index 0000000000000000000000000000000000000000..020368da69b9a492155f6de6297f7473
 +}
 diff --git a/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..0dd3374468e05f7a312ba5856b9cf8a4787dfa59
+index 0000000000000000000000000000000000000000..61f21c0bf6658326a15b735c22001b4028b98800
 --- /dev/null
 +++ b/src/main/java/gg/pufferfish/pufferfish/PufferfishConfig.java
-@@ -0,0 +1,293 @@
+@@ -0,0 +1,315 @@
 +package gg.pufferfish.pufferfish;
 +
 +import gg.pufferfish.pufferfish.simd.SIMDDetection;
@@ -810,6 +810,28 @@ index 0000000000000000000000000000000000000000..0dd3374468e05f7a312ba5856b9cf8a4
 +				"Servers that anticipate being a target for duping may want to consider",
 +				"disabling this option.",
 +				"This can be overridden per-player with the permission pufferfish.usebooks");
++	}
++
++	public static boolean tpsCatchup;
++	private static void tpsCatchup() {
++		tpsCatchup = getBoolean("tps-catchup", true,
++				"If this setting is true, the server will run faster after a lag spike in",
++				"an attempt to maintain 20 TPS. This option (defaults to true per",
++				"spigot/paper) can cause mobs to move fast after a lag spike.");
++	}
++
++	public static boolean enableAsyncWorldSaving;
++	public static boolean asyncWorldSavingInitialized;
++	private static void asyncWorldSaving() {
++		boolean temp = getBoolean("enable-async-world-saving", false,
++				"Save world changes asynchronously. This is disabled by default as it is not",
++				"100% confident that this will not cause world corruption issues.");
++
++		// This prevents us from changing the value during a reload.
++		if (!asyncWorldSavingInitialized) {
++			asyncWorldSavingInitialized = true;
++			enableAsyncWorldSaving = temp;
++		}
 +	}
 +	
 +	public static boolean enableSuffocationOptimization;
@@ -1489,7 +1511,7 @@ index 85a8a687b1568a56e3e646b37ef78b562c1b8a82..69971b2c59e541ac4100b84c84e2972d
              } else {
                  this.lastTimeStamp = body.timeStamp();
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 016b7628b289fb882f3ec15dd5b0cb4e0af72edc..47d81048c67653e36aae4937c8fa8fd084c12417 100644
+index 016b7628b289fb882f3ec15dd5b0cb4e0af72edc..1343649cd77a42dd502747581050b401840a6efe 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -314,6 +314,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -1501,7 +1523,20 @@ index 016b7628b289fb882f3ec15dd5b0cb4e0af72edc..47d81048c67653e36aae4937c8fa8fd0
  
      public static <S extends MinecraftServer> S spin(Function<Thread, S> serverFactory) {
          AtomicReference<S> atomicreference = new AtomicReference();
-@@ -1852,7 +1854,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1217,6 +1219,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+                 this.profiler.popPush("nextTickWait");
+                 this.mayHaveDelayedTasks = true;
+                 this.delayedTasksMaxNextTickTimeNanos = Math.max(Util.getNanos() + i, this.nextTickTimeNanos);
++                // Pufferfish start - tps catchup
++                if (!gg.pufferfish.pufferfish.PufferfishConfig.tpsCatchup) {
++                    this.nextTickTimeNanos = curTime + i;
++                    this.delayedTasksMaxNextTickTimeNanos = nextTickTimeNanos;
++                }
++                // Pufferfish end
+                 this.waitUntilNextTick();
+                 if (flag) {
+                     this.tickRateManager.endTickWork();
+@@ -1852,7 +1860,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
  
      @DontObfuscate
      public String getServerModName() {
@@ -1510,7 +1545,7 @@ index 016b7628b289fb882f3ec15dd5b0cb4e0af72edc..47d81048c67653e36aae4937c8fa8fd0
      }
  
      public SystemReport fillSystemReport(SystemReport details) {
-@@ -2439,6 +2441,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -2439,6 +2447,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      }
  
      public ProfilerFiller getProfiler() {
@@ -1718,7 +1753,7 @@ index b6e5a2fa247bdee2f681739a26630dff3fc6c51a..e385a62058204ba3b01ce594e7c180f9
                          this.wasOnGround = this.entity.onGround();
                          this.teleportDelay = 0;
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
-index a1fd04399ef61d0257d1e4a6bb627e4a1b7a7ceb..f571a4a8b56a82f17b0af3ae482c7ba7ce30a0b0 100644
+index a1fd04399ef61d0257d1e4a6bb627e4a1b7a7ceb..c80dc73d7fd7d6cf3b87d1626129273e944d6649 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
 +++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
 @@ -899,6 +899,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
@@ -1773,6 +1808,39 @@ index a1fd04399ef61d0257d1e4a6bb627e4a1b7a7ceb..f571a4a8b56a82f17b0af3ae482c7ba7
              blockposition.set(this.findLightningTargetAround(this.getBlockRandomPos(j, 0, k, 15))); // Paper
  
              if (this.isRainingAt(blockposition)) {
+@@ -1491,7 +1507,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
+ 
+         try (co.aikar.timings.Timing ignored = this.timings.worldSave.startTiming()) {
+             if (doFull) {
+-                this.saveLevelData();
++                this.saveLevelData(true); // Pufferfish
+             }
+ 
+             this.timings.worldSaveChunks.startTiming(); // Paper
+@@ -1527,7 +1543,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
+                 progressListener.progressStartNoAbort(Component.translatable("menu.savingLevel"));
+             }
+ 
+-            this.saveLevelData();
++            this.saveLevelData(!close); // Pufferfish
+             if (progressListener != null) {
+                 progressListener.progressStage(Component.translatable("menu.savingChunks"));
+             }
+@@ -1550,12 +1566,12 @@ public class ServerLevel extends Level implements WorldGenLevel {
+         // CraftBukkit end
+     }
+ 
+-    private void saveLevelData() {
++    private void saveLevelData(boolean async) { // Pufferfish
+         if (this.dragonFight != null) {
+             this.serverLevelData.setEndDragonFightData(this.dragonFight.saveData()); // CraftBukkit
+         }
+ 
+-        this.getChunkSource().getDataStorage().save();
++        this.getChunkSource().getDataStorage().save(async); // Pufferfish
+     }
+ 
+     public <T extends Entity> List<? extends T> getEntities(EntityTypeTest<Entity, T> filter, Predicate<? super T> predicate) {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 index 75a763afecd63ab1b4c020460da58c8364e950b7..f29808e52fd095eea4f869091d4aed84bb90c7d9 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
@@ -1785,6 +1853,19 @@ index 75a763afecd63ab1b4c020460da58c8364e950b7..f29808e52fd095eea4f869091d4aed84
          // Paper start
          if (!this.cserver.isPrimaryThread()) {
              List<String> pageList = packet.getPages();
+diff --git a/src/main/java/net/minecraft/util/worldupdate/WorldUpgrader.java b/src/main/java/net/minecraft/util/worldupdate/WorldUpgrader.java
+index f2a7cb6ebed7a4b4019a09af2a025f624f6fe9c9..47636aad5fa20d1c28d3520beb0729df9b30cf6c 100644
+--- a/src/main/java/net/minecraft/util/worldupdate/WorldUpgrader.java
++++ b/src/main/java/net/minecraft/util/worldupdate/WorldUpgrader.java
+@@ -224,7 +224,7 @@ public class WorldUpgrader {
+                 }
+             }
+ 
+-            this.overworldDataStorage.save();
++            this.overworldDataStorage.save(false); // Pufferfish
+             i = Util.getMillis() - i;
+             WorldUpgrader.LOGGER.info("World optimizaton finished after {} ms", i);
+             this.finished = true;
 diff --git a/src/main/java/net/minecraft/world/CompoundContainer.java b/src/main/java/net/minecraft/world/CompoundContainer.java
 index 241fec02e6869c638d3a160819b32173a081467b..6a8f9e8f5bf108674c47018def28906e2d0a729c 100644
 --- a/src/main/java/net/minecraft/world/CompoundContainer.java
@@ -2680,18 +2761,18 @@ index 27b0a79f7a7c47047216aae42944bac2a2151181..a097cfc528f709c80575f35483b68783
          autorecipestackmanager.initialize(this); // Paper - better exact choice recipes
          int i = 0;
 diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
-index 00ff7de3fe0feb166a792c61aa81a1e201d7e928..06bef6a9ed86b26f84b264a44864592ff13c87c6 100644
+index 00ff7de3fe0feb166a792c61aa81a1e201d7e928..3bf4aa21e2ad602bf9d85d3fcd4f43e0357ef221 100644
 --- a/src/main/java/net/minecraft/world/level/Level.java
 +++ b/src/main/java/net/minecraft/world/level/Level.java
-@@ -213,6 +213,8 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+@@ -212,6 +212,8 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+     // Paper end
  
      public abstract ResourceKey<LevelStem> getTypeKey();
- 
++    
 +    protected final io.papermc.paper.util.math.ThreadUnsafeRandom randomTickRandom = new io.papermc.paper.util.math.ThreadUnsafeRandom(java.util.concurrent.ThreadLocalRandom.current().nextLong()); public net.minecraft.util.RandomSource getThreadUnsafeRandom() { return this.randomTickRandom; } // Pufferfish - move thread unsafe random initialization // Pufferfish - getter
-+
+ 
      protected Level(WritableLevelData worlddatamutable, ResourceKey<Level> resourcekey, RegistryAccess iregistrycustom, Holder<DimensionType> holder, Supplier<ProfilerFiller> supplier, boolean flag, boolean flag1, long i, int j, org.bukkit.generator.ChunkGenerator gen, org.bukkit.generator.BiomeProvider biomeProvider, org.bukkit.World.Environment env, java.util.function.Function<org.spigotmc.SpigotWorldConfig, io.papermc.paper.configuration.WorldConfiguration> paperWorldConfigCreator, java.util.concurrent.Executor executor) { // Paper - create paper world config; Async-Anti-Xray: Pass executor
          this.spigotConfig = new org.spigotmc.SpigotWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName()); // Spigot
-         this.paperConfig = paperWorldConfigCreator.apply(this.spigotConfig); // Paper - create paper world config
 @@ -1318,13 +1320,13 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
          try {
              tickConsumer.accept(entity);
@@ -3148,6 +3229,57 @@ index e21f4c5aff3a8e97101f6efc1349fbecf326b5ea..c55f51e6db55f9fa66f53eef0e7a56af
  
          return flag;
      }
+diff --git a/src/main/java/net/minecraft/world/level/saveddata/SavedData.java b/src/main/java/net/minecraft/world/level/saveddata/SavedData.java
+index 697df9a9f050c0130246ce2b08a859965bddf184..6df6a6bd89979bcd728e2f5bec948437d6ff9498 100644
+--- a/src/main/java/net/minecraft/world/level/saveddata/SavedData.java
++++ b/src/main/java/net/minecraft/world/level/saveddata/SavedData.java
+@@ -29,17 +29,28 @@ public abstract class SavedData {
+         return this.dirty;
+     }
+ 
+-    public void save(File file) {
++    public void save(File file) { save(file, false); } // Pufferfish
++    public void save(File file, boolean async) { // Pufferfish
+         if (this.isDirty()) {
+             CompoundTag compoundTag = new CompoundTag();
+             compoundTag.put("data", this.save(new CompoundTag()));
+             NbtUtils.addCurrentDataVersion(compoundTag);
+ 
++            // Pufferfish start
++            Runnable writeRunnable = () -> {
+             try {
+                 NbtIo.writeCompressed(compoundTag, file.toPath());
+             } catch (IOException var4) {
+                 LOGGER.error("Could not save data {}", this, var4);
+             }
++            };
++
++            if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncWorldSaving && async) {
++                net.minecraft.Util.ioPool().execute(writeRunnable);
++            } else {
++                writeRunnable.run();
++            }
++            // Pufferfish end
+ 
+             this.setDirty(false);
+         }
+diff --git a/src/main/java/net/minecraft/world/level/storage/DimensionDataStorage.java b/src/main/java/net/minecraft/world/level/storage/DimensionDataStorage.java
+index d051e8c1db6b5c42b8df0be54d9d48ba0e7b0077..6488a61bb05b0f2af23c77bc6df7c3014042ec5e 100644
+--- a/src/main/java/net/minecraft/world/level/storage/DimensionDataStorage.java
++++ b/src/main/java/net/minecraft/world/level/storage/DimensionDataStorage.java
+@@ -118,10 +118,10 @@ public class DimensionDataStorage {
+         return bl;
+     }
+ 
+-    public void save() {
++    public void save(boolean async) { // Pufferfish
+         this.cache.forEach((id, state) -> {
+             if (state != null) {
+-                state.save(this.getDataFile(id));
++                state.save(this.getDataFile(id), async); // Pufferfish
+             }
+ 
+         });
 diff --git a/src/main/java/net/minecraft/world/level/storage/loot/LootParams.java b/src/main/java/net/minecraft/world/level/storage/loot/LootParams.java
 index e43d07ccdd36f0c9f5b8e9c74cf0d87e17eec66a..8e441f7c2b2d911a0c0111aaa231fc6adae08730 100644
 --- a/src/main/java/net/minecraft/world/level/storage/loot/LootParams.java
@@ -3315,7 +3447,7 @@ index 774556a62eb240da42e84db4502e2ed43495be17..80553face9c70c2a3d897681e7761df8
  
          if (stream != null) {
 diff --git a/src/main/java/org/spigotmc/ActivationRange.java b/src/main/java/org/spigotmc/ActivationRange.java
-index 2d31752478636bd21bbff5b430e5acb76b5d91c2..b8217bee667da63d3dd789f1a52646a8fa9fd632 100644
+index 2d31752478636bd21bbff5b430e5acb76b5d91c2..651063863b451d24ffe39f0a4d8db296e58ff585 100644
 --- a/src/main/java/org/spigotmc/ActivationRange.java
 +++ b/src/main/java/org/spigotmc/ActivationRange.java
 @@ -38,6 +38,10 @@ import co.aikar.timings.MinecraftTimings;
@@ -3375,7 +3507,7 @@ index 2d31752478636bd21bbff5b430e5acb76b5d91c2..b8217bee667da63d3dd789f1a52646a8
          {
              LivingEntity living = (LivingEntity) entity;
 -            if ( living.onClimbable() || living.jumping || living.hurtTime > 0 || living.activeEffects.size() > 0 || living.isFreezing()) // Paper
-+            if ( living.onClimableCached() || living.jumping || living.hurtTime > 0 || living.activeEffects.size() > 0 || living.isFreezing()) // Paper // Pufferfish - use cached
++            if ( living.onClimableCached() || living.jumping || living.hurtTime > 0 || living.activeEffects.size() > 0 || living.isFreezing() ) // Paper // Pufferfish - use cached
              {
                  return 1; // Paper
              }
