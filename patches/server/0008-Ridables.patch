@@ -5,7 +5,7 @@ Subject: [PATCH] Ridables
 
 
 diff --git a/src/main/java/net/minecraft/core/BlockPos.java b/src/main/java/net/minecraft/core/BlockPos.java
-index 83cab746d1d6fe25c043c8aee28c39412b90c127..ec6b58dae525c81bbb1c0e2d96fbded6f00a45b5 100644
+index c47aa87db42dea74a2e07ffe6015257fa337da23..fb672028548fbc3c026c3823024249e4e804be01 100644
 --- a/src/main/java/net/minecraft/core/BlockPos.java
 +++ b/src/main/java/net/minecraft/core/BlockPos.java
 @@ -48,6 +48,12 @@ public class BlockPos extends Vec3i {
@@ -22,22 +22,22 @@ index 83cab746d1d6fe25c043c8aee28c39412b90c127..ec6b58dae525c81bbb1c0e2d96fbded6
          super(x, y, z);
      }
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 6e8d7a22e9301704fd8d3e08e806b186f2578038..2dd32f61efa12689b08a54f30deac397ec49cef4 100644
+index de0f93e1a85754051315653f707b95753ff7dc70..41918e5fe6d55749204a9207efe305e2f1369d9c 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
 @@ -1700,6 +1700,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
              worldserver.hasPhysicsEvent =  org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper
-             net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = worldserver.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper
+             net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = worldserver.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
              worldserver.hasEntityMoveEvent =  io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper
 +            worldserver.hasRidableMoveEvent = org.purpurmc.purpur.event.entity.RidableMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Purpur
  
              this.profiler.push(() -> {
                  return worldserver + " " + worldserver.dimension().location();
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
-index 3ff4c4835029ff6010ac28f933952b56bb823452..6ae230859458b3bf7171577e34c3b6351fa842df 100644
+index f29b3dc2243138783ba1d5ec852a8e4c2400150c..dda4a2e46e085190697adc60311abc43031bbf2e 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
 +++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
-@@ -225,6 +225,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
+@@ -224,6 +224,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
      public boolean hasPhysicsEvent = true; // Paper
      public boolean hasEntityMoveEvent = false; // Paper
      private final alternate.current.wire.WireHandler wireHandler = new alternate.current.wire.WireHandler(this); // Paper - optimize redstone (Alternate Current)
@@ -46,7 +46,7 @@ index 3ff4c4835029ff6010ac28f933952b56bb823452..6ae230859458b3bf7171577e34c3b635
          final Throwable thr = new Throwable(entity + " Added to world at " + new java.util.Date());
          io.papermc.paper.util.StacktraceDeobfuscator.INSTANCE.deobfuscateThrowable(thr);
 diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-index 257675e0f3d44dec2d532161713609502b2ae868..a3b4ed70b7d7012a72d5997c04821871d029d18b 100644
+index 849b4190976722179ce4b90aa2bad1dd6cfbadc7..c0b18bf97c8da4e843e08ccd39d4ef6d43295e54 100644
 --- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
 +++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
 @@ -763,6 +763,15 @@ public class ServerPlayer extends Player {
@@ -66,10 +66,10 @@ index 257675e0f3d44dec2d532161713609502b2ae868..a3b4ed70b7d7012a72d5997c04821871
  
      public void doTick() {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index df07e24ad5e1eaf5211d307965107ec1776cfa19..748c48a5facc24abb106eded9d5f034b5c36757e 100644
+index 04b0eb391bb524dd7af14b862d89c0f2494a8206..671b5deba9eb3afddc4d0af7ce5e61c11cddd303 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -2722,6 +2722,8 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
+@@ -2724,6 +2724,8 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
  
                              ServerGamePacketListenerImpl.this.cserver.getPluginManager().callEvent(event);
  
@@ -79,10 +79,10 @@ index df07e24ad5e1eaf5211d307965107ec1776cfa19..748c48a5facc24abb106eded9d5f034b
                              if ((entity instanceof Bucketable && entity instanceof LivingEntity && origItem != null && origItem.asItem() == Items.WATER_BUCKET) && (event.isCancelled() || ServerGamePacketListenerImpl.this.player.getInventory().getSelected() == null || ServerGamePacketListenerImpl.this.player.getInventory().getSelected().getItem() != origItem)) {
                                  entity.getEntityData().resendPossiblyDesyncedEntity(player); // Paper - The entire mob gets deleted, so resend it.
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 4bcd36f4767975e87ec6ed12a3c80e834e2d497b..0bc1c009424ce4e8bc61232b5ffd40db1ae3f262 100644
+index d7e664b9b1f19eeb74b380c90d25354b3f450421..5544a0d6bb1eac588a301261dcd96701be316cc8 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
-@@ -377,7 +377,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
+@@ -379,7 +379,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
      private final Set<String> tags;
      private final double[] pistonDeltas;
      private long pistonDeltasGameTime;
@@ -91,7 +91,7 @@ index 4bcd36f4767975e87ec6ed12a3c80e834e2d497b..0bc1c009424ce4e8bc61232b5ffd40db
      private float eyeHeight;
      public boolean isInPowderSnow;
      public boolean wasInPowderSnow;
-@@ -3012,6 +3012,13 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
+@@ -3013,6 +3013,13 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
                  this.passengers = ImmutableList.copyOf(list);
              }
  
@@ -108,7 +108,7 @@ index 4bcd36f4767975e87ec6ed12a3c80e834e2d497b..0bc1c009424ce4e8bc61232b5ffd40db
 @@ -3052,6 +3059,14 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
                  return false;
              }
-             // Spigot end
+             // CraftBukkit end
 +
 +            // Purpur start
 +            if (this.rider != null && this.passengers.get(0) == this.rider) {
@@ -190,7 +190,7 @@ index 1bb8b6e91c44cd13411d96d749fa64835c75a267..75c278b67ad2b78766efd8f89c4c2ca7
      protected ParticleOptions getInkParticle() {
          return ParticleTypes.GLOW_SQUID_INK;
 diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
-index 0a9a77564d624d66e76637eef509e2f321333dc6..5e64293b7392e5a4b19a4c7303b0365d48f90115 100644
+index 9b7e786d5ae6bdeeb96df6e9c4d1b24e1e856e58..120666439f235c976ba32a02b09c239ca79cb826 100644
 --- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
 +++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
 @@ -217,9 +217,9 @@ public abstract class LivingEntity extends Entity implements Attackable {
@@ -223,7 +223,7 @@ index 0a9a77564d624d66e76637eef509e2f321333dc6..5e64293b7392e5a4b19a4c7303b0365d
  
      @Override
      protected void checkFallDamage(double heightDifference, boolean onGround, BlockState state, BlockPos landedPosition) {
-@@ -2727,7 +2728,7 @@ public abstract class LivingEntity extends Entity implements Attackable {
+@@ -2728,7 +2729,7 @@ public abstract class LivingEntity extends Entity implements Attackable {
      }
  
      protected long lastJumpTime = 0L; // Paper
@@ -232,7 +232,7 @@ index 0a9a77564d624d66e76637eef509e2f321333dc6..5e64293b7392e5a4b19a4c7303b0365d
          Vec3 vec3d = this.getDeltaMovement();
          // Paper start
          long time = System.nanoTime();
-@@ -3505,8 +3506,10 @@ public abstract class LivingEntity extends Entity implements Attackable {
+@@ -3506,8 +3507,10 @@ public abstract class LivingEntity extends Entity implements Attackable {
          this.pushEntities();
          this.level().getProfiler().pop();
          // Paper start
@@ -245,7 +245,7 @@ index 0a9a77564d624d66e76637eef509e2f321333dc6..5e64293b7392e5a4b19a4c7303b0365d
                  Location from = new Location(this.level().getWorld(), this.xo, this.yo, this.zo, this.yRotO, this.xRotO);
                  Location to = new Location (this.level().getWorld(), this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot());
                  io.papermc.paper.event.entity.EntityMoveEvent event = new io.papermc.paper.event.entity.EntityMoveEvent(this.getBukkitLivingEntity(), from, to.clone());
-@@ -3516,6 +3519,21 @@ public abstract class LivingEntity extends Entity implements Attackable {
+@@ -3517,6 +3520,21 @@ public abstract class LivingEntity extends Entity implements Attackable {
                      this.absMoveTo(event.getTo().getX(), event.getTo().getY(), event.getTo().getZ(), event.getTo().getYaw(), event.getTo().getPitch());
                  }
              }
@@ -268,7 +268,7 @@ index 0a9a77564d624d66e76637eef509e2f321333dc6..5e64293b7392e5a4b19a4c7303b0365d
          // Paper end
          if (!this.level().isClientSide && this.isSensitiveToWater() && this.isInWaterRainOrBubble()) {
 diff --git a/src/main/java/net/minecraft/world/entity/Mob.java b/src/main/java/net/minecraft/world/entity/Mob.java
-index 40fbf1bc4409c289fe9ca154ff306be52708540d..f17b7e83a04a2cd738f7d708891fec2e341f3f96 100644
+index 2f3dc569ff9cdead48aa831c96c027cc7255d609..36c49ca7632495d816fdf98e7f5ae62bbedd4e22 100644
 --- a/src/main/java/net/minecraft/world/entity/Mob.java
 +++ b/src/main/java/net/minecraft/world/entity/Mob.java
 @@ -148,8 +148,8 @@ public abstract class Mob extends LivingEntity implements Targeting {
@@ -1090,7 +1090,7 @@ index e555fd8ca61e1ce7a52ecd475cc3ea11dedcab08..e818cf94d0a7def1f0abc8519e3b8ff4
              this.setAirSupply(this.getMaxAirSupply());
          } else {
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Fox.java b/src/main/java/net/minecraft/world/entity/animal/Fox.java
-index d17c69a857f083350cc9e9ec2b5dbe0a1482c85f..86c7b7d3c340372a5c33f8a848a274240c0e8554 100644
+index 3d771b137dc29579614aa4c15d12bd456cdc608a..8e1494f0f5a50dc16efebc8ab76a41d0cd355ff2 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Fox.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Fox.java
 @@ -144,6 +144,44 @@ public class Fox extends Animal implements VariantHolder<Fox.Type> {
@@ -1251,7 +1251,7 @@ index f383928fc5b331ddf128bdcb6a23010d8fe088d3..6815d7350a82c6d32f60aa6116466ebd
                  float f1 = 1.0F + (this.random.nextFloat() - this.random.nextFloat()) * 0.2F;
  
 diff --git a/src/main/java/net/minecraft/world/entity/animal/MushroomCow.java b/src/main/java/net/minecraft/world/entity/animal/MushroomCow.java
-index a7e8b544d7b05efe95182a03cabaf1993da9d839..0e871753024ae39538ed056d27fff98e6bdf8ae0 100644
+index 7a82ba6e29fde33841c049e8520300aa66608f34..214e9b119e2a5b1039840c5d3f6d57e0aedd60ef 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/MushroomCow.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/MushroomCow.java
 @@ -63,6 +63,23 @@ public class MushroomCow extends Cow implements Shearable, VariantHolder<Mushroo
@@ -1340,7 +1340,7 @@ index 4300fab61765dd224fab084d118aae7294fc9de6..66f80ec010909648278c4e74c80d3766
          this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Turtle.class, 10, false, false, Turtle.BABY_ON_LAND_SELECTOR));
      }
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Panda.java b/src/main/java/net/minecraft/world/entity/animal/Panda.java
-index 17e42c49fe6f1696a0b0b4b2537cabfe565692e5..61af090813936bac334a487c21e9e67f80a4c413 100644
+index ead5060ae2840a0519c5bf8b4b84aa12cc41b02a..9376de7391cfdd31f3f44da9a062bf23efd43561 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Panda.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Panda.java
 @@ -114,6 +114,32 @@ public class Panda extends Animal {
@@ -1402,7 +1402,7 @@ index 17e42c49fe6f1696a0b0b4b2537cabfe565692e5..61af090813936bac334a487c21e9e67f
              this.setOnBack(false);
              return InteractionResult.sidedSuccess(this.level().isClientSide);
 @@ -654,7 +682,7 @@ public class Panda extends Animal {
-                 this.setInLove(player, breedCopy); // Paper
+                 this.setInLove(player, breedCopy); // Paper - Fix EntityBreedEvent copying
              } else {
                  if (this.level().isClientSide || this.isSitting() || this.isInWater()) {
 -                    return InteractionResult.PASS;
@@ -2265,7 +2265,7 @@ index 9158c5a507904c46a8fe2fdad9a0b6ba3a9b2460..877c1050e4c38943f6e8c3f81fa4f288
  
          }
 diff --git a/src/main/java/net/minecraft/world/entity/animal/camel/Camel.java b/src/main/java/net/minecraft/world/entity/animal/camel/Camel.java
-index 7dee2d1c4ce038f42334120f5dedb836f4e21723..02d19eaa4599951dd8a8fe594946c8a3dc5b30a9 100644
+index abd913079c00f335944c8eb590fd08bd518b1a10..a32535c8bb29afea3a3495796d71351603d162a2 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/camel/Camel.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/camel/Camel.java
 @@ -86,6 +86,13 @@ public class Camel extends AbstractHorse implements PlayerRideableJumping, Saddl
@@ -2475,7 +2475,7 @@ index ff12ba2b79cb2e7e0bfd0e3b58ff6cb9e770092b..fef3b7d193d20c4fdd50b38c6a0371f0
          this.level().getProfiler().pop();
          this.level().getProfiler().push("goatActivityUpdate");
 diff --git a/src/main/java/net/minecraft/world/entity/animal/horse/AbstractHorse.java b/src/main/java/net/minecraft/world/entity/animal/horse/AbstractHorse.java
-index 63bbb5723f587788a65cc1cdac4cea94d96f254b..a96deee06d209dfe86a66b14166671d1dc924e11 100644
+index d9539f5275c4cb63910ba79aa522d9569ad35a89..dc6cda07d2ae7beb5361e3b20eb1fd073f70ad55 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/horse/AbstractHorse.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/horse/AbstractHorse.java
 @@ -149,12 +149,22 @@ public abstract class AbstractHorse extends Animal implements ContainerListener,
@@ -2546,7 +2546,7 @@ index 5f5dc651d570989ec1294c31a14dcfede466b80a..3e50581033e88e8eddcbd85bfa890cbe
      protected void randomizeAttributes(RandomSource random) {
          this.getAttribute(Attributes.MAX_HEALTH).setBaseValue((double)generateMaxHealth(random::nextInt));
 diff --git a/src/main/java/net/minecraft/world/entity/animal/horse/Llama.java b/src/main/java/net/minecraft/world/entity/animal/horse/Llama.java
-index 9120663b63fc0e365e8edb359892b0db1ee97875..cd11879b8ad7977ca9c0c26d9bcc26ac7078a265 100644
+index 4863586b1c54192e0228342a0c36561348ebb3fb..40f2510f71608975eff411c632d6f36399130648 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/horse/Llama.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/horse/Llama.java
 @@ -78,7 +78,51 @@ public class Llama extends AbstractChestedHorse implements VariantHolder<Llama.V
@@ -2781,7 +2781,7 @@ index a6f3fba3b02b0b4d2a4e9e5205301c6f52d0188a..4eebfc27ded55e4d764d04f35d3e9c9e
      protected void defineSynchedData() {
      }
 diff --git a/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java b/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
-index e5b4aaa9e08dbafa46c92e3fce8b2ee9b0167530..b5b8a4fa5b9a016a38053326cc4ba9d665f467ee 100644
+index a59c2d1e84c522a9b86cb86491fb987f6f70dcd0..89e3c1cf179b95efe5e0e16ce703fa0b836ba4f7 100644
 --- a/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
 +++ b/src/main/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
 @@ -107,6 +107,7 @@ public class EnderDragon extends Mob implements Enemy {
@@ -2935,7 +2935,7 @@ index e5b4aaa9e08dbafa46c92e3fce8b2ee9b0167530..b5b8a4fa5b9a016a38053326cc4ba9d6
                          this.dragonFight.updateDragon(this);
                      }
 diff --git a/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java b/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
-index 2732ecac901d99ba44132faeddda194bf06e0193..926850c0b0c36c3e5601ddaeb86176b07af1cb07 100644
+index 1f7f6e5995c00725bf66723c75620ec416e24f87..f1f95b2a22797a8b16df1276d8fcc65cbebb165a 100644
 --- a/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
 +++ b/src/main/java/net/minecraft/world/entity/boss/wither/WitherBoss.java
 @@ -84,16 +84,30 @@ public class WitherBoss extends Monster implements PowerableMob, RangedAttackMob
@@ -3116,7 +3116,7 @@ index 2732ecac901d99ba44132faeddda194bf06e0193..926850c0b0c36c3e5601ddaeb86176b0
  
      @Override
 diff --git a/src/main/java/net/minecraft/world/entity/monster/AbstractSkeleton.java b/src/main/java/net/minecraft/world/entity/monster/AbstractSkeleton.java
-index b319021b22c5dceba6199ed27814b2dcf47b8d50..2dbcfd847dd5b6db587b291a8a7a6e278949c3a9 100644
+index a383c0c8b5c89ef1eef7d18edc3a09f749fdd310..d205578dbed88776c6704fec9500299ce1606152 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/AbstractSkeleton.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/AbstractSkeleton.java
 @@ -70,12 +70,14 @@ public abstract class AbstractSkeleton extends Monster implements RangedAttackMo
@@ -3446,7 +3446,7 @@ index efc1d49c5bfea7d1674b8a9de2c8b617657eda0f..37afe706c5c453003ea96e62f376f45d
          return Guardian.createAttributes().add(Attributes.MOVEMENT_SPEED, 0.30000001192092896D).add(Attributes.ATTACK_DAMAGE, 8.0D).add(Attributes.MAX_HEALTH, 80.0D);
      }
 diff --git a/src/main/java/net/minecraft/world/entity/monster/EnderMan.java b/src/main/java/net/minecraft/world/entity/monster/EnderMan.java
-index 0d51f435f18f3f9d59a3241a0b7fa1c4af841b72..21e5102761876ceafce87fc824bf8392c354341a 100644
+index ebbd0031da656c4b12debbf76a347da2865d50d1..05f2b8c9813b2cdadb2aa8de445b8506ed4c2a30 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/EnderMan.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/EnderMan.java
 @@ -98,9 +98,27 @@ public class EnderMan extends Monster implements NeutralMob {
@@ -4381,7 +4381,7 @@ index cd964e5cded6a74cb9dcf27b4134f944764062cd..5d15c491034e2bd9c136935f5b266e2d
  
              }
 diff --git a/src/main/java/net/minecraft/world/entity/monster/Spider.java b/src/main/java/net/minecraft/world/entity/monster/Spider.java
-index 9063f66b0497a3eb3893e307e685be692cc5c128..5944ded9de9fac56136b30858fbf8236f8f6f555 100644
+index 8094c133f9e934c98eee09738220bacd87a0a364..4d0ef7d73b2c4623c9df22fd971ba8c378e8f696 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/Spider.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/Spider.java
 @@ -53,14 +53,33 @@ public class Spider extends Monster {
@@ -4781,7 +4781,7 @@ index 753defa8f8b48d004a2a53b2fc322fd9c083d95e..1d5c60c08354bb64a6d671032c2e8b88
      }
  
 diff --git a/src/main/java/net/minecraft/world/entity/monster/ZombieVillager.java b/src/main/java/net/minecraft/world/entity/monster/ZombieVillager.java
-index 94396ad1a3c280787d36c6c18256d10340ace488..3396acd9d361e05b8d7696d823c36c4fda945a23 100644
+index 7de9d012e7416eaa0189b513a0972c846e93c4b6..ba391ae0f8c361fb0ffbe0b65f12a008c21e4676 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/ZombieVillager.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/ZombieVillager.java
 @@ -82,6 +82,23 @@ public class ZombieVillager extends Zombie implements VillagerDataHolder {
@@ -5007,7 +5007,7 @@ index 58a7e61e02b7d72326ed4d57ee514adb63b3873c..63e4688d8055cf4a8883477f7943bf63
  
      public static void applyDarknessAround(ServerLevel world, Vec3 pos, @Nullable Entity entity, int range) {
 diff --git a/src/main/java/net/minecraft/world/entity/npc/Villager.java b/src/main/java/net/minecraft/world/entity/npc/Villager.java
-index 6b869c05bbdb13e23ecaa2c38e0cb05bda5a083d..4ae36a344143c5aed4266dfef2920ff3d83b1b48 100644
+index 1e6d61673b0e3252129c04edcfa1d7d436e8ecbe..8102f0beb58a6055e0b21c793e913d4eae96c348 100644
 --- a/src/main/java/net/minecraft/world/entity/npc/Villager.java
 +++ b/src/main/java/net/minecraft/world/entity/npc/Villager.java
 @@ -157,6 +157,28 @@ public class Villager extends AbstractVillager implements ReputationEventHandler
@@ -5114,7 +5114,7 @@ index 833563e237462ccfc1b730b8f5fb35340d0db854..2bed7b373813660139d2322dcd6b83f3
                      this.setTradingPlayer(player);
                      this.openTradingScreen(player, this.getDisplayName(), 1);
 diff --git a/src/main/java/net/minecraft/world/entity/player/Player.java b/src/main/java/net/minecraft/world/entity/player/Player.java
-index ccc1caafb0ada52c7b99b7358253826f5390843e..47057f51e034b6695d0b294eaf461dfe6aeedb19 100644
+index 2668c3b6f752d5d8bc45f4e6e52c20cc6a36a957..19ed29dc7e4bcb9bedbb8c25174d48194132685e 100644
 --- a/src/main/java/net/minecraft/world/entity/player/Player.java
 +++ b/src/main/java/net/minecraft/world/entity/player/Player.java
 @@ -194,6 +194,19 @@ public abstract class Player extends LivingEntity {
@@ -5204,7 +5204,7 @@ index 1c3e1153d08b59d29b3613fc3b50a4780aa7a3ac..7c8b90444aa635cddf480d49a92a180a
 +    // Purpur end
  }
 diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-index 2aab68bac670dcd134d817940020214c7b0797f9..11dacda7c56c1819adc0c5a420b277c8e0db0aeb 100644
+index 55c26840957f69860816c917c16f59d02074b388..b3d8e795683ab186295902aba7d476a689ff0f3f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 +++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 @@ -591,6 +591,15 @@ public class CraftEventFactory {
@@ -6668,16 +6668,3 @@ index 0000000000000000000000000000000000000000..18a95e043cbffa65eeaaf65ff7695e5d
 +        return super.canUse() && llama.isSaddled() && llama.isControllable();
 +    }
 +}
-diff --git a/src/test/java/com/destroystokyo/paper/entity/ai/VanillaMobGoalTest.java b/src/test/java/com/destroystokyo/paper/entity/ai/VanillaMobGoalTest.java
-index 654ed436e99dd56f1fe7c1d4f38da34d95ce9349..6453b1d4182a47367e89500ed4180ce75556b47d 100644
---- a/src/test/java/com/destroystokyo/paper/entity/ai/VanillaMobGoalTest.java
-+++ b/src/test/java/com/destroystokyo/paper/entity/ai/VanillaMobGoalTest.java
-@@ -36,7 +36,7 @@ public class VanillaMobGoalTest {
-         }
- 
-         List<Class<?>> classes;
--        try (ScanResult scanResult = new ClassGraph().enableAllInfo().whitelistPackages("net.minecraft").scan()) {
-+        try (ScanResult scanResult = new ClassGraph().enableAllInfo().whitelistPackages("net.minecraft", "org.purpurmc.purpur.entity.ai").scan()) { // Purpur
-             classes = scanResult.getSubclasses(net.minecraft.world.entity.ai.goal.Goal.class.getName()).loadClasses();
-         }
- 

@@ -5,7 +5,7 @@ Subject: [PATCH] Add adjustable breeding cooldown to config
 
 
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Animal.java b/src/main/java/net/minecraft/world/entity/animal/Animal.java
-index f6e0eefe068fe1a9fe159b382cf94de488521728..0116f6057f7db02f9971698871bf893f2dee0939 100644
+index 081d1e38b7b1f286e138b0981aaa760e58761215..d94928a78d166dd3d836261b4f99fb4f533019e7 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Animal.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Animal.java
 @@ -151,7 +151,7 @@ public abstract class Animal extends AgeableMob {
@@ -14,9 +14,9 @@ index f6e0eefe068fe1a9fe159b382cf94de488521728..0116f6057f7db02f9971698871bf893f
  
 -            if (!this.level().isClientSide && i == 0 && this.canFallInLove()) {
 +            if (!this.level().isClientSide && i == 0 && this.canFallInLove() && (this.level().purpurConfig.animalBreedingCooldownSeconds <= 0 || !this.level().hasBreedingCooldown(player.getUUID(), this.getClass()))) { // Purpur
-                 final ItemStack breedCopy = itemstack.copy(); // Paper
+                 final ItemStack breedCopy = itemstack.copy(); // Paper - Fix EntityBreedEvent copying
                  this.usePlayerItem(player, hand, itemstack);
-                 this.setInLove(player, breedCopy); // Paper
+                 this.setInLove(player, breedCopy); // Paper - Fix EntityBreedEvent copying
 @@ -242,12 +242,20 @@ public abstract class Animal extends AgeableMob {
          AgeableMob entityageable = this.getBreedOffspring(world, other);
  
@@ -42,7 +42,7 @@ index f6e0eefe068fe1a9fe159b382cf94de488521728..0116f6057f7db02f9971698871bf893f
              EntityBreedEvent entityBreedEvent = org.bukkit.craftbukkit.event.CraftEventFactory.callEntityBreedEvent(entityageable, this, other, breeder, this.breedItem, experience);
              if (entityBreedEvent.isCancelled()) {
 diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
-index 93f6dc91b1ea9191941933aac42b8e4ddb1f028d..d4da05d29545a4a40f4b6489aa22813d580874c4 100644
+index 6a044ac07f69dc3e7edbc761f982479bb4aff9bd..1df81be711afc2adeb6908c86c7952580f3c8f0a 100644
 --- a/src/main/java/net/minecraft/world/level/Level.java
 +++ b/src/main/java/net/minecraft/world/level/Level.java
 @@ -197,6 +197,49 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
@@ -97,14 +97,14 @@ index 93f6dc91b1ea9191941933aac42b8e4ddb1f028d..d4da05d29545a4a40f4b6489aa22813d
      }
 @@ -220,6 +263,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
          this.spigotConfig = new org.spigotmc.SpigotWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName()); // Spigot
-         this.paperConfig = paperWorldConfigCreator.apply(this.spigotConfig); // Paper
+         this.paperConfig = paperWorldConfigCreator.apply(this.spigotConfig); // Paper - create paper world config
          this.purpurConfig = new org.purpurmc.purpur.PurpurWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) worlddatamutable).getLevelName(), env); // Purpur
 +        this.playerBreedingCooldowns = this.getNewBreedingCooldownCache(); // Purpur
          this.generator = gen;
          this.world = new CraftWorld((ServerLevel) this, gen, biomeProvider, env);
  
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 30cc6cf6911fef48454a213370e4759f6f71e357..7ebc466f72e61e11e73ab20a98f72d16cea7c077 100644
+index 6654234cae07b569ff97a51284a459335af300a4..52b9e364056b0b405779965daa634a8b0f1f82e0 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 @@ -115,6 +115,7 @@ public class PurpurWorldConfig {
