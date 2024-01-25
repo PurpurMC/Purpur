@@ -22,11 +22,11 @@ index e17fa30966dea2836fb791becd032fc7d5cc2611..dd06323731533fb9b1b25a56844a4e39
          super(x, y, z);
      }
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 3506a1ff01fab1dc7f99c219e23c3b0b9e5a5565..21a23f1c5d644a1212269d77dc598925f86e0598 100644
+index 3c2eb7eeff23cd2b93105518a5cfbfb39565b845..db9267ce8da952397398a077cc65e72dc9909719 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
-@@ -1700,6 +1700,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
-             worldserver.hasPhysicsEvent =  org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper
+@@ -1698,6 +1698,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+             worldserver.hasPhysicsEvent =  org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
              net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = worldserver.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
              worldserver.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
 +            worldserver.hasRidableMoveEvent = org.purpurmc.purpur.event.entity.RidableMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Purpur
@@ -34,19 +34,19 @@ index 3506a1ff01fab1dc7f99c219e23c3b0b9e5a5565..21a23f1c5d644a1212269d77dc598925
              this.profiler.push(() -> {
                  return worldserver + " " + worldserver.dimension().location();
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
-index e8784caa72af2bf27988c393d5f66aa79401a9bf..5a5eece4393aba0902a94f94c10172ddda53776c 100644
+index 0982d44b9dd30c13d9d879095cc9a839bbda8bdc..cdc17904cdf3d6669503e09debfbb156a80f0020 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
 +++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
 @@ -224,6 +224,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
-     public boolean hasPhysicsEvent = true; // Paper
+     public boolean hasPhysicsEvent = true; // Paper - BlockPhysicsEvent
      public boolean hasEntityMoveEvent; // Paper - Add EntityMoveEvent
      private final alternate.current.wire.WireHandler wireHandler = new alternate.current.wire.WireHandler(this); // Paper - optimize redstone (Alternate Current)
 +    public boolean hasRidableMoveEvent = false; // Purpur
  
-     @Override public LevelChunk getChunkIfLoaded(int x, int z) { // Paper - this was added in world too but keeping here for NMS ABI
+     public LevelChunk getChunkIfLoaded(int x, int z) {
          return this.chunkSource.getChunkAtIfLoadedImmediately(x, z); // Paper - Use getChunkIfLoadedImmediately
 diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-index 47b98effff238fd238da85eef6a108e3dfff98e8..936224e1884f7f7d03d51c2cce3599a78d174b80 100644
+index 6c3e5ad96ff1c33181663d89c3c227e1a96e4912..62fd29f19b93f07a87377f26d9e5b169b9d80f4f 100644
 --- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
 +++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
 @@ -763,6 +763,15 @@ public class ServerPlayer extends Player {
@@ -66,7 +66,7 @@ index 47b98effff238fd238da85eef6a108e3dfff98e8..936224e1884f7f7d03d51c2cce3599a7
  
      public void doTick() {
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 79701158989205af7b70ab5d312c1d3fa27c6cd2..4326b324ff5c815b38211fe24cb5f05b974c3200 100644
+index 7b74541d648de48579221945e4bab963882cc1f2..564ad357c3f85c3018b51e592474722f9f92bf35 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -2704,6 +2704,8 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
@@ -79,7 +79,7 @@ index 79701158989205af7b70ab5d312c1d3fa27c6cd2..4326b324ff5c815b38211fe24cb5f05b
                              if ((entity instanceof Bucketable && entity instanceof LivingEntity && origItem != null && origItem.asItem() == Items.WATER_BUCKET) && (event.isCancelled() || ServerGamePacketListenerImpl.this.player.getInventory().getSelected() == null || ServerGamePacketListenerImpl.this.player.getInventory().getSelected().getItem() != origItem)) {
                                  entity.getEntityData().resendPossiblyDesyncedEntity(player); // Paper - The entire mob gets deleted, so resend it.
 diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 4f74874821683127265da4d9b2b7cba69e475576..3bb76702a36b3ee638779b5d83093965b42341ce 100644
+index b8236e91b4bf204e728cba13c95292329f0058e9..fcc95eaaa8f9160f8a3c2391f6d23c27266c3771 100644
 --- a/src/main/java/net/minecraft/world/entity/Entity.java
 +++ b/src/main/java/net/minecraft/world/entity/Entity.java
 @@ -378,7 +378,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
@@ -91,7 +91,7 @@ index 4f74874821683127265da4d9b2b7cba69e475576..3bb76702a36b3ee638779b5d83093965
      private float eyeHeight;
      public boolean isInPowderSnow;
      public boolean wasInPowderSnow;
-@@ -3012,6 +3012,13 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
+@@ -3010,6 +3010,13 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
                  this.passengers = ImmutableList.copyOf(list);
              }
  
@@ -105,7 +105,7 @@ index 4f74874821683127265da4d9b2b7cba69e475576..3bb76702a36b3ee638779b5d83093965
              this.gameEvent(GameEvent.ENTITY_MOUNT, passenger);
          }
      }
-@@ -3051,6 +3058,14 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
+@@ -3049,6 +3056,14 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
                  return false;
              }
              // CraftBukkit end
@@ -120,7 +120,7 @@ index 4f74874821683127265da4d9b2b7cba69e475576..3bb76702a36b3ee638779b5d83093965
              if (this.passengers.size() == 1 && this.passengers.get(0) == entity) {
                  this.passengers = ImmutableList.of();
              } else {
-@@ -4992,4 +5007,44 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
+@@ -4987,4 +5002,44 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
          return ((net.minecraft.server.level.ServerChunkCache) level.getChunkSource()).isPositionTicking(this);
      }
      // Paper end - Expose entity id counter
@@ -190,7 +190,7 @@ index 1bb8b6e91c44cd13411d96d749fa64835c75a267..75c278b67ad2b78766efd8f89c4c2ca7
      protected ParticleOptions getInkParticle() {
          return ParticleTypes.GLOW_SQUID_INK;
 diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
-index 47d9d45a5244ea991bedd16ff9ef0a40128b0258..a47e0b6b1650ae88fcbdc2f12c1b00ad94f29f85 100644
+index 5641bc7f50cef7819ddaeb76a4a4f9c80f473d31..5e663a0d0c4fe1f32ac3483b86c085ec2205b3dc 100644
 --- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
 +++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
 @@ -217,9 +217,9 @@ public abstract class LivingEntity extends Entity implements Attackable {
@@ -268,7 +268,7 @@ index 47d9d45a5244ea991bedd16ff9ef0a40128b0258..a47e0b6b1650ae88fcbdc2f12c1b00ad
          // Paper end - Add EntityMoveEvent
          if (!this.level().isClientSide && this.isSensitiveToWater() && this.isInWaterRainOrBubble()) {
 diff --git a/src/main/java/net/minecraft/world/entity/Mob.java b/src/main/java/net/minecraft/world/entity/Mob.java
-index 4e5038e3cb6644e14d4b0022444386c50c827d0b..f6261b43cad2c97e08788c27d0bdc1d8a42bd4d5 100644
+index a181a298334212847166409a2121476ba5871cb2..76729680ea74eedd648eeaafbdfed4ee817b5675 100644
 --- a/src/main/java/net/minecraft/world/entity/Mob.java
 +++ b/src/main/java/net/minecraft/world/entity/Mob.java
 @@ -148,8 +148,8 @@ public abstract class Mob extends LivingEntity implements Targeting {
@@ -1912,7 +1912,7 @@ index b5d6857eaf2bed14adcb5f5e80d91b44eb8b0dcc..bc57978d89db43e97a38ea56c3541e8f
      }
  
 diff --git a/src/main/java/net/minecraft/world/entity/animal/Squid.java b/src/main/java/net/minecraft/world/entity/animal/Squid.java
-index f60c4cd0543fd5d50fa7e2c1a9e8381227adb540..7fa03dbc442942b70f374096e346d54089d8f0a0 100644
+index 4f32597c7af34d599f6658fe4962d41624e60419..0ee9d5eeabb0352d0a92fa0106b7a3a834a9c146 100644
 --- a/src/main/java/net/minecraft/world/entity/animal/Squid.java
 +++ b/src/main/java/net/minecraft/world/entity/animal/Squid.java
 @@ -48,9 +48,32 @@ public class Squid extends WaterAnimal {
@@ -4251,7 +4251,7 @@ index 92974452d8f63fde8524cfac305ee2ef5212f840..3568c4b7ecfa250bbeb1799685b487df
      protected void defineSynchedData() {
          super.defineSynchedData();
 diff --git a/src/main/java/net/minecraft/world/entity/monster/Slime.java b/src/main/java/net/minecraft/world/entity/monster/Slime.java
-index 2e59a32aa8afe45641a319b1a6c347ee944398a8..01416cef059e4b8d82a0676a0ced19a325a47ace 100644
+index 2502cb476032c6a247132ce2e427721d6c9f8ce4..23ed3890fd5a5786c1d251b926cb386b16f8b4f9 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/Slime.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/Slime.java
 @@ -61,6 +61,7 @@ public class Slime extends Mob implements Enemy {
@@ -4381,7 +4381,7 @@ index 2e59a32aa8afe45641a319b1a6c347ee944398a8..01416cef059e4b8d82a0676a0ced19a3
  
              }
 diff --git a/src/main/java/net/minecraft/world/entity/monster/Spider.java b/src/main/java/net/minecraft/world/entity/monster/Spider.java
-index 0c68ed759421d6bce4435399f1b4980510081cac..8133ff59a1dba12542c7b582381433267ca18ce5 100644
+index 7618364e5373fe17cfe45a5a4ee9ab25e591581c..dd1a6fc505ce2214903dbe703bcabe7d264fbe90 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/Spider.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/Spider.java
 @@ -53,14 +53,33 @@ public class Spider extends Monster {
@@ -4746,7 +4746,7 @@ index 11275a9ec6faa69c9f054683cb47312e443ba883..dc29e875c1e184c1c4553c127bb8c86d
          this.level().getProfiler().pop();
          this.updateActivity();
 diff --git a/src/main/java/net/minecraft/world/entity/monster/Zombie.java b/src/main/java/net/minecraft/world/entity/monster/Zombie.java
-index 3fa43be16cc8d35622c269db37875b4bd0a09405..aa6533c40b73bc72a4906f0533f13e74e58c091a 100644
+index 5c40e994007dbf46ebc12c1e6a6ca90379471b74..3be3e46408b2d43f2cbb27b516be8c466ab0ed79 100644
 --- a/src/main/java/net/minecraft/world/entity/monster/Zombie.java
 +++ b/src/main/java/net/minecraft/world/entity/monster/Zombie.java
 @@ -107,11 +107,30 @@ public class Zombie extends Monster {
@@ -5114,10 +5114,10 @@ index 1c89f20debfad9807c90a21cc336d5790294ebce..3782209c6d3408393e91ffe64976a15c
                      this.setTradingPlayer(player);
                      this.openTradingScreen(player, this.getDisplayName(), 1);
 diff --git a/src/main/java/net/minecraft/world/entity/player/Player.java b/src/main/java/net/minecraft/world/entity/player/Player.java
-index 35869e655a7488f7b5868895287b8045b03f2d63..1662bff77da2acae9661f1a083e048d5626189f7 100644
+index 44a17a8e763455e834dcf488044a0f4907ce346e..16e90cc84433a0cdabcf3fec8d9734d074b73c71 100644
 --- a/src/main/java/net/minecraft/world/entity/player/Player.java
 +++ b/src/main/java/net/minecraft/world/entity/player/Player.java
-@@ -194,6 +194,19 @@ public abstract class Player extends LivingEntity {
+@@ -192,6 +192,19 @@ public abstract class Player extends LivingEntity {
      }
      // CraftBukkit end
  
@@ -5172,7 +5172,7 @@ index 78dd3365dc4d1265fc2102f740d75a384f5df5c5..4a2331c22a022881d66bcfd4134b0ffe
      public boolean isPickable() {
          return false;
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index f16ac1d640fc97f348c244d4ea86e3278b30ae19..6f7be7d29b4654d463299c62b8a01696ca187eb2 100644
+index 8698104e3eb98e2cc5da5de87a8f538860c1d91d..39ae3335866669be54f31ee6cd10d41bc70b193c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -1227,4 +1227,27 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
