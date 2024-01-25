@@ -5,32 +5,23 @@ Subject: [PATCH] Add 5 second tps average in /tps
 
 
 diff --git a/src/main/java/com/destroystokyo/paper/gui/RAMDetails.java b/src/main/java/com/destroystokyo/paper/gui/RAMDetails.java
-index 066b9e4c4f0e7773548eda045cdd1ca8445221d2..92eaba96135ccddb7d682dab7e82cde9318a48ef 100644
+index 039a86034928a5eb7aaa2d7ca76a7bddcca346bd..308f67d0616e2d6bb135258f1fda53ccdee01430 100644
 --- a/src/main/java/com/destroystokyo/paper/gui/RAMDetails.java
 +++ b/src/main/java/com/destroystokyo/paper/gui/RAMDetails.java
-@@ -58,7 +58,7 @@ public class RAMDetails extends JList<String> {
-         GraphData data = RAMGraph.DATA.peekLast();
-         Vector<String> vector = new Vector<>();
- 
--        double[] tps = new double[] {server.tps1.getAverage(), server.tps5.getAverage(), server.tps15.getAverage()};
-+        double[] tps = new double[] {server.tps5s.getAverage(), server.tps1.getAverage(), server.tps5.getAverage(), server.tps15.getAverage()}; // Purpur
-         String[] tpsAvg = new String[tps.length];
- 
-         for ( int g = 0; g < tps.length; g++) {
-@@ -67,7 +67,7 @@ public class RAMDetails extends JList<String> {
+@@ -68,7 +68,7 @@ public class RAMDetails extends JList<String> {
          vector.add("Memory use: " + (data.getUsedMem() / 1024L / 1024L) + " mb (" + (data.getFree() * 100L / data.getMax()) + "% free)");
          vector.add("Heap: " + (data.getTotal() / 1024L / 1024L) + " / " + (data.getMax() / 1024L / 1024L) + " mb");
-         vector.add("Avg tick: " + DECIMAL_FORMAT.format(this.getAverage(server.getTickTimesNanos())) + " ms");
+         vector.add("Avg tick: " + DECIMAL_FORMAT.format((double)this.server.getAverageTickTimeNanos() / (double) TimeUtil.NANOSECONDS_PER_MILLISECOND) + " ms");
 -        vector.add("TPS from last 1m, 5m, 15m: " + String.join(", ", tpsAvg));
 +        vector.add("TPS from last 5s, 1m, 5m, 15m: " + String.join(", ", tpsAvg)); // Purpur
- 
          setListData(vector);
      }
+ 
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 830d02bfb5fc84079fc70d59919a9547e4cf2874..56e5c6ff88b6037f725020ac381d6ae473c059a4 100644
+index 73d7385c00f41075b00e68d3b44c56501c47a6a5..cc17176b4019a99e8322942a33cb66a0ea93735a 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
-@@ -303,7 +303,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -302,7 +302,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      public static final int TPS = 20;
      public static final int TICK_TIME = 1000000000 / MinecraftServer.TPS;
      private static final int SAMPLE_INTERVAL = 20; // Paper
@@ -39,7 +30,7 @@ index 830d02bfb5fc84079fc70d59919a9547e4cf2874..56e5c6ff88b6037f725020ac381d6ae4
      // Spigot end
      public final io.papermc.paper.configuration.PaperConfigurations paperConfigurations; // Paper - add paper configuration files
      public static long currentTickLong = 0L; // Paper - track current tick as a long
-@@ -1080,6 +1080,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1077,6 +1077,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      private static final long MAX_CATCHUP_BUFFER = TICK_TIME * TPS * 60L;
      private long lastTick = 0;
      private long catchupTime = 0;
@@ -47,7 +38,7 @@ index 830d02bfb5fc84079fc70d59919a9547e4cf2874..56e5c6ff88b6037f725020ac381d6ae4
      public final RollingAverage tps1 = new RollingAverage(60);
      public final RollingAverage tps5 = new RollingAverage(60 * 5);
      public final RollingAverage tps15 = new RollingAverage(60 * 15);
-@@ -1190,13 +1191,17 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1187,13 +1188,17 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                      curTime = Util.getNanos();
                      final long diff = curTime - tickSection;
                      java.math.BigDecimal currentTps = TPS_BASE.divide(new java.math.BigDecimal(diff), 30, java.math.RoundingMode.HALF_UP);
@@ -68,20 +59,33 @@ index 830d02bfb5fc84079fc70d59919a9547e4cf2874..56e5c6ff88b6037f725020ac381d6ae4
                      // Paper end
                          lagging = recentTps[0] < org.purpurmc.purpur.PurpurConfig.laggingThreshold; // Purpur
                      tickSection = curTime;
+diff --git a/src/main/java/net/minecraft/server/gui/StatsComponent.java b/src/main/java/net/minecraft/server/gui/StatsComponent.java
+index 38fe7e5014332f45e41a3d5d91c28dd0acfdc3b0..479657ddef21f0279b361117b82549f7105be416 100644
+--- a/src/main/java/net/minecraft/server/gui/StatsComponent.java
++++ b/src/main/java/net/minecraft/server/gui/StatsComponent.java
+@@ -45,7 +45,7 @@ public class StatsComponent extends JComponent {
+         }
+         this.msgs[0] = "Memory use: " + l / 1024L / 1024L + " mb (" + Runtime.getRuntime().freeMemory() * 100L / Runtime.getRuntime().maxMemory() + "% free)";
+         this.msgs[1] = "Avg tick: " + DECIMAL_FORMAT.format((double)this.server.getAverageTickTimeNanos() / (double)TimeUtil.NANOSECONDS_PER_MILLISECOND) + " ms";
+-        this.msgs[2] = "TPS from last 1m, 5m, 15m: " + String.join(", ", tpsAvg);
++        this.msgs[2] = "TPS from last 5s, 1m, 5m, 15m: " + String.join(", ", tpsAvg); // Purpur
+         // Paper end - Improve ServerGUI
+         this.values[this.vp++ & 255] = (int)(l * 100L / Runtime.getRuntime().maxMemory());
+         this.repaint();
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 958c7f58d253df363e9657f5cd3f4a35aa68e672..a675368062510a699ef18fb8064f0909930618d5 100644
+index 5c30c63c2af21b75e3b785e9f024526baa7dbaa2..555cffaf05116c7c0a3071c83221d10710be62e8 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -2972,6 +2972,7 @@ public final class CraftServer implements Server {
+@@ -3047,6 +3047,7 @@ public final class CraftServer implements Server {
      @Override
      public double[] getTPS() {
          return new double[] {
-+                net.minecraft.server.MinecraftServer.getServer().tps5s.getAverage(), // Purpur
-                 net.minecraft.server.MinecraftServer.getServer().tps1.getAverage(),
-                 net.minecraft.server.MinecraftServer.getServer().tps5.getAverage(),
-                 net.minecraft.server.MinecraftServer.getServer().tps15.getAverage()
++            net.minecraft.server.MinecraftServer.getServer().tps5s.getAverage(), // Purpur
+             net.minecraft.server.MinecraftServer.getServer().tps1.getAverage(),
+             net.minecraft.server.MinecraftServer.getServer().tps5.getAverage(),
+             net.minecraft.server.MinecraftServer.getServer().tps15.getAverage()
 diff --git a/src/main/java/org/spigotmc/TicksPerSecondCommand.java b/src/main/java/org/spigotmc/TicksPerSecondCommand.java
-index 9eb2823cc8f83bad2626fc77578b0162d9ed5782..5da1ef6d90c6a5bd047e971bcc56d786239c6fd8 100644
+index 9eb2823cc8f83bad2626fc77578b0162d9ed5782..f144a08e88f8268b84eb188a36bf470457f59958 100644
 --- a/src/main/java/org/spigotmc/TicksPerSecondCommand.java
 +++ b/src/main/java/org/spigotmc/TicksPerSecondCommand.java
 @@ -39,7 +39,7 @@ public class TicksPerSecondCommand extends Command
@@ -89,7 +93,7 @@ index 9eb2823cc8f83bad2626fc77578b0162d9ed5782..5da1ef6d90c6a5bd047e971bcc56d786
  
          net.kyori.adventure.text.TextComponent.Builder builder = net.kyori.adventure.text.Component.text();
 -        builder.append(net.kyori.adventure.text.Component.text("TPS from last 1m, 5m, 15m: ", net.kyori.adventure.text.format.NamedTextColor.GOLD));
-+        builder.append(net.kyori.adventure.text.Component.text("TPS from last 5s, 1m, 5m, 15m: ", net.kyori.adventure.text.format.NamedTextColor.GOLD));
++        builder.append(net.kyori.adventure.text.Component.text("TPS from last 5s, 1m, 5m, 15m: ", net.kyori.adventure.text.format.NamedTextColor.GOLD)); // Purpur
          builder.append(net.kyori.adventure.text.Component.join(net.kyori.adventure.text.JoinConfiguration.commas(true), tpsAvg));
          sender.sendMessage(builder.asComponent());
          if (args.length > 0 && args[0].equals("mem") && sender.hasPermission("bukkit.command.tpsmemory")) {
