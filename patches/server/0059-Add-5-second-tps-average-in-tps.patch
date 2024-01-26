@@ -18,19 +18,19 @@ index 039a86034928a5eb7aaa2d7ca76a7bddcca346bd..308f67d0616e2d6bb135258f1fda53cc
      }
  
 diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
-index 73d7385c00f41075b00e68d3b44c56501c47a6a5..cc17176b4019a99e8322942a33cb66a0ea93735a 100644
+index bfac8119c862e1dd86c1e0ee5851456d010d6012..e4ec12c28d8d3006032690cf363691f039b12312 100644
 --- a/src/main/java/net/minecraft/server/MinecraftServer.java
 +++ b/src/main/java/net/minecraft/server/MinecraftServer.java
-@@ -302,7 +302,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
-     public static final int TPS = 20;
+@@ -303,7 +303,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      public static final int TICK_TIME = 1000000000 / MinecraftServer.TPS;
-     private static final int SAMPLE_INTERVAL = 20; // Paper
+     private static final int SAMPLE_INTERVAL = 20; // Paper - improve server tick loop
+     @Deprecated(forRemoval = true) // Paper
 -    public final double[] recentTps = new double[ 3 ];
 +    public final double[] recentTps = new double[ 4 ]; // Purpur
      // Spigot end
      public final io.papermc.paper.configuration.PaperConfigurations paperConfigurations; // Paper - add paper configuration files
      public static long currentTickLong = 0L; // Paper - track current tick as a long
-@@ -1077,6 +1077,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1078,6 +1078,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
      private static final long MAX_CATCHUP_BUFFER = TICK_TIME * TPS * 60L;
      private long lastTick = 0;
      private long catchupTime = 0;
@@ -38,27 +38,28 @@ index 73d7385c00f41075b00e68d3b44c56501c47a6a5..cc17176b4019a99e8322942a33cb66a0
      public final RollingAverage tps1 = new RollingAverage(60);
      public final RollingAverage tps5 = new RollingAverage(60 * 5);
      public final RollingAverage tps15 = new RollingAverage(60 * 15);
-@@ -1187,13 +1188,17 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
-                     curTime = Util.getNanos();
-                     final long diff = curTime - tickSection;
-                     java.math.BigDecimal currentTps = TPS_BASE.divide(new java.math.BigDecimal(diff), 30, java.math.RoundingMode.HALF_UP);
-+                        tps5s.add(currentTps, diff); // Purpur
+@@ -1190,14 +1191,18 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+                 if (++MinecraftServer.currentTick % MinecraftServer.SAMPLE_INTERVAL == 0) {
+                     final long diff = currentTime - tickSection;
+                     final java.math.BigDecimal currentTps = TPS_BASE.divide(new java.math.BigDecimal(diff), 30, java.math.RoundingMode.HALF_UP);
++                    tps5s.add(currentTps, diff); // Purpur
                      tps1.add(currentTps, diff);
                      tps5.add(currentTps, diff);
                      tps15.add(currentTps, diff);
+ 
                      // Backwards compat with bad plugins
 -                    this.recentTps[0] = tps1.getAverage();
 -                    this.recentTps[1] = tps5.getAverage();
 -                    this.recentTps[2] = tps15.getAverage();
-+                        // Purpur start
-+                        this.recentTps[0] = tps5s.getAverage();
-+                        this.recentTps[1] = tps1.getAverage();
-+                        this.recentTps[2] = tps5.getAverage();
-+                        this.recentTps[3] = tps15.getAverage();
-+                        // Purpur end
-                     // Paper end
-                         lagging = recentTps[0] < org.purpurmc.purpur.PurpurConfig.laggingThreshold; // Purpur
-                     tickSection = curTime;
++                    // Purpur start
++                    this.recentTps[0] = tps5s.getAverage();
++                    this.recentTps[1] = tps1.getAverage();
++                    this.recentTps[2] = tps5.getAverage();
++                    this.recentTps[3] = tps15.getAverage();
++                    // Purpur end
+                     lagging = recentTps[0] < org.purpurmc.purpur.PurpurConfig.laggingThreshold; // Purpur
+                     tickSection = currentTime;
+                 }
 diff --git a/src/main/java/net/minecraft/server/gui/StatsComponent.java b/src/main/java/net/minecraft/server/gui/StatsComponent.java
 index 38fe7e5014332f45e41a3d5d91c28dd0acfdc3b0..479657ddef21f0279b361117b82549f7105be416 100644
 --- a/src/main/java/net/minecraft/server/gui/StatsComponent.java
