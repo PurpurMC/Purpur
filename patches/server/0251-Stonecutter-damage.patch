@@ -5,47 +5,83 @@ Subject: [PATCH] Stonecutter damage
 
 
 diff --git a/src/main/java/net/minecraft/world/damagesource/CombatTracker.java b/src/main/java/net/minecraft/world/damagesource/CombatTracker.java
-index 9e3608650c44ef5fa724c3aea86603d7bd02429c..8c2c515f1b5f56bf1d6cf0c35d4f0fa7b593d1a0 100644
+index 5c9d49b40a940df724101bef339a9ac5a31fd025..8ed6b8ddc76bda3d4f298b3076dba9275cec93d9 100644
 --- a/src/main/java/net/minecraft/world/damagesource/CombatTracker.java
 +++ b/src/main/java/net/minecraft/world/damagesource/CombatTracker.java
 @@ -102,6 +102,8 @@ public class CombatTracker {
                  // Purpur start
-                 if (damageSource.isScissors) {
+                 if (damageSource.isScissors()) {
                      return damageSource.getLocalizedDeathMessage(org.purpurmc.purpur.PurpurConfig.deathMsgRunWithScissors, this.mob);
-+                } else if (damageSource.isStoneCutter) {
++                } else if (damageSource.isStonecutter()) {
 +                    return damageSource.getLocalizedDeathMessage(org.purpurmc.purpur.PurpurConfig.deathMsgStonecutter, this.mob);
                  }
                  // Purpur end
                  return damageSource.getLocalizedDeathMessage(this.mob);
 diff --git a/src/main/java/net/minecraft/world/damagesource/DamageSource.java b/src/main/java/net/minecraft/world/damagesource/DamageSource.java
-index 727a598f1c265ae524c3746c7b7c7d2d0774d530..478173fe8e61730a2210e886a4c8dc2a6e018e90 100644
+index 2e443b02108b63fbaea2754b989e241494510363..09aa1677ad67701d592c18078eee5bd0317ba7c4 100644
 --- a/src/main/java/net/minecraft/world/damagesource/DamageSource.java
 +++ b/src/main/java/net/minecraft/world/damagesource/DamageSource.java
-@@ -99,6 +99,8 @@ public class DamageSource {
+@@ -28,6 +28,7 @@ public class DamageSource {
+     private boolean melting = false;
+     private boolean poison = false;
+     private boolean scissors = false; // Purpur
++    private boolean stonecutter = false; // Purpur
+     private Entity customCausingEntity = null; // This field is a helper for when causing entity damage is not set by vanilla
  
-     public boolean isScissors; // Purpur
- 
-+    public boolean isStoneCutter; // Purpur
-+
-     public String toString() {
-         return "DamageSource (" + this.type().msgId() + ")";
-     }
-diff --git a/src/main/java/net/minecraft/world/damagesource/DamageSources.java b/src/main/java/net/minecraft/world/damagesource/DamageSources.java
-index 28b57ed7e862eecc04dfb2eac0093385b64460e7..0f7d3e8573462c6fde8e5e2c1e86ad8406b9f549 100644
---- a/src/main/java/net/minecraft/world/damagesource/DamageSources.java
-+++ b/src/main/java/net/minecraft/world/damagesource/DamageSources.java
-@@ -283,5 +283,11 @@ public class DamageSources {
-         source.isScissors = true;
-         return source;
+     public DamageSource sweep() {
+@@ -66,6 +67,15 @@ public class DamageSource {
+     public boolean isScissors() {
+         return this.scissors;
      }
 +
 +    public DamageSource stonecutter() {
-+        DamageSource source = new DamageSource(this.damageTypes.getHolderOrThrow(DamageTypes.MAGIC));
-+        source.isStoneCutter = true;
-+        return source;
++        this.stonecutter = true;
++        return this;
++    }
++
++    public boolean isStonecutter() {
++        return this.stonecutter;
 +    }
      // Purpur end
- }
+ 
+     public Entity getCausingEntity() {
+@@ -106,6 +116,7 @@ public class DamageSource {
+         damageSource.poison = this.isPoison();
+         damageSource.melting = this.isMelting();
+         damageSource.scissors = this.isScissors(); // Purpur
++        damageSource.stonecutter = this.isStonecutter(); // Purpur
+         return damageSource;
+     }
+     // CraftBukkit end
+diff --git a/src/main/java/net/minecraft/world/damagesource/DamageSources.java b/src/main/java/net/minecraft/world/damagesource/DamageSources.java
+index 23c7f22dacc570837120c28e0a57f8c9155e92fc..2c1fdc031bcfc8f39692312e9ce9c5a3cf987349 100644
+--- a/src/main/java/net/minecraft/world/damagesource/DamageSources.java
++++ b/src/main/java/net/minecraft/world/damagesource/DamageSources.java
+@@ -45,12 +45,14 @@ public class DamageSources {
+     private final DamageSource melting;
+     private final DamageSource poison;
+     private final DamageSource scissors; // Purpur
++    private final DamageSource stonecutter; // Purpur
+ 
+     public DamageSources(RegistryAccess registryManager) {
+         this.damageTypes = registryManager.registryOrThrow(Registries.DAMAGE_TYPE);
+         this.melting = this.source(DamageTypes.ON_FIRE).melting();
+         this.poison = this.source(DamageTypes.MAGIC).poison();
+         this.scissors = this.source(DamageTypes.MAGIC).scissors(); // Purpur
++        this.stonecutter = this.source(DamageTypes.MAGIC).stonecutter(); // Purpur
+         // CraftBukkit end
+         this.inFire = this.source(DamageTypes.IN_FIRE);
+         this.lightningBolt = this.source(DamageTypes.LIGHTNING_BOLT);
+@@ -103,6 +105,9 @@ public class DamageSources {
+     public DamageSource scissors() {
+         return this.scissors;
+     }
++    public DamageSource stonecutter() {
++        return this.stonecutter;
++    }
+     // Purpur end
+ 
+     public DamageSource inFire() {
 diff --git a/src/main/java/net/minecraft/world/level/block/StonecutterBlock.java b/src/main/java/net/minecraft/world/level/block/StonecutterBlock.java
 index 77ae7b8ab24935d046cce1f8f7f476310876f9df..579abfbe791052507b15c14d8c81e39b2fdd6520 100644
 --- a/src/main/java/net/minecraft/world/level/block/StonecutterBlock.java
@@ -87,6 +123,19 @@ index 0dc05919dfbbf73230505fcdc25d949b1602801c..996bd26e95e766ce4ca7e61d060881fe
                  if (blockState.is(Blocks.HONEY_BLOCK)) {
                      return BlockPathTypes.STICKY_HONEY;
                  } else if (blockState.is(Blocks.COCOA)) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+index aa89fcab22c7ad0c9425f5ae65cc2c6b150579cc..069ea4dc556d179d166e1dba3527c9def7129e65 100644
+--- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
++++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+@@ -1133,7 +1133,7 @@ public class CraftEventFactory {
+             return CraftEventFactory.callEntityDamageEvent(source.getDirectBlock(), entity, DamageCause.LAVA, bukkitDamageSource, modifiers, modifierFunctions, cancelled);
+         } else if (source.getDirectBlock() != null) {
+             DamageCause cause;
+-            if (source.is(DamageTypes.CACTUS) || source.is(DamageTypes.SWEET_BERRY_BUSH) || source.is(DamageTypes.STALAGMITE) || source.is(DamageTypes.FALLING_STALACTITE) || source.is(DamageTypes.FALLING_ANVIL)) {
++            if (source.is(DamageTypes.CACTUS) || source.is(DamageTypes.SWEET_BERRY_BUSH) || source.is(DamageTypes.STALAGMITE) || source.is(DamageTypes.FALLING_STALACTITE) || source.is(DamageTypes.FALLING_ANVIL) || source.isStonecutter()) { // Purpur
+                 cause = DamageCause.CONTACT;
+             } else if (source.is(DamageTypes.HOT_FLOOR)) {
+                 cause = DamageCause.HOT_FLOOR;
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
 index c6628a28387023b334dd99a4e469126a2108c38b..3a49455509a26063a62e39fb3d3ad81e80bced54 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
