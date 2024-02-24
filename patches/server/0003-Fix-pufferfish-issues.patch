@@ -5,10 +5,10 @@ Subject: [PATCH] Fix pufferfish issues
 
 
 diff --git a/build.gradle.kts b/build.gradle.kts
-index 3caad009206da9c8161f549af0c3437923f6aa4a..6bceca84bd073e25fc9aa19b8b713a2873713696 100644
+index 7e82d2c6a6085a5ea335ba9ef2a5ec3f5a37e787..32366253c04c493135f2b22d1940f83669104723 100644
 --- a/build.gradle.kts
 +++ b/build.gradle.kts
-@@ -233,5 +233,7 @@ val runtimeClasspathForRunDev = sourceSets.main.flatMap { src ->
+@@ -234,5 +234,7 @@ val runtimeClasspathForRunDev = sourceSets.main.flatMap { src ->
  }
  tasks.registerRunTask("runDev") {
      description = "Spin up a non-relocated Mojang-mapped test server"
@@ -40,9 +40,18 @@ index f6a3364175476c57a7763a087ff55e1689474800..5e01bfdad663656168604fc878a993dd
  				"This can improve performance by a few percent, but has minor gameplay implications.");
  	}
 diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
-index dbe612427b894df9da1335b94163ba9b89b090c0..0982d44b9dd30c13d9d879095cc9a839bbda8bdc 100644
+index 531c9ef0d6504fc1632b83bd93b9cf76e91377e8..09594f96cf79aa38142a859bef2e3b6b8d00f7db 100644
 --- a/src/main/java/net/minecraft/server/level/ServerLevel.java
 +++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
+@@ -924,7 +924,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
+                             final String msg = String.format("Entity threw exception at %s:%s,%s,%s", entity.level().getWorld().getName(), entity.getX(), entity.getY(), entity.getZ());
+                             MinecraftServer.LOGGER.error(msg, throwable);
+                             getCraftServer().getPluginManager().callEvent(new com.destroystokyo.paper.event.server.ServerExceptionEvent(new com.destroystokyo.paper.exception.ServerInternalException(msg, throwable)));
+-                            entity.discard();
++                            entity.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD); // Purpur
+                             // Paper end
+                         }
+                         // Pufferfish end
 @@ -992,7 +992,7 @@ public class ServerLevel extends Level implements WorldGenLevel {
      }
      // Paper start - optimise random block ticking
@@ -52,8 +61,34 @@ index dbe612427b894df9da1335b94163ba9b89b090c0..0982d44b9dd30c13d9d879095cc9a839
      // Paper end
  
      private int currentIceAndSnowTick = 0; protected void resetIceAndSnowTick() { this.currentIceAndSnowTick = this.randomTickRandom.nextInt(16); } // Pufferfish
+diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
+index 098c410f0285948d7ac48835c352f9c97742c5c7..3773b05d0e2875db8817835e623272292855925f 100644
+--- a/src/main/java/net/minecraft/world/entity/Entity.java
++++ b/src/main/java/net/minecraft/world/entity/Entity.java
+@@ -825,7 +825,7 @@ public abstract class Entity implements Nameable, EntityAccess, CommandSource, S
+     public void tick() {
+         // Pufferfish start - entity TTL
+         if (type != EntityType.PLAYER && type.ttl >= 0 && this.tickCount >= type.ttl) {
+-            discard();
++            discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD); // Purpur
+             return;
+         }
+         // Pufferfish end - entity TTL
+diff --git a/src/main/java/net/minecraft/world/entity/projectile/Projectile.java b/src/main/java/net/minecraft/world/entity/projectile/Projectile.java
+index 837f68825f601971f374be47952b23108bf66ba6..2a8a8030feefae84e394460612405887e63f2ac7 100644
+--- a/src/main/java/net/minecraft/world/entity/projectile/Projectile.java
++++ b/src/main/java/net/minecraft/world/entity/projectile/Projectile.java
+@@ -64,7 +64,7 @@ public abstract class Projectile extends Entity implements TraceableEntity {
+             if (!isLoaded) {
+                 if (Projectile.loadedThisTick > gg.pufferfish.pufferfish.PufferfishConfig.maxProjectileLoadsPerTick) {
+                     if (++this.loadedLifetime > gg.pufferfish.pufferfish.PufferfishConfig.maxProjectileLoadsPerProjectile) {
+-                        this.discard();
++                        this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD); // Purpur
+                     }
+                     return;
+                 }
 diff --git a/src/main/java/net/minecraft/world/level/Level.java b/src/main/java/net/minecraft/world/level/Level.java
-index 9c02040543825e99f576c6f8995133ec6a329940..d6a08f06812bc15813559eb8ff66eddf7cf22888 100644
+index 506100b02e7e9a3eabfde6b1f93858c4cc048524..27447e4acb7db91b7595a7c25b682a4a4ce8c151 100644
 --- a/src/main/java/net/minecraft/world/level/Level.java
 +++ b/src/main/java/net/minecraft/world/level/Level.java
 @@ -207,7 +207,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
