@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MrFishCakes <FinlayOxby@outlook.com>
+Date: Sun, 2 Jul 2023 00:50:14 +0100
+Subject: [PATCH] Shears can defuse TNT
+
+Shears can now defuse TNT. Each world can have a configured chance for the TNT to be defused when right clicking with a set of shears and damage dealt to the shears accordingly. If the TNT is defused then it will drop the TNT item instead and the entity removed from the world no longer existing. All the interaction is handled within the net.minecraft.world.entity.item.PrimedTnt class similar to how it is handled for when sheep are sheared.
+
+By default the option is disabled to avoid breaking any possible vanilla mechanics.
+
+diff --git a/src/main/java/net/minecraft/world/entity/item/PrimedTnt.java b/src/main/java/net/minecraft/world/entity/item/PrimedTnt.java
+index e712bd07ea2946167782473a536e0c72fab4bccd..6d934405cd18d63943171448743cafd5c52026e2 100644
+--- a/src/main/java/net/minecraft/world/entity/item/PrimedTnt.java
++++ b/src/main/java/net/minecraft/world/entity/item/PrimedTnt.java
+@@ -200,4 +200,29 @@ public class PrimedTnt extends Entity implements TraceableEntity {
+         return !level().paperConfig().fixes.preventTntFromMovingInWater && super.isPushedByFluid();
+     }
+     // Paper end - Option to prevent TNT from moving in water
++    // Purpur start - Shears can defuse TNT
++    @Override
++    public net.minecraft.world.InteractionResult interact(net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand) {
++        if (!level().isClientSide && level().purpurConfig.shearsCanDefuseTnt) {
++            final net.minecraft.world.item.ItemStack inHand = player.getItemInHand(hand);
++
++            if (!inHand.is(net.minecraft.world.item.Items.SHEARS) || !player.getBukkitEntity().hasPermission("purpur.tnt.defuse") ||
++                    level().random.nextFloat() > level().purpurConfig.shearsCanDefuseTntChance) return net.minecraft.world.InteractionResult.PASS;
++
++            net.minecraft.world.entity.item.ItemEntity tntItem = new net.minecraft.world.entity.item.ItemEntity(level(), getX(), getY(), getZ(),
++                    new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.TNT));
++            tntItem.setPickUpDelay(10);
++
++            inHand.hurtAndBreak(1, player, entity -> entity.broadcastBreakEvent(hand));
++            level().addFreshEntity(tntItem, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CUSTOM);
++
++            this.playSound(net.minecraft.sounds.SoundEvents.SHEEP_SHEAR);
++
++            this.kill();
++            return net.minecraft.world.InteractionResult.SUCCESS;
++        }
++
++        return super.interact(player, hand);
++    }
++    // Purpur end - Shears can defuse TNT
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 24e3ebf13e6af6d4bddb85976b30ef894278ce20..a35837a4d089658b4a19ebf63690e5371e1515cd 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -3276,4 +3276,11 @@ public class PurpurWorldConfig {
+         cauldronDripstoneWaterFillChance = (float) getDouble("blocks.cauldron.fill-chances.dripstone-water", cauldronDripstoneWaterFillChance);
+         cauldronDripstoneLavaFillChance = (float) getDouble("blocks.cauldron.fill-chances.dripstone-lava", cauldronDripstoneLavaFillChance);
+     }
++
++    public float shearsCanDefuseTntChance = 0.00F;
++    public boolean shearsCanDefuseTnt = false;
++    private void shearsCanDefuseTntSettings() {
++        shearsCanDefuseTntChance = (float) getDouble("gameplay-mechanics.item.shears.defuse-tnt-chance", 0.00D);
++        shearsCanDefuseTnt = shearsCanDefuseTntChance > 0.00F;
++    }
+ }
