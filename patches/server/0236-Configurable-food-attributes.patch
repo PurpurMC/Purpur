@@ -1,0 +1,149 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <Blake.Galbreath@Gmail.com>
+Date: Tue, 18 Jan 2022 04:51:51 -0600
+Subject: [PATCH] Configurable food attributes
+
+
+diff --git a/src/main/java/net/minecraft/world/food/FoodProperties.java b/src/main/java/net/minecraft/world/food/FoodProperties.java
+index 9967ba762567631f2bdb1e4f8fe16a13ea927b46..6c945ae8fe8b1517e312c688f829fab41f12d9f4 100644
+--- a/src/main/java/net/minecraft/world/food/FoodProperties.java
++++ b/src/main/java/net/minecraft/world/food/FoodProperties.java
+@@ -2,15 +2,22 @@ package net.minecraft.world.food;
+ 
+ import com.google.common.collect.Lists;
+ import com.mojang.datafixers.util.Pair;
++
++import java.util.ArrayList;
+ import java.util.List;
+ import net.minecraft.world.effect.MobEffectInstance;
+ 
+ public class FoodProperties {
+-    private final int nutrition;
+-    private final float saturationModifier;
+-    private final boolean isMeat;
+-    private final boolean canAlwaysEat;
+-    private final boolean fastFood;
++    // Purpur start
++    private int nutrition; public void setNutrition(int nutrition) { this.nutrition = nutrition; }
++    private float saturationModifier; public void setSaturationModifier(float saturation) { this.saturationModifier = saturation; }
++    private boolean isMeat; public void setIsMeat(boolean isMeat) { this.isMeat = isMeat; }
++    private boolean canAlwaysEat; public void setCanAlwaysEat(boolean canAlwaysEat) { this.canAlwaysEat = canAlwaysEat; }
++    private boolean fastFood; public void setFastFood(boolean isFastFood) { this.fastFood = isFastFood; }
++    public FoodProperties copy() {
++        return new FoodProperties(this.nutrition, this.saturationModifier, this.isMeat, this.canAlwaysEat, this.fastFood, new ArrayList<>(this.effects));
++    }
++    // Purpur end
+     private final List<Pair<MobEffectInstance, Float>> effects;
+ 
+     FoodProperties(int hunger, float saturationModifier, boolean meat, boolean alwaysEdible, boolean snack, List<Pair<MobEffectInstance, Float>> statusEffects) {
+diff --git a/src/main/java/net/minecraft/world/food/Foods.java b/src/main/java/net/minecraft/world/food/Foods.java
+index 4569cf30b33167a415256a8542820557ad38f89e..9c65eefa855f3622b6c9ae2a698cf332ba225c7f 100644
+--- a/src/main/java/net/minecraft/world/food/Foods.java
++++ b/src/main/java/net/minecraft/world/food/Foods.java
+@@ -4,6 +4,8 @@ import net.minecraft.world.effect.MobEffectInstance;
+ import net.minecraft.world.effect.MobEffects;
+ 
+ public class Foods {
++    public static final java.util.Map<String, FoodProperties> ALL_PROPERTIES = new java.util.HashMap<>(); // Purpur
++    public static final java.util.Map<String, FoodProperties> DEFAULT_PROPERTIES = new java.util.HashMap<>(); // Purpur
+     public static final FoodProperties APPLE = new FoodProperties.Builder().nutrition(4).saturationMod(0.3F).build();
+     public static final FoodProperties BAKED_POTATO = new FoodProperties.Builder().nutrition(5).saturationMod(0.6F).build();
+     public static final FoodProperties BEEF = new FoodProperties.Builder().nutrition(3).saturationMod(0.3F).meat().build();
+diff --git a/src/main/java/net/minecraft/world/item/Items.java b/src/main/java/net/minecraft/world/item/Items.java
+index bb2103a488964f25335393fa91e8ae5749eca333..249c887af68f56739c3609bad2405ba2cbe11762 100644
+--- a/src/main/java/net/minecraft/world/item/Items.java
++++ b/src/main/java/net/minecraft/world/item/Items.java
+@@ -1715,6 +1715,13 @@ public class Items {
+             ((BlockItem)item).registerBlocks(Item.BY_BLOCK, item);
+         }
+ 
++        // Purpur start
++        if (item.getFoodProperties() != null) {
++            Foods.ALL_PROPERTIES.put(key.location().getPath(), item.getFoodProperties());
++            Foods.DEFAULT_PROPERTIES.put(key.location().getPath(), item.getFoodProperties().copy());
++        }
++        // Purpur end
++
+         return Registry.register(BuiltInRegistries.ITEM, key, item);
+     }
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 0e28cf20a870f3f3662bd1d8f7a4f2cbf13c48bf..ce3ab604e6ed6669f38abf83d40b500148277b9d 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -466,4 +466,75 @@ public class PurpurConfig {
+         String setPattern = getString("settings.username-valid-characters", defaultPattern);
+         usernameValidCharactersPattern = java.util.regex.Pattern.compile(setPattern == null || setPattern.isBlank() ? defaultPattern : setPattern);
+     }
++
++    private static void foodSettings() {
++        ConfigurationSection properties = config.getConfigurationSection("settings.food-properties");
++        if (properties == null) {
++            config.addDefault("settings.food-properties", new HashMap<>());
++            return;
++        }
++
++        Map<MobEffect, Map<String, Object>> effectDefaults = new HashMap<>();
++        Map<String, Object> EFFECT_DEFAULT = Map.of(
++            "chance", 0.0F,
++            "duration", 0,
++            "amplifier", 0,
++            "ambient", false,
++            "visible", true,
++            "show-icon", true
++        );
++
++        properties.getKeys(false).forEach(foodKey -> {
++            FoodProperties food = Foods.ALL_PROPERTIES.get(foodKey);
++            if (food == null) {
++                PurpurConfig.log(Level.SEVERE, "Invalid food property: " + foodKey);
++                return;
++            }
++            FoodProperties foodDefaults = Foods.DEFAULT_PROPERTIES.get(foodKey);
++            food.setNutrition(properties.getInt(foodKey + ".nutrition", foodDefaults.getNutrition()));
++            food.setSaturationModifier((float) properties.getDouble(foodKey + ".saturation-modifier", foodDefaults.getSaturationModifier()));
++            food.setIsMeat(properties.getBoolean(foodKey + ".is-meat", foodDefaults.isMeat()));
++            food.setCanAlwaysEat(properties.getBoolean(foodKey + ".can-always-eat", foodDefaults.canAlwaysEat()));
++            food.setFastFood(properties.getBoolean(foodKey + ".fast-food", foodDefaults.isFastFood()));
++            ConfigurationSection effects = properties.getConfigurationSection(foodKey + ".effects");
++            if (effects != null) {
++                effectDefaults.clear();
++                foodDefaults.getEffects().forEach(pair -> {
++                    MobEffectInstance effect = pair.getFirst();
++                    effectDefaults.put(effect.getEffect(), Map.of(
++                            "chance", pair.getSecond(),
++                            "duration", effect.getDuration(),
++                            "amplifier", effect.getAmplifier(),
++                            "ambient", effect.isAmbient(),
++                            "visible", effect.isVisible(),
++                            "show-icon", effect.showIcon()
++                    ));
++                });
++                effects.getKeys(false).forEach(effectKey -> {
++                    MobEffect effect = BuiltInRegistries.MOB_EFFECT.get(new ResourceLocation(effectKey));
++                    if (effect == null) {
++                        PurpurConfig.log(Level.SEVERE, "Invalid food property effect for " + foodKey + ": " + effectKey);
++                        return;
++                    }
++
++                    Map<String, Object> effectDefault = effectDefaults.get(effect);
++                    if (effectDefault == null) {
++                        effectDefault = EFFECT_DEFAULT;
++                    }
++
++                    food.getEffects().removeIf(pair -> pair.getFirst().getEffect() == effect);
++                    float chance = (float) effects.getDouble(effectKey + ".chance", ((Float) effectDefault.get("chance")).doubleValue());
++                    int duration = effects.getInt(effectKey + ".duration", (int) effectDefault.get("duration"));
++                    if (chance <= 0.0F || duration < 0) {
++                        return;
++                    }
++                    int amplifier = effects.getInt(effectKey + ".amplifier", (int) effectDefault.get("amplifier"));
++                    boolean ambient = effects.getBoolean(effectKey + ".ambient", (boolean) effectDefault.get("ambient"));
++                    boolean visible = effects.getBoolean(effectKey + ".visible", (boolean) effectDefault.get("visible"));
++                    boolean showIcon = effects.getBoolean(effectKey + ".show-icon", (boolean) effectDefault.get("show-icon"));
++                    food.getEffects().add(Pair.of(new MobEffectInstance(effect, duration, amplifier, ambient, visible, showIcon), chance));
++                });
++            }
++        });
++    }
+ }
