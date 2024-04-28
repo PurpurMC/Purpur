@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Fri, 18 Oct 2019 22:50:12 -0500
+Subject: [PATCH] Llama API
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/ai/goal/LlamaFollowCaravanGoal.java b/src/main/java/net/minecraft/world/entity/ai/goal/LlamaFollowCaravanGoal.java
+index df695b444fa2a993d381e2f197182c3e91a68502..eb0faf58fa1a408f294fc62120b140def97f998d 100644
+--- a/src/main/java/net/minecraft/world/entity/ai/goal/LlamaFollowCaravanGoal.java
++++ b/src/main/java/net/minecraft/world/entity/ai/goal/LlamaFollowCaravanGoal.java
+@@ -22,6 +22,7 @@ public class LlamaFollowCaravanGoal extends Goal {
+ 
+     @Override
+     public boolean canUse() {
++        if (!this.llama.shouldJoinCaravan) return false; // Purpur
+         if (!this.llama.isLeashed() && !this.llama.inCaravan()) {
+             List<Entity> list = this.llama.level().getEntities(this.llama, this.llama.getBoundingBox().inflate(9.0, 4.0, 9.0), entity -> {
+                 EntityType<?> entityType = entity.getType();
+@@ -71,6 +72,7 @@ public class LlamaFollowCaravanGoal extends Goal {
+ 
+     @Override
+     public boolean canContinueToUse() {
++        if (!this.llama.shouldJoinCaravan) return false; // Purpur
+         if (this.llama.inCaravan() && this.llama.getCaravanHead().isAlive() && this.firstIsLeashed(this.llama, 0)) {
+             double d = this.llama.distanceToSqr(this.llama.getCaravanHead());
+             if (d > 676.0) {
+diff --git a/src/main/java/net/minecraft/world/entity/animal/horse/Llama.java b/src/main/java/net/minecraft/world/entity/animal/horse/Llama.java
+index 697895661826e4a1ecbdfd2c3a195b9d0ee7e00a..05614fb50a5509331ac15bb819e827365a4cefcf 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/horse/Llama.java
++++ b/src/main/java/net/minecraft/world/entity/animal/horse/Llama.java
+@@ -75,6 +75,7 @@ public class Llama extends AbstractChestedHorse implements VariantHolder<Llama.V
+     private Llama caravanHead;
+     @Nullable
+     public Llama caravanTail; // Paper
++    public boolean shouldJoinCaravan = true; // Purpur
+ 
+     public Llama(EntityType<? extends Llama> type, Level world) {
+         super(type, world);
+@@ -167,6 +168,7 @@ public class Llama extends AbstractChestedHorse implements VariantHolder<Llama.V
+         super.addAdditionalSaveData(nbt);
+         nbt.putInt("Variant", this.getVariant().id);
+         nbt.putInt("Strength", this.getStrength());
++        nbt.putBoolean("Purpur.ShouldJoinCaravan", shouldJoinCaravan); // Purpur
+     }
+ 
+     @Override
+@@ -174,6 +176,7 @@ public class Llama extends AbstractChestedHorse implements VariantHolder<Llama.V
+         this.setStrength(nbt.getInt("Strength"));
+         super.readAdditionalSaveData(nbt);
+         this.setVariant(Llama.Variant.byId(nbt.getInt("Variant")));
++        if (nbt.contains("Purpur.ShouldJoinCaravan")) this.shouldJoinCaravan = nbt.getBoolean("Purpur.ShouldJoinCaravan"); // Purpur
+     }
+ 
+     @Override
+@@ -460,6 +463,7 @@ public class Llama extends AbstractChestedHorse implements VariantHolder<Llama.V
+ 
+     public void leaveCaravan() {
+         if (this.caravanHead != null) {
++            new org.purpurmc.purpur.event.entity.LlamaLeaveCaravanEvent((org.bukkit.entity.Llama) getBukkitEntity()).callEvent(); // Purpur
+             this.caravanHead.caravanTail = null;
+         }
+ 
+@@ -467,6 +471,7 @@ public class Llama extends AbstractChestedHorse implements VariantHolder<Llama.V
+     }
+ 
+     public void joinCaravan(Llama llama) {
++        if (!shouldJoinCaravan || !new org.purpurmc.purpur.event.entity.LlamaJoinCaravanEvent((org.bukkit.entity.Llama) getBukkitEntity(), (org.bukkit.entity.Llama) llama.getBukkitEntity()).callEvent()) return; // Purpur
+         this.caravanHead = llama;
+         this.caravanHead.caravanTail = this;
+     }
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftLlama.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftLlama.java
+index 0ad16ee7b33582d214dab41eeee378d52c8e38ed..16bd1294c219f15ada653ef810bc2d748222d0da 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftLlama.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftLlama.java
+@@ -90,4 +90,16 @@ public class CraftLlama extends CraftChestedHorse implements Llama, com.destroys
+         return this.getHandle().caravanTail == null ? null : (Llama) this.getHandle().caravanTail.getBukkitEntity();
+     }
+     // Paper end
++
++    // Purpur start
++    @Override
++    public boolean shouldJoinCaravan() {
++        return getHandle().shouldJoinCaravan;
++    }
++
++    @Override
++    public void setShouldJoinCaravan(boolean shouldJoinCaravan) {
++        getHandle().shouldJoinCaravan = shouldJoinCaravan;
++    }
++    // Purpur end
+ }
