@@ -1,0 +1,131 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Encode42 <me@encode42.dev>
+Date: Wed, 24 Mar 2021 17:59:54 -0400
+Subject: [PATCH] Config to allow for unsafe enchants
+
+
+diff --git a/src/main/java/net/minecraft/server/commands/EnchantCommand.java b/src/main/java/net/minecraft/server/commands/EnchantCommand.java
+index 84f1ba6275f04624f46ccd772924b5e075e7b205..bfb455fb74f0a9645212f90acb54f68d1c7d9772 100644
+--- a/src/main/java/net/minecraft/server/commands/EnchantCommand.java
++++ b/src/main/java/net/minecraft/server/commands/EnchantCommand.java
+@@ -70,7 +70,7 @@ public class EnchantCommand {
+ 
+     private static int enchant(CommandSourceStack source, Collection<? extends Entity> targets, Holder<Enchantment> enchantment, int level) throws CommandSyntaxException {
+         Enchantment enchantment2 = enchantment.value();
+-        if (level > enchantment2.getMaxLevel()) {
++        if (!org.purpurmc.purpur.PurpurConfig.allowUnsafeEnchantCommand && level > enchantment2.getMaxLevel()) { // Purpur
+             throw ERROR_LEVEL_TOO_HIGH.create(level, enchantment2.getMaxLevel());
+         } else {
+             int i = 0;
+@@ -81,7 +81,7 @@ public class EnchantCommand {
+                     ItemStack itemStack = livingEntity.getMainHandItem();
+                     if (!itemStack.isEmpty()) {
+                         if (enchantment2.canEnchant(itemStack)
+-                            && EnchantmentHelper.isEnchantmentCompatible(EnchantmentHelper.getEnchantmentsForCrafting(itemStack).keySet(), enchantment2)) {
++                            && EnchantmentHelper.isEnchantmentCompatible(EnchantmentHelper.getEnchantmentsForCrafting(itemStack).keySet(), enchantment2) || (org.purpurmc.purpur.PurpurConfig.allowUnsafeEnchantCommand && !itemStack.hasEnchantment(enchantment2))) { // Purpur
+                             itemStack.enchant(enchantment2, level);
+                             i++;
+                         } else if (targets.size() == 1) {
+diff --git a/src/main/java/net/minecraft/world/inventory/AnvilMenu.java b/src/main/java/net/minecraft/world/inventory/AnvilMenu.java
+index 62a69dc13406bb0144948bf4bd265c3a28bfe14b..128c2c6f1b94d934d4d306f70c8ace08e4dc48d1 100644
+--- a/src/main/java/net/minecraft/world/inventory/AnvilMenu.java
++++ b/src/main/java/net/minecraft/world/inventory/AnvilMenu.java
+@@ -228,7 +228,8 @@ public class AnvilMenu extends ItemCombinerMenu {
+                         int i2 = entry.getIntValue();
+ 
+                         i2 = l1 == i2 ? i2 + 1 : Math.max(i2, l1);
+-                        boolean flag3 = enchantment.canEnchant(itemstack);
++                        boolean flag3 = canDoUnsafeEnchants || (org.purpurmc.purpur.PurpurConfig.allowUnsafeEnchants && org.purpurmc.purpur.PurpurConfig.allowInapplicableEnchants) || enchantment.canEnchant(itemstack); // Purpur
++                        boolean flag4 = true; // Purpur
+ 
+                         if (this.player.getAbilities().instabuild || itemstack.is(Items.ENCHANTED_BOOK)) {
+                             flag3 = true;
+@@ -240,16 +241,20 @@ public class AnvilMenu extends ItemCombinerMenu {
+                             Holder<Enchantment> holder1 = (Holder) iterator1.next();
+ 
+                             if (!holder1.equals(holder) && !enchantment.isCompatibleWith((Enchantment) holder1.value())) {
+-                                flag3 = canDoUnsafeEnchants; // Purpur
++                                flag4 = canDoUnsafeEnchants || (org.purpurmc.purpur.PurpurConfig.allowUnsafeEnchants && org.purpurmc.purpur.PurpurConfig.allowIncompatibleEnchants); // Purpur flag3 -> flag4
++                                    if (!flag4 && org.purpurmc.purpur.PurpurConfig.replaceIncompatibleEnchants) {
++                                        iterator1.remove();
++                                        flag4 = true;
++                                    }
+                                 ++i;
+                             }
+                         }
+ 
+-                        if (!flag3) {
++                        if (!flag3 || !flag4) { // Purpur
+                             flag2 = true;
+                         } else {
+                             flag1 = true;
+-                            if (i2 > enchantment.getMaxLevel()) {
++                            if ((!org.purpurmc.purpur.PurpurConfig.allowUnsafeEnchants || !org.purpurmc.purpur.PurpurConfig.allowHigherEnchantsLevels) && i2 > enchantment.getMaxLevel()) { // Purpur
+                                 i2 = enchantment.getMaxLevel();
+                             }
+ 
+@@ -375,7 +380,7 @@ public class AnvilMenu extends ItemCombinerMenu {
+             this.sendAllDataToRemote(); // CraftBukkit - SPIGOT-6686: Always send completed inventory to stay in sync with client
+             this.broadcastChanges();
+             // Purpur start
+-            if (canDoUnsafeEnchants && itemstack1 != ItemStack.EMPTY) {
++            if ((canDoUnsafeEnchants || org.purpurmc.purpur.PurpurConfig.allowUnsafeEnchants) && itemstack1 != ItemStack.EMPTY) {
+                 ((ServerPlayer) player).connection.send(new ClientboundContainerSetSlotPacket(containerId, incrementStateId(), 2, itemstack1));
+                 ((ServerPlayer) player).connection.send(new ClientboundContainerSetDataPacket(containerId, 0, cost.get()));
+             }
+diff --git a/src/main/java/net/minecraft/world/item/ItemStack.java b/src/main/java/net/minecraft/world/item/ItemStack.java
+index 206f6409a17eb0db1ced8c7a90127ed375329a44..7e6c231a50c7fd2297e1ab404a743e1aece9913b 100644
+--- a/src/main/java/net/minecraft/world/item/ItemStack.java
++++ b/src/main/java/net/minecraft/world/item/ItemStack.java
+@@ -1226,6 +1226,12 @@ public final class ItemStack implements DataComponentHolder {
+         return !((ItemEnchantments) this.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY)).isEmpty();
+     }
+ 
++    // Purpur start
++    public boolean hasEnchantment(Enchantment enchantment) {
++        return isEnchanted() && EnchantmentHelper.deserializeEnchantments(getEnchantmentTags()).containsKey(enchantment);
++    }
++    // Purpur end
++
+     public ItemEnchantments getEnchantments() {
+         return (ItemEnchantments) this.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+     }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 11b8f16a39011500d28f72e9c40fc3ca4b0f0fad..f725b560313aaee505708c835499d340e04217e4 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -285,14 +285,34 @@ public class PurpurConfig {
+ 
+     public static boolean allowInfinityMending = false;
+     public static boolean allowCrossbowInfinity = true;
++    public static boolean allowUnsafeEnchants = false;
++    public static boolean allowInapplicableEnchants = true;
++    public static boolean allowIncompatibleEnchants = true;
++    public static boolean allowHigherEnchantsLevels = true;
++    public static boolean allowUnsafeEnchantCommand = false;
++    public static boolean replaceIncompatibleEnchants = false;
+     private static void enchantmentSettings() {
+         if (version < 5) {
+             boolean oldValue = getBoolean("settings.enchantment.allow-infinite-and-mending-together", false);
+             set("settings.enchantment.allow-infinity-and-mending-together", oldValue);
+             set("settings.enchantment.allow-infinite-and-mending-together", null);
+         }
++        if (version < 30) {
++            boolean oldValue = getBoolean("settings.enchantment.allow-unsafe-enchants", false);
++            set("settings.enchantment.anvil.allow-unsafe-enchants", oldValue);
++            set("settings.enchantment.anvil.allow-inapplicable-enchants", true);
++            set("settings.enchantment.anvil.allow-incompatible-enchants", true);
++            set("settings.enchantment.anvil.allow-higher-enchants-levels", true);
++            set("settings.enchantment.allow-unsafe-enchants", null);
++        }
+         allowInfinityMending = getBoolean("settings.enchantment.allow-infinity-and-mending-together", allowInfinityMending);
+         allowCrossbowInfinity = getBoolean("settings.enchantment.allow-infinity-on-crossbow", allowCrossbowInfinity);
++        allowUnsafeEnchants = getBoolean("settings.enchantment.anvil.allow-unsafe-enchants", allowUnsafeEnchants);
++        allowInapplicableEnchants = getBoolean("settings.enchantment.anvil.allow-inapplicable-enchants", allowInapplicableEnchants);
++        allowIncompatibleEnchants = getBoolean("settings.enchantment.anvil.allow-incompatible-enchants", allowIncompatibleEnchants);
++        allowHigherEnchantsLevels = getBoolean("settings.enchantment.anvil.allow-higher-enchants-levels", allowHigherEnchantsLevels);
++        allowUnsafeEnchantCommand = getBoolean("settings.enchantment.allow-unsafe-enchant-command", allowUnsafeEnchants); // allowUnsafeEnchants as default for backwards compatability
++        replaceIncompatibleEnchants = getBoolean("settings.enchantment.anvil.replace-incompatible-enchants", replaceIncompatibleEnchants);
+     }
+ 
+     public static boolean endermanShortHeight = false;
