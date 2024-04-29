@@ -5,18 +5,18 @@ Subject: [PATCH] Stored Bee API
 
 
 diff --git a/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
-index ba610e05806ad020d439d59d30b820bc9cd3fbff..6afaab31539667667481f7e9bfc0c6846abe661a 100644
+index d8efb00c325448d566c59418fe22268c6eb4cfce..f7a6ab35c95ffda73f17843916ddb624ad290b42 100644
 --- a/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
 +++ b/src/main/java/net/minecraft/world/level/block/entity/BeehiveBlockEntity.java
-@@ -134,6 +134,22 @@ public class BeehiveBlockEntity extends BlockEntity {
+@@ -146,11 +146,33 @@ public class BeehiveBlockEntity extends BlockEntity {
          return list;
      }
  
 +    // Purpur start
-+    public List<Entity> releaseBee(BlockState iblockdata, BeeData data, BeehiveBlockEntity.BeeReleaseStatus tileentitybeehive_releasestatus, boolean force) {
++    public List<Entity> releaseBee(BlockState iblockdata, BeehiveBlockEntity.BeeData data, BeehiveBlockEntity.BeeReleaseStatus tileentitybeehive_releasestatus, boolean force) {
 +        List<Entity> list = Lists.newArrayList();
 +
-+        BeehiveBlockEntity.releaseBee(this.level, this.worldPosition, iblockdata, data, list, tileentitybeehive_releasestatus, this.savedFlowerPos, force);
++        BeehiveBlockEntity.releaseOccupant(this.level, this.worldPosition, iblockdata, data.occupant, list, tileentitybeehive_releasestatus, this.savedFlowerPos, force);
 +
 +        if (!list.isEmpty()) {
 +            stored.remove(data);
@@ -28,10 +28,8 @@ index ba610e05806ad020d439d59d30b820bc9cd3fbff..6afaab31539667667481f7e9bfc0c684
 +    }
 +    // Purpur end
 +
-     public void addOccupant(Entity entity, boolean hasNectar) {
-         this.addOccupantWithPresetTicks(entity, hasNectar, 0);
-     }
-@@ -143,6 +159,12 @@ public class BeehiveBlockEntity extends BlockEntity {
+     @VisibleForDebug
+     public int getOccupantCount() {
          return this.stored.size();
      }
  
@@ -44,20 +42,20 @@ index ba610e05806ad020d439d59d30b820bc9cd3fbff..6afaab31539667667481f7e9bfc0c684
      // Paper start - Add EntityBlockStorage clearEntities
      public void clearBees() {
          this.stored.clear();
-@@ -435,9 +457,9 @@ public class BeehiveBlockEntity extends BlockEntity {
-         private BeeReleaseStatus() {}
+@@ -471,9 +493,9 @@ public class BeehiveBlockEntity extends BlockEntity {
+         }
      }
  
 -    private static class BeeData {
 +    public static class BeeData { // Purpur - change from private to public
  
--        final CompoundTag entityData;
-+        public final CompoundTag entityData; // Purpur - make public
-         int ticksInHive;
-         int exitTickCounter; // Paper - Fix bees aging inside hives; separate counter for checking if bee should exit to reduce exit attempts
-         final int minOccupationTicks;
+-        private final BeehiveBlockEntity.Occupant occupant;
++        public final BeehiveBlockEntity.Occupant occupant; // Purpur - make public
+         private int exitTickCounter; // Paper - Fix bees aging inside hives; separate counter for checking if bee should exit to reduce exit attempts
+         private int ticksInHive;
+ 
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
-index 2e51fab98d95c93d2095f7be6dbb5d5474158bfb..32285c8e0f42897793759fba85a1e8658750c843 100644
+index 1a2a05160ba51d9c75f1ae6ae61d944d81428722..3beb26ad2ef0fded49a8da8c5dec64f9508c1995 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBeehive.java
 @@ -16,8 +16,15 @@ import org.bukkit.entity.Bee;
@@ -75,7 +73,7 @@ index 2e51fab98d95c93d2095f7be6dbb5d5474158bfb..32285c8e0f42897793759fba85a1e865
 +        // Purpur end
      }
  
-     protected CraftBeehive(CraftBeehive state) {
+     protected CraftBeehive(CraftBeehive state, Location location) {
 @@ -75,15 +82,54 @@ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> impl
                  bees.add((Bee) bee.getBukkitEntity());
              }
@@ -120,20 +118,20 @@ index 2e51fab98d95c93d2095f7be6dbb5d5474158bfb..32285c8e0f42897793759fba85a1e865
      public void addEntity(Bee entity) {
          Preconditions.checkArgument(entity != null, "Entity must not be null");
  
--        this.getSnapshot().addOccupant(((CraftBee) entity).getHandle(), false);
+-        this.getSnapshot().addOccupant(((CraftBee) entity).getHandle());
 +        int length = this.getSnapshot().getStored().size();  // Purpur
-+        getSnapshot().addOccupant(((CraftBee) entity).getHandle(), false);
++        getSnapshot().addOccupant(((CraftBee) entity).getHandle());
 +
 +        // Purpur start - check if new bee was added, and if yes, add to stored bees
-+        List<BeehiveBlockEntity.BeeData> s = this.getSnapshot().getStored();
-+        if(length < s.size()) {
-+            storage.add(new org.purpurmc.purpur.entity.PurpurStoredBee(s.get(s.size() - 1), this));
++        List<BeehiveBlockEntity.BeeData> storedBeeData = this.getSnapshot().getStored();
++        if(length < storedBeeData.size()) {
++            storage.add(new org.purpurmc.purpur.entity.PurpurStoredBee(storedBeeData.getLast(), this));
 +        }
 +        // Purpur end
      }
  
      @Override
-@@ -95,6 +141,7 @@ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> impl
+@@ -100,6 +146,7 @@ public class CraftBeehive extends CraftBlockEntityState<BeehiveBlockEntity> impl
      @Override
      public void clearEntities() {
          getSnapshot().clearBees();
@@ -143,15 +141,16 @@ index 2e51fab98d95c93d2095f7be6dbb5d5474158bfb..32285c8e0f42897793759fba85a1e865
  }
 diff --git a/src/main/java/org/purpurmc/purpur/entity/PurpurStoredBee.java b/src/main/java/org/purpurmc/purpur/entity/PurpurStoredBee.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..8efca1d91188ac4db911a8eb0fa9ea2cc3c48e28
+index 0000000000000000000000000000000000000000..25d718489a1a589d9754b8a02340cec819eec6d8
 --- /dev/null
 +++ b/src/main/java/org/purpurmc/purpur/entity/PurpurStoredBee.java
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,103 @@
 +package org.purpurmc.purpur.entity;
 +
 +import io.papermc.paper.adventure.PaperAdventure;
 +import net.kyori.adventure.text.Component;
 +import net.minecraft.nbt.Tag;
++import net.minecraft.server.MinecraftServer;
 +import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
 +import org.bukkit.block.EntityBlockStorage;
 +import org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer;
@@ -177,12 +176,12 @@ index 0000000000000000000000000000000000000000..8efca1d91188ac4db911a8eb0fa9ea2c
 +        this.handle = data;
 +        this.blockStorage = blockStorage;
 +
-+        this.customName = handle.entityData.contains("CustomName", Tag.TAG_STRING)
-+                ? PaperAdventure.asAdventure(net.minecraft.network.chat.Component.Serializer.fromJson(handle.entityData.getString("CustomName")))
++        this.customName = handle.occupant.entityData().contains("CustomName")
++                ? PaperAdventure.asAdventure(net.minecraft.network.chat.Component.Serializer.fromJson(handle.occupant.entityData().getUnsafe().getString("CustomName"), MinecraftServer.getDefaultRegistryAccess()))
 +                : null;
 +
-+        if(handle.entityData.contains("BukkitValues", Tag.TAG_COMPOUND)) {
-+            this.persistentDataContainer.putAll(handle.entityData.getCompound("BukkitValues"));
++        if(handle.occupant.entityData().getUnsafe().contains("BukkitValues", Tag.TAG_COMPOUND)) {
++            this.persistentDataContainer.putAll(handle.occupant.entityData().getUnsafe().getCompound("BukkitValues"));
 +        }
 +    }
 +
@@ -241,11 +240,11 @@ index 0000000000000000000000000000000000000000..8efca1d91188ac4db911a8eb0fa9ea2c
 +
 +    @Override
 +    public void update() {
-+        handle.entityData.put("BukkitValues", this.persistentDataContainer.toTagCompound());
++        handle.occupant.entityData().copyTag().put("BukkitValues", this.persistentDataContainer.toTagCompound());
 +        if(customName == null) {
-+            handle.entityData.remove("CustomName");
++            handle.occupant.entityData().copyTag().remove("CustomName");
 +        } else {
-+            handle.entityData.putString("CustomName", net.minecraft.network.chat.Component.Serializer.toJson(PaperAdventure.asVanilla(customName)));
++            handle.occupant.entityData().copyTag().putString("CustomName", net.minecraft.network.chat.Component.Serializer.toJson(PaperAdventure.asVanilla(customName), MinecraftServer.getDefaultRegistryAccess()));
 +        }
 +    }
 +}
