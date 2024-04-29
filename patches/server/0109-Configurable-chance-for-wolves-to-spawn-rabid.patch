@@ -1,0 +1,214 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Encode42 <me@encode42.dev>
+Date: Tue, 8 Dec 2020 17:15:15 -0500
+Subject: [PATCH] Configurable chance for wolves to spawn rabid
+
+Configurable chance to spawn a wolf that is rabid.
+Rabid wolves attack all players, mobs, and animals.
+
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Wolf.java b/src/main/java/net/minecraft/world/entity/animal/Wolf.java
+index 4212c3921a4059c539ca37f9609ef50538bc1fae..5c74febb5ff6632a35f856717a6c44df38c1d329 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Wolf.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Wolf.java
+@@ -30,6 +30,8 @@ import net.minecraft.world.DifficultyInstance;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.InteractionResult;
+ import net.minecraft.world.damagesource.DamageSource;
++import net.minecraft.world.effect.MobEffectInstance;
++import net.minecraft.world.effect.MobEffects;
+ import net.minecraft.world.entity.AgeableMob;
+ import net.minecraft.world.entity.Crackiness;
+ import net.minecraft.world.entity.Entity;
+@@ -104,6 +106,37 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+ 
+         return entitytypes == EntityType.SHEEP || entitytypes == EntityType.RABBIT || entitytypes == EntityType.FOX;
+     };
++    // Purpur start - rabid wolf spawn chance
++    private boolean isRabid = false;
++    private static final Predicate<LivingEntity> RABID_PREDICATE = entity -> entity instanceof net.minecraft.server.level.ServerPlayer || entity instanceof Mob;
++    private final net.minecraft.world.entity.ai.goal.Goal PATHFINDER_VANILLA = new NonTameRandomTargetGoal<>(this, Animal.class, false, PREY_SELECTOR);
++    private final net.minecraft.world.entity.ai.goal.Goal PATHFINDER_RABID = new NonTameRandomTargetGoal<>(this, LivingEntity.class, false, RABID_PREDICATE);
++    private static final class AvoidRabidWolfGoal extends AvoidEntityGoal<Wolf> {
++        private final Wolf wolf;
++
++        public AvoidRabidWolfGoal(Wolf wolf, float distance, double minSpeed, double maxSpeed) {
++            super(wolf, Wolf.class, distance, minSpeed, maxSpeed);
++            this.wolf = wolf;
++        }
++
++        @Override
++        public boolean canUse() {
++            return super.canUse() && !this.wolf.isRabid() && this.toAvoid != null && this.toAvoid.isRabid(); // wolves which are not rabid run away from rabid wolves
++        }
++
++        @Override
++        public void start() {
++            this.wolf.setTarget(null);
++            super.start();
++        }
++
++        @Override
++        public void tick() {
++            this.wolf.setTarget(null);
++            super.tick();
++        }
++    }
++    // Purpur end
+     private static final float START_HEALTH = 8.0F;
+     private static final float TAME_HEALTH = 40.0F;
+     private static final float ARMOR_REPAIR_UNIT = 0.125F;
+@@ -156,6 +189,30 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+         return this.level().purpurConfig.wolfBreedingTicks;
+     }
+ 
++    public boolean isRabid() {
++        return this.isRabid;
++    }
++
++    public void setRabid(boolean isRabid) {
++        this.isRabid = isRabid;
++        updatePathfinders(true);
++    }
++
++    public void updatePathfinders(boolean modifyEffects) {
++        this.targetSelector.removeGoal(PATHFINDER_VANILLA);
++        this.targetSelector.removeGoal(PATHFINDER_RABID);
++        if (this.isRabid) {
++            setOwnerUUID(null);
++            setTame(false, true);
++            this.targetSelector.addGoal(5, PATHFINDER_RABID);
++            if (modifyEffects) this.addEffect(new MobEffectInstance(MobEffects.CONFUSION, 1200));
++        } else {
++            this.targetSelector.addGoal(5, PATHFINDER_VANILLA);
++            this.stopBeingAngry();
++            if (modifyEffects) this.removeEffect(MobEffects.CONFUSION);
++        }
++    }
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(1, new FloatGoal(this));
+@@ -163,6 +220,7 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+         this.goalSelector.addGoal(1, new Wolf.WolfPanicGoal(this, 1.5D));
+         this.goalSelector.addGoal(2, new SitWhenOrderedToGoal(this));
+         this.goalSelector.addGoal(3, new Wolf.WolfAvoidEntityGoal<>(this, Llama.class, 24.0F, 1.5D, 1.5D));
++        this.goalSelector.addGoal(3, new AvoidRabidWolfGoal(this, 24.0F, 1.5D, 1.5D)); // Purpur
+         this.goalSelector.addGoal(4, new LeapAtTargetGoal(this, 0.4F));
+         this.goalSelector.addGoal(5, new MeleeAttackGoal(this, 1.0D, true));
+         this.goalSelector.addGoal(6, new FollowOwnerGoal(this, 1.0D, 10.0F, 2.0F, false));
+@@ -176,7 +234,7 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+         this.targetSelector.addGoal(2, new OwnerHurtTargetGoal(this));
+         this.targetSelector.addGoal(3, (new HurtByTargetGoal(this, new Class[0])).setAlertOthers());
+         this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, Player.class, 10, true, false, this::isAngryAt));
+-        this.targetSelector.addGoal(5, new NonTameRandomTargetGoal<>(this, Animal.class, false, Wolf.PREY_SELECTOR));
++        // this.targetSelector.addGoal(5, new NonTameRandomTargetGoal<>(this, Animal.class, false, Wolf.PREY_SELECTOR)); // Purpur - moved to updatePathfinders()
+         this.targetSelector.addGoal(6, new NonTameRandomTargetGoal<>(this, Turtle.class, false, Turtle.BABY_ON_LAND_SELECTOR));
+         this.targetSelector.addGoal(7, new NearestAttackableTargetGoal<>(this, AbstractSkeleton.class, false));
+         this.targetSelector.addGoal(8, new ResetUniversalAngerTargetGoal<>(this, true));
+@@ -219,6 +277,7 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+     public void addAdditionalSaveData(CompoundTag nbt) {
+         super.addAdditionalSaveData(nbt);
+         nbt.putByte("CollarColor", (byte) this.getCollarColor().getId());
++        nbt.putBoolean("Purpur.IsRabid", this.isRabid); // Purpur
+         nbt.putString("variant", ((ResourceKey) this.getVariant().unwrapKey().orElse(WolfVariants.PALE)).location().toString());
+         this.addPersistentAngerSaveData(nbt);
+     }
+@@ -234,6 +293,10 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+         if (nbt.contains("CollarColor", 99)) {
+             this.setCollarColor(DyeColor.byId(nbt.getInt("CollarColor")));
+         }
++        // Purpur start
++        this.isRabid = nbt.getBoolean("Purpur.IsRabid");
++        this.updatePathfinders(false);
++        // Purpur end
+ 
+         this.readPersistentAngerSaveData(this.level(), nbt);
+     }
+@@ -252,6 +315,12 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+         }
+ 
+         this.setVariant(holder1);
++
++        // Purpur start
++        this.isRabid = world.getLevel().purpurConfig.wolfNaturalRabid > 0.0D && random.nextDouble() <= world.getLevel().purpurConfig.wolfNaturalRabid;
++        this.updatePathfinders(false);
++        // Purpur end
++
+         return super.finalizeSpawn(world, difficulty, spawnReason, (SpawnGroupData) entityData);
+     }
+ 
+@@ -295,6 +364,11 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+     public void tick() {
+         super.tick();
+         if (this.isAlive()) {
++            // Purpur start
++            if (this.age % 300 == 0 && this.isRabid()) {
++                this.addEffect(new MobEffectInstance(MobEffects.CONFUSION, 400));
++            }
++            // Purpur end
+             this.interestedAngleO = this.interestedAngle;
+             if (this.isInterested()) {
+                 this.interestedAngle += (1.0F - this.interestedAngle) * 0.4F;
+@@ -539,6 +613,19 @@ public class Wolf extends TamableAnimal implements NeutralMob, VariantHolder<Hol
+             itemstack.consume(1, player);
+             this.tryToTame(player);
+             return InteractionResult.SUCCESS;
++        // Purpur start
++        } else if (this.level().purpurConfig.wolfMilkCuresRabies && itemstack.getItem() == Items.MILK_BUCKET && this.isRabid()) {
++            if (!player.isCreative()) {
++                player.setItemInHand(hand, new ItemStack(Items.BUCKET));
++            }
++            this.setRabid(false);
++            for (int i = 0; i < 10; ++i) {
++                ((ServerLevel) level()).sendParticles(((ServerLevel) level()).players(), null, ParticleTypes.HAPPY_VILLAGER,
++                        getX() + random.nextFloat(), getY() + (random.nextFloat() * 1.5), getZ() + random.nextFloat(), 1,
++                        random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, 0, true);
++            }
++            return InteractionResult.SUCCESS;
++        // Purpur end
+         } else {
+             return super.mobInteract(player, hand);
+         }
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
+index 86574da257731de7646a712ed73384955fe35aa3..e223234dd64b0e41441c3b9f649f0b64dc6d98c4 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
+@@ -146,4 +146,16 @@ public class CraftWolf extends CraftTameableAnimal implements Wolf {
+             return this.getKey().hashCode();
+         }
+     }
++
++    // Purpur start
++    @Override
++    public boolean isRabid() {
++        return getHandle().isRabid();
++    }
++
++    @Override
++    public void setRabid(boolean isRabid) {
++        getHandle().setRabid(isRabid);
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index d621f330f954a12635d8c87c5ff66dae7448a856..fc0a733df7f0e851681bed1b22bfa6836812272a 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1938,6 +1938,8 @@ public class PurpurWorldConfig {
+     public boolean wolfRidableInWater = true;
+     public boolean wolfControllable = true;
+     public double wolfMaxHealth = 8.0D;
++    public boolean wolfMilkCuresRabies = true;
++    public double wolfNaturalRabid = 0.0D;
+     public int wolfBreedingTicks = 6000;
+     private void wolfSettings() {
+         wolfRidable = getBoolean("mobs.wolf.ridable", wolfRidable);
+@@ -1949,6 +1951,8 @@ public class PurpurWorldConfig {
+             set("mobs.wolf.attributes.max_health", oldValue);
+         }
+         wolfMaxHealth = getDouble("mobs.wolf.attributes.max_health", wolfMaxHealth);
++        wolfMilkCuresRabies = getBoolean("mobs.wolf.milk-cures-rabid-wolves", wolfMilkCuresRabies);
++        wolfNaturalRabid = getDouble("mobs.wolf.spawn-rabid-chance", wolfNaturalRabid);
+         wolfBreedingTicks = getInt("mobs.wolf.breeding-delay-ticks", wolfBreedingTicks);
+     }
+ 
