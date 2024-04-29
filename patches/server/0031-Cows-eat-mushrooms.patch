@@ -1,0 +1,136 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sat, 4 May 2019 01:10:30 -0500
+Subject: [PATCH] Cows eat mushrooms
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/animal/Cow.java b/src/main/java/net/minecraft/world/entity/animal/Cow.java
+index bee1a275f242866206dc461461b7962e04289ddc..bda0d933ccbee613aa7fb31534351a0d2dbab0a7 100644
+--- a/src/main/java/net/minecraft/world/entity/animal/Cow.java
++++ b/src/main/java/net/minecraft/world/entity/animal/Cow.java
+@@ -2,6 +2,7 @@ package net.minecraft.world.entity.animal;
+ 
+ import javax.annotation.Nullable;
+ import net.minecraft.core.BlockPos;
++import net.minecraft.core.particles.ParticleTypes;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.sounds.SoundEvent;
+ import net.minecraft.sounds.SoundEvents;
+@@ -29,6 +30,7 @@ import net.minecraft.world.item.ItemStack;
+ import net.minecraft.world.item.ItemUtils;
+ import net.minecraft.world.item.Items;
+ import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.state.BlockState;
+ // CraftBukkit start
+ import org.bukkit.craftbukkit.event.CraftEventFactory;
+@@ -73,7 +75,7 @@ public class Cow extends Animal {
+         this.goalSelector.addGoal(1, new PanicGoal(this, 2.0D));
+         this.goalSelector.addGoal(2, new BreedGoal(this, 1.0D));
+         this.goalSelector.addGoal(3, new TemptGoal(this, 1.25D, (itemstack) -> {
+-            return itemstack.is(ItemTags.COW_FOOD);
++            return level().purpurConfig.cowFeedMushrooms > 0 && (itemstack.is(Blocks.RED_MUSHROOM.asItem()) || itemstack.is(Blocks.BROWN_MUSHROOM.asItem())) || itemstack.is(ItemTags.COW_FOOD); // Purpur
+         }, false));
+         this.goalSelector.addGoal(4, new FollowParentGoal(this, 1.25D));
+         this.goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 1.0D));
+@@ -134,6 +136,10 @@ public class Cow extends Animal {
+ 
+             player.setItemInHand(hand, itemstack1);
+             return InteractionResult.sidedSuccess(this.level().isClientSide);
++        // Purpur start - feed mushroom to change to mooshroom
++        } else if (level().purpurConfig.cowFeedMushrooms > 0 && this.getType() != EntityType.MOOSHROOM && isMushroom(itemstack)) {
++            return this.feedMushroom(player, itemstack);
++        // Purpur end
+         } else {
+             return super.mobInteract(player, hand);
+         }
+@@ -149,4 +155,69 @@ public class Cow extends Animal {
+     public EntityDimensions getDefaultDimensions(Pose pose) {
+         return this.isBaby() ? Cow.BABY_DIMENSIONS : super.getDefaultDimensions(pose);
+     }
++
++    // Purpur start - feed mushroom to change to mooshroom
++    private int redMushroomsFed = 0;
++    private int brownMushroomsFed = 0;
++
++    private boolean isMushroom(ItemStack stack) {
++        return stack.getItem() == Blocks.RED_MUSHROOM.asItem() || stack.getItem() == Blocks.BROWN_MUSHROOM.asItem();
++    }
++
++    private int incrementFeedCount(ItemStack stack) {
++        if (stack.getItem() == Blocks.RED_MUSHROOM.asItem()) {
++            return ++redMushroomsFed;
++        } else {
++            return ++brownMushroomsFed;
++        }
++    }
++
++    private InteractionResult feedMushroom(Player player, ItemStack stack) {
++        level().broadcastEntityEvent(this, (byte) 18); // hearts
++        playSound(SoundEvents.COW_MILK, 1.0F, 1.0F);
++        if (incrementFeedCount(stack) < level().purpurConfig.cowFeedMushrooms) {
++            if (!player.getAbilities().instabuild) {
++                stack.shrink(1);
++            }
++            return InteractionResult.CONSUME; // require 5 mushrooms to transform (prevents mushroom duping)
++        }
++        MushroomCow mooshroom = EntityType.MOOSHROOM.create(level());
++        if (mooshroom == null) {
++            return InteractionResult.PASS;
++        }
++        if (stack.getItem() == Blocks.BROWN_MUSHROOM.asItem()) {
++            mooshroom.setVariant(MushroomCow.MushroomType.BROWN);
++        } else {
++            mooshroom.setVariant(MushroomCow.MushroomType.RED);
++        }
++        mooshroom.moveTo(this.getX(), this.getY(), this.getZ(), this.getYRot(), this.getXRot());
++        mooshroom.setHealth(this.getHealth());
++        mooshroom.setAge(getAge());
++        mooshroom.copyPosition(this);
++        mooshroom.setYBodyRot(this.yBodyRot);
++        mooshroom.setYHeadRot(this.getYHeadRot());
++        mooshroom.yRotO = this.yRotO;
++        mooshroom.xRotO = this.xRotO;
++        if (this.hasCustomName()) {
++            mooshroom.setCustomName(this.getCustomName());
++        }
++        if (CraftEventFactory.callEntityTransformEvent(this, mooshroom, org.bukkit.event.entity.EntityTransformEvent.TransformReason.INFECTION).isCancelled()) {
++            return InteractionResult.PASS;
++        }
++        if (!new com.destroystokyo.paper.event.entity.EntityTransformedEvent(this.getBukkitEntity(), mooshroom.getBukkitEntity(), com.destroystokyo.paper.event.entity.EntityTransformedEvent.TransformedReason.INFECTED).callEvent()) {
++            return InteractionResult.PASS;
++        }
++        this.level().addFreshEntity(mooshroom);
++        this.remove(RemovalReason.DISCARDED, org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD);
++        if (!player.getAbilities().instabuild) {
++            stack.shrink(1);
++        }
++        for (int i = 0; i < 15; ++i) {
++            ((ServerLevel) level()).sendParticles(((ServerLevel) level()).players(), null, ParticleTypes.HAPPY_VILLAGER,
++                    getX() + random.nextFloat(), getY() + (random.nextFloat() * 2), getZ() + random.nextFloat(), 1,
++                    random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, 0, true);
++        }
++        return InteractionResult.SUCCESS;
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 73b86b6a367cb37b180b4806671c19dccd90950a..0b19c023f020438418e41b6c2803399d967348dc 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -310,6 +310,7 @@ public class PurpurWorldConfig {
+     public boolean cowRidableInWater = true;
+     public boolean cowControllable = true;
+     public double cowMaxHealth = 10.0D;
++    public int cowFeedMushrooms = 0;
+     private void cowSettings() {
+         cowRidable = getBoolean("mobs.cow.ridable", cowRidable);
+         cowRidableInWater = getBoolean("mobs.cow.ridable-in-water", cowRidableInWater);
+@@ -320,6 +321,7 @@ public class PurpurWorldConfig {
+             set("mobs.cow.attributes.max_health", oldValue);
+         }
+         cowMaxHealth = getDouble("mobs.cow.attributes.max_health", cowMaxHealth);
++        cowFeedMushrooms = getInt("mobs.cow.feed-mushrooms-for-mooshroom", cowFeedMushrooms);
+     }
+ 
+     public boolean creeperRidable = false;
