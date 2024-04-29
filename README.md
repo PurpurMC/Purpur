@@ -114,7 +114,7 @@ Use the command `./gradlew build` to build the API and server. Compiled JARs
 will be placed under `Purpur-API/build/libs` and `Purpur-Server/build/libs`.
 **These JARs are not used to start a server.**
 
-To compile a server-ready purpurclip jar, run `./gradlew createReobfPaperclipJar`.
+To compile a server-ready purpurclip jar, run `./gradlew createMojmapBundlerJar`.
 To install the `purpur-api` and `purpur` dependencies to your local Maven repo, run `./gradlew publishToMavenLocal`. The compiled purpurclip jar will be in `build/libs/` not `Purpur-Server/build/libs`.
 
 Special Thanks To:
