@@ -4,6 +4,18 @@ Date: Thu, 9 May 2019 14:27:37 -0500
 Subject: [PATCH] Silk touch spawners
 
 
+diff --git a/src/main/java/net/minecraft/world/item/BlockItem.java b/src/main/java/net/minecraft/world/item/BlockItem.java
+index 96fb69ec6db2e7c8c728435f0c537b076259b2fb..3253361d91e2a2e68d354eaf3dd3e3cd486e191d 100644
+--- a/src/main/java/net/minecraft/world/item/BlockItem.java
++++ b/src/main/java/net/minecraft/world/item/BlockItem.java
+@@ -219,6 +219,7 @@ public class BlockItem extends Item {
+ 
+                 if (tileentity != null) {
+                     if (!world.isClientSide && tileentity.onlyOpCanSetNbt() && (player == null || !(player.canUseGameMasterBlocks() || (player.getAbilities().instabuild && player.getBukkitEntity().hasPermission("minecraft.nbt.place"))))) { // Spigot - add permission
++                        if (!(!world.isClientSide && world.purpurConfig.silkTouchEnabled && tileentity instanceof net.minecraft.world.level.block.entity.SpawnerBlockEntity && player.getBukkitEntity().hasPermission("purpur.drop.spawners")))
+                         return false;
+                     }
+ 
 diff --git a/src/main/java/net/minecraft/world/item/Items.java b/src/main/java/net/minecraft/world/item/Items.java
 index d00b59efb754594cf532f8598f4b6d3b29693232..6467358f5fdf4cd4f7c1e2cc65c834a9da39596a 100644
 --- a/src/main/java/net/minecraft/world/item/Items.java
@@ -18,10 +30,10 @@ index d00b59efb754594cf532f8598f4b6d3b29693232..6467358f5fdf4cd4f7c1e2cc65c834a9
      public static final Item CRAFTING_TABLE = registerBlock(Blocks.CRAFTING_TABLE);
      public static final Item FARMLAND = registerBlock(Blocks.FARMLAND);
 diff --git a/src/main/java/net/minecraft/world/level/block/SpawnerBlock.java b/src/main/java/net/minecraft/world/level/block/SpawnerBlock.java
-index 4f190a40b8474aa06a92c8afcc06d0044120ff7b..bc3c0b7c06d0ed5c4f54cf08c37f7331bb0cc00d 100644
+index 4f190a40b8474aa06a92c8afcc06d0044120ff7b..66c17bdfecdfbcfb2d853e561432dd51a8f7ed46 100644
 --- a/src/main/java/net/minecraft/world/level/block/SpawnerBlock.java
 +++ b/src/main/java/net/minecraft/world/level/block/SpawnerBlock.java
-@@ -42,6 +42,55 @@ public class SpawnerBlock extends BaseEntityBlock {
+@@ -42,6 +42,57 @@ public class SpawnerBlock extends BaseEntityBlock {
          return createTickerHelper(type, BlockEntityType.MOB_SPAWNER, world.isClientSide ? SpawnerBlockEntity::clientTick : SpawnerBlockEntity::serverTick);
      }
  
@@ -29,14 +41,17 @@ index 4f190a40b8474aa06a92c8afcc06d0044120ff7b..bc3c0b7c06d0ed5c4f54cf08c37f7331
 +    @Override
 +    public void playerDestroy(Level level, net.minecraft.world.entity.player.Player player, BlockPos pos, BlockState state, @Nullable BlockEntity blockEntity, ItemStack stack, boolean includeDrops, boolean dropExp) {
 +        if (level.purpurConfig.silkTouchEnabled && player.getBukkitEntity().hasPermission("purpur.drop.spawners") && isSilkTouch(level, stack)) {
-+            java.util.Optional<net.minecraft.world.entity.EntityType<?>> type = net.minecraft.world.entity.EntityType.by(((SpawnerBlockEntity) blockEntity).getSpawner().nextSpawnData.getEntityToSpawn());
-+
-+            net.minecraft.world.entity.EntityType<?> entityType = type.orElse(null);
 +            ItemStack item = new ItemStack(Blocks.SPAWNER.asItem());
-+            if (entityType != null) {
-+                final net.kyori.adventure.text.Component mobName = io.papermc.paper.adventure.PaperAdventure.asAdventure(entityType.getDescription());
-+                // blockEntityTag.remove("Delay"); // remove this tag to allow stacking duplicate spawners
-+                // tag.put("BlockEntityTag", blockEntityTag);
++
++            net.minecraft.world.level.SpawnData nextSpawnData = blockEntity instanceof SpawnerBlockEntity spawnerBlock ? spawnerBlock.getSpawner().nextSpawnData : null;
++            java.util.Optional<net.minecraft.world.entity.EntityType<?>> type = java.util.Optional.empty();
++            if (nextSpawnData != null) {
++                type = net.minecraft.world.entity.EntityType.by(nextSpawnData.getEntityToSpawn());
++                net.minecraft.world.level.SpawnData.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE, nextSpawnData).result().ifPresent(tag -> item.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.EMPTY.update(compoundTag -> compoundTag.put("Purpur.SpawnData", tag))));
++            }
++
++            if (type.isPresent()) {
++                final net.kyori.adventure.text.Component mobName = io.papermc.paper.adventure.PaperAdventure.asAdventure(type.get().getDescription());
 +
 +                String name = level.purpurConfig.silkTouchSpawnerName;
 +                if (name != null && !name.isEmpty() && !name.equals("Monster Spawner")) {
@@ -59,7 +74,6 @@ index 4f190a40b8474aa06a92c8afcc06d0044120ff7b..bc3c0b7c06d0ed5c4f54cf08c37f7331
 +                        loreComponentList.add(io.papermc.paper.adventure.PaperAdventure.asVanilla(lineComponent));
 +                    }
 +
-+
 +                    item.set(net.minecraft.core.component.DataComponents.LORE, new net.minecraft.world.item.component.ItemLore(loreComponentList, loreComponentList));
 +                }
 +                item.set(net.minecraft.core.component.DataComponents.HIDE_ADDITIONAL_TOOLTIP, net.minecraft.util.Unit.INSTANCE);
@@ -77,7 +91,7 @@ index 4f190a40b8474aa06a92c8afcc06d0044120ff7b..bc3c0b7c06d0ed5c4f54cf08c37f7331
      @Override
      protected void spawnAfterBreak(BlockState state, ServerLevel world, BlockPos pos, ItemStack tool, boolean dropExperience) {
          super.spawnAfterBreak(state, world, pos, tool, dropExperience);
-@@ -50,6 +99,7 @@ public class SpawnerBlock extends BaseEntityBlock {
+@@ -50,6 +101,7 @@ public class SpawnerBlock extends BaseEntityBlock {
  
      @Override
      public int getExpDrop(BlockState iblockdata, ServerLevel worldserver, BlockPos blockposition, ItemStack itemstack, boolean flag) {
@@ -130,10 +144,10 @@ index 70f53ccb22de2c05c9ead68f8bd29d0b69d0993f..d4bca5b5f3d10c3a04befd8c365f4643
      public boolean useNightVisionWhenRiding = false;
 diff --git a/src/main/java/org/purpurmc/purpur/item/SpawnerItem.java b/src/main/java/org/purpurmc/purpur/item/SpawnerItem.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..1a929cd455e361f4d544de26b5392b62660b31db
+index 0000000000000000000000000000000000000000..ed50cb2115401c9039df4136caf5a087a5f5991c
 --- /dev/null
 +++ b/src/main/java/org/purpurmc/purpur/item/SpawnerItem.java
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,40 @@
 +package org.purpurmc.purpur.item;
 +
 +import net.minecraft.core.BlockPos;
@@ -160,16 +174,14 @@ index 0000000000000000000000000000000000000000..1a929cd455e361f4d544de26b5392b62
 +    protected boolean updateCustomBlockEntityTag(BlockPos pos, Level level, Player player, ItemStack stack, BlockState state) {
 +        boolean handled = super.updateCustomBlockEntityTag(pos, level, player, stack, state);
 +        if (level.purpurConfig.silkTouchEnabled && player.getBukkitEntity().hasPermission("purpur.place.spawners")) {
-+            BlockEntity spawner = level.getBlockEntity(pos);
-+            if (spawner instanceof SpawnerBlockEntity && stack.has(DataComponents.CUSTOM_DATA)) {
-+                CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
++            BlockEntity blockEntity = level.getBlockEntity(pos);
++            if (blockEntity instanceof SpawnerBlockEntity spawner) {
++                CompoundTag customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
 +                if (customData.contains("Purpur.mob_type")) {
-+                    CompoundTag unsafe = customData.getUnsafe();
-+
-+                    EntityType.byString(unsafe.getString("Purpur.mob_type")).ifPresent(type ->
-+                            ((SpawnerBlockEntity) spawner).getSpawner().setEntityId(type, level, level.random, pos));
-+                } else if (stack.has(DataComponents.BLOCK_ENTITY_DATA)) {
-+                    spawner.applyComponentsFromItemStack(stack);
++                    EntityType.byString(customData.getString("Purpur.mob_type")).ifPresent(type -> spawner.getSpawner().setEntityId(type, level, level.random, pos));
++                } else if (customData.contains("Purpur.SpawnData")) {
++                    net.minecraft.world.level.SpawnData.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, customData.getCompound("Purpur.SpawnData")).result()
++                        .ifPresent(spawnData -> spawner.getSpawner().nextSpawnData = spawnData);
 +                }
 +            }
 +        }
