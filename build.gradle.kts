@@ -93,6 +93,7 @@ tasks.generateDevelopmentBundle {
         "https://repo.maven.apache.org/maven2/",
         paperMavenPublicUrl,
         "https://repo.purpurmc.org/snapshots",
+        "https://s01.oss.sonatype.org/content/repositories/snapshots/", // TODO - Adventure snapshot
     )
 }
 
