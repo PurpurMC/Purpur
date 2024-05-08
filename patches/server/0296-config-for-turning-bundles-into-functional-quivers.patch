@@ -1,0 +1,191 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: granny <granny@purpurmc.org>
+Date: Mon, 16 Oct 2023 21:54:47 -0700
+Subject: [PATCH] config for turning bundles into functional quivers
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+index 53ff232129443ba3242cfc57fc57026bf76d96e8..f5b78ae87457c0d3a550082fdf8640267f413130 100644
+--- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
++++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+@@ -4495,6 +4495,11 @@ public abstract class LivingEntity extends Entity implements Attackable {
+     }
+ 
+     public ItemStack getProjectile(ItemStack stack) {
++    // Purpur start
++        return getProjectile(stack, false);
++    }
++    public ItemStack getProjectile(ItemStack stack, boolean useBundleItemStack) {
++    // Purpur end
+         return ItemStack.EMPTY;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Monster.java b/src/main/java/net/minecraft/world/entity/monster/Monster.java
+index e60e6b3e5ae5a468cfe649ed2222412f3bc8b268..265437318f3db4331d9062d99c980f80a19211c7 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Monster.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Monster.java
+@@ -144,6 +144,12 @@ public abstract class Monster extends PathfinderMob implements Enemy {
+ 
+     @Override
+     public ItemStack getProjectile(ItemStack stack) {
++    // Purpur start
++        return getProjectile(stack, false);
++    }
++    @Override
++    public ItemStack getProjectile(ItemStack stack, boolean useBundleItemStack) {
++    // Purpur end
+         if (stack.getItem() instanceof ProjectileWeaponItem) {
+             Predicate<ItemStack> predicate = ((ProjectileWeaponItem)stack.getItem()).getSupportedHeldProjectiles();
+             ItemStack itemStack = ProjectileWeaponItem.getHeldProjectile(this, predicate);
+diff --git a/src/main/java/net/minecraft/world/entity/player/Player.java b/src/main/java/net/minecraft/world/entity/player/Player.java
+index 845c4af5d5d38d54de4a1b20fe32bf5dd4776a29..15763ebc6c1ba3ba47d8110cf87fd4869660b2f4 100644
+--- a/src/main/java/net/minecraft/world/entity/player/Player.java
++++ b/src/main/java/net/minecraft/world/entity/player/Player.java
+@@ -2349,6 +2349,12 @@ public abstract class Player extends LivingEntity {
+ 
+     @Override
+     public ItemStack getProjectile(ItemStack stack) {
++    // Purpur start
++        return getProjectile(stack, false);
++    }
++    @Override
++    public ItemStack getProjectile(ItemStack stack, boolean useBundleItemStack) {
++    // Purpur end
+         if (!(stack.getItem() instanceof ProjectileWeaponItem)) {
+             return ItemStack.EMPTY;
+         } else {
+@@ -2363,6 +2369,38 @@ public abstract class Player extends LivingEntity {
+                 for (int i = 0; i < this.inventory.getContainerSize(); ++i) {
+                     ItemStack itemstack2 = this.inventory.getItem(i);
+ 
++                    // Purpur start
++                    if ((this.level().purpurConfig.bowUseBundleAsQuiver || this.level().purpurConfig.crossbowUseBundleAsQuiver) && itemstack2.getItem() instanceof net.minecraft.world.item.BundleItem) {
++                        net.minecraft.world.item.component.BundleContents bundleContents = itemstack2.get(net.minecraft.core.component.DataComponents.BUNDLE_CONTENTS);
++                        if (bundleContents == null || bundleContents.isEmpty()) {
++                            continue;
++                        }
++
++                        Optional<ItemStack> first = bundleContents.itemCopyStream().filter(predicate).findFirst();
++
++                        if (first.isEmpty()) {
++                            continue;
++                        }
++
++                        ItemStack itemStack = first.get();
++                        if (useBundleItemStack) {
++                            net.minecraft.world.item.component.BundleContents.Mutable mutable = new net.minecraft.world.item.component.BundleContents.Mutable(bundleContents);
++                            ItemStack itemStack2 = mutable.removeOne(itemStack);
++                            if (itemStack2 == null) {
++                                continue;
++                            }
++
++                            itemStack2.shrink(1);
++                            if (itemStack2.getCount() != 0) {
++                                mutable.tryInsert(itemStack2);
++                            }
++                            itemstack2.set(net.minecraft.core.component.DataComponents.BUNDLE_CONTENTS, mutable.toImmutable());
++                        }
++                        itemStack.setCount(1);
++                        return itemStack;
++                    }
++                    // Purpur end
++
+                     if (predicate.test(itemstack2)) {
+                         return itemstack2;
+                     }
+diff --git a/src/main/java/net/minecraft/world/item/BowItem.java b/src/main/java/net/minecraft/world/item/BowItem.java
+index ff39d3614f360918d74b54b817bc227f89d34c9c..4544835f2fe916e81f2932c1c6117bc9c1faa3ae 100644
+--- a/src/main/java/net/minecraft/world/item/BowItem.java
++++ b/src/main/java/net/minecraft/world/item/BowItem.java
+@@ -24,7 +24,7 @@ public class BowItem extends ProjectileWeaponItem {
+     @Override
+     public void releaseUsing(ItemStack stack, Level world, LivingEntity user, int remainingUseTicks) {
+         if (user instanceof Player player) {
+-            ItemStack itemStack = player.getProjectile(stack);
++            ItemStack itemStack = player.getProjectile(stack, true); // Purpur
+             if (!itemStack.isEmpty()) {
+                 int i = this.getUseDuration(stack) - remainingUseTicks;
+                 float f = getPowerForTime(i);
+diff --git a/src/main/java/net/minecraft/world/item/CrossbowItem.java b/src/main/java/net/minecraft/world/item/CrossbowItem.java
+index 78f124f5204e4af9318ca3eeced6b1e3353b210f..40c6076a9cb17ac8120181dab77290bb0131b121 100644
+--- a/src/main/java/net/minecraft/world/item/CrossbowItem.java
++++ b/src/main/java/net/minecraft/world/item/CrossbowItem.java
+@@ -62,7 +62,7 @@ public class CrossbowItem extends ProjectileWeaponItem {
+         if (chargedProjectiles != null && !chargedProjectiles.isEmpty()) {
+             this.performShooting(world, user, hand, itemStack, getShootingPower(chargedProjectiles), (float) world.purpurConfig.crossbowProjectileOffset, null); // Purpur
+             return InteractionResultHolder.consume(itemStack);
+-        } else if (!user.getProjectile(itemStack).isEmpty()) {
++        } else if (!user.getProjectile(itemStack).isEmpty()) { // Purpur
+             this.startSoundPlayed = false;
+             this.midLoadSoundPlayed = false;
+             user.startUsingItem(hand);
+@@ -107,7 +107,7 @@ public class CrossbowItem extends ProjectileWeaponItem {
+         return CrossbowItem.tryLoadProjectiles(shooter, crossbow, true);
+     }
+     private static boolean tryLoadProjectiles(LivingEntity shooter, ItemStack crossbow, boolean consume) {
+-        List<ItemStack> list = draw(crossbow, shooter.getProjectile(crossbow), shooter, (org.purpurmc.purpur.PurpurConfig.allowCrossbowInfinity && EnchantmentHelper.getItemEnchantmentLevel(Enchantments.INFINITY, crossbow) > 0) || consume);
++        List<ItemStack> list = draw(crossbow, shooter.getProjectile(crossbow, true), shooter, (org.purpurmc.purpur.PurpurConfig.allowCrossbowInfinity && EnchantmentHelper.getItemEnchantmentLevel(Enchantments.INFINITY, crossbow) > 0) || consume); // Purpur
+         // Paper end - Add EntityLoadCrossbowEvent
+         if (!list.isEmpty()) {
+             crossbow.set(DataComponents.CHARGED_PROJECTILES, ChargedProjectiles.of(list));
+diff --git a/src/main/java/net/minecraft/world/item/component/BundleContents.java b/src/main/java/net/minecraft/world/item/component/BundleContents.java
+index 00efca5920cefe60eb26654c2cdc69fb62894924..d4ce443420c9a3e2b7f0a0065f0024c756f70012 100644
+--- a/src/main/java/net/minecraft/world/item/component/BundleContents.java
++++ b/src/main/java/net/minecraft/world/item/component/BundleContents.java
+@@ -119,7 +119,12 @@ public final class BundleContents implements TooltipComponent {
+         }
+ 
+         private int findStackIndex(ItemStack stack) {
+-            if (!stack.isStackable()) {
++        // Purpur start
++            return this.findStackIndex(stack, false);
++        }
++        private int findStackIndex(ItemStack stack, boolean skipStackableCheck) {
++            if (!skipStackableCheck && !stack.isStackable()) {
++        // Purpur end
+                 return -1;
+             } else {
+                 for (int i = 0; i < this.items.size(); i++) {
+@@ -169,10 +174,19 @@ public final class BundleContents implements TooltipComponent {
+ 
+         @Nullable
+         public ItemStack removeOne() {
++        // Purpur start
++            return this.removeOne(null);
++        }
++        @Nullable
++        public ItemStack removeOne(ItemStack itemStack2) {
++        // Purpur end
+             if (this.items.isEmpty()) {
+                 return null;
+             } else {
+-                ItemStack itemStack = this.items.remove(0).copy();
++                // Purpur start
++                int stackIndex = itemStack2 != null ? this.findStackIndex(itemStack2, true) : -1;
++                ItemStack itemStack = this.items.remove(stackIndex == -1 ? 0 : stackIndex).copy();
++                // Purpur end
+                 this.weight = this.weight.subtract(BundleContents.getWeight(itemStack).multiplyBy(Fraction.getFraction(itemStack.getCount(), 1)));
+                 return itemStack;
+             }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index d8de8710d9b8cf2ae5c434b2b0b27e76ffbbe4bf..36d1d235c627bd4b9a45c332fca31c83549ccfe6 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -259,6 +259,8 @@ public class PurpurWorldConfig {
+     public boolean snowballExtinguishesFire = false;
+     public boolean snowballExtinguishesCandles = false;
+     public boolean snowballExtinguishesCampfires = false;
++    public boolean bowUseBundleAsQuiver = false;
++    public boolean crossbowUseBundleAsQuiver = false;
+     private void itemSettings() {
+         itemImmuneToCactus.clear();
+         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
+@@ -310,6 +312,8 @@ public class PurpurWorldConfig {
+         snowballExtinguishesFire = getBoolean("gameplay-mechanics.item.snowball.extinguish.fire", snowballExtinguishesFire);
+         snowballExtinguishesCandles = getBoolean("gameplay-mechanics.item.snowball.extinguish.candles", snowballExtinguishesCandles);
+         snowballExtinguishesCampfires = getBoolean("gameplay-mechanics.item.snowball.extinguish.campfires", snowballExtinguishesCampfires);
++        bowUseBundleAsQuiver = getBoolean("gameplay-mechanics.item.bow.use-bundle-as-quiver", bowUseBundleAsQuiver);
++        crossbowUseBundleAsQuiver = getBoolean("gameplay-mechanics.item.crossbow.use-bundle-as-quiver", crossbowUseBundleAsQuiver);
+     }
+ 
+     public double minecartMaxSpeed = 0.4D;
