@@ -4,11 +4,11 @@ Purpur is happy you're willing to contribute to our projects. We are usually
 very lenient with all submitted PRs, but there are still some guidelines you
 can follow to make the approval process go more smoothly.
 
-## Use a Personal Fork and not Organization
+## Use a Personal Fork and not an Organization
 
 Purpur will routinely modify your PR, whether it's a quick rebase or to take care
 of any minor nitpicks we might have. Often, it's better for us to solve these
-problems for you than make you go back and forth trying to fix it yourself.
+problems for you than make you go back and forth trying to fix them yourself.
 
 Unfortunately, if you use an organization for your PR, it prevents Purpur from
 modifying it. This requires us to manually merge your PR, resulting in us
@@ -27,12 +27,12 @@ which can be obtained in (most) package managers such as `apt` (Debian / Ubuntu;
 you will most likely use this for WSL), `homebrew` (macOS / Linux), and more:
 
 - `git` (package `git` everywhere);
-- A Java 16 or later JDK (packages vary, use Google/DuckDuckGo/etc.).
+- A Java 21 or later JDK (packages vary, use Google/DuckDuckGo/etc.).
     - [Adoptium](https://adoptium.net/) has builds for most operating systems.
-    - Purpur requires JDK 16 to build, however makes use of Gradle's
+    - Purpur requires JDK 21 to build, however, makes use of Gradle's
       [Toolchains](https://docs.gradle.org/current/userguide/toolchains.html)
-      feature to allow building with only JRE 8 or later installed. (Gradle will
-      automatically provision JDK 16 for compilation if it cannot find an existing
+      feature to allow building with only JRE 11 or later installed. (Gradle will
+      automatically provision JDK 21 for compilation if it cannot find an existing
       install).
 
 If you're on Windows, check
@@ -42,16 +42,16 @@ If you're compiling with Docker, you can use Adoptium's
 [`eclipse-temurin`](https://hub.docker.com/_/eclipse-temurin/) images like so:
 
 ```console
-# docker run -it -v "$(pwd)":/data --rm eclipse-temurin:16.0.2_7-jdk bash
+# docker run -it -v "$(pwd)":/data --rm eclipse-temurin:21.0.3_9-jdk bash
 Pulling image...
 
 root@abcdefg1234:/# javac -version
-javac 16.0.2
+javac 21.0.3
 ```
 
 ## Understanding Patches
 
-Purpur is mostly patches and extensions to Paper/Spigot. These patches/extensions are
+Paper is mostly patches and extensions to Spigot. These patches/extensions are
 split into different directories which target certain parts of the code. These
 directories are:
 
@@ -66,7 +66,7 @@ Assuming you have already forked the repository:
 
 1. Clone your fork to your local machine;
 2. Type `./gradlew applyPatches` in a terminal to apply the changes from upstream.
-   On Windows, leave out the `./` at the beginning for all `gradlew` commands;
+   On Windows, replace the `./` with `.\` at the beginning for all `gradlew` commands;
 3. cd into `Purpur-Server` for server changes, and `Purpur-API` for API changes.
 <!--You can also run `./paper server` or `./paper api` for these same directories
 respectively.
@@ -167,7 +167,7 @@ messing with your HEADs.
       assist you too.
     - Alternatively, if you only know the name of the patch, you can do
       `git commit -a --fixup "Subject of Patch name"`.
-1. Rebase with autosquash: `git rebase --autosquash -i base`.
+1. Rebase with autosquash: `git rebase -i --autosquash base`.
    This will automatically move your fixup commit to the right place, and you just
    need to "save" the changes.
 1. Type `./gradlew rebuildPatches` in the root directory;
@@ -183,7 +183,7 @@ These steps assume the `origin` remote is your fork of this repository and `upst
 1. Checkout feature/fix branch and rebase on master: `git checkout patch-branch && git rebase master`.
 1. Apply updated patches: `./gradlew applyPatches`.
 1. If there are conflicts, fix them.
-1. If your PR creates new patches instead of modifying exist ones, in both the `Purpur-Server` and `Purpur-API` directories, ensure your newly-created patch is the last commit by either:
+1. If your PR creates new patches instead of modifying existing ones, in both the `Purpur-Server` and `Purpur-API` directories, ensure your newly-created patch is the last commit by either:
     * Renaming the patch file with a large 4-digit number in front (e.g. 9999-Patch-to-add-some-new-stuff.patch), and re-applying patches.
     * Running `git rebase --interactive base` and moving the commits to the end.
 1. Rebuild patches: `./gradlew rebuildPatches`.
@@ -203,37 +203,58 @@ when making and submitting changes.
 
 ## Formatting
 
-All modifications to non-Purpur files should be marked.
+All modifications to non-Purpur files should be marked. The one exception to this is
+when modifying javadoc comments, which should not have these markers.
 
-- Multi-line changes start with `// Purpur start` and end with `// Purpur end`;
-- You can put a comment with an explanation if it isn't obvious, like this:
-  `// Purpur start - reason`.
+- You need to add a comment with a short and identifiable description of the patch:
+  `// Purpur start - <COMMIT DESCRIPTION>`
     - The comments should generally be about the reason the change was made, what
       it was before, or what the change is.
-    - Multi-line messages should start with `// Purpur start` and use `/* Multi
-      line message here */` for the message itself.
-- One-line changes should have `// Purpur` or `// Purpur - reason`.
+    - After the general commit description, you can add additional information either
+      after a `;` or in the next line.
+- Multi-line changes start with `// Purpur start - <COMMIT DESCRIPTION>` and end
+  with `// Purpur end - <COMMIT DESCRIPTION>`.
+- One-line changes should have `// Purpur - <COMMIT DESCRIPTION>` at the end of the line.
 
 Here's an example of how to mark changes by Purpur:
 
 ```java
-entity.getWorld().dontbeStupid(); // Purpur - was beStupid() which is bad
+entity.getWorld().dontBeStupid(); // Purpur - Was beStupid(), which is bad
 entity.getFriends().forEach(Entity::explode);
-entity.a();
-entity.b();
-// Purpur start - use plugin-set spawn
+entity.updateFriends();
+
+// Purpur start - Use plugin-set spawn
 // entity.getWorld().explode(entity.getWorld().getSpawn());
 Location spawnLocation = ((CraftWorld)entity.getWorld()).getSpawnLocation();
 entity.getWorld().explode(new BlockPosition(spawnLocation.getX(), spawnLocation.getY(), spawnLocation.getZ()));
-// Purpur end
+// Purpur end - Use plugin-set spawn
 ```
 
-We generally follow usual Java style (aka. Oracle style), or what is programmed
+We generally follow the usual Java style (aka. Oracle style), or what is programmed
 into most IDEs and formatters by default. There are a few notes, however:
 - It is fine to go over 80 lines as long as it doesn't hurt readability.  
   There are exceptions, especially in Spigot-related files
 - When in doubt or the code around your change is in a clearly different style,
   use the same style as the surrounding code.
+- `var` usage is heavily discouraged, as it makes reading patch files a lot harder
+  and can lead to confusion during updates due to changed return types. The only
+  exception to this is if a line would otherwise be way too long/filled with hard
+  to parse generics in a case where the base type itself is already obvious
+
+### Imports
+When adding new imports to a class in a file not created by the current patch, use the fully qualified class name
+instead of adding a new import to the top of the file. If you are using a type a significant number of times, you
+can add an import with a comment. However, if its only used a couple of times, the FQN is preferred to prevent future
+patch conflicts in the import section of the file.
+
+```java
+import org.bukkit.event.Event;
+// don't add import here, use FQN like below
+
+public class SomeEvent extends Event {
+    public final org.bukkit.Location newLocation; // Purpur - add location
+}
+```
 
 ## Patch Notes
 
@@ -269,7 +290,7 @@ Subject: [PATCH] revert serverside behavior of keepalives
 
 This patch intends to bump up the time that a client has to reply to the
 server back to 30 seconds as per pre 1.12.2, which allowed clients
-more than enough time to reply, potentially allowing them to be less
+more than enough time to reply potentially allowing them to be less
 temperamental due to lag spikes on the network thread, e.g. that caused
 by plugins that are interacting with netty.
 
@@ -359,6 +380,12 @@ object:
 return this.level.purpurConfig.useInhabitedTime ? this.inhabitedTime : 0;
 ```
 
+#### Committing changes
+All changes to the `PurpurConfig` and `PurpurWorldConfig` files
+should be done in the commit that created them. So do an interactive rebase
+or fixup to apply just those changes to that commit, then add a new commit
+that includes the logic that uses that option in the server somewhere.
+
 ## Testing API changes
 
 ### Using the Purpur Test Plugin
@@ -401,7 +428,7 @@ patching process.
 1. Identify the name(s) of the file(s) you want to import.
     - A complete list of all possible file names can be found at
       `./Purpur-Server/.gradle/caches/paperweight/mc-dev-sources/net/minecraft/`. You might find
-      [MiniMappingViewer] useful if you need to translate between Mojang and Spigot mapped names.
+      [MappingViewer] useful if you need to translate between Mojang and Spigot mapped names.
 1. Open the file at `./build-data/dev-imports.txt` and add the name of your file to
    the script. Follow the instructions there;
 1. Re-patch the server `./gradlew applyPatches`;
@@ -426,16 +453,16 @@ file (`CONTRIBUTING.md`), the `LICENSE.md` file, and so forth.
 ### Patching and building is *really* slow, what can I do?
 
 This only applies if you're running Windows. If you're running a prior Windows
-release, either update to Windows 10 or move to macOS/Linux/BSD.
+release, either update to Windows 10/11 or move to macOS/Linux/BSD.
 
-In order to speed up patching process on Windows, it's recommended you get WSL.
+In order to speed up patching process on Windows, it's recommended you get WSL
 2. This is available in Windows 10 v2004, build 19041 or higher. (You can check
    your version by running `winver` in the run window (Windows key + R)). If you're
-   out of date, update your system with the
-   [Windows Update Assistant](https://www.microsoft.com/en-us/software-download/windows10).
+   using an out of date version of Windows 10, update your system with the
+   [Windows 10 Update Assistant](https://www.microsoft.com/en-us/software-download/windows10) or [Windows 11 Update Assistant](https://www.microsoft.com/en-us/software-download/windows11).
 
 To set up WSL 2, follow the information here:
-<https://docs.microsoft.com/en-us/windows/wsl/install-win10>
+<https://docs.microsoft.com/en-us/windows/wsl/install>
 
 You will most likely want to use the Ubuntu apps. Once it's set up, install the
 required tools with `sudo apt-get update && sudo apt-get install $TOOL_NAMES
@@ -445,6 +472,6 @@ everything like usual.
 
 > ❗ Do not use the `/mnt/` directory in WSL! Instead, mount the WSL directories
 > in Windows like described here:
-> <https://www.howtogeek.com/426749/how-to-access-your-linux-wsl-files-in-windows-10/>
+> <https://docs.microsoft.com/en-us/windows/wsl/filesystems#view-your-current-directory-in-windows-file-explorer>
 
-[MiniMappingViewer]: https://minidigger.github.io/MiniMappingViewer/
+[MappingViewer]: https://mappings.cephx.dev/
