@@ -7,7 +7,7 @@ plugins {
 toothpick {
     forkName = "Purpur"
     groupId = "net.pl3x.purpur"
-    forkUrl = "https://github.com/pl3xgaming/Purpur"
+    forkUrl = "https://github.com/sweet333/Purpur"
     val versionTag = System.getenv("BUILD_NUMBER")
         ?: "\"${commitHash() ?: error("Could not obtain git hash")}\""
     forkVersion = "git-$forkName-$versionTag"
