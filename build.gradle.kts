@@ -4,7 +4,7 @@ import org.gradle.api.tasks.testing.logging.TestLogEvent
 plugins {
     java
     `maven-publish`
-    id("io.papermc.paperweight.patcher") version "1.6.3"
+    id("io.papermc.paperweight.patcher") version "1.7.1"
 }
 
 allprojects {
@@ -87,12 +87,10 @@ paperweight {
 
 tasks.generateDevelopmentBundle {
     apiCoordinates = "org.purpurmc.purpur:purpur-api"
-    mojangApiCoordinates = "io.papermc.paper:paper-mojangapi"
     libraryRepositories = listOf(
         "https://repo.maven.apache.org/maven2/",
         paperMavenPublicUrl,
         "https://repo.purpurmc.org/snapshots",
-        "https://s01.oss.sonatype.org/content/repositories/snapshots/", // TODO - Adventure snapshot
     )
 }
 
