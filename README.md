@@ -80,7 +80,7 @@ repositories {
 ```
 ```kotlin
 dependencies {
-    compileOnly("org.purpurmc.purpur:purpur-api:1.20.5-R0.1-SNAPSHOT")
+    compileOnly("org.purpurmc.purpur:purpur-api:1.20.6-R0.1-SNAPSHOT")
 }
 ```
 
