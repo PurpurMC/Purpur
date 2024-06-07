@@ -1,5 +1,6 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
+import io.papermc.paperweight.util.Git
 
 plugins {
     java
@@ -55,8 +56,16 @@ repositories {
     }
 }
 
+val paperDir = layout.projectDirectory.dir("work/NogyangSpigot")
+val initSubmodules by tasks.registering {
+    outputs.upToDateWhen { false }
+    doLast {
+        Git(layout.projectDirectory)("submodule", "update", "--init").executeOut()
+    }
+}
+
 dependencies {
-    remapper("net.fabricmc:tiny-remapper:0.10.1:fat")
+    remapper("net.fabricmc:tiny-remapper:0.10.2:fat")
     decompiler("org.vineflower:vineflower:1.10.1")
     paperclip("io.papermc:paperclip:3.0.3")
 }
@@ -67,22 +76,33 @@ paperweight {
     remapRepo = paperMavenPublicUrl
     decompileRepo = paperMavenPublicUrl
 
-    usePaperUpstream(providers.gradleProperty("paperCommit")) {
-        withPaperPatcher {
-            apiPatchDir = layout.projectDirectory.dir("patches/api")
-            apiOutputDir = layout.projectDirectory.dir("Purpur-API")
-
-            serverPatchDir = layout.projectDirectory.dir("patches/server")
-            serverOutputDir = layout.projectDirectory.dir("Purpur-Server")
+   upstreams {
+        register("paper") {
+            upstreamDataTask {
+                dependsOn(initSubmodules)
+                projectDir = paperDir
+            }
+			
+patchTasks {
+                register("api") {
+                    upstreamDir = paperDir.dir("Paper-API")
+                    patchDir = layout.projectDirectory.dir("patches/api")
+                    outputDir = layout.projectDirectory.dir("$projectName-api")
+                }
+                register("server") {
+                    upstreamDir = paperDir.dir("Paper-Server")
+                    patchDir = layout.projectDirectory.dir("patches/server")
+                    outputDir = layout.projectDirectory.dir("$projectName-server")
+                    importMcDev = true
+                }
+                register("generatedApi") {
+                    isBareDirectory = true
+                    upstreamDir = paperDir.dir("paper-api-generator/generated")
+                    patchDir = layout.projectDirectory.dir("patches/generatedApi")
+                    outputDir = layout.projectDirectory.dir("paper-api-generator/generated")
+                }
+            }
         }
-
-        patchTasks.register("generatedApi") {
-            isBareDirectory = true
-            upstreamDirPath = "paper-api-generator/generated"
-            patchDir = layout.projectDirectory.dir("patches/generated-api")
-            outputDir = layout.projectDirectory.dir("paper-api-generator/generated")
-        }
-    }
 }
 
 tasks.generateDevelopmentBundle {
