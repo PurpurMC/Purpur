@@ -56,7 +56,7 @@ repositories {
     }
 }
 
-val paperDir = layout.projectDirectory.dir("work/NogyangSpigot")
+val paperDir = layout.projectDirectory.dir("NogyangSpigot")
 val initSubmodules by tasks.registering {
     outputs.upToDateWhen { false }
     doLast {
