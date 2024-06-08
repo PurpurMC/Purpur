@@ -85,7 +85,7 @@ paperweight {
 			
 patchTasks {
                 register("api") {
-                    upstreamDir = paperDir.dir("NogyangSpigot-API")
+                    upstreamDir = paperDir.dir("NogyangSpigot-api")
                     patchDir = layout.projectDirectory.dir("patches/api")
                     outputDir = layout.projectDirectory.dir("Purpur-api")
                 }
