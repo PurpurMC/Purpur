@@ -90,7 +90,7 @@ patchTasks {
                     outputDir = layout.projectDirectory.dir("Purpur-api")
                 }
                 register("server") {
-                    upstreamDir = paperDir.dir("NogyangSpigot-Server")
+                    upstreamDir = paperDir.dir("NogyangSpigot-server")
                     patchDir = layout.projectDirectory.dir("patches/server")
                     outputDir = layout.projectDirectory.dir("Purpur-server")
                     importMcDev = true
