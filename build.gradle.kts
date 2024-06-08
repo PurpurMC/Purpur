@@ -143,4 +143,5 @@ tasks.register("printPurpurVersion") {
     doLast {
         println(project.version)
     }
+ }
 }
