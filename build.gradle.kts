@@ -85,14 +85,14 @@ paperweight {
 			
 patchTasks {
                 register("api") {
-                    upstreamDir = paperDir.dir("Paper-API")
+                    upstreamDir = paperDir.dir("NogyangSpigot-API")
                     patchDir = layout.projectDirectory.dir("patches/api")
-                    outputDir = layout.projectDirectory.dir("$projectName-api")
+                    outputDir = layout.projectDirectory.dir("Purpur-api")
                 }
                 register("server") {
-                    upstreamDir = paperDir.dir("Paper-Server")
+                    upstreamDir = paperDir.dir("NogyangSpigot-Server")
                     patchDir = layout.projectDirectory.dir("patches/server")
-                    outputDir = layout.projectDirectory.dir("$projectName-server")
+                    outputDir = layout.projectDirectory.dir("Purpur-server")
                     importMcDev = true
                 }
                 register("generatedApi") {
