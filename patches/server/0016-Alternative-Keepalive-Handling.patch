@@ -5,7 +5,7 @@ Subject: [PATCH] Alternative Keepalive Handling
 
 
 diff --git a/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-index a8edeb5a40cd9aac933805259407e32c544d181e..26ccb217b846410c826cb1da017b45903d9c5469 100644
+index a8edeb5a40cd9aac933805259407e32c544d181e..a30435cdc62d4947596b9cee3b114f7cb1349769 100644
 --- a/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 @@ -73,6 +73,7 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
@@ -22,10 +22,10 @@ index a8edeb5a40cd9aac933805259407e32c544d181e..26ccb217b846410c826cb1da017b4590
      public void handleKeepAlive(ServerboundKeepAlivePacket packet) {
 +        // Purpur start
 +        if (org.purpurmc.purpur.PurpurConfig.useAlternateKeepAlive) {
-+            long id = packet.getId();
-+            if (keepAlives.size() > 0 && keepAlives.contains(id)) {
-+                int ping = (int) (Util.getMillis() - id);
++            if (this.keepAlivePending && !keepAlives.isEmpty() && keepAlives.contains(packet.getId())) {
++                int ping = (int) (Util.getMillis() - packet.getId());
 +                this.latency = (this.latency * 3 + ping) / 4;
++                this.keepAlivePending = false;
 +                keepAlives.clear(); // we got a valid response, lets roll with it and forget the rest
 +            }
 +        } else
@@ -40,13 +40,13 @@ index a8edeb5a40cd9aac933805259407e32c544d181e..26ccb217b846410c826cb1da017b4590
 +        // Purpur start
 +        if (org.purpurmc.purpur.PurpurConfig.useAlternateKeepAlive) {
 +            if (elapsedTime >= 1000L) { // 1 second
-+                if (!processedDisconnect && keepAlives.size() * 1000L >= KEEPALIVE_LIMIT) {
-+                    LOGGER.warn("{} was kicked due to keepalive timeout!", this.player.getScoreboardName());
-+                    disconnect(ServerCommonPacketListenerImpl.TIMEOUT_DISCONNECTION_MESSAGE, org.bukkit.event.player.PlayerKickEvent.Cause.TIMEOUT);
-+                } else {
-+                    keepAliveTime = currentTime; // hijack this field for 1 second intervals
-+                    keepAlives.add(currentTime); // currentTime is ID
-+                    send(new ClientboundKeepAlivePacket(currentTime));
++                if (this.keepAlivePending && !this.processedDisconnect && keepAlives.size() * 1000L >= KEEPALIVE_LIMIT) {
++                    this.disconnect(ServerCommonPacketListenerImpl.TIMEOUT_DISCONNECTION_MESSAGE, org.bukkit.event.player.PlayerKickEvent.Cause.TIMEOUT);
++                } else if (this.checkIfClosed(currentTime)) {
++                    this.keepAlivePending = true;
++                    this.keepAliveTime = currentTime; // hijack this field for 1 second intervals
++                    this.keepAlives.add(currentTime); // currentTime is ID
++                    this.send(new ClientboundKeepAlivePacket(currentTime));
 +                }
 +            }
 +        } else
@@ -56,7 +56,7 @@ index a8edeb5a40cd9aac933805259407e32c544d181e..26ccb217b846410c826cb1da017b4590
              if (this.keepAlivePending && !this.processedDisconnect && elapsedTime >= KEEPALIVE_LIMIT) { // Paper - check keepalive limit, don't fire if already disconnected
                  this.disconnect(ServerCommonPacketListenerImpl.TIMEOUT_DISCONNECTION_MESSAGE, org.bukkit.event.player.PlayerKickEvent.Cause.TIMEOUT); // Paper - kick event cause
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
-index 876a4ea0beeae5baca62822eec2e18a4cf3ef09b..bf45bdc2126b320a4954a3d546ec9d4d30660527 100644
+index f80414b9bb7fb1f2849749481209648516fb28fb..e4c01fc54f832f895adec75ac855b614ff77d19a 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
 @@ -198,6 +198,11 @@ public class PurpurConfig {
