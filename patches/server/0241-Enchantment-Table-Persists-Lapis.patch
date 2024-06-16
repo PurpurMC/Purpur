@@ -1,0 +1,154 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ben Kerllenevich <ben@omega24.dev>
+Date: Sat, 25 Jun 2022 08:04:06 -0400
+Subject: [PATCH] Enchantment Table Persists Lapis
+
+
+diff --git a/src/main/java/net/minecraft/world/inventory/EnchantmentMenu.java b/src/main/java/net/minecraft/world/inventory/EnchantmentMenu.java
+index 07223046761cb2186d75de8edc03a91d2e8e8b2f..4e5d497b966a04d42b988d26039cbbcc3da7121c 100644
+--- a/src/main/java/net/minecraft/world/inventory/EnchantmentMenu.java
++++ b/src/main/java/net/minecraft/world/inventory/EnchantmentMenu.java
+@@ -45,6 +45,12 @@ import org.bukkit.event.enchantment.PrepareItemEnchantEvent;
+ import org.bukkit.entity.Player;
+ // CraftBukkit end
+ 
++// Purpur start
++import net.minecraft.world.level.block.entity.BlockEntity;
++import net.minecraft.world.level.block.entity.EnchantingTableBlockEntity;
++import org.bukkit.craftbukkit.entity.CraftHumanEntity;
++// Purpur end
++
+ public class EnchantmentMenu extends AbstractContainerMenu {
+ 
+     static final ResourceLocation EMPTY_SLOT_LAPIS_LAZULI = ResourceLocation.withDefaultNamespace("item/empty_slot_lapis_lazuli");
+@@ -79,6 +85,22 @@ public class EnchantmentMenu extends AbstractContainerMenu {
+                 return context.getLocation();
+             }
+             // CraftBukkit end
++
++            // Purpur start
++            @Override
++            public void onClose(CraftHumanEntity who) {
++                super.onClose(who);
++
++                if (who.getHandle().level().purpurConfig.enchantmentTableLapisPersists) {
++                    access.execute((level, pos) -> {
++                        BlockEntity blockEntity = level.getBlockEntity(pos);
++                        if (blockEntity instanceof EnchantingTableBlockEntity enchantmentTable) {
++                            enchantmentTable.setLapis(this.getItem(1).getCount());
++                        }
++                    });
++                }
++            }
++            // Purpur end
+         };
+         this.random = RandomSource.create();
+         this.enchantmentSeed = DataSlot.standalone();
+@@ -104,6 +126,17 @@ public class EnchantmentMenu extends AbstractContainerMenu {
+             }
+         });
+ 
++        // Purpur start
++        access.execute((level, pos) -> {
++            if (level.purpurConfig.enchantmentTableLapisPersists) {
++                BlockEntity blockEntity = level.getBlockEntity(pos);
++                if (blockEntity instanceof EnchantingTableBlockEntity enchantmentTable) {
++                    this.getSlot(1).set(new ItemStack(Items.LAPIS_LAZULI, enchantmentTable.getLapis()));
++                }
++            }
++        });
++        // Purpur end
++
+         int j;
+ 
+         for (j = 0; j < 3; ++j) {
+@@ -344,6 +377,7 @@ public class EnchantmentMenu extends AbstractContainerMenu {
+     public void removed(net.minecraft.world.entity.player.Player player) {
+         super.removed(player);
+         this.access.execute((world, blockposition) -> {
++            if (world.purpurConfig.enchantmentTableLapisPersists) this.getSlot(1).set(ItemStack.EMPTY); // Purpur
+             this.clearContainer(player, this.enchantSlots);
+         });
+     }
+diff --git a/src/main/java/net/minecraft/world/level/block/EnchantingTableBlock.java b/src/main/java/net/minecraft/world/level/block/EnchantingTableBlock.java
+index 151e856dda3aa262c846ce8793650ee582bfb749..be0ed8a14e5726d5fcea1864302b18fb75fde2b4 100644
+--- a/src/main/java/net/minecraft/world/level/block/EnchantingTableBlock.java
++++ b/src/main/java/net/minecraft/world/level/block/EnchantingTableBlock.java
+@@ -124,4 +124,18 @@ public class EnchantingTableBlock extends BaseEntityBlock {
+     protected boolean isPathfindable(BlockState state, PathComputationType type) {
+         return false;
+     }
++
++    // Purpur start
++    @Override
++    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moved) {
++        BlockEntity blockEntity = level.getBlockEntity(pos);
++
++        if (level.purpurConfig.enchantmentTableLapisPersists && blockEntity instanceof EnchantingTableBlockEntity enchantmentTable) {
++            net.minecraft.world.Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.LAPIS_LAZULI, enchantmentTable.getLapis()));
++            level.updateNeighbourForOutputSignal(pos, this);
++        }
++
++        super.onRemove(state, level, pos, newState, moved);
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/world/level/block/entity/EnchantingTableBlockEntity.java b/src/main/java/net/minecraft/world/level/block/entity/EnchantingTableBlockEntity.java
+index d47bc2f54c4722a0b8c419b99ee57eb3cb25d750..fdeabdcc781b605d6f3ee18528fd380ffff95660 100644
+--- a/src/main/java/net/minecraft/world/level/block/entity/EnchantingTableBlockEntity.java
++++ b/src/main/java/net/minecraft/world/level/block/entity/EnchantingTableBlockEntity.java
+@@ -28,6 +28,7 @@ public class EnchantingTableBlockEntity extends BlockEntity implements Nameable
+     private static final RandomSource RANDOM = RandomSource.create();
+     @Nullable
+     private Component name;
++    private int lapis = 0; // Purpur
+ 
+     public EnchantingTableBlockEntity(BlockPos pos, BlockState state) {
+         super(BlockEntityType.ENCHANTING_TABLE, pos, state);
+@@ -39,6 +40,7 @@ public class EnchantingTableBlockEntity extends BlockEntity implements Nameable
+         if (this.hasCustomName()) {
+             nbt.putString("CustomName", Component.Serializer.toJson(this.name, registryLookup));
+         }
++        nbt.putInt("Purpur.Lapis", this.lapis); // Purpur
+     }
+ 
+     @Override
+@@ -47,6 +49,7 @@ public class EnchantingTableBlockEntity extends BlockEntity implements Nameable
+         if (nbt.contains("CustomName", 8)) {
+             this.name = parseCustomNameSafe(nbt.getString("CustomName"), registryLookup);
+         }
++        this.lapis = nbt.getInt("Purpur.Lapis"); // Purpur
+     }
+ 
+     public static void bookAnimationTick(Level world, BlockPos pos, BlockState state, EnchantingTableBlockEntity blockEntity) {
+@@ -138,4 +141,14 @@ public class EnchantingTableBlockEntity extends BlockEntity implements Nameable
+     public void removeComponentsFromTag(CompoundTag nbt) {
+         nbt.remove("CustomName");
+     }
++
++    // Purpur start
++    public int getLapis() {
++        return this.lapis;
++    }
++
++    public void setLapis(int lapis) {
++        this.lapis = lapis;
++    }
++    // Purpur
+ }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 48cc255a35e24dfa3b7563b92f791237eb4e7904..f8eedeb83261aaf7346e4111a46fc6bc1c8f5f19 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1535,6 +1535,11 @@ public class PurpurWorldConfig {
+         elderGuardianAlwaysDropExp = getBoolean("mobs.elder_guardian.always-drop-exp", elderGuardianAlwaysDropExp);
+     }
+ 
++    public boolean enchantmentTableLapisPersists = false;
++    private void enchantmentTableSettings() {
++        enchantmentTableLapisPersists = getBoolean("blocks.enchantment-table.lapis-persists", enchantmentTableLapisPersists);
++    }
++
+     public boolean enderDragonRidable = false;
+     public boolean enderDragonRidableInWater = true;
+     public boolean enderDragonControllable = true;
