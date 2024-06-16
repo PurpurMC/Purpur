@@ -1,0 +1,91 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: nitricspace <nitricspace@users.noreply.github.com>
+Date: Mon, 21 Sep 2020 23:19:43 +0100
+Subject: [PATCH] Add option to disable zombie aggressiveness towards villagers
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/entity/ai/MobGoalHelper.java b/src/main/java/com/destroystokyo/paper/entity/ai/MobGoalHelper.java
+index 06455d65c4605ce092bf5300d432087f24186741..750fd2809f6d5d5896904cad0f65029b03bda849 100644
+--- a/src/main/java/com/destroystokyo/paper/entity/ai/MobGoalHelper.java
++++ b/src/main/java/com/destroystokyo/paper/entity/ai/MobGoalHelper.java
+@@ -137,6 +137,10 @@ public class MobGoalHelper {
+     static {
+         // TODO these kinda should be checked on each release, in case obfuscation changes
+         deobfuscationMap.put("abstract_skeleton_1", "abstract_skeleton_melee");
++        // Purpur start
++        deobfuscationMap.put("zombie_1", "zombie_attack_villager");
++        deobfuscationMap.put("drowned_1", "drowned_attack_villager");
++        // Purpur end
+ 
+         ignored.add("goal_selector_1");
+         ignored.add("goal_selector_2");
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Drowned.java b/src/main/java/net/minecraft/world/entity/monster/Drowned.java
+index 1d283484be270497859e23e3bb4ab38c09af23e6..b02cdbaa0455319b1e8a7e777e64ff4a56590388 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Drowned.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Drowned.java
+@@ -123,7 +123,19 @@ public class Drowned extends Zombie implements RangedAttackMob {
+         this.goalSelector.addGoal(7, new RandomStrollGoal(this, 1.0D));
+         this.targetSelector.addGoal(1, (new HurtByTargetGoal(this, new Class[]{Drowned.class})).setAlertOthers(ZombifiedPiglin.class));
+         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, 10, true, false, this::okTarget));
+-        if (this.level().spigotConfig.zombieAggressiveTowardsVillager) this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, AbstractVillager.class, false)); // Paper - Check drowned for villager aggression config
++        // Purpur start
++        if (this.level().spigotConfig.zombieAggressiveTowardsVillager) this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, AbstractVillager.class, false) { // Paper - Check drowned for villager aggression config
++            @Override
++            public boolean canUse() {
++                return (level().purpurConfig.zombieAggressiveTowardsVillagerWhenLagging || !level().getServer().server.isLagging()) && super.canUse();
++            }
++
++            @Override
++            public boolean canContinueToUse() {
++                return (level().purpurConfig.zombieAggressiveTowardsVillagerWhenLagging || !level().getServer().server.isLagging()) && super.canContinueToUse();
++            }
++        });
++        // Purpur end
+         this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, IronGolem.class, true));
+         this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Axolotl.class, true, false));
+         this.targetSelector.addGoal(5, new NearestAttackableTargetGoal<>(this, Turtle.class, 10, true, false, Turtle.BABY_ON_LAND_SELECTOR));
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Zombie.java b/src/main/java/net/minecraft/world/entity/monster/Zombie.java
+index 43c48bb14957b93ee3b0191360c09f710bc008e0..b39d8ee4c6e9483a15991be3b1440384708aee65 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Zombie.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Zombie.java
+@@ -158,7 +158,19 @@ public class Zombie extends Monster {
+         this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 1.0D));
+         this.targetSelector.addGoal(1, (new HurtByTargetGoal(this, new Class[0])).setAlertOthers(ZombifiedPiglin.class));
+         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));
+-        if ( this.level().spigotConfig.zombieAggressiveTowardsVillager ) this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, AbstractVillager.class, false)); // Spigot
++        // Purpur start
++        if ( this.level().spigotConfig.zombieAggressiveTowardsVillager ) this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, AbstractVillager.class, false) { // Spigot
++            @Override
++            public boolean canUse() {
++                return (level().purpurConfig.zombieAggressiveTowardsVillagerWhenLagging || !level().getServer().server.isLagging()) && super.canUse();
++            }
++
++            @Override
++            public boolean canContinueToUse() {
++                return (level().purpurConfig.zombieAggressiveTowardsVillagerWhenLagging || !level().getServer().server.isLagging()) && super.canContinueToUse();
++            }
++        });
++        // Purpur end
+         this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, IronGolem.class, true));
+         this.targetSelector.addGoal(5, new NearestAttackableTargetGoal<>(this, Turtle.class, 10, true, false, Turtle.BABY_ON_LAND_SELECTOR));
+     }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 16b591138dc14414535ad48230a824597383a2fc..45ff2269cad6a54a2bcb5a46000555d6f56e77b9 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1871,6 +1871,7 @@ public class PurpurWorldConfig {
+     public boolean zombieJockeyOnlyBaby = true;
+     public double zombieJockeyChance = 0.05D;
+     public boolean zombieJockeyTryExistingChickens = true;
++    public boolean zombieAggressiveTowardsVillagerWhenLagging = true;
+     private void zombieSettings() {
+         zombieRidable = getBoolean("mobs.zombie.ridable", zombieRidable);
+         zombieRidableInWater = getBoolean("mobs.zombie.ridable-in-water", zombieRidableInWater);
+@@ -1885,6 +1886,7 @@ public class PurpurWorldConfig {
+         zombieJockeyOnlyBaby = getBoolean("mobs.zombie.jockey.only-babies", zombieJockeyOnlyBaby);
+         zombieJockeyChance = getDouble("mobs.zombie.jockey.chance", zombieJockeyChance);
+         zombieJockeyTryExistingChickens = getBoolean("mobs.zombie.jockey.try-existing-chickens", zombieJockeyTryExistingChickens);
++        zombieAggressiveTowardsVillagerWhenLagging = getBoolean("mobs.zombie.aggressive-towards-villager-when-lagging", zombieAggressiveTowardsVillagerWhenLagging);
+     }
+ 
+     public boolean zombieHorseRidable = false;

@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: draycia <lonelyyordle@gmail.com>
+Date: Sun, 12 Apr 2020 20:41:59 -0700
+Subject: [PATCH] Phantoms burn in light
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Phantom.java b/src/main/java/net/minecraft/world/entity/monster/Phantom.java
+index 7a80cb45ff5d96380755d37ff43ddeac2cd451e1..8f221fe016ea7221eb3a2116a2213139cf961797 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Phantom.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Phantom.java
+@@ -48,6 +48,7 @@ public class Phantom extends FlyingMob implements Enemy {
+     Vec3 moveTargetPoint;
+     public BlockPos anchorPoint;
+     Phantom.AttackPhase attackPhase;
++    private static final net.minecraft.world.item.crafting.Ingredient TORCH = net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.TORCH, net.minecraft.world.item.Items.SOUL_TORCH); // Purpur
+     Vec3 crystalPosition; // Purpur
+ 
+     public Phantom(EntityType<? extends Phantom> type, Level world) {
+@@ -240,7 +241,11 @@ public class Phantom extends FlyingMob implements Enemy {
+ 
+     @Override
+     public void aiStep() {
+-        if (this.isAlive() && this.shouldBurnInDay && this.isSunBurnTick()) { // Paper - shouldBurnInDay API
++        // Purpur start
++        boolean burnFromDaylight = this.shouldBurnInDay && this.isSunBurnTick() && this.level().purpurConfig.phantomBurnInDaylight;
++        boolean burnFromLightSource = this.level().purpurConfig.phantomBurnInLight > 0 && this.level().getMaxLocalRawBrightness(blockPosition()) >= this.level().purpurConfig.phantomBurnInLight;
++        if (this.isAlive() && (burnFromDaylight || burnFromLightSource)) { // Paper - shouldBurnInDay API
++        // Purpur end
+             if (getRider() == null || !this.isControllable()) // Purpur
+             this.igniteForSeconds(8.0F);
+         }
+@@ -641,6 +646,12 @@ public class Phantom extends FlyingMob implements Enemy {
+                 return false;
+             } else if (!entityliving.isAlive()) {
+                 return false;
++            // Purpur start
++            } else if (level().purpurConfig.phantomBurnInLight > 0 && level().getLightEmission(new BlockPos(Phantom.this)) >= level().purpurConfig.phantomBurnInLight) {
++                return false;
++            } else if (level().purpurConfig.phantomIgnorePlayersWithTorch && (TORCH.test(entityliving.getItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND)) || TORCH.test(entityliving.getItemInHand(net.minecraft.world.InteractionHand.OFF_HAND)))) {
++                return false;
++            // Purpur end
+             } else {
+                 if (entityliving instanceof Player) {
+                     Player entityhuman = (Player) entityliving;
+@@ -786,6 +797,7 @@ public class Phantom extends FlyingMob implements Enemy {
+                 this.nextScanTick = reducedTickDelay(60);
+                 List<Player> list = Phantom.this.level().getNearbyPlayers(this.attackTargeting, Phantom.this, Phantom.this.getBoundingBox().inflate(16.0D, 64.0D, 16.0D));
+ 
++                if (level().purpurConfig.phantomIgnorePlayersWithTorch) list.removeIf(human -> TORCH.test(human.getItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND)) || TORCH.test(human.getItemInHand(net.minecraft.world.InteractionHand.OFF_HAND)));// Purpur
+                 if (!list.isEmpty()) {
+                     list.sort(Comparator.comparing((Entity e) -> { return e.getY(); }).reversed()); // CraftBukkit - decompile error
+                     Iterator iterator = list.iterator();
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 1da67c207b18e4c0eaf9a822360dbbe3215e7a6d..2c6167946e8186f378142b0cd02b71abf1780bea 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1145,6 +1145,9 @@ public class PurpurWorldConfig {
+     public double phantomSpawnLocalDifficultyChance = 3.0D;
+     public int phantomSpawnMinPerAttempt = 1;
+     public int phantomSpawnMaxPerAttempt = -1;
++    public int phantomBurnInLight = 0;
++    public boolean phantomIgnorePlayersWithTorch = false;
++    public boolean phantomBurnInDaylight = true;
+     private void phantomSettings() {
+         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
+         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
+@@ -1175,6 +1178,9 @@ public class PurpurWorldConfig {
+         phantomSpawnLocalDifficultyChance = getDouble("mobs.phantom.spawn.local-difficulty-chance", phantomSpawnLocalDifficultyChance);
+         phantomSpawnMinPerAttempt = getInt("mobs.phantom.spawn.per-attempt.min", phantomSpawnMinPerAttempt);
+         phantomSpawnMaxPerAttempt = getInt("mobs.phantom.spawn.per-attempt.max", phantomSpawnMaxPerAttempt);
++        phantomBurnInLight = getInt("mobs.phantom.burn-in-light", phantomBurnInLight);
++        phantomBurnInDaylight = getBoolean("mobs.phantom.burn-in-daylight", phantomBurnInDaylight);
++        phantomIgnorePlayersWithTorch = getBoolean("mobs.phantom.ignore-players-with-torch", phantomIgnorePlayersWithTorch);
+     }
+ 
+     public boolean pigRidable = false;

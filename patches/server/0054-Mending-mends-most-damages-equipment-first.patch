@@ -1,0 +1,110 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Sun, 14 Jul 2019 19:52:47 -0500
+Subject: [PATCH] Mending mends most damages equipment first
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/ExperienceOrb.java b/src/main/java/net/minecraft/world/entity/ExperienceOrb.java
+index 15844971ce2cca8c679ad3aaa2dfe160e6d0b564..6598a737db11fb0c7e7a95b9bbfaabd75895cbdd 100644
+--- a/src/main/java/net/minecraft/world/entity/ExperienceOrb.java
++++ b/src/main/java/net/minecraft/world/entity/ExperienceOrb.java
+@@ -20,6 +20,7 @@ import net.minecraft.world.item.ItemStack;
+ import net.minecraft.world.item.enchantment.EnchantedItemInUse;
+ import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
+ import net.minecraft.world.item.enchantment.EnchantmentHelper;
++import net.minecraft.world.item.enchantment.Enchantments;
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.entity.EntityTypeTest;
+ import net.minecraft.world.phys.AABB;
+@@ -347,7 +348,7 @@ public class ExperienceOrb extends Entity {
+     }
+ 
+     private int repairPlayerItems(ServerPlayer player, int amount) {
+-        Optional<EnchantedItemInUse> optional = EnchantmentHelper.getRandomItemWith(EnchantmentEffectComponents.REPAIR_WITH_XP, player, ItemStack::isDamaged);
++        Optional<EnchantedItemInUse> optional = level().purpurConfig.useBetterMending ? EnchantmentHelper.getMostDamagedEquipment(Enchantments.MENDING, player) : EnchantmentHelper.getRandomItemWith(EnchantmentEffectComponents.REPAIR_WITH_XP, player, ItemStack::isDamaged); // Purpur
+ 
+         if (optional.isPresent()) {
+             ItemStack itemstack = ((EnchantedItemInUse) optional.get()).itemStack();
+diff --git a/src/main/java/net/minecraft/world/item/ItemStack.java b/src/main/java/net/minecraft/world/item/ItemStack.java
+index 312b57b4ef340935f4335989ce1d6a4b8b61532c..930cc4c38a7c7631b140f7735cb03f4c82553375 100644
+--- a/src/main/java/net/minecraft/world/item/ItemStack.java
++++ b/src/main/java/net/minecraft/world/item/ItemStack.java
+@@ -643,6 +643,16 @@ public final class ItemStack implements DataComponentHolder {
+         return this.isDamageableItem() && this.getDamageValue() > 0;
+     }
+ 
++    // Purpur start
++    public float getDamagePercent() {
++        if (isDamaged()) {
++            return (float) getDamageValue() / (float) getMaxDamage();
++        } else {
++            return 0F;
++        }
++    }
++    // Purpur end
++
+     public int getDamageValue() {
+         return Mth.clamp((Integer) this.getOrDefault(DataComponents.DAMAGE, 0), 0, this.getMaxDamage());
+     }
+diff --git a/src/main/java/net/minecraft/world/item/enchantment/EnchantmentHelper.java b/src/main/java/net/minecraft/world/item/enchantment/EnchantmentHelper.java
+index fce49b17905ab97e691aa8499a5dfed67adf0c40..5ef8f69a4271c0a70380b5bd321735ff3e2b8cdd 100644
+--- a/src/main/java/net/minecraft/world/item/enchantment/EnchantmentHelper.java
++++ b/src/main/java/net/minecraft/world/item/enchantment/EnchantmentHelper.java
+@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap.Entry;
+ import java.util.ArrayList;
+ import java.util.Collection;
+ import java.util.List;
++import java.util.Map;
+ import java.util.Optional;
+ import java.util.function.BiConsumer;
+ import java.util.function.Consumer;
+@@ -380,6 +381,29 @@ public class EnchantmentHelper {
+         return false;
+     }
+ 
++    // Purpur start
++    @Nullable
++    public static Map.Entry<EquipmentSlot, ItemStack> getMostDamagedEquipment(Enchantment enchantment, LivingEntity entity) {
++        Map<EquipmentSlot, ItemStack> map = enchantment.getSlotItems(entity);
++        if (map.isEmpty()) {
++            return null;
++        }
++        Map.Entry<EquipmentSlot, ItemStack> item = null;
++        float maxPercent = 0F;
++        for (Map.Entry<EquipmentSlot, ItemStack> entry : map.entrySet()) {
++            ItemStack itemstack = entry.getValue();
++            if (!itemstack.isEmpty() && itemstack.isDamaged() && getItemEnchantmentLevel(enchantment, itemstack) > 0) {
++                float percent = itemstack.getDamagePercent();
++                if (item == null || percent > maxPercent) {
++                    item = entry;
++                    maxPercent = percent;
++                }
++            }
++        }
++        return item;
++    }
++    // Purpur end
++
+     public static boolean has(ItemStack stack, DataComponentType<?> componentType) {
+         MutableBoolean mutableBoolean = new MutableBoolean(false);
+         runIterationOnItem(stack, (enchantment, level) -> {
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 240c34bd95be07f19fb92d9b6678e6feffe2430e..9c87144050ed62ca030e51ae08d8a977e935ba68 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -95,6 +95,7 @@ public class PurpurWorldConfig {
+         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
+     }
+ 
++    public boolean useBetterMending = false;
+     public boolean boatEjectPlayersOnLand = false;
+     public boolean disableDropsOnCrammingDeath = false;
+     public boolean milkCuresBadOmen = true;
+@@ -102,6 +103,7 @@ public class PurpurWorldConfig {
+     public double voidDamageHeight = -64.0D;
+     public double voidDamageDealt = 4.0D;
+     private void miscGameplayMechanicsSettings() {
++        useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
+         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
+         disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);
+         milkCuresBadOmen = getBoolean("gameplay-mechanics.milk-cures-bad-omen", milkCuresBadOmen);
