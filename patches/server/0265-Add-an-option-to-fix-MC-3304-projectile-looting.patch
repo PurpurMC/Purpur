@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: MelnCat <melncatuwu@gmail.com>
+Date: Sat, 1 Oct 2022 11:33:15 -0700
+Subject: [PATCH] Add an option to fix MC-3304 (projectile looting)
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/projectile/AbstractArrow.java b/src/main/java/net/minecraft/world/entity/projectile/AbstractArrow.java
+index 8d8944a0455b3401d84cab636d61447e7d51ab19..0a7aa715674e5577e7f2327f6d0d253e5e6ec234 100644
+--- a/src/main/java/net/minecraft/world/entity/projectile/AbstractArrow.java
++++ b/src/main/java/net/minecraft/world/entity/projectile/AbstractArrow.java
+@@ -80,6 +80,7 @@ public abstract class AbstractArrow extends Projectile {
+     public ItemStack pickupItemStack;
+     @Nullable
+     public ItemStack firedFromWeapon;
++    public net.minecraft.world.item.enchantment.ItemEnchantments actualEnchantments = net.minecraft.world.item.enchantment.ItemEnchantments.EMPTY; // Purpur - Add an option to fix MC-3304 projectile looting
+ 
+     // Spigot Start
+     @Override
+@@ -589,6 +590,12 @@ public abstract class AbstractArrow extends Projectile {
+         return this.firedFromWeapon;
+     }
+ 
++    // Purpur start - Add an option to fix MC-3304 projectile looting
++    public void setActualEnchantments(net.minecraft.world.item.enchantment.ItemEnchantments actualEnchantments) {
++        this.actualEnchantments = actualEnchantments;
++    }
++    // Purpur end - Add an option to fix MC-3304 projectile looting
++
+     protected SoundEvent getDefaultHitGroundSoundEvent() {
+         return SoundEvents.ARROW_HIT;
+     }
+diff --git a/src/main/java/net/minecraft/world/item/ProjectileWeaponItem.java b/src/main/java/net/minecraft/world/item/ProjectileWeaponItem.java
+index 7ae7626c82969ea5a6fc5aa4a0c7ec43cea73adb..ffbc56290eb8e36339e29f6084bb207366506c39 100644
+--- a/src/main/java/net/minecraft/world/item/ProjectileWeaponItem.java
++++ b/src/main/java/net/minecraft/world/item/ProjectileWeaponItem.java
+@@ -110,6 +110,8 @@ public abstract class ProjectileWeaponItem extends Item {
+             entityarrow.setCritArrow(true);
+         }
+ 
++        entityarrow.setActualEnchantments(weaponStack.getEnchantments()); // Purpur - Add an option to fix MC-3304 projectile looting
++
+         return entityarrow;
+     }
+ 
+diff --git a/src/main/java/net/minecraft/world/item/TridentItem.java b/src/main/java/net/minecraft/world/item/TridentItem.java
+index 1be074074283f12543ac771ac9201580e7736289..8cf0b69fee110af05b89afa8e3236575aa6850e2 100644
+--- a/src/main/java/net/minecraft/world/item/TridentItem.java
++++ b/src/main/java/net/minecraft/world/item/TridentItem.java
+@@ -86,6 +86,8 @@ public class TridentItem extends Item implements ProjectileItem {
+                                     entitythrowntrident.pickup = AbstractArrow.Pickup.CREATIVE_ONLY;
+                                 }
+ 
++                                entitythrowntrident.setActualEnchantments(stack.getEnchantments()); // Purpur - Add an option to fix MC-3304 projectile looting
++
+                                 // CraftBukkit start
+                                 // Paper start - PlayerLaunchProjectileEvent
+                                 com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent event = new com.destroystokyo.paper.event.player.PlayerLaunchProjectileEvent((org.bukkit.entity.Player) entityhuman.getBukkitEntity(), org.bukkit.craftbukkit.inventory.CraftItemStack.asCraftMirror(stack), (org.bukkit.entity.Projectile) entitythrowntrident.getBukkitEntity());
+diff --git a/src/main/java/net/minecraft/world/level/storage/loot/functions/EnchantedCountIncreaseFunction.java b/src/main/java/net/minecraft/world/level/storage/loot/functions/EnchantedCountIncreaseFunction.java
+index d86189bd446c7cd7215cfbcef72b2125a064e3d1..53608b9dbb81c58819b9ae6bc676ffb3ed01ce70 100644
+--- a/src/main/java/net/minecraft/world/level/storage/loot/functions/EnchantedCountIncreaseFunction.java
++++ b/src/main/java/net/minecraft/world/level/storage/loot/functions/EnchantedCountIncreaseFunction.java
+@@ -66,6 +66,11 @@ public class EnchantedCountIncreaseFunction extends LootItemConditionalFunction
+         Entity entity = context.getParamOrNull(LootContextParams.ATTACKING_ENTITY);
+         if (entity instanceof LivingEntity livingEntity) {
+             int i = EnchantmentHelper.getEnchantmentLevel(this.enchantment, livingEntity);
++            // Purpur start - Add an option to fix MC-3304 projectile looting
++            if (org.purpurmc.purpur.PurpurConfig.fixProjectileLootingTransfer && context.getParamOrNull(LootContextParams.DIRECT_ATTACKING_ENTITY) instanceof net.minecraft.world.entity.projectile.AbstractArrow arrow) {
++                i = arrow.actualEnchantments.getLevel(this.enchantment);
++            }
++            // Purpur end - Add an option to fix MC-3304 projectile looting
+             if (i == 0) {
+                 return stack;
+             }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 72e918ad137dbfe8cde8b179f352224c8b2a1dad..2f05f9c7f86a30b75b4fcaff8a95d0563ed8c9ad 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -496,6 +496,11 @@ public class PurpurConfig {
+         usernameValidCharactersPattern = java.util.regex.Pattern.compile(setPattern == null || setPattern.isBlank() ? defaultPattern : setPattern);
+     }
+ 
++    public static boolean fixProjectileLootingTransfer = false;
++    private static void fixProjectileLootingTransfer() {
++        fixProjectileLootingTransfer = getBoolean("settings.fix-projectile-looting-transfer", fixProjectileLootingTransfer);
++    }
++
+     private static void blastResistanceSettings() {
+         getMap("settings.blast-resistance-overrides", Collections.emptyMap()).forEach((blockId, value) -> {
+             Block block = BuiltInRegistries.BLOCK.get(ResourceLocation.withDefaultNamespace(blockId));

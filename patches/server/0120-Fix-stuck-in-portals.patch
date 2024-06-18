@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <Blake.Galbreath@GMail.com>
+Date: Thu, 14 Jan 2021 16:48:10 -0600
+Subject: [PATCH] Fix stuck in portals
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index a1ef38422631b3856160e054daa14eacb8f13c57..794f5ccc2147ad101e06576a704bb153e83550f7 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -1424,6 +1424,7 @@ public class ServerPlayer extends net.minecraft.world.entity.player.Player imple
+                 worldserver1.removePlayerImmediately(this, Entity.RemovalReason.CHANGED_DIMENSION);
+                 this.unsetRemoved();
+                 // CraftBukkit end
++                this.portalPos = io.papermc.paper.util.MCUtil.toBlockPosition(exit); // Purpur
+                 this.setServerLevel(worldserver);
+                 this.connection.teleport(exit); // CraftBukkit - use internal teleport without event
+                 this.connection.resetPosition();
+diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
+index 295acb77be8a2219e1f6cfe6e215695d763cfbd9..3e9bb7916e6440b3831871e2b8bcffbfc9172562 100644
+--- a/src/main/java/net/minecraft/world/entity/Entity.java
++++ b/src/main/java/net/minecraft/world/entity/Entity.java
+@@ -3103,13 +3103,16 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+         return Vec3.directionFromRotation(this.getRotationVector());
+     }
+ 
++    public BlockPos portalPos = BlockPos.ZERO; // Purpur
+     public void setAsInsidePortal(Portal portal, BlockPos pos) {
+         if (this.isOnPortalCooldown()) {
++            if (!(level().purpurConfig.playerFixStuckPortal && this instanceof Player && !pos.equals(portalPos))) // Purpur
+             this.setPortalCooldown();
+         } else {
+             if (this.portalProcess != null && this.portalProcess.isSamePortal(portal)) {
+                 this.portalProcess.updateEntryPosition(pos.immutable());
+                 this.portalProcess.setAsInsidePortalThisTick(true);
++                portalPos = BlockPos.ZERO; // Purpur
+             } else {
+                 this.portalProcess = new PortalProcessor(portal, pos.immutable());
+             }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 7d057cb9e8abf43200121b200746e630641c9420..57e00aabe89a8f03994bd6923dccf75e082a9031 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -323,6 +323,7 @@ public class PurpurWorldConfig {
+     public int playerDeathExpDropMax = 100;
+     public boolean teleportIfOutsideBorder = false;
+     public boolean totemOfUndyingWorksInInventory = false;
++    public boolean playerFixStuckPortal = false;
+     private void playerSettings() {
+         if (PurpurConfig.version < 19) {
+             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
+@@ -338,6 +339,7 @@ public class PurpurWorldConfig {
+         playerDeathExpDropMax = getInt("gameplay-mechanics.player.exp-dropped-on-death.maximum", playerDeathExpDropMax);
+         teleportIfOutsideBorder = getBoolean("gameplay-mechanics.player.teleport-if-outside-border", teleportIfOutsideBorder);
+         totemOfUndyingWorksInInventory = getBoolean("gameplay-mechanics.player.totem-of-undying-works-in-inventory", totemOfUndyingWorksInInventory);
++        playerFixStuckPortal = getBoolean("gameplay-mechanics.player.fix-stuck-in-portal", playerFixStuckPortal);
+     }
+ 
+     public boolean silkTouchEnabled = false;
