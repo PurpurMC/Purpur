@@ -4,11 +4,23 @@ Date: Thu, 8 Aug 2019 15:29:15 -0500
 Subject: [PATCH] AFK API
 
 
+diff --git a/src/main/java/net/minecraft/commands/Commands.java b/src/main/java/net/minecraft/commands/Commands.java
+index 3e454515360c22a26c9329e4032d525579110d7e..d44719f05847ea4a7e6eab32714295d62c1976ef 100644
+--- a/src/main/java/net/minecraft/commands/Commands.java
++++ b/src/main/java/net/minecraft/commands/Commands.java
+@@ -250,6 +250,7 @@ public class Commands {
+             StopCommand.register(this.dispatcher);
+             TransferCommand.register(this.dispatcher);
+             WhitelistCommand.register(this.dispatcher);
++            org.purpurmc.purpur.command.AFKCommand.register(this.dispatcher); // Purpur
+         }
+ 
+         if (environment.includeIntegrated) {
 diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-index ae41c955ec6cfe284fec5f8e79cb827ea20facc0..d39ade65011030b9079bf6001196dd411064e52b 100644
+index ae41c955ec6cfe284fec5f8e79cb827ea20facc0..586862519d7477b9c7db0cb8f1ef51dd76485215 100644
 --- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
 +++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
-@@ -2367,8 +2367,68 @@ public class ServerPlayer extends net.minecraft.world.entity.player.Player imple
+@@ -2367,8 +2367,84 @@ public class ServerPlayer extends net.minecraft.world.entity.player.Player imple
  
      public void resetLastActionTime() {
          this.lastActionTime = Util.getMillis();
@@ -17,6 +29,8 @@ index ae41c955ec6cfe284fec5f8e79cb827ea20facc0..d39ade65011030b9079bf6001196dd41
  
 +    // Purpur Start
 +    private boolean isAfk = false;
++    public boolean isCommandAfk = false;
++    public boolean commandAfkStatus = false;
 +
 +    @Override
 +    public void setAfk(boolean afk) {
@@ -54,6 +68,20 @@ index ae41c955ec6cfe284fec5f8e79cb827ea20facc0..d39ade65011030b9079bf6001196dd41
 +            String prefix = (split.length > 0 ? split[0] : "").replace(org.purpurmc.purpur.PurpurConfig.afkTabListPrefix, "");
 +            String suffix = (split.length > 1 ? split[1] : "").replace(org.purpurmc.purpur.PurpurConfig.afkTabListSuffix, "");
 +            if (afk) {
++                String[] rawTitle = org.purpurmc.purpur.PurpurConfig.afkTitleAway.split(":");
++                if (rawTitle.length == 5) {
++                    String title = rawTitle[0];
++                    String subTitle = rawTitle[1];
++                    long fadeInTicks = Long.parseLong(rawTitle[2]);
++                    long stayTicks = Long.parseLong(rawTitle[3]);
++                    long fadeOutTicks = Long.parseLong(rawTitle[4]);
++                    net.kyori.adventure.title.Title tile = net.kyori.adventure.title.Title.title(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(title), net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(subTitle), net.kyori.adventure.title.Title.Times.times(net.kyori.adventure.util.Ticks.duration(fadeInTicks), net.kyori.adventure.util.Ticks.duration(stayTicks), net.kyori.adventure.util.Ticks.duration(fadeOutTicks)));
++                    getBukkitEntity().showTitle(tile);
++                } else {
++                    LOGGER.error("You put wrong format of afk-title-away in PurpurConfig, it should look like <gold><bold>AFK:<red>You are now AFK...:10:70:20");
++                    LOGGER.error("'Title:Sub Title:Title Fade In Ticks:Title Stay Ticks:Title Fade Out Ticks', split with :");
++                }
++
 +                getBukkitEntity().setPlayerListName(org.purpurmc.purpur.PurpurConfig.afkTabListPrefix + prefix + scoreboardName + suffix + org.purpurmc.purpur.PurpurConfig.afkTabListSuffix, true);
 +            } else {
 +                getBukkitEntity().setPlayerListName(prefix + scoreboardName + suffix, true);
@@ -78,7 +106,7 @@ index ae41c955ec6cfe284fec5f8e79cb827ea20facc0..d39ade65011030b9079bf6001196dd41
          return this.stats;
      }
 diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 82f60de72bc0f9b01eb97dbc0e296e80579b0968..07d8b2536c2c95b91467edd2ece8674eeaa6ad2f 100644
+index 82f60de72bc0f9b01eb97dbc0e296e80579b0968..3f8b275c05752e7b1add07f0a414f7313913d1d7 100644
 --- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -332,6 +332,20 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
@@ -142,6 +170,47 @@ index 82f60de72bc0f9b01eb97dbc0e296e80579b0968..07d8b2536c2c95b91467edd2ece8674e
                                      Location oldTo = to.clone();
                                      PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
                                      this.cserver.getPluginManager().callEvent(event);
+@@ -2110,8 +2134,28 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
+         }
+     }
+ 
++    public static final Map<UUID, Long> afkCooldown = new java.util.concurrent.ConcurrentHashMap<>(); // Purpur
++
+     @Override
+     public void handleChatCommand(ServerboundChatCommandPacket packet) {
++        // Purpur start
++        if (this.server.getPlayerIdleTimeout() > 0 && packet.command().equals("afk")) {
++            player.commandAfkStatus = player.isAfk();
++            player.isCommandAfk = true;
++            if (org.purpurmc.purpur.PurpurConfig.afkCommandCooldown > 0) {
++                UUID uuid = player.getUUID();
++                long currentTime = System.nanoTime();
++                if (afkCooldown.containsKey(uuid) && (currentTime - afkCooldown.get(uuid)) / 1_000_000_000 <= org.purpurmc.purpur.PurpurConfig.afkCommandCooldown) {
++                    String msg = org.purpurmc.purpur.PurpurConfig.afkCooldown;
++                    if (msg != null && !msg.isEmpty())
++                        player.sendMessage(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(msg.replace("%time%", String.valueOf(org.purpurmc.purpur.PurpurConfig.afkCommandCooldown - (currentTime - afkCooldown.get(uuid)) / 1_000_000_000))));
++                    return;
++                } else {
++                    afkCooldown.put(uuid, currentTime);
++                }
++            }
++        }
++        // Purpur end
+         this.tryHandleChat(packet.command(), () -> {
+             // CraftBukkit start - SPIGOT-7346: Prevent disconnected players from executing commands
+             if (this.player.hasDisconnected()) {
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index 8bf5db384a283086334e739942f12e97108d8c2f..b55f395be54717b08c47919aea46ccd8ba5fa267 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -591,6 +591,7 @@ public abstract class PlayerList {
+     public net.kyori.adventure.text.Component remove(ServerPlayer entityplayer, net.kyori.adventure.text.Component leaveMessage) {
+         // Paper end - Fix kick event leave message not being sent
+         ServerLevel worldserver = entityplayer.serverLevel();
++        net.minecraft.server.network.ServerGamePacketListenerImpl.afkCooldown.remove(entityplayer.getBukkitEntity().getUniqueId()); // Puprur
+ 
+         entityplayer.awardStat(Stats.LEAVE_GAME);
+ 
 diff --git a/src/main/java/net/minecraft/server/players/SleepStatus.java b/src/main/java/net/minecraft/server/players/SleepStatus.java
 index 823efad652d8ff9e96b99375b102fef6f017716e..caa8a69bde0c212c36dd990a67836ac2f95548c0 100644
 --- a/src/main/java/net/minecraft/server/players/SleepStatus.java
@@ -192,7 +261,7 @@ index aecb0ad814586bfc5e56755ee14379a69388b38c..98a2a469e3d62f963968ef1be3e97892
              if (baseEntity == null) {
                  if (this.isCombat && (!targetEntity.canBeSeenAsEnemy() || targetEntity.level().getDifficulty() == Difficulty.PEACEFUL)) {
 diff --git a/src/main/java/net/minecraft/world/entity/player/Player.java b/src/main/java/net/minecraft/world/entity/player/Player.java
-index ce184181529a9743cc6a7685dcb7cf572be65350..9ef4ab973508eb139f7a44feb4bd484d8e0e03cd 100644
+index a8a7f4532a2df6985ae323b5cc0e6f38d464fb93..f20d0e76318d12b567755a33c8d1f99fd5d8ec11 100644
 --- a/src/main/java/net/minecraft/world/entity/player/Player.java
 +++ b/src/main/java/net/minecraft/world/entity/player/Player.java
 @@ -202,6 +202,13 @@ public abstract class Player extends LivingEntity {
@@ -265,30 +334,36 @@ index 3e912a8cf20c7a97efcbcb4fafa41827a71fa45b..745e57d58966dbe60b2301818c23d25e
      // Purpur end
  }
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
-index 5f51a9d16912ecbd9d015f5158d50563904a461f..d80e5f2280aa156bbe455f9638d84f8243dbdaf7 100644
+index 5f51a9d16912ecbd9d015f5158d50563904a461f..cb529e581d169f6eec7fe1b1fdea78b9e8882997 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
-@@ -176,8 +176,18 @@ public class PurpurConfig {
+@@ -176,8 +176,24 @@ public class PurpurConfig {
      }
  
      public static String cannotRideMob = "<red>You cannot mount that mob";
 +    public static String afkBroadcastAway = "<yellow><italic>%s is now AFK";
 +    public static String afkBroadcastBack = "<yellow><italic>%s is no longer AFK";
++    public static String afkTitleAway = "<gold><bold>AFK:<red>You are now AFK...:10:70:20";
 +    public static boolean afkBroadcastUseDisplayName = false;
 +    public static String afkTabListPrefix = "[AFK] ";
 +    public static String afkTabListSuffix = "";
++    public static int afkCommandCooldown = 0;
++    public static String afkCooldown = "<gray>You need to wait %time%s to use /afk.";
      private static void messages() {
          cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
 +        afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
 +        afkBroadcastBack = getString("settings.messages.afk-broadcast-back", afkBroadcastBack);
++        afkTitleAway = getString("settings.messages.afk-title-away", afkTitleAway);
 +        afkBroadcastUseDisplayName = getBoolean("settings.messages.afk-broadcast-use-display-name", afkBroadcastUseDisplayName);
 +        afkTabListPrefix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-prefix", afkTabListPrefix)));
 +        afkTabListSuffix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-suffix", afkTabListSuffix)));
++        afkCommandCooldown = getInt("settings.messages.afk-command-cooldown", afkCommandCooldown);
++        afkCooldown = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-command-cooldown-msg", afkCooldown)));
      }
  
      public static int barrelRows = 3;
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index 00c74f8b834b20e71299329833395736a3073437..05b8c7da71454399a9e7d0732885326ddb6c9a15 100644
+index 65cbd35892ab48fccda9bccf2b4dd66be5c84a0d..42bff6f2d864a31dcb1c0087a4e0c9027ece001e 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 +++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 @@ -91,6 +91,24 @@ public class PurpurWorldConfig {
@@ -316,6 +391,46 @@ index 00c74f8b834b20e71299329833395736a3073437..05b8c7da71454399a9e7d0732885326d
      public boolean babiesAreRidable = true;
      public boolean untamedTamablesAreRidable = true;
      public boolean useNightVisionWhenRiding = false;
+diff --git a/src/main/java/org/purpurmc/purpur/command/AFKCommand.java b/src/main/java/org/purpurmc/purpur/command/AFKCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8dca966c25f8e3f5622ef8f5862fdb43eae3813f
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/command/AFKCommand.java
+@@ -0,0 +1,34 @@
++package org.purpurmc.purpur.command;
++
++import com.mojang.brigadier.CommandDispatcher;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.commands.arguments.EntityArgument;
++import net.minecraft.server.level.ServerPlayer;
++
++import java.util.Collection;
++import java.util.Collections;
++
++public class AFKCommand {
++    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++        dispatcher.register(Commands.literal("afk")
++                .requires((listener) -> listener.hasPermission(2, "bukkit.command.afk"))
++                .executes((context) -> execute(context.getSource(), Collections.singleton(context.getSource().getPlayerOrException())))
++                .then(Commands.argument("targets", EntityArgument.players())
++                        .requires(listener -> listener.hasPermission(2, "bukkit.command.afk.other"))
++                        .executes((context) -> execute(context.getSource(), EntityArgument.getPlayers(context, "targets")))
++                )
++        );
++    }
++
++    private static int execute(CommandSourceStack sender, Collection<ServerPlayer> targets) {
++        for (ServerPlayer player : targets) {
++            boolean afk = player.isCommandAfk ? !player.commandAfkStatus : !player.isAfk();
++            if (afk) {
++                player.setAfk(true);
++            }
++            player.isCommandAfk = false;
++        }
++        return targets.size();
++    }
++}
 diff --git a/src/main/java/org/spigotmc/ActivationRange.java b/src/main/java/org/spigotmc/ActivationRange.java
 index bf2d18f74b0f0da7c3c30310c74224a1c0853564..02be091f2ee12a728fec72c6eaf390eac4c9a806 100644
 --- a/src/main/java/org/spigotmc/ActivationRange.java
