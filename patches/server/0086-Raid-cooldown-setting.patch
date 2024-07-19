@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jason Penilla <11360596+jpenilla@users.noreply.github.com>
+Date: Thu, 27 Aug 2020 13:48:52 -0700
+Subject: [PATCH] Raid cooldown setting
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/raid/Raids.java b/src/main/java/net/minecraft/world/entity/raid/Raids.java
+index 8c60f71270d909c10e6617eb64b8fdb42deb73e9..eedce2a3d67d875d5174ee125e2679480d4d412c 100644
+--- a/src/main/java/net/minecraft/world/entity/raid/Raids.java
++++ b/src/main/java/net/minecraft/world/entity/raid/Raids.java
+@@ -26,6 +26,7 @@ import net.minecraft.world.phys.Vec3;
+ public class Raids extends SavedData {
+ 
+     private static final String RAID_FILE_ID = "raids";
++    public final Map<java.util.UUID, Integer> playerCooldowns = Maps.newHashMap();
+     public final Map<Integer, Raid> raidMap = Maps.newHashMap();
+     private final ServerLevel level;
+     private int nextAvailableID;
+@@ -51,6 +52,17 @@ public class Raids extends SavedData {
+ 
+     public void tick() {
+         ++this.tick;
++        // Purpur start
++        if (level.purpurConfig.raidCooldownSeconds != 0 && this.tick % 20 == 0) {
++            com.google.common.collect.ImmutableMap.copyOf(playerCooldowns).forEach((uuid, i) -> {
++                if (i < 1) {
++                    playerCooldowns.remove(uuid);
++                } else {
++                    playerCooldowns.put(uuid, i - 1);
++                }
++            });
++        }
++        // Purpur end
+         Iterator<Raid> iterator = this.raidMap.values().iterator();
+ 
+         while (iterator.hasNext()) {
+@@ -122,11 +134,13 @@ public class Raids extends SavedData {
+                 */
+ 
+                 if (!raid.isStarted() || (raid.isInProgress() && raid.getRaidOmenLevel() < raid.getMaxRaidOmenLevel())) { // CraftBukkit - fixed a bug with raid: players could add up Bad Omen level even when the raid had finished
++                    if (level.purpurConfig.raidCooldownSeconds != 0 && playerCooldowns.containsKey(player.getUUID())) return null; // Purpur
+                     // CraftBukkit start
+                     if (!org.bukkit.craftbukkit.event.CraftEventFactory.callRaidTriggerEvent(raid, player)) {
+                         player.removeEffect(net.minecraft.world.effect.MobEffects.RAID_OMEN);
+                         return null;
+                     }
++                    if (level.purpurConfig.raidCooldownSeconds != 0) playerCooldowns.put(player.getUUID(), level.purpurConfig.raidCooldownSeconds); // Purpur
+ 
+                     if (!raid.isStarted() && !this.raidMap.containsKey(raid.getId())) {
+                         this.raidMap.put(raid.getId(), raid);
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index e43e5facf44978994c8a515a20906dc8fbf8b9b8..092b8854470cb034205f2cf708186d559be5d609 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -109,6 +109,7 @@ public class PurpurWorldConfig {
+     public double tridentLoyaltyVoidReturnHeight = 0.0D;
+     public double voidDamageHeight = -64.0D;
+     public double voidDamageDealt = 4.0D;
++    public int raidCooldownSeconds = 0;
+     private void miscGameplayMechanicsSettings() {
+         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
+         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
+@@ -117,6 +118,7 @@ public class PurpurWorldConfig {
+         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
+         voidDamageHeight = getDouble("gameplay-mechanics.void-damage-height", voidDamageHeight);
+         voidDamageDealt = getDouble("gameplay-mechanics.void-damage-dealt", voidDamageDealt);
++        raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
+     }
+ 
+     public int elytraDamagePerSecond = 1;
