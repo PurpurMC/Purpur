@@ -6,164 +6,63 @@ Subject: [PATCH] old raid behavior
 Adapted from https://github.com/litetex-oss/mcm-raid-restore/
 
 diff --git a/src/main/java/net/minecraft/world/effect/BadOmenMobEffect.java b/src/main/java/net/minecraft/world/effect/BadOmenMobEffect.java
-index 038ee9e1ef4c7fc6a92efbba0f2ec9063c236df5..0b370231b8d31e779780010b6d2e06baff74bc34 100644
+index 038ee9e1ef4c7fc6a92efbba0f2ec9063c236df5..574bdc2e3c3fb13e80c1d43210d9bf20be217603 100644
 --- a/src/main/java/net/minecraft/world/effect/BadOmenMobEffect.java
 +++ b/src/main/java/net/minecraft/world/effect/BadOmenMobEffect.java
-@@ -21,6 +21,12 @@ class BadOmenMobEffect extends MobEffect {
-         if (entity instanceof ServerPlayer serverPlayer && !serverPlayer.isSpectator()) {
-             ServerLevel serverLevel = serverPlayer.serverLevel();
+@@ -23,7 +23,7 @@ class BadOmenMobEffect extends MobEffect {
              if (serverLevel.getDifficulty() != Difficulty.PEACEFUL && serverLevel.isVillage(serverPlayer.blockPosition())) {
-+                // Purpur start - old raid behavior
-+                if (entity.level().purpurConfig.oldRaidBehavior) {
-+                    serverLevel.getRaids().createOrExtendRaid(serverPlayer, serverPlayer.blockPosition());
-+                    return true;
-+                }
-+                // Purpur end - old raid behavior
                  Raid raid = serverLevel.getRaidAt(serverPlayer.blockPosition());
                  if (raid == null || raid.getRaidOmenLevel() < raid.getMaxRaidOmenLevel()) {
-                     serverPlayer.addEffect(new MobEffectInstance(MobEffects.RAID_OMEN, 600, amplifier));
-diff --git a/src/main/java/net/minecraft/world/entity/raid/Raid.java b/src/main/java/net/minecraft/world/entity/raid/Raid.java
-index dcbef04bbaab988096bf416163264833e84d1967..1f53df599593bd2bbb197d02780fe95646cd9b0e 100644
---- a/src/main/java/net/minecraft/world/entity/raid/Raid.java
-+++ b/src/main/java/net/minecraft/world/entity/raid/Raid.java
-@@ -268,6 +268,16 @@ public class Raid {
-     }
- 
-     public boolean absorbRaidOmen(ServerPlayer entityplayer) {
-+        // Purpur start - old raid behavior
-+        if (level.purpurConfig.oldRaidBehavior) {
-+            final net.minecraft.world.effect.MobEffectInstance mobEffect = entityplayer.getEffect(MobEffects.BAD_OMEN);
-+            if (mobEffect != null) {
-+                this.raidOmenLevel = java.lang.Math.clamp(this.raidOmenLevel + mobEffect.getAmplifier() + 1, 0, this.getMaxRaidOmenLevel());
-+            }
-+            entityplayer.removeEffect(MobEffects.BAD_OMEN);
-+            return true;
-+        }
-+        // Purpur end - old raid behavior
-         MobEffectInstance mobeffect = entityplayer.getEffect(MobEffects.RAID_OMEN);
- 
-         if (mobeffect == null) {
+-                    serverPlayer.addEffect(new MobEffectInstance(MobEffects.RAID_OMEN, 600, amplifier));
++                    serverPlayer.addEffect(new MobEffectInstance(MobEffects.RAID_OMEN, serverLevel.purpurConfig.oldRaidBehavior ? 1 : 600, amplifier));
+                     serverPlayer.setRaidOmenPosition(serverPlayer.blockPosition());
+                     return false;
+                 }
 diff --git a/src/main/java/net/minecraft/world/entity/raid/Raider.java b/src/main/java/net/minecraft/world/entity/raid/Raider.java
-index 06487fc9ea416d8256e0c2cd1969d4e0283ffb05..4205ea55468a70e524bbf011eb20c067d7177433 100644
+index 06487fc9ea416d8256e0c2cd1969d4e0283ffb05..c9863c441ff769a7a7319df64dd7531658c1222a 100644
 --- a/src/main/java/net/minecraft/world/entity/raid/Raider.java
 +++ b/src/main/java/net/minecraft/world/entity/raid/Raider.java
-@@ -133,6 +133,42 @@ public abstract class Raider extends PatrollingMonster {
-             }
-         }
+@@ -131,6 +131,40 @@ public abstract class Raider extends PatrollingMonster {
  
-+        // Purpur start - old raid behavior
-+        if (this.level().purpurConfig.oldRaidBehavior) {
-+            if (this.level() instanceof final ServerLevel serverLevel && this.isPatrolLeader() && this.getCurrentRaid() == null && serverLevel.getRaidAt(this.getOnPos()) == null) {
-+                final net.minecraft.world.item.ItemStack itemStack = this.getItemBySlot(EquipmentSlot.HEAD);
-+                if (!itemStack.isEmpty() && net.minecraft.world.item.ItemStack.isSameItem(itemStack, net.minecraft.world.entity.raid.Raid.getLeaderBannerInstance(this.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN)))) {
-+                    final net.minecraft.world.entity.Entity attacker = damageSource.getEntity();
-+                    net.minecraft.server.level.ServerPlayer attackingPlayer = null;
-+                    if (attacker instanceof final net.minecraft.server.level.ServerPlayer playerEntity) {
-+                        attackingPlayer = playerEntity;
-+                    } else if (attacker instanceof final net.minecraft.world.entity.animal.Wolf wolfEntity && wolfEntity.isTame() && wolfEntity.getOwner() instanceof final net.minecraft.server.level.ServerPlayer wolfOwnerPlayerEntity) {
-+                        attackingPlayer = wolfOwnerPlayerEntity;
-+                    }
-+                    if (attackingPlayer != null) {
-+                        final net.minecraft.world.effect.MobEffectInstance mobEffectInstance = attackingPlayer.getEffect(net.minecraft.world.effect.MobEffects.BAD_OMEN);
-+                        int amplifier = 1;
-+                        if (mobEffectInstance != null) {
-+                            amplifier += mobEffectInstance.getAmplifier();
-+                            attackingPlayer.removeEffectNoUpdate(net.minecraft.world.effect.MobEffects.BAD_OMEN);
-+                        } else {
-+                            amplifier--;
-+                        }
-+                        if (!serverLevel.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DISABLE_RAIDS)) {
-+                            attackingPlayer.addEffect(new net.minecraft.world.effect.MobEffectInstance(
-+                                net.minecraft.world.effect.MobEffects.BAD_OMEN,
-+                                100 * 60 * 20,
-+                                java.lang.Math.clamp(amplifier, 0, 4),
-+                                false,
-+                                false,
-+                                true
-+                            ));
+                 raid.removeFromRaid(this, false);
+             }
++
++            // Purpur start - old raid behavior
++            if (this.level().purpurConfig.oldRaidBehavior) {
++                if (this.isPatrolLeader() && raid == null && ((ServerLevel) this.level()).getRaidAt(this.blockPosition()) == null) {
++                    ItemStack itemstack = this.getItemBySlot(EquipmentSlot.HEAD);
++
++                    net.minecraft.world.entity.player.Player entityhuman = null;
++                    if (entity instanceof net.minecraft.world.entity.player.Player player) {
++                        entityhuman = player;
++                    } else if (entity instanceof net.minecraft.world.entity.animal.Wolf entitywolf) {
++                        LivingEntity entityliving = entitywolf.getOwner();
++
++                        if (entitywolf.isTame() && entityliving instanceof net.minecraft.world.entity.player.Player player) {
++                            entityhuman = player;
 +                        }
 +                    }
++
++                    if (entityhuman != null && !itemstack.isEmpty() && ItemStack.matches(itemstack, Raid.getLeaderBannerInstance(this.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN)))) {
++                        net.minecraft.world.effect.MobEffectInstance mobeffect = entityhuman.getEffect(net.minecraft.world.effect.MobEffects.BAD_OMEN);
++                        int i = 0;
++                        if (mobeffect != null) {
++                            i = mobeffect.getAmplifier();
++                            entityhuman.removeEffectNoUpdate(net.minecraft.world.effect.MobEffects.BAD_OMEN);
++                        }
++                        i = net.minecraft.util.Mth.clamp(i, 0, 4);
++                        net.minecraft.world.effect.MobEffectInstance mobeffect1 = new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.BAD_OMEN, 120000, i, false, false, true);
++                        if (!this.level().getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DISABLE_RAIDS)) {
++                            entityhuman.addEffect(mobeffect1, org.bukkit.event.entity.EntityPotionEffectEvent.Cause.PATROL_CAPTAIN); // CraftBukkit
++                        }
++                    }
++
 +                }
 +            }
-+        }
-+        // Purpur end - old raid behavior
++            // Purpur end - old raid behavior
+         }
+ 
          super.die(damageSource);
-     }
- 
-diff --git a/src/main/java/net/minecraft/world/entity/raid/Raids.java b/src/main/java/net/minecraft/world/entity/raid/Raids.java
-index eedce2a3d67d875d5174ee125e2679480d4d412c..07f143e9fbda90529ba0ab163c07c6d65680d54c 100644
---- a/src/main/java/net/minecraft/world/entity/raid/Raids.java
-+++ b/src/main/java/net/minecraft/world/entity/raid/Raids.java
-@@ -132,22 +132,56 @@ public class Raids extends SavedData {
-                     this.raidMap.put(raid.getId(), raid);
-                 }
-                 */
--
--                if (!raid.isStarted() || (raid.isInProgress() && raid.getRaidOmenLevel() < raid.getMaxRaidOmenLevel())) { // CraftBukkit - fixed a bug with raid: players could add up Bad Omen level even when the raid had finished
--                    if (level.purpurConfig.raidCooldownSeconds != 0 && playerCooldowns.containsKey(player.getUUID())) return null; // Purpur
--                    // CraftBukkit start
--                    if (!org.bukkit.craftbukkit.event.CraftEventFactory.callRaidTriggerEvent(raid, player)) {
--                        player.removeEffect(net.minecraft.world.effect.MobEffects.RAID_OMEN);
--                        return null;
-+                // Purpur start - old raid behavior
-+                if (level.purpurConfig.oldRaidBehavior) {
-+                    boolean startRaid = false;
-+                    if (!raid.isStarted()) {
-+                        if (!this.raidMap.containsKey(raid.getId())) {
-+                            this.raidMap.put(raid.getId(), raid);
-+                        }
-+                        startRaid = true;
-+                    } else if (raid.getRaidOmenLevel() < raid.getMaxRaidOmenLevel()) {
-+                        startRaid = true;
-+                    } else {
-+                        player.removeEffect(net.minecraft.world.effect.MobEffects.BAD_OMEN);
-                     }
--                    if (level.purpurConfig.raidCooldownSeconds != 0) playerCooldowns.put(player.getUUID(), level.purpurConfig.raidCooldownSeconds); // Purpur
--
--                    if (!raid.isStarted() && !this.raidMap.containsKey(raid.getId())) {
--                        this.raidMap.put(raid.getId(), raid);
-+                    if (startRaid) {
-+                        if (level.purpurConfig.raidCooldownSeconds != 0 && playerCooldowns.containsKey(player.getUUID())) return null; // Purpur
-+                        // CraftBukkit start
-+                        if (!org.bukkit.craftbukkit.event.CraftEventFactory.callRaidTriggerEvent(raid, player)) {
-+                            player.removeEffect(net.minecraft.world.effect.MobEffects.RAID_OMEN);
-+                            return null;
-+                        }
-+                        if (level.purpurConfig.raidCooldownSeconds != 0) playerCooldowns.put(player.getUUID(), level.purpurConfig.raidCooldownSeconds); // Purpur
-+
-+                        if (!raid.isStarted() && !this.raidMap.containsKey(raid.getId())) {
-+                            this.raidMap.put(raid.getId(), raid);
-+                        }
-+                        // CraftBukkit end
-+                        raid.absorbRaidOmen(player);
-+
-+                        if (!raid.hasFirstWaveSpawned()) {
-+                            player.awardStat(net.minecraft.stats.Stats.RAID_TRIGGER);
-+                        }
-+                    }
-+                } else {
-+                    if (!raid.isStarted() || (raid.isInProgress() && raid.getRaidOmenLevel() < raid.getMaxRaidOmenLevel())) { // CraftBukkit - fixed a bug with raid: players could add up Bad Omen level even when the raid had finished
-+                        if (level.purpurConfig.raidCooldownSeconds != 0 && playerCooldowns.containsKey(player.getUUID())) return null; // Purpur
-+                        // CraftBukkit start
-+                        if (!org.bukkit.craftbukkit.event.CraftEventFactory.callRaidTriggerEvent(raid, player)) {
-+                            player.removeEffect(net.minecraft.world.effect.MobEffects.RAID_OMEN);
-+                            return null;
-+                        }
-+                        if (level.purpurConfig.raidCooldownSeconds != 0) playerCooldowns.put(player.getUUID(), level.purpurConfig.raidCooldownSeconds); // Purpur
-+
-+                        if (!raid.isStarted() && !this.raidMap.containsKey(raid.getId())) {
-+                            this.raidMap.put(raid.getId(), raid);
-+                        }
-+                        // CraftBukkit end
-+                        raid.absorbRaidOmen(player);
-                     }
--                    // CraftBukkit end
--                    raid.absorbRaidOmen(player);
-                 }
-+                // Purpur end - old raid behavior
- 
-                 this.setDirty();
-                 return raid;
 diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
 index 2cb73db565bc55a0c49310cf76ee3ed7a6821c6a..a6c55d9253ff20099e9754d5e3acd31dfc53d948 100644
 --- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
