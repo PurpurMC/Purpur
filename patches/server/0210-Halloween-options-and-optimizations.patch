@@ -1,0 +1,79 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: DoctaEnkoda <bierquejason@gmail.com>
+Date: Mon, 13 Sep 2021 04:48:21 +0200
+Subject: [PATCH] Halloween options and optimizations
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/ambient/Bat.java b/src/main/java/net/minecraft/world/entity/ambient/Bat.java
+index 3d556fb56977f3a75702c43e933340155e3e1cf3..54a3cb6b0a30b3a5dadda88afed28e9679d74ccc 100644
+--- a/src/main/java/net/minecraft/world/entity/ambient/Bat.java
++++ b/src/main/java/net/minecraft/world/entity/ambient/Bat.java
+@@ -302,7 +302,7 @@ public class Bat extends AmbientCreature {
+             int i = world.getMaxLocalRawBrightness(pos);
+             byte b0 = 4;
+ 
+-            if (Bat.isHalloween()) {
++            if (Bat.isHalloweenSeason(world.getMinecraftWorld())) { // Purpur
+                 b0 = 7;
+             } else if (random.nextBoolean()) {
+                 return false;
+@@ -316,6 +316,7 @@ public class Bat extends AmbientCreature {
+     private static boolean isSpookySeason = false;
+     private static final int ONE_HOUR = 20 * 60 * 60;
+     private static int lastSpookyCheck = -ONE_HOUR;
++    public static boolean isHalloweenSeason(Level level) { return level.purpurConfig.forceHalloweenSeason || isHalloween(); } // Purpur
+     private static boolean isHalloween() {
+         if (net.minecraft.server.MinecraftServer.currentTick - lastSpookyCheck > ONE_HOUR) {
+         LocalDate localdate = LocalDate.now();
+diff --git a/src/main/java/net/minecraft/world/entity/monster/AbstractSkeleton.java b/src/main/java/net/minecraft/world/entity/monster/AbstractSkeleton.java
+index 1d06c612eaba8b595fa3d094577f700989d1e224..4aeb23de31e826d5cf27f8c91bd60c911f769a17 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/AbstractSkeleton.java
++++ b/src/main/java/net/minecraft/world/entity/monster/AbstractSkeleton.java
+@@ -136,11 +136,7 @@ public abstract class AbstractSkeleton extends Monster implements RangedAttackMo
+         this.reassessWeaponGoal();
+         this.setCanPickUpLoot(this.level().paperConfig().entities.behavior.mobsCanAlwaysPickUpLoot.skeletons || randomsource.nextFloat() < 0.55F * difficulty.getSpecialMultiplier()); // Paper - Add world settings for mobs picking up loot
+         if (this.getItemBySlot(EquipmentSlot.HEAD).isEmpty()) {
+-            LocalDate localdate = LocalDate.now();
+-            int i = localdate.get(ChronoField.DAY_OF_MONTH);
+-            int j = localdate.get(ChronoField.MONTH_OF_YEAR);
+-
+-            if (j == 10 && i == 31 && randomsource.nextFloat() < 0.25F) {
++            if (net.minecraft.world.entity.ambient.Bat.isHalloweenSeason(world.getMinecraftWorld()) && this.random.nextFloat() < this.level().purpurConfig.chanceHeadHalloweenOnEntity) { // Purpur
+                 this.setItemSlot(EquipmentSlot.HEAD, new ItemStack(randomsource.nextFloat() < 0.1F ? Blocks.JACK_O_LANTERN : Blocks.CARVED_PUMPKIN));
+                 this.armorDropChances[EquipmentSlot.HEAD.getIndex()] = 0.0F;
+             }
+diff --git a/src/main/java/net/minecraft/world/entity/monster/Zombie.java b/src/main/java/net/minecraft/world/entity/monster/Zombie.java
+index 1910e22e9ee2d18e86c9f8e3dd06199e73599bf6..29cbb9ae004f657ff3aa6db379716472dc0bbf2f 100644
+--- a/src/main/java/net/minecraft/world/entity/monster/Zombie.java
++++ b/src/main/java/net/minecraft/world/entity/monster/Zombie.java
+@@ -585,11 +585,7 @@ public class Zombie extends Monster {
+         }
+ 
+         if (this.getItemBySlot(EquipmentSlot.HEAD).isEmpty()) {
+-            LocalDate localdate = LocalDate.now();
+-            int i = localdate.get(ChronoField.DAY_OF_MONTH);
+-            int j = localdate.get(ChronoField.MONTH_OF_YEAR);
+-
+-            if (j == 10 && i == 31 && randomsource.nextFloat() < 0.25F) {
++            if (net.minecraft.world.entity.ambient.Bat.isHalloweenSeason(world.getMinecraftWorld()) && this.random.nextFloat() < this.level().purpurConfig.chanceHeadHalloweenOnEntity) { // Purpur
+                 this.setItemSlot(EquipmentSlot.HEAD, new ItemStack(randomsource.nextFloat() < 0.1F ? Blocks.JACK_O_LANTERN : Blocks.CARVED_PUMPKIN));
+                 this.armorDropChances[EquipmentSlot.HEAD.getIndex()] = 0.0F;
+             }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 218fd4a054f70f33f4e3f6d65f43815edfe8c7ae..e506e6f2a09b2c2f5d9bdbdbd7634e0fdc399d64 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -1748,6 +1748,13 @@ public class PurpurWorldConfig {
+         guardianTakeDamageFromWater = getBoolean("mobs.guardian.takes-damage-from-water", guardianTakeDamageFromWater);
+     }
+ 
++    public boolean forceHalloweenSeason = false;
++    public float chanceHeadHalloweenOnEntity = 0.25F;
++    private void halloweenSetting() {
++        forceHalloweenSeason = getBoolean("gameplay-mechanics.halloween.force", forceHalloweenSeason);
++        chanceHeadHalloweenOnEntity = (float) getDouble("gameplay-mechanics.halloween.head-chance", chanceHeadHalloweenOnEntity);
++    }
++
+     public boolean hoglinRidable = false;
+     public boolean hoglinRidableInWater = true;
+     public boolean hoglinControllable = true;
