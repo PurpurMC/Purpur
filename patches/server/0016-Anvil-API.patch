@@ -17,11 +17,11 @@ index 32910f677b0522ac8ec513fa0d00b714b52cfae4..c491291b522aebf34c7d990d2b485d1a
      // CraftBukkit start
      public boolean checkReachable = true;
 diff --git a/src/main/java/net/minecraft/world/inventory/AnvilMenu.java b/src/main/java/net/minecraft/world/inventory/AnvilMenu.java
-index 7198dc9ffc9a37dab3654e12aa497c442a9993c5..99bfa7cdc58c690d6f0c742dafedd40cace3223f 100644
+index d685511104ac552dfc9ae2111e1bfb60fa812102..b1810b5dfc89dd2921607b0040afd69b05d36b9e 100644
 --- a/src/main/java/net/minecraft/world/inventory/AnvilMenu.java
 +++ b/src/main/java/net/minecraft/world/inventory/AnvilMenu.java
 @@ -25,6 +25,12 @@ import org.slf4j.Logger;
- import org.bukkit.craftbukkit.inventory.CraftInventoryView;
+ import org.bukkit.craftbukkit.inventory.view.CraftAnvilView;
  // CraftBukkit end
  
 +// Purpur start - Anvil API
@@ -35,7 +35,7 @@ index 7198dc9ffc9a37dab3654e12aa497c442a9993c5..99bfa7cdc58c690d6f0c742dafedd40c
      public static final int INPUT_SLOT = 0;
 @@ -53,6 +59,10 @@ public class AnvilMenu extends ItemCombinerMenu {
      public int maximumRepairCost = 40;
-     private CraftInventoryView bukkitEntity;
+     private CraftAnvilView bukkitEntity;
      // CraftBukkit end
 +    // Purpur start - Anvil API
 +    public boolean bypassCost = false;
@@ -136,21 +136,73 @@ index 7de5e47f9a54263734eeef855a2dc07ef64d30ea..b3bd9bbd96efc4784b86c2be6bb857da
  
          return itemstack;
 diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryAnvil.java b/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryAnvil.java
-index 9ee14589d63bbfc0880f2eee5e924fe946ee0035..062783f30f41761c34d7679844e443e9a55c6011 100644
+index 792cb6adf0c7a6335cc5985fce8bed2e0f1149af..aa59dcdea74434993dbb9d8a7b2fc3bfae9d0a77 100644
 --- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryAnvil.java
 +++ b/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryAnvil.java
-@@ -9,7 +9,7 @@ import org.bukkit.inventory.AnvilInventory;
- public class CraftInventoryAnvil extends CraftResultInventory implements AnvilInventory {
+@@ -3,6 +3,7 @@ package org.bukkit.craftbukkit.inventory;
+ import com.google.common.base.Preconditions;
+ import java.util.function.Consumer;
+ import net.minecraft.world.Container;
++import net.minecraft.world.inventory.AnvilMenu;
+ import org.bukkit.Location;
+ import org.bukkit.craftbukkit.inventory.view.CraftAnvilView;
+ import org.bukkit.entity.HumanEntity;
+@@ -19,6 +20,8 @@ public class CraftInventoryAnvil extends CraftResultInventory implements AnvilIn
+     private int repairCost;
+     private int repairCostAmount;
+     private int maximumRepairCost;
++    private boolean bypassCost;
++    private boolean canDoUnsafeEnchants;
  
-     private final Location location;
--    private final AnvilMenu container;
-+    public final AnvilMenu container; // Purpur - private -> public - Anvil API
- 
-     public CraftInventoryAnvil(Location location, Container inventory, Container resultInventory, AnvilMenu container) {
+     public CraftInventoryAnvil(Location location, Container inventory, Container resultInventory) {
          super(inventory, resultInventory);
-@@ -57,4 +57,26 @@ public class CraftInventoryAnvil extends CraftResultInventory implements AnvilIn
-         Preconditions.checkArgument(levels >= 0, "Maximum repair cost must be positive (or 0)");
-         this.container.maximumRepairCost = levels;
+@@ -27,6 +30,8 @@ public class CraftInventoryAnvil extends CraftResultInventory implements AnvilIn
+         this.repairCost = CraftInventoryAnvil.DEFAULT_REPAIR_COST;
+         this.repairCostAmount = CraftInventoryAnvil.DEFAULT_REPAIR_COST_AMOUNT;
+         this.maximumRepairCost = CraftInventoryAnvil.DEFAULT_MAXIMUM_REPAIR_COST;
++        this.bypassCost = false;
++        this.canDoUnsafeEnchants = false;
+     }
+ 
+     @Override
+@@ -113,4 +118,30 @@ public class CraftInventoryAnvil extends CraftResultInventory implements AnvilIn
+             consumer.accept(cav);
+         }
+     }
++
++    // Purpur start - Anvil API
++    @Override
++    public boolean canBypassCost() {
++        this.syncWithArbitraryViewValue((cav) -> this.bypassCost = cav.canBypassCost());
++        return this.bypassCost;
++    }
++
++    @Override
++    public void setBypassCost(boolean bypassCost) {
++        this.bypassCost = bypassCost;
++        this.syncViews((cav) -> cav.setBypassCost(bypassCost));
++    }
++
++    @Override
++    public boolean canDoUnsafeEnchants() {
++        this.syncWithArbitraryViewValue((cav) -> this.canDoUnsafeEnchants = cav.canDoUnsafeEnchants());
++        return this.canDoUnsafeEnchants;
++    }
++
++    @Override
++    public void setDoUnsafeEnchants(boolean canDoUnsafeEnchants) {
++        this.canDoUnsafeEnchants = canDoUnsafeEnchants;
++        this.syncViews((cav) -> cav.setDoUnsafeEnchants(canDoUnsafeEnchants));
++    }
++    // Purpur end - Anvil API
+ }
+diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/view/CraftAnvilView.java b/src/main/java/org/bukkit/craftbukkit/inventory/view/CraftAnvilView.java
+index e2d8d69c5ae8feb6840462ba8332344972658d83..d1505efcf861224f0b3c9837072690155b36ae32 100644
+--- a/src/main/java/org/bukkit/craftbukkit/inventory/view/CraftAnvilView.java
++++ b/src/main/java/org/bukkit/craftbukkit/inventory/view/CraftAnvilView.java
+@@ -63,4 +63,26 @@ public class CraftAnvilView extends CraftInventoryView<AnvilMenu> implements Anv
+             this.setMaximumRepairCost(legacy.getMaximumRepairCost());
+         }
      }
 +
 +    // Purpur start - Anvil API
