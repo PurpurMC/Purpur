@@ -1,0 +1,184 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BillyGalbreath <blake.galbreath@gmail.com>
+Date: Thu, 30 Dec 2021 09:56:43 -0600
+Subject: [PATCH] Give bee counts in beehives to Purpur clients
+
+
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 4612bf69c6fb249df161aada20fa0c0f0238e96e..c026ae0e9b577bedcba5d4093b83889bcb1b0ad4 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1150,6 +1150,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+     }
+     public void safeShutdown(boolean waitForShutdown, boolean isRestarting) {
+         org.purpurmc.purpur.task.BossBarTask.stopAll(); // Purpur
++        org.purpurmc.purpur.task.BeehiveTask.instance().unregister(); // Purpur
+         this.isRestarting = isRestarting;
+         this.hasLoggedStop = true; // Paper - Debugging
+         if (isDebugging()) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper - Debugging
+diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+index 36d9ad38347e65c68656300af0dcd5e7afffe800..2d3f9550d4fb47b461ed5d4c1de62d511b1ad31d 100644
+--- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -396,6 +396,7 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
+ 
+             if (gg.pufferfish.pufferfish.PufferfishConfig.enableAsyncMobSpawning) mobSpawnExecutor.start(); // Pufferfish
+             org.purpurmc.purpur.task.BossBarTask.startAll(); // Purpur
++            if (org.purpurmc.purpur.PurpurConfig.beeCountPayload) org.purpurmc.purpur.task.BeehiveTask.instance().register(); // Purpur
+             return true;
+         }
+     }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurConfig.java b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+index 346113abdc8da4a2fe69650642515460086a357a..a36b5d9c61a99ce217ad4bea82ea7478821b867c 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurConfig.java
+@@ -429,6 +429,11 @@ public class PurpurConfig {
+         allowWaterPlacementInTheEnd = getBoolean("settings.allow-water-placement-in-the-end", allowWaterPlacementInTheEnd);
+     }
+ 
++    public static boolean beeCountPayload = false;
++    private static void beeCountPayload() {
++        beeCountPayload = getBoolean("settings.bee-count-payload", beeCountPayload);
++    }
++
+     public static boolean loggerSuppressInitLegacyMaterialError = false;
+     public static boolean loggerSuppressIgnoredAdvancementWarnings = false;
+     public static boolean loggerSuppressUnrecognizedRecipeErrors = false;
+diff --git a/src/main/java/org/purpurmc/purpur/network/ClientboundBeehivePayload.java b/src/main/java/org/purpurmc/purpur/network/ClientboundBeehivePayload.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..793a3ea45fe04e84725926f17615c26e008b0ce4
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/network/ClientboundBeehivePayload.java
+@@ -0,0 +1,27 @@
++package org.purpurmc.purpur.network;
++
++import net.minecraft.core.BlockPos;
++import net.minecraft.network.FriendlyByteBuf;
++import net.minecraft.network.codec.StreamCodec;
++import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
++import net.minecraft.resources.ResourceLocation;
++import org.jetbrains.annotations.NotNull;
++
++public record ClientboundBeehivePayload(BlockPos pos, int numOfBees) implements CustomPacketPayload {
++    public static final StreamCodec<FriendlyByteBuf, ClientboundBeehivePayload> STREAM_CODEC = CustomPacketPayload.codec(ClientboundBeehivePayload::write, ClientboundBeehivePayload::new);
++    public static final Type<ClientboundBeehivePayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("purpur", "beehive_s2c"));
++
++    public ClientboundBeehivePayload(FriendlyByteBuf friendlyByteBuf) {
++        this(friendlyByteBuf.readBlockPos(),  friendlyByteBuf.readInt());
++    }
++
++    private void write(FriendlyByteBuf friendlyByteBuf) {
++        friendlyByteBuf.writeBlockPos(this.pos);
++        friendlyByteBuf.writeInt(this.numOfBees);
++    }
++
++    @Override
++    public @NotNull Type<? extends CustomPacketPayload> type() {
++        return TYPE;
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/network/ServerboundBeehivePayload.java b/src/main/java/org/purpurmc/purpur/network/ServerboundBeehivePayload.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..fa72769e06061609e1e658a0250e99c8cb026c0e
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/network/ServerboundBeehivePayload.java
+@@ -0,0 +1,26 @@
++package org.purpurmc.purpur.network;
++
++import net.minecraft.core.BlockPos;
++import net.minecraft.network.FriendlyByteBuf;
++import net.minecraft.network.codec.StreamCodec;
++import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
++import net.minecraft.resources.ResourceLocation;
++import org.jetbrains.annotations.NotNull;
++
++public record ServerboundBeehivePayload(BlockPos pos) implements CustomPacketPayload {
++    public static final StreamCodec<FriendlyByteBuf, ServerboundBeehivePayload> STREAM_CODEC = CustomPacketPayload.codec(ServerboundBeehivePayload::write, ServerboundBeehivePayload::new);
++    public static final Type<ServerboundBeehivePayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath("purpur", "beehive_c2s"));
++
++    public ServerboundBeehivePayload(FriendlyByteBuf friendlyByteBuf) {
++        this(friendlyByteBuf.readBlockPos());
++    }
++
++    private void write(FriendlyByteBuf friendlyByteBuf) {
++        friendlyByteBuf.writeBlockPos(this.pos);
++    }
++
++    @Override
++    public @NotNull Type<? extends CustomPacketPayload> type() {
++        return TYPE;
++    }
++}
+diff --git a/src/main/java/org/purpurmc/purpur/task/BeehiveTask.java b/src/main/java/org/purpurmc/purpur/task/BeehiveTask.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..664f9d5e1ce5e2787bf699bd11758b9e3aa8ed3a
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/task/BeehiveTask.java
+@@ -0,0 +1,67 @@
++package org.purpurmc.purpur.task;
++
++import io.netty.buffer.Unpooled;
++import net.minecraft.network.FriendlyByteBuf;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
++import net.minecraft.world.level.block.entity.BlockEntity;
++import org.bukkit.Bukkit;
++import org.bukkit.craftbukkit.entity.CraftPlayer;
++import org.bukkit.entity.Player;
++import org.bukkit.plugin.PluginBase;
++import org.bukkit.plugin.messaging.PluginMessageListener;
++import org.jetbrains.annotations.NotNull;
++import org.purpurmc.purpur.network.ClientboundBeehivePayload;
++import org.purpurmc.purpur.network.ServerboundBeehivePayload;
++import org.purpurmc.purpur.util.MinecraftInternalPlugin;
++
++public class BeehiveTask implements PluginMessageListener {
++
++    private static BeehiveTask instance;
++
++    public static BeehiveTask instance() {
++        if (instance == null) {
++            instance = new BeehiveTask();
++        }
++        return instance;
++    }
++
++    private final PluginBase plugin = new MinecraftInternalPlugin();
++
++    private BeehiveTask() {
++    }
++
++    public void register() {
++        Bukkit.getMessenger().registerOutgoingPluginChannel(this.plugin, ClientboundBeehivePayload.TYPE.id().toString());
++        Bukkit.getMessenger().registerIncomingPluginChannel(this.plugin, ServerboundBeehivePayload.TYPE.id().toString(), this);
++    }
++
++    public void unregister() {
++        Bukkit.getMessenger().unregisterOutgoingPluginChannel(this.plugin, ClientboundBeehivePayload.TYPE.id().toString());
++        Bukkit.getMessenger().unregisterIncomingPluginChannel(this.plugin, ServerboundBeehivePayload.TYPE.id().toString());
++    }
++
++    @Override
++    public void onPluginMessageReceived(@NotNull String channel, @NotNull Player player, byte[] bytes) {
++        FriendlyByteBuf byteBuf = new FriendlyByteBuf(Unpooled.copiedBuffer(bytes));
++        ServerboundBeehivePayload payload = ServerboundBeehivePayload.STREAM_CODEC.decode(byteBuf);
++
++        ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
++
++        // targeted block info max range specified in client at net.minecraft.client.gui.hud.DebugHud#render
++        if (!payload.pos().getCenter().closerThan(serverPlayer.position(), 20)) return; // Targeted Block info max range is 20
++        if (serverPlayer.level().getChunkIfLoaded(payload.pos()) == null) return;
++
++        BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
++        if (!(blockEntity instanceof BeehiveBlockEntity beehive)) {
++            return;
++        }
++
++        ClientboundBeehivePayload customPacketPayload = new ClientboundBeehivePayload(payload.pos(), beehive.getOccupantCount());
++        FriendlyByteBuf friendlyByteBuf = new FriendlyByteBuf(Unpooled.buffer());
++        ClientboundBeehivePayload.STREAM_CODEC.encode(friendlyByteBuf, customPacketPayload);
++        byte[] byteArray = new byte[friendlyByteBuf.readableBytes()];
++        friendlyByteBuf.readBytes(byteArray);
++        player.sendPluginMessage(this.plugin, customPacketPayload.type().id().toString(), byteArray);
++    }
++}

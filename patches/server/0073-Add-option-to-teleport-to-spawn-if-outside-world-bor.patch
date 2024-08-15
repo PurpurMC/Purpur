@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Mon, 13 Jul 2020 11:40:00 -0500
+Subject: [PATCH] Add option to teleport to spawn if outside world border
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayer.java b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+index f9d2cb898e8f19accf30de609b5f0b1ef17fa9c7..7899793cf22f79e4d1acbac052ee273e6b2ad12f 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayer.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayer.java
+@@ -3033,4 +3033,26 @@ public class ServerPlayer extends net.minecraft.world.entity.player.Player imple
+         return (CraftPlayer) super.getBukkitEntity();
+     }
+     // CraftBukkit end
++
++    // Purpur start
++    public void teleport(Location to) {
++        this.ejectPassengers();
++        this.stopRiding(true);
++
++        if (this.isSleeping()) {
++            this.stopSleepInBed(true, false);
++        }
++
++        if (this.containerMenu != this.inventoryMenu) {
++            this.closeContainer(org.bukkit.event.inventory.InventoryCloseEvent.Reason.TELEPORT);
++        }
++
++        ServerLevel toLevel = ((CraftWorld) to.getWorld()).getHandle();
++        if (this.level() == toLevel) {
++            this.connection.internalTeleport(to.getX(), to.getY(), to.getZ(), to.getYaw(), to.getPitch(), java.util.EnumSet.noneOf(net.minecraft.world.entity.RelativeMovement.class));
++        } else {
++            this.server.getPlayerList().respawn(this, true, RemovalReason.KILLED, org.bukkit.event.player.PlayerRespawnEvent.RespawnReason.DEATH, to);
++        }
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+index 9ee0ff0a32634cda0fff6bc16df32e47f0edec1c..7dd20ec15b038df76d3f9e34e0f2c90c4659c9e8 100644
+--- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
++++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
+@@ -461,6 +461,7 @@ public abstract class LivingEntity extends Entity implements Attackable {
+                         double d1 = this.level().getWorldBorder().getDamagePerBlock();
+ 
+                         if (d1 > 0.0D) {
++                            if (level().purpurConfig.teleportIfOutsideBorder && this instanceof ServerPlayer serverPlayer) { serverPlayer.teleport(io.papermc.paper.util.MCUtil.toLocation(level(), ((ServerLevel) level()).getSharedSpawnPos())); return; } // Purpur
+                             this.hurt(this.damageSources().outOfBorder(), (float) Math.max(1, Mth.floor(-d0 * d1)));
+                         }
+                     }
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 65b5ddde3496d1b04bedd410675a548f662aa073..7e416c24a336b53a71b53c020171a32adca6c95c 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -241,6 +241,7 @@ public class PurpurWorldConfig {
+     public boolean idleTimeoutTargetPlayer = true;
+     public String playerDeathExpDropEquation = "expLevel * 7";
+     public int playerDeathExpDropMax = 100;
++    public boolean teleportIfOutsideBorder = false;
+     private void playerSettings() {
+         if (PurpurConfig.version < 19) {
+             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
+@@ -254,6 +255,7 @@ public class PurpurWorldConfig {
+         idleTimeoutTargetPlayer = getBoolean("gameplay-mechanics.player.idle-timeout.mobs-target", idleTimeoutTargetPlayer);
+         playerDeathExpDropEquation = getString("gameplay-mechanics.player.exp-dropped-on-death.equation", playerDeathExpDropEquation);
+         playerDeathExpDropMax = getInt("gameplay-mechanics.player.exp-dropped-on-death.maximum", playerDeathExpDropMax);
++        teleportIfOutsideBorder = getBoolean("gameplay-mechanics.player.teleport-if-outside-border", teleportIfOutsideBorder);
+     }
+ 
+     public boolean silkTouchEnabled = false;

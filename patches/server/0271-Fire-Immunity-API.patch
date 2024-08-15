@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Racci <90304606+DaRacci@users.noreply.github.com>
+Date: Fri, 4 Feb 2022 16:10:21 +1100
+Subject: [PATCH] Fire Immunity API
+
+
+diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
+index 9911d937ddaa456157aeacfe3178ab7d10fa5a3b..d383a8c3c9d3ba5fc191826b869227612f04b461 100644
+--- a/src/main/java/net/minecraft/world/entity/Entity.java
++++ b/src/main/java/net/minecraft/world/entity/Entity.java
+@@ -433,6 +433,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+     public boolean activatedPriorityReset = false; // Pufferfish - DAB
+     public int activatedPriority = gg.pufferfish.pufferfish.PufferfishConfig.maximumActivationPrio; // Pufferfish - DAB (golf score)
+     public final BlockPos.MutableBlockPos cachedBlockPos = new BlockPos.MutableBlockPos(); // Pufferfish - reduce entity allocations
++    public @Nullable Boolean immuneToFire = null; // Purpur - Fire immune API
+ 
+     public void setOrigin(@javax.annotation.Nonnull Location location) {
+         this.origin = location.toVector();
+@@ -1878,7 +1879,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+     }
+ 
+     public boolean fireImmune() {
+-        return this.getType().fireImmune();
++        return this.immuneToFire != null ? immuneToFire : this.getType().fireImmune(); // Purpur - add fire immune API
+     }
+ 
+     public boolean causeFallDamage(float fallDistance, float damageMultiplier, DamageSource damageSource) {
+@@ -2587,6 +2588,11 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+                 nbttagcompound.putBoolean("Paper.FreezeLock", true);
+             }
+             // Paper end
++            // Purpur start
++            if (immuneToFire != null) {
++                nbttagcompound.putBoolean("Purpur.FireImmune", immuneToFire);
++            }
++            // Purpur end
+             return nbttagcompound;
+         } catch (Throwable throwable) {
+             CrashReport crashreport = CrashReport.forThrowable(throwable, "Saving entity NBT");
+@@ -2734,6 +2740,11 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+                 freezeLocked = nbt.getBoolean("Paper.FreezeLock");
+             }
+             // Paper end
++            // Purpur start
++            if (nbt.contains("Purpur.FireImmune")) {
++                immuneToFire = nbt.getBoolean("Purpur.FireImmune");
++            }
++            // Purpur end
+ 
+         } catch (Throwable throwable) {
+             CrashReport crashreport = CrashReport.forThrowable(throwable, "Loading entity NBT");
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
+index 33469665998543f45e68eb50e7dc3f3c6af7b0c4..bec40e26e17ba6fdefb68c79e2fa7a9593b0f4fe 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
+@@ -87,6 +87,16 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
+     }
+ 
+     // Purpur start - API for any mob to burn daylight
++    @Override
++    public boolean isImmuneToFire() {
++        return getHandle().fireImmune();
++    }
++
++    @Override
++    public void setImmuneToFire(Boolean fireImmune) {
++        getHandle().immuneToFire = fireImmune;
++    }
++
+     @Override
+     public boolean isInDaylight() {
+         return getHandle().isSunBurnTick();
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
+index 01e4395f1669d21c30465aa1366bd2f1ae17678f..5c1cda88080850314dac196dbe71ff12e48a8aca 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftItem.java
+@@ -173,9 +173,14 @@ public class CraftItem extends CraftEntity implements Item {
+         return this.getHandle().immuneToExplosion;
+     }
+ 
++    @Override
++    public void setImmuneToFire(@org.jetbrains.annotations.Nullable Boolean immuneToFire) {
++        this.getHandle().immuneToFire = (immuneToFire != null && immuneToFire);
++    }
++
+     @Override
+     public void setImmuneToFire(boolean immuneToFire) {
+-        item.immuneToFire = immuneToFire;
++        this.setImmuneToFire((Boolean) immuneToFire);
+     }
+ 
+     @Override

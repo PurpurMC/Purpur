@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Tue, 3 Nov 2020 01:25:06 -0600
+Subject: [PATCH] Allow color codes in books
+
+
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index cb9efbba91510d90fa4a7dbe01fa6e9ba8206612..7a2bc00ee456caf48d3261f065fb1c9e760b813b 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -1199,10 +1199,14 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
+ 
+             Objects.requireNonNull(list);
+             stream.forEach(list::add);
++            // Purpur start
++            boolean hasEditPerm = getCraftPlayer().hasPermission("purpur.book.color.edit");
++            boolean hasSignPerm = hasEditPerm || getCraftPlayer().hasPermission("purpur.book.color.sign");
++            // Purpur end
+             Consumer<List<FilteredText>> consumer = optional.isPresent() ? (list1) -> {
+-                this.signBook((FilteredText) list1.get(0), list1.subList(1, list1.size()), i);
++                this.signBook((FilteredText) list1.get(0), list1.subList(1, list1.size()), i, hasSignPerm); // Purpur
+             } : (list1) -> {
+-                this.updateBookContents(list1, i);
++                this.updateBookContents(list1, i, hasEditPerm); // Purpur
+             };
+ 
+             this.filterTextPacket((List) list).thenAcceptAsync(consumer, this.server);
+@@ -1210,13 +1214,18 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
+     }
+ 
+     private void updateBookContents(List<FilteredText> pages, int slotId) {
++    // Purpur start
++        updateBookContents(pages, slotId, false);
++    }
++    private void updateBookContents(List<FilteredText> pages, int slotId, boolean hasPerm) {
++    // Purpur end
+         // CraftBukkit start
+         ItemStack handItem = this.player.getInventory().getItem(slotId);
+         ItemStack itemstack = handItem.copy();
+         // CraftBukkit end
+ 
+         if (itemstack.is(Items.WRITABLE_BOOK)) {
+-            List<Filterable<String>> list1 = pages.stream().map(this::filterableFromOutgoing).toList();
++            List<Filterable<String>> list1 = pages.stream().map(filteredText -> filterableFromOutgoing(filteredText).map(s -> color(s, hasPerm))).toList(); // Purpur
+ 
+             itemstack.set(DataComponents.WRITABLE_BOOK_CONTENT, new WritableBookContent(list1));
+             this.player.getInventory().setItem(slotId, CraftEventFactory.handleEditBookEvent(this.player, slotId, handItem, itemstack)); // CraftBukkit // Paper - Don't ignore result (see other callsite for handleEditBookEvent)
+@@ -1224,6 +1233,11 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
+     }
+ 
+     private void signBook(FilteredText title, List<FilteredText> pages, int slotId) {
++    // Purpur start
++        signBook(title, pages, slotId, false);
++    }
++    private void signBook(FilteredText title, List<FilteredText> pages, int slotId, boolean hasPerm) {
++    // Purpur end
+         ItemStack itemstack = this.player.getInventory().getItem(slotId);
+ 
+         if (itemstack.is(Items.WRITABLE_BOOK)) {
+@@ -1231,10 +1245,10 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
+ 
+             itemstack1.remove(DataComponents.WRITABLE_BOOK_CONTENT);
+             List<Filterable<Component>> list1 = (List<Filterable<Component>>) (List) pages.stream().map((filteredtext1) -> { // CraftBukkit - decompile error
+-                return this.filterableFromOutgoing(filteredtext1).map(Component::literal);
++                return this.filterableFromOutgoing(filteredtext1).map(s -> hexColor(s, hasPerm)); // Purpur
+             }).toList();
+ 
+-            itemstack1.set(DataComponents.WRITTEN_BOOK_CONTENT, new WrittenBookContent(this.filterableFromOutgoing(title), this.player.getName().getString(), 0, list1, true));
++            itemstack1.set(DataComponents.WRITTEN_BOOK_CONTENT, new WrittenBookContent(this.filterableFromOutgoing(title).map(s -> color(s, hasPerm)), this.player.getName().getString(), 0, list1, true)); // Purpur
+             CraftEventFactory.handleEditBookEvent(this.player, slotId, itemstack, itemstack1); // CraftBukkit
+             this.player.getInventory().setItem(slotId, itemstack); // CraftBukkit - event factory updates the hand book
+         }
+@@ -1244,6 +1258,16 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
+         return this.player.isTextFilteringEnabled() ? Filterable.passThrough(message.filteredOrEmpty()) : Filterable.from(message);
+     }
+ 
++    // Purpur start
++    private Component hexColor(String str, boolean hasPerm) {
++        return hasPerm ? PaperAdventure.asVanilla(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().deserialize(str)) : Component.literal(str);
++    }
++
++    private String color(String str, boolean hasPerm) {
++        return hasPerm ? org.bukkit.ChatColor.color(str, false) : str;
++    }
++    // Purpur end
++
+     @Override
+     public void handleEntityTagQuery(ServerboundEntityTagQueryPacket packet) {
+         PacketUtils.ensureRunningOnSameThread(packet, this, this.player.serverLevel());
