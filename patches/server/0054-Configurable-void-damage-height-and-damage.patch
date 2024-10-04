@@ -3,49 +3,170 @@ From: William Blake Galbreath <blake.galbreath@gmail.com>
 Date: Thu, 27 Feb 2020 21:42:19 -0600
 Subject: [PATCH] Configurable void damage height and damage
 
+temporarily migrate to paper's config
+drop patch on the next minecraft release
 
-diff --git a/src/main/java/net/minecraft/world/entity/Entity.java b/src/main/java/net/minecraft/world/entity/Entity.java
-index 79b158062b37fe19956a025ae6d74563092e3b8e..4ba8de9d87fc1b94019e8529a279cbc8a91a2b7f 100644
---- a/src/main/java/net/minecraft/world/entity/Entity.java
-+++ b/src/main/java/net/minecraft/world/entity/Entity.java
-@@ -942,7 +942,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+diff --git a/src/main/java/io/papermc/paper/configuration/PaperConfigurations.java b/src/main/java/io/papermc/paper/configuration/PaperConfigurations.java
+index 1029b6de6f36b08bf634b4056ef5701383f6f258..ee0d1df78838e05450ad1a06ce70eab2d5e5d3b8 100644
+--- a/src/main/java/io/papermc/paper/configuration/PaperConfigurations.java
++++ b/src/main/java/io/papermc/paper/configuration/PaperConfigurations.java
+@@ -260,6 +260,7 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
+         for (final NodePath path : RemovedConfigurations.REMOVED_WORLD_PATHS) {
+             builder.addAction(path, TransformAction.remove());
+         }
++        org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.apply(builder, contextMap); // Purpur
+         builder.build().apply(node);
  
-     public void checkBelowWorld() {
-         // Paper start - Configurable nether ceiling damage
--        if (this.getY() < (double) (this.level.getMinBuildHeight() - 64) || (this.level.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER
-+        if (this.getY() < (double) (this.level.getMinBuildHeight() + level().purpurConfig.voidDamageHeight) || (this.level.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER // Purpur
-             && this.level.paperConfig().environment.netherCeilingVoidDamageHeight.test(v -> this.getY() >= v)
-             && (!(this instanceof Player player) || !player.getAbilities().invulnerable))) {
-             // Paper end - Configurable nether ceiling damage
-diff --git a/src/main/java/net/minecraft/world/entity/LivingEntity.java b/src/main/java/net/minecraft/world/entity/LivingEntity.java
-index b4c50e28cad3a063c2168cd9a813dfc6349d86e3..f721bd0286d8ea903b1d41983451fa406e870bd3 100644
---- a/src/main/java/net/minecraft/world/entity/LivingEntity.java
-+++ b/src/main/java/net/minecraft/world/entity/LivingEntity.java
-@@ -2657,7 +2657,7 @@ public abstract class LivingEntity extends Entity implements Attackable {
- 
-     @Override
-     protected void onBelowWorld() {
--        this.hurt(this.damageSources().fellOutOfWorld(), 4.0F);
-+        this.hurt(this.damageSources().fellOutOfWorld(), (float) level().purpurConfig.voidDamageDealt); // Purpur
+         final ConfigurationTransformation.VersionedBuilder versionedBuilder = Transformations.versionedBuilder();
+diff --git a/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java b/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
+index fd3b1c10695634f65c7291016bf671c084bc4d57..c867796f625813797f167610ad443c4be5a7561e 100644
+--- a/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
++++ b/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
+@@ -401,6 +401,7 @@ public class WorldConfiguration extends ConfigurationPart {
+         public boolean useVanillaWorldScoreboardNameColoring = false;
      }
  
-     protected void updateSwingTime() {
-diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-index ed8f3c606984f83b77ca96cbfc8bcd454ad63ff8..022cebe27d305073a05475cb045e863135de5446 100644
---- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-+++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
-@@ -99,10 +99,14 @@ public class PurpurWorldConfig {
-     public boolean disableDropsOnCrammingDeath = false;
-     public boolean milkCuresBadOmen = true;
-     public double tridentLoyaltyVoidReturnHeight = 0.0D;
-+    public double voidDamageHeight = -64.0D;
-+    public double voidDamageDealt = 4.0D;
-     private void miscGameplayMechanicsSettings() {
-         disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);
-         milkCuresBadOmen = getBoolean("gameplay-mechanics.milk-cures-bad-omen", milkCuresBadOmen);
-         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
-+        voidDamageHeight = getDouble("gameplay-mechanics.void-damage-height", voidDamageHeight);
-+        voidDamageDealt = getDouble("gameplay-mechanics.void-damage-dealt", voidDamageDealt);
-     }
++    @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.ENVIRONMENT_KEY) // Purpur
+     public Environment environment;
  
-     public double minecartMaxSpeed = 0.4D;
+     public class Environment extends ConfigurationPart {
+@@ -410,7 +411,9 @@ public class WorldConfiguration extends ConfigurationPart {
+         public boolean disableExplosionKnockback = false;
+         public boolean generateFlatBedrock = false;
+         public FrostedIce frostedIce;
++        @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.VOID_DAMAGE_KEY) // Purpur
+         public DoubleOr.Disabled voidDamageAmount = new DoubleOr.Disabled(OptionalDouble.of(4));
++        @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.VOID_DAMAGE_MIN_HEIGHT_OFFSET_KEY) // Purpur
+         public double voidDamageMinBuildHeightOffset = -64.0;
+ 
+         public class FrostedIce extends ConfigurationPart {
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index f200a105bd3f5013d0590f1a10d4edc08ad745d1..debc521eaa05c6befc6fe67f44780372b078039d 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1249,7 +1249,15 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+                 LOGGER.info("*************************************************************************************");
+             }
+             // Paper end - Add onboarding message for initial server start
+-
++            // Purpur start
++            if (org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.HAS_BEEN_REGISTERED) {
++                try {
++                    org.purpurmc.purpur.PurpurConfig.config.save((File) this.options.valueOf("purpur-settings"));
++                } catch (IOException ex) {
++                    Bukkit.getLogger().log(java.util.logging.Level.SEVERE, "Could not save " + this.options.valueOf("purpur-settings"), ex);
++                }
++            }
++            // Purpur end
+             while (this.running) {
+                 long i;
+ 
+diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+index ca9afa93a9c43208ef64f86d534e5540d34a6b09..ea89f36bb1ecb8a7a8b88d6f46bc24554609647f 100644
+--- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -222,6 +222,15 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
+         org.spigotmc.SpigotConfig.registerCommands();
+         // Spigot end
+         io.papermc.paper.util.ObfHelper.INSTANCE.getClass(); // Paper - load mappings for stacktrace deobf and etc.
++        // Purpur start
++        try {
++            org.purpurmc.purpur.PurpurConfig.init((java.io.File) options.valueOf("purpur-settings"));
++        } catch (Exception e) {
++            DedicatedServer.LOGGER.error("Unable to load server configuration", e);
++            return false;
++        }
++        org.purpurmc.purpur.PurpurConfig.registerCommands();
++        // Purpur end
+         // Paper start - initialize global and world-defaults configuration
+         this.paperConfigurations.initializeGlobalConfiguration(this.registryAccess());
+         this.paperConfigurations.initializeWorldDefaultsConfiguration(this.registryAccess());
+@@ -238,15 +247,6 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
+         io.papermc.paper.command.PaperCommands.registerCommands(this); // Paper - setup /paper command
+         this.server.spark.registerCommandBeforePlugins(this.server); // Paper - spark
+         com.destroystokyo.paper.Metrics.PaperMetrics.startMetrics(); // Paper - start metrics
+-        // Purpur start
+-        try {
+-            org.purpurmc.purpur.PurpurConfig.init((java.io.File) options.valueOf("purpur-settings"));
+-        } catch (Exception e) {
+-            DedicatedServer.LOGGER.error("Unable to load server configuration", e);
+-            return false;
+-        }
+-        org.purpurmc.purpur.PurpurConfig.registerCommands();
+-        // Purpur end
+         com.destroystokyo.paper.VersionHistoryManager.INSTANCE.getClass(); // Paper - load version history now
+         gg.pufferfish.pufferfish.PufferfishConfig.load(); // Pufferfish
+         gg.pufferfish.pufferfish.PufferfishCommand.init(); // Pufferfish
+diff --git a/src/main/java/org/purpurmc/purpur/configuration/transformation/VoidDamageHeightMigration.java b/src/main/java/org/purpurmc/purpur/configuration/transformation/VoidDamageHeightMigration.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..a04d23bd98075cd65a24d4de8d18281d1668480f
+--- /dev/null
++++ b/src/main/java/org/purpurmc/purpur/configuration/transformation/VoidDamageHeightMigration.java
+@@ -0,0 +1,67 @@
++package org.purpurmc.purpur.configuration.transformation;
++
++import io.papermc.paper.configuration.Configurations;
++import io.papermc.paper.configuration.PaperConfigurations;
++import io.papermc.paper.configuration.type.number.DoubleOr;
++import java.util.OptionalDouble;
++import org.checkerframework.checker.nullness.qual.Nullable;
++import org.purpurmc.purpur.PurpurConfig;
++import org.spongepowered.configurate.ConfigurateException;
++import org.spongepowered.configurate.ConfigurationNode;
++import org.spongepowered.configurate.NodePath;
++import org.spongepowered.configurate.transformation.ConfigurationTransformation;
++import org.spongepowered.configurate.transformation.TransformAction;
++
++import static org.spongepowered.configurate.NodePath.path;
++
++public class VoidDamageHeightMigration implements TransformAction {
++
++    public static boolean HAS_BEEN_REGISTERED = false;
++
++    public static final String ENVIRONMENT_KEY = "environment";
++    public static final String VOID_DAMAGE_KEY = "void-damage-amount";
++    public static final String VOID_DAMAGE_MIN_HEIGHT_OFFSET_KEY = "void-damage-min-build-height-offset";
++    public static final double DEFAULT_VOID_DAMAGE_HEIGHT = -64.0D;
++    public static final double DEFAULT_VOID_DAMAGE = 4.0D;
++
++    private final String worldName;
++
++    private VoidDamageHeightMigration(String worldName) {
++        this.worldName = PaperConfigurations.WORLD_DEFAULTS.equals(worldName) ? "default" : worldName;
++    }
++
++    @Override
++    public Object @Nullable [] visitPath(final NodePath path, final ConfigurationNode value) throws ConfigurateException {
++        String purpurVoidDamageHeightPath = "world-settings." + this.worldName + ".gameplay-mechanics.void-damage-height";
++        ConfigurationNode voidDamageMinHeightOffsetNode = value.node(ENVIRONMENT_KEY, VOID_DAMAGE_MIN_HEIGHT_OFFSET_KEY);
++        if (PurpurConfig.config.contains(purpurVoidDamageHeightPath)) {
++            double purpurVoidDamageHeight = PurpurConfig.config.getDouble(purpurVoidDamageHeightPath);
++            if (purpurVoidDamageHeight != DEFAULT_VOID_DAMAGE_HEIGHT && (voidDamageMinHeightOffsetNode.empty() || voidDamageMinHeightOffsetNode.getDouble() == DEFAULT_VOID_DAMAGE_HEIGHT)) {
++                voidDamageMinHeightOffsetNode.raw(null);
++                voidDamageMinHeightOffsetNode.set(purpurVoidDamageHeight);
++            }
++            PurpurConfig.config.set(purpurVoidDamageHeightPath, null);
++        }
++
++        String purpurVoidDamagePath = "world-settings." + this.worldName + ".gameplay-mechanics.void-damage-dealt";
++        ConfigurationNode voidDamageNode = value.node(ENVIRONMENT_KEY, VOID_DAMAGE_KEY);
++        if (PurpurConfig.config.contains(purpurVoidDamagePath)) {
++            double purpurVoidDamage = PurpurConfig.config.getDouble(purpurVoidDamagePath);
++            if (purpurVoidDamage != DEFAULT_VOID_DAMAGE && (voidDamageNode.empty() || voidDamageNode.getDouble() == DEFAULT_VOID_DAMAGE)) {
++                voidDamageNode.raw(null);
++                voidDamageNode.set(new DoubleOr.Disabled(OptionalDouble.of(purpurVoidDamage)));
++            }
++            PurpurConfig.config.set(purpurVoidDamagePath, null);
++        }
++
++        return null;
++    }
++
++    public static void apply(final ConfigurationTransformation.Builder builder, final Configurations.ContextMap contextMap) {
++        if (PurpurConfig.version < 36) {
++            HAS_BEEN_REGISTERED = true;
++            builder.addAction(path(), new VoidDamageHeightMigration(contextMap.require(Configurations.WORLD_NAME)));
++        }
++    }
++
++}
