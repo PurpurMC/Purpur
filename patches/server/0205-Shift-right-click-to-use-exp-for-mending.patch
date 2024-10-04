@@ -1,0 +1,69 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Tue, 24 Aug 2021 16:48:35 -0500
+Subject: [PATCH] Shift right click to use exp for mending
+
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java b/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
+index d3c49951c0bd7db4352326d3113f0ca9da393fab..28731f0c5b0ba63fa8d5ce3ee580bf314a844f92 100644
+--- a/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
++++ b/src/main/java/net/minecraft/server/level/ServerPlayerGameMode.java
+@@ -518,6 +518,7 @@ public class ServerPlayerGameMode {
+     public InteractionHand interactHand;
+     public ItemStack interactItemStack;
+     public InteractionResult useItemOn(ServerPlayer player, Level world, ItemStack stack, InteractionHand hand, BlockHitResult hitResult) {
++        if (shiftClickMended(stack)) return InteractionResult.SUCCESS; // Purpur
+         BlockPos blockposition = hitResult.getBlockPos();
+         BlockState iblockdata = world.getBlockState(blockposition);
+         boolean cancelledBlock = false;
+@@ -626,4 +627,18 @@ public class ServerPlayerGameMode {
+     public void setLevel(ServerLevel world) {
+         this.level = world;
+     }
++
++    // Purpur start
++    public boolean shiftClickMended(ItemStack itemstack) {
++        if (this.player.level().purpurConfig.shiftRightClickRepairsMendingPoints > 0 && this.player.isShiftKeyDown() && this.player.getBukkitEntity().hasPermission("purpur.mending_shift_click")) {
++            int points = Math.min(this.player.totalExperience, this.player.level().purpurConfig.shiftRightClickRepairsMendingPoints);
++            if (points > 0 && itemstack.isDamaged() && net.minecraft.world.item.enchantment.EnchantmentHelper.getItemEnchantmentLevel(net.minecraft.world.item.enchantment.Enchantments.MENDING, itemstack) > 0) {
++                this.player.giveExperiencePoints(-points);
++                this.player.level().addFreshEntity(new net.minecraft.world.entity.ExperienceOrb(this.player.level(), this.player.getX(), this.player.getY(), this.player.getZ(), points, org.bukkit.entity.ExperienceOrb.SpawnReason.UNKNOWN, this.player, this.player));
++                return true;
++            }
++        }
++        return false;
++    }
++    // Purpur end
+ }
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index b7f8499cabbd28c0679d0c775b009c9cdf53b5f8..cdb5062d4d6325ada90dec3d4de6c0fd7546e8ab 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -2075,6 +2075,7 @@ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl
+ 
+             boolean cancelled;
+             if (movingobjectposition == null || movingobjectposition.getType() != HitResult.Type.BLOCK) {
++                if (this.player.gameMode.shiftClickMended(itemstack)) return; // Purpur
+                 org.bukkit.event.player.PlayerInteractEvent event = CraftEventFactory.callPlayerInteractEvent(this.player, Action.RIGHT_CLICK_AIR, itemstack, enumhand);
+                 cancelled = event.useItemInHand() == Event.Result.DENY;
+             } else {
+diff --git a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+index 73283dd57a67ff0d7fa65ab279b4d21c2030d4f8..58ffc28078756435e6ddfdea4109d61375eecc54 100644
+--- a/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
++++ b/src/main/java/org/purpurmc/purpur/PurpurWorldConfig.java
+@@ -404,6 +404,7 @@ public class PurpurWorldConfig {
+     public boolean playerBurpWhenFull = false;
+     public boolean playerRidableInWater = false;
+     public boolean playerRemoveBindingWithWeakness = false;
++    public int shiftRightClickRepairsMendingPoints = 0;
+     private void playerSettings() {
+         if (PurpurConfig.version < 19) {
+             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
+@@ -428,6 +429,7 @@ public class PurpurWorldConfig {
+         playerBurpWhenFull = getBoolean("gameplay-mechanics.player.burp-when-full", playerBurpWhenFull);
+         playerRidableInWater = getBoolean("gameplay-mechanics.player.ridable-in-water", playerRidableInWater);
+         playerRemoveBindingWithWeakness = getBoolean("gameplay-mechanics.player.curse-of-binding.remove-with-weakness", playerRemoveBindingWithWeakness);
++        shiftRightClickRepairsMendingPoints = getInt("gameplay-mechanics.player.shift-right-click-repairs-mending-points", shiftRightClickRepairsMendingPoints);
+     }
+ 
+     public boolean silkTouchEnabled = false;
