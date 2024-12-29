@@ -2,28 +2,58 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 
 plugins {
-    java
-    `maven-publish`
-    id("io.papermc.paperweight.patcher") version "1.7.7"
-}
-
-allprojects {
-    apply(plugin = "java")
-    apply(plugin = "maven-publish")
-
-    java {
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(21)
-        }
-    }
+    java // TODO java launcher tasks
+    id("io.papermc.paperweight.patcher") version "2.0.0-beta.8"
 }
 
 val paperMavenPublicUrl = "https://repo.papermc.io/repository/maven-public/"
 
+paperweight {
+    upstreams.paper {
+        ref = providers.gradleProperty("paperCommit")
+
+        patchFile {
+            path = "paper-server/build.gradle.kts"
+            outputFile = file("purpur-server/build.gradle.kts")
+            patchFile = file("purpur-server/build.gradle.kts.patch")
+        }
+        patchFile {
+            path = "paper-api/build.gradle.kts"
+            outputFile = file("purpur-api/build.gradle.kts")
+            patchFile = file("purpur-api/build.gradle.kts.patch")
+        }
+        patchDir("paperApi") {
+            upstreamPath = "paper-api"
+            excludes = setOf("build.gradle.kts")
+            patchesDir = file("purpur-api/paper-patches")
+            outputDir = file("paper-api")
+        }
+        patchDir("paperApiGenerator") {
+            upstreamPath = "paper-api-generator"
+            patchesDir = file("purpur-api-generator/paper-patches")
+            outputDir = file("paper-api-generator")
+        }
+    }
+}
+
 subprojects {
-    tasks.withType<JavaCompile>().configureEach {
+    apply(plugin = "java-library")
+    apply(plugin = "maven-publish")
+
+    extensions.configure<JavaPluginExtension> {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    dependencies {
+        "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
+    }
+
+    tasks.withType<JavaCompile> {
         options.encoding = Charsets.UTF_8.name()
         options.release = 21
+        options.isFork = true
     }
     tasks.withType<Javadoc> {
         options.encoding = Charsets.UTF_8.name()
@@ -38,77 +68,23 @@ subprojects {
             events(TestLogEvent.STANDARD_OUT)
         }
     }
+    tasks.withType<AbstractArchiveTask>().configureEach {
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
 
     repositories {
         mavenCentral()
         maven(paperMavenPublicUrl)
         maven("https://jitpack.io")
     }
-}
 
-repositories {
-    mavenCentral()
-    maven(paperMavenPublicUrl) {
-        content {
-            onlyForConfigurations(configurations.paperclip.name)
-        }
-    }
-}
-
-dependencies {
-    remapper("net.fabricmc:tiny-remapper:0.10.3:fat")
-    decompiler("org.vineflower:vineflower:1.10.1")
-    paperclip("io.papermc:paperclip:3.0.3")
-}
-
-paperweight {
-    serverProject = project(":purpur-server")
-
-    remapRepo = paperMavenPublicUrl
-    decompileRepo = paperMavenPublicUrl
-
-    usePaperUpstream(providers.gradleProperty("paperCommit")) {
-        withPaperPatcher {
-            apiPatchDir = layout.projectDirectory.dir("patches/api")
-            apiOutputDir = layout.projectDirectory.dir("Purpur-API")
-
-            serverPatchDir = layout.projectDirectory.dir("patches/server")
-            serverOutputDir = layout.projectDirectory.dir("Purpur-Server")
-        }
-
-        patchTasks.register("generatedApi") {
-            isBareDirectory = true
-            upstreamDirPath = "paper-api-generator/generated"
-            patchDir = layout.projectDirectory.dir("patches/generated-api")
-            outputDir = layout.projectDirectory.dir("paper-api-generator/generated")
-        }
-    }
-}
-
-tasks.generateDevelopmentBundle {
-    apiCoordinates = "org.purpurmc.purpur:purpur-api"
-    libraryRepositories = listOf(
-        "https://repo.maven.apache.org/maven2/",
-        paperMavenPublicUrl,
-        "https://repo.purpurmc.org/snapshots",
-    )
-}
-
-allprojects {
-    publishing {
+    extensions.configure<PublishingExtension> {
         repositories {
             maven("https://repo.purpurmc.org/snapshots") {
                 name = "purpur"
                 credentials(PasswordCredentials::class)
             }
-        }
-    }
-}
-
-publishing {
-    publications.create<MavenPublication>("devBundle") {
-        artifact(tasks.generateDevelopmentBundle) {
-            artifactId = "dev-bundle"
         }
     }
 }

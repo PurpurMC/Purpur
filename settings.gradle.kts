@@ -8,7 +8,7 @@ pluginManagement {
 }
 
 plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.9.0"
 }
 
 if (!file(".git").exists()) {
@@ -32,7 +32,7 @@ if (!file(".git").exists()) {
 }
 
 rootProject.name = "purpur"
-for (name in listOf("Purpur-API", "Purpur-Server", "paper-api-generator")) {
+for (name in listOf("purpur-api", "purpur-server", "purpur-api-generator")) {
     val projName = name.lowercase(Locale.ENGLISH)
     include(projName)
     findProject(":$projName")!!.projectDir = file(name)
