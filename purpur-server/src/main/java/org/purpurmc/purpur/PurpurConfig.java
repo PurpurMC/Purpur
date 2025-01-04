@@ -155,4 +155,9 @@ public class PurpurConfig {
         }
         return builder.build();
     }
+
+    public static String cannotRideMob = "<red>You cannot mount that mob";
+    private static void messages() {
+        cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
+    }
 }

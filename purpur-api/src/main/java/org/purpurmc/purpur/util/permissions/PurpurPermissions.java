@@ -29,6 +29,22 @@ public final class PurpurPermissions {
     public static Permission registerPermissions() {
         Permission purpur = DefaultPermissions.registerPermission(ROOT, "Gives the user the ability to use all Purpur utilities and commands", PermissionDefault.FALSE);
 
+        Permission ride = DefaultPermissions.registerPermission("allow.ride", "Allows the user to ride all mobs", PermissionDefault.FALSE, purpur);
+        for (String mob : mobs) {
+            DefaultPermissions.registerPermission("allow.ride." + mob, "Allows the user to ride " + mob, PermissionDefault.FALSE, ride);
+        }
+        ride.recalculatePermissibles();
+
+        Permission special = DefaultPermissions.registerPermission("allow.special", "Allows the user to use all mobs special abilities", PermissionDefault.FALSE, purpur);
+        for (String mob : mobs) {
+            DefaultPermissions.registerPermission("allow.special." + mob, "Allows the user to use " + mob + " special ability", PermissionDefault.FALSE, special);
+        }
+        special.recalculatePermissibles();
+
+        Permission powered = DefaultPermissions.registerPermission("allow.powered", "Allows the user to toggle all mobs powered state", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission("allow.powered.creeper", "Allows the user to toggle creeper powered state", PermissionDefault.FALSE, powered);
+        powered.recalculatePermissibles();
+
         purpur.recalculatePermissibles();
         return purpur;
     }
