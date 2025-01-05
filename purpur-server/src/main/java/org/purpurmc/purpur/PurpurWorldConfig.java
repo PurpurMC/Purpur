@@ -621,6 +621,10 @@ public class PurpurWorldConfig {
     public double giantAttackDamage = 50.0D;
     public double giantMaxHealth = 100.0D;
     public double giantScale = 1.0D;
+    public float giantStepHeight = 2.0F;
+    public float giantJumpHeight = 1.0F;
+    public boolean giantHaveAI = false;
+    public boolean giantHaveHostileAI = false;
     private void giantSettings() {
         giantRidable = getBoolean("mobs.giant.ridable", giantRidable);
         giantRidableInWater = getBoolean("mobs.giant.ridable-in-water", giantRidableInWater);
@@ -638,6 +642,10 @@ public class PurpurWorldConfig {
         }
         giantMaxHealth = getDouble("mobs.giant.attributes.max_health", giantMaxHealth);
         giantScale = Mth.clamp(getDouble("mobs.giant.attributes.scale", giantScale), 0.0625D, 16.0D);
+        giantStepHeight = (float) getDouble("mobs.giant.step-height", giantStepHeight);
+        giantJumpHeight = (float) getDouble("mobs.giant.jump-height", giantJumpHeight);
+        giantHaveAI = getBoolean("mobs.giant.have-ai", giantHaveAI);
+        giantHaveHostileAI = getBoolean("mobs.giant.have-hostile-ai", giantHaveHostileAI);
     }
 
     public boolean glowSquidRidable = false;
