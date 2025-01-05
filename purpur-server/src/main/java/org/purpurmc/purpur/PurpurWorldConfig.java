@@ -298,6 +298,9 @@ public class PurpurWorldConfig {
     public boolean catControllable = true;
     public double catMaxHealth = 10.0D;
     public double catScale = 1.0D;
+    public int catSpawnDelay = 1200;
+    public int catSpawnSwampHutScanRange = 16;
+    public int catSpawnVillageScanRange = 48;
     private void catSettings() {
         catRidable = getBoolean("mobs.cat.ridable", catRidable);
         catRidableInWater = getBoolean("mobs.cat.ridable-in-water", catRidableInWater);
@@ -309,6 +312,9 @@ public class PurpurWorldConfig {
         }
         catMaxHealth = getDouble("mobs.cat.attributes.max_health", catMaxHealth);
         catScale = Mth.clamp(getDouble("mobs.cat.attributes.scale", catScale), 0.0625D, 16.0D);
+        catSpawnDelay = getInt("mobs.cat.spawn-delay", catSpawnDelay);
+        catSpawnSwampHutScanRange = getInt("mobs.cat.scan-range-for-other-cats.swamp-hut", catSpawnSwampHutScanRange);
+        catSpawnVillageScanRange = getInt("mobs.cat.scan-range-for-other-cats.village", catSpawnVillageScanRange);
     }
 
     public boolean caveSpiderRidable = false;
