@@ -132,6 +132,11 @@ public class PurpurWorldConfig {
         });
     }
 
+    public boolean farmlandGetsMoistFromBelow = false;
+    private void farmlandSettings() {
+        farmlandGetsMoistFromBelow = getBoolean("blocks.farmland.gets-moist-from-below", farmlandGetsMoistFromBelow);
+    }
+
     public boolean turtleEggsBreakFromExpOrbs = false;
     public boolean turtleEggsBreakFromItems = false;
     public boolean turtleEggsBreakFromMinecarts = false;
