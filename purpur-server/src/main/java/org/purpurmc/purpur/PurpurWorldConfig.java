@@ -1297,6 +1297,7 @@ public class PurpurWorldConfig {
     public boolean snowGolemLeaveTrailWhenRidden = false;
     public double snowGolemMaxHealth = 4.0D;
     public double snowGolemScale = 1.0D;
+    public boolean snowGolemPutPumpkinBack = false;
     private void snowGolemSettings() {
         snowGolemRidable = getBoolean("mobs.snow_golem.ridable", snowGolemRidable);
         snowGolemRidableInWater = getBoolean("mobs.snow_golem.ridable-in-water", snowGolemRidableInWater);
@@ -1309,6 +1310,7 @@ public class PurpurWorldConfig {
         }
         snowGolemMaxHealth = getDouble("mobs.snow_golem.attributes.max_health", snowGolemMaxHealth);
         snowGolemScale = Mth.clamp(getDouble("mobs.snow_golem.attributes.scale", snowGolemScale), 0.0625D, 16.0D);
+        snowGolemPutPumpkinBack = getBoolean("mobs.snow_golem.pumpkin-can-be-added-back", snowGolemPutPumpkinBack);
     }
 
     public boolean snifferRidable = false;
