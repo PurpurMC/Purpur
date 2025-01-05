@@ -177,6 +177,11 @@ public class PurpurConfig {
         serverModName = getString("settings.server-mod-name", serverModName);
     }
 
+    public static double laggingThreshold = 19.0D;
+    private static void tickLoopSettings() {
+        laggingThreshold = getDouble("settings.lagging-threshold", laggingThreshold);
+    }
+
     public static int barrelRows = 3;
     public static boolean enderChestSixRows = false;
     public static boolean enderChestPermissionRows = false;
