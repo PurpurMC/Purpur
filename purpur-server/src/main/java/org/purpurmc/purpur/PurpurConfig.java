@@ -160,4 +160,39 @@ public class PurpurConfig {
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
     }
+
+    public static int barrelRows = 3;
+    public static boolean enderChestSixRows = false;
+    public static boolean enderChestPermissionRows = false;
+    private static void blockSettings() {
+        if (version < 3) {
+            boolean oldValue = getBoolean("settings.barrel.packed-barrels", true);
+            set("settings.blocks.barrel.six-rows", oldValue);
+            set("settings.packed-barrels", null);
+            oldValue = getBoolean("settings.large-ender-chests", true);
+            set("settings.blocks.ender_chest.six-rows", oldValue);
+            set("settings.large-ender-chests", null);
+        }
+        if (version < 20) {
+            boolean oldValue = getBoolean("settings.blocks.barrel.six-rows", false);
+            set("settings.blocks.barrel.rows", oldValue ? 6 : 3);
+            set("settings.blocks.barrel.six-rows", null);
+        }
+        barrelRows = getInt("settings.blocks.barrel.rows", barrelRows);
+        if (barrelRows < 1 || barrelRows > 6) {
+            Bukkit.getLogger().severe("settings.blocks.barrel.rows must be 1-6, resetting to default");
+            barrelRows = 3;
+        }
+        org.bukkit.event.inventory.InventoryType.BARREL.setDefaultSize(switch (barrelRows) {
+            case 6 -> 54;
+            case 5 -> 45;
+            case 4 -> 36;
+            case 2 -> 18;
+            case 1 -> 9;
+            default -> 27;
+        });
+        enderChestSixRows = getBoolean("settings.blocks.ender_chest.six-rows", enderChestSixRows);
+        org.bukkit.event.inventory.InventoryType.ENDER_CHEST.setDefaultSize(enderChestSixRows ? 54 : 27);
+        enderChestPermissionRows = getBoolean("settings.blocks.ender_chest.use-permissions-for-rows", enderChestPermissionRows);
+    }
 }
