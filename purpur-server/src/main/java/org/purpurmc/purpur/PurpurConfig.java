@@ -221,4 +221,15 @@ public class PurpurConfig {
         org.bukkit.event.inventory.InventoryType.ENDER_CHEST.setDefaultSize(enderChestSixRows ? 54 : 27);
         enderChestPermissionRows = getBoolean("settings.blocks.ender_chest.use-permissions-for-rows", enderChestPermissionRows);
     }
+
+    public static boolean loggerSuppressInitLegacyMaterialError = false;
+    public static boolean loggerSuppressIgnoredAdvancementWarnings = false;
+    public static boolean loggerSuppressUnrecognizedRecipeErrors = false;
+    public static boolean loggerSuppressSetBlockFarChunk = false;
+    private static void loggerSettings() {
+        loggerSuppressInitLegacyMaterialError = getBoolean("settings.logger.suppress-init-legacy-material-errors", loggerSuppressInitLegacyMaterialError);
+        loggerSuppressIgnoredAdvancementWarnings = getBoolean("settings.logger.suppress-ignored-advancement-warnings", loggerSuppressIgnoredAdvancementWarnings);
+        loggerSuppressUnrecognizedRecipeErrors = getBoolean("settings.logger.suppress-unrecognized-recipe-errors", loggerSuppressUnrecognizedRecipeErrors);
+        loggerSuppressSetBlockFarChunk = getBoolean("settings.logger.suppress-setblock-in-far-chunk-errors", loggerSuppressSetBlockFarChunk);
+    }
 }
