@@ -1002,6 +1002,7 @@ public class PurpurWorldConfig {
     public boolean pigControllable = true;
     public double pigMaxHealth = 10.0D;
     public double pigScale = 1.0D;
+    public boolean pigGiveSaddleBack = false;
     private void pigSettings() {
         pigRidable = getBoolean("mobs.pig.ridable", pigRidable);
         pigRidableInWater = getBoolean("mobs.pig.ridable-in-water", pigRidableInWater);
@@ -1013,6 +1014,7 @@ public class PurpurWorldConfig {
         }
         pigMaxHealth = getDouble("mobs.pig.attributes.max_health", pigMaxHealth);
         pigScale = Mth.clamp(getDouble("mobs.pig.attributes.scale", pigScale), 0.0625D, 16.0D);
+        pigGiveSaddleBack = getBoolean("mobs.pig.give-saddle-back", pigGiveSaddleBack);
     }
 
     public boolean piglinRidable = false;
