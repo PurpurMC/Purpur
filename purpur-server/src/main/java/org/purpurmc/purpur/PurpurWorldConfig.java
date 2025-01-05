@@ -8,6 +8,8 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.monster.Shulker;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -80,6 +82,68 @@ public class PurpurWorldConfig {
     public float armorstandStepHeight = 0.0F;
     private void armorstandSettings() {
         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
+    }
+
+    public double minecartMaxSpeed = 0.4D;
+    public boolean minecartPlaceAnywhere = false;
+    public boolean minecartControllable = false;
+    public float minecartControllableStepHeight = 1.0F;
+    public double minecartControllableHopBoost = 0.5D;
+    public boolean minecartControllableFallDamage = true;
+    public double minecartControllableBaseSpeed = 0.1D;
+    public Map<Block, Double> minecartControllableBlockSpeeds = new HashMap<>();
+    private void minecartSettings() {
+        if (PurpurConfig.version < 12) {
+            boolean oldBool = getBoolean("gameplay-mechanics.controllable-minecarts.place-anywhere", minecartPlaceAnywhere);
+            set("gameplay-mechanics.controllable-minecarts.place-anywhere", null);
+            set("gameplay-mechanics.minecart.place-anywhere", oldBool);
+            oldBool = getBoolean("gameplay-mechanics.controllable-minecarts.enabled", minecartControllable);
+            set("gameplay-mechanics.controllable-minecarts.enabled", null);
+            set("gameplay-mechanics.minecart.controllable.enabled", oldBool);
+            double oldDouble = getDouble("gameplay-mechanics.controllable-minecarts.step-height", minecartControllableStepHeight);
+            set("gameplay-mechanics.controllable-minecarts.step-height", null);
+            set("gameplay-mechanics.minecart.controllable.step-height", oldDouble);
+            oldDouble = getDouble("gameplay-mechanics.controllable-minecarts.hop-boost", minecartControllableHopBoost);
+            set("gameplay-mechanics.controllable-minecarts.hop-boost", null);
+            set("gameplay-mechanics.minecart.controllable.hop-boost", oldDouble);
+            oldBool = getBoolean("gameplay-mechanics.controllable-minecarts.fall-damage", minecartControllableFallDamage);
+            set("gameplay-mechanics.controllable-minecarts.fall-damage", null);
+            set("gameplay-mechanics.minecart.controllable.fall-damage", oldBool);
+            oldDouble = getDouble("gameplay-mechanics.controllable-minecarts.base-speed", minecartControllableBaseSpeed);
+            set("gameplay-mechanics.controllable-minecarts.base-speed", null);
+            set("gameplay-mechanics.minecart.controllable.base-speed", oldDouble);
+            ConfigurationSection section = getConfigurationSection("gameplay-mechanics.controllable-minecarts.block-speed");
+            if (section != null) {
+                for (String key : section.getKeys(false)) {
+                    if ("grass-block".equals(key)) key = "grass_block"; // oopsie
+                    oldDouble = section.getDouble(key, minecartControllableBaseSpeed);
+                    set("gameplay-mechanics.controllable-minecarts.block-speed." + key, null);
+                    set("gameplay-mechanics.minecart.controllable.block-speed." + key, oldDouble);
+                }
+                set("gameplay-mechanics.controllable-minecarts.block-speed", null);
+            }
+            set("gameplay-mechanics.controllable-minecarts", null);
+        }
+
+        minecartMaxSpeed = getDouble("gameplay-mechanics.minecart.max-speed", minecartMaxSpeed);
+        minecartPlaceAnywhere = getBoolean("gameplay-mechanics.minecart.place-anywhere", minecartPlaceAnywhere);
+        minecartControllable = getBoolean("gameplay-mechanics.minecart.controllable.enabled", minecartControllable);
+        minecartControllableStepHeight = (float) getDouble("gameplay-mechanics.minecart.controllable.step-height", minecartControllableStepHeight);
+        minecartControllableHopBoost = getDouble("gameplay-mechanics.minecart.controllable.hop-boost", minecartControllableHopBoost);
+        minecartControllableFallDamage = getBoolean("gameplay-mechanics.minecart.controllable.fall-damage", minecartControllableFallDamage);
+        minecartControllableBaseSpeed = getDouble("gameplay-mechanics.minecart.controllable.base-speed", minecartControllableBaseSpeed);
+        ConfigurationSection section = getConfigurationSection("gameplay-mechanics.minecart.controllable.block-speed");
+        if (section != null) {
+            for (String key : section.getKeys(false)) {
+                Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(key));
+                if (block != Blocks.AIR) {
+                    minecartControllableBlockSpeeds.put(block, section.getDouble(key, minecartControllableBaseSpeed));
+                }
+            }
+        } else {
+            set("gameplay-mechanics.minecart.controllable.block-speed.grass_block", 0.3D);
+            set("gameplay-mechanics.minecart.controllable.block-speed.stone", 0.5D);
+        }
     }
 
     public boolean idleTimeoutKick = true;
