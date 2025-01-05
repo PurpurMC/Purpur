@@ -182,6 +182,11 @@ public class PurpurConfig {
         laggingThreshold = getDouble("settings.lagging-threshold", laggingThreshold);
     }
 
+    public static boolean useAlternateKeepAlive = false;
+    private static void useAlternateKeepAlive() {
+        useAlternateKeepAlive = getBoolean("settings.use-alternate-keepalive", useAlternateKeepAlive);
+    }
+
     public static int barrelRows = 3;
     public static boolean enderChestSixRows = false;
     public static boolean enderChestPermissionRows = false;
