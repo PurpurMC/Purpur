@@ -77,6 +77,11 @@ public class PurpurWorldConfig {
         return value.isEmpty() ? fallback : value;
     }
 
+    public float armorstandStepHeight = 0.0F;
+    private void armorstandSettings() {
+        armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
+    }
+
     public boolean idleTimeoutKick = true;
     public boolean idleTimeoutTickNearbyEntities = true;
     public boolean idleTimeoutCountAsSleeping = false;
