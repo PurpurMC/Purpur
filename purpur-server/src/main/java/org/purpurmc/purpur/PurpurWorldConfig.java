@@ -511,6 +511,7 @@ public class PurpurWorldConfig {
     public boolean enderDragonControllable = true;
     public double enderDragonMaxY = 320D;
     public double enderDragonMaxHealth = 200.0D;
+    public boolean enderDragonAlwaysDropsFullExp = false;
     private void enderDragonSettings() {
         enderDragonRidable = getBoolean("mobs.ender_dragon.ridable", enderDragonRidable);
         enderDragonRidableInWater = getBoolean("mobs.ender_dragon.ridable-in-water", enderDragonRidableInWater);
@@ -526,6 +527,7 @@ public class PurpurWorldConfig {
             set("mobs.ender_dragon.attributes.max_health", oldValue);
         }
         enderDragonMaxHealth = getDouble("mobs.ender_dragon.attributes.max_health", enderDragonMaxHealth);
+        enderDragonAlwaysDropsFullExp = getBoolean("mobs.ender_dragon.always-drop-full-exp", enderDragonAlwaysDropsFullExp);
     }
 
     public boolean endermanRidable = false;
