@@ -394,6 +394,7 @@ public class PurpurWorldConfig {
     public boolean creeperControllable = true;
     public double creeperMaxHealth = 20.0D;
     public double creeperScale = 1.0D;
+    public double creeperChargedChance = 0.0D;
     private void creeperSettings() {
         creeperRidable = getBoolean("mobs.creeper.ridable", creeperRidable);
         creeperRidableInWater = getBoolean("mobs.creeper.ridable-in-water", creeperRidableInWater);
@@ -405,6 +406,7 @@ public class PurpurWorldConfig {
         }
         creeperMaxHealth = getDouble("mobs.creeper.attributes.max_health", creeperMaxHealth);
         creeperScale = Mth.clamp(getDouble("mobs.creeper.attributes.scale", creeperScale), 0.0625D, 16.0D);
+        creeperChargedChance = getDouble("mobs.creeper.naturally-charged-chance", creeperChargedChance);
     }
 
     public boolean dolphinRidable = false;
@@ -1089,6 +1091,8 @@ public class PurpurWorldConfig {
     public boolean rabbitControllable = true;
     public double rabbitMaxHealth = 3.0D;
     public double rabbitScale = 1.0D;
+    public double rabbitNaturalToast = 0.0D;
+    public double rabbitNaturalKiller = 0.0D;
     private void rabbitSettings() {
         rabbitRidable = getBoolean("mobs.rabbit.ridable", rabbitRidable);
         rabbitRidableInWater = getBoolean("mobs.rabbit.ridable-in-water", rabbitRidableInWater);
@@ -1100,6 +1104,8 @@ public class PurpurWorldConfig {
         }
         rabbitMaxHealth = getDouble("mobs.rabbit.attributes.max_health", rabbitMaxHealth);
         rabbitScale = Mth.clamp(getDouble("mobs.rabbit.attributes.scale", rabbitScale), 0.0625D, 16.0D);
+        rabbitNaturalToast = getDouble("mobs.rabbit.spawn-toast-chance", rabbitNaturalToast);
+        rabbitNaturalKiller = getDouble("mobs.rabbit.spawn-killer-rabbit-chance", rabbitNaturalKiller);
     }
 
     public boolean ravagerRidable = false;
@@ -1478,6 +1484,7 @@ public class PurpurWorldConfig {
     public boolean vindicatorControllable = true;
     public double vindicatorMaxHealth = 24.0D;
     public double vindicatorScale = 1.0D;
+    public double vindicatorJohnnySpawnChance = 0D;
     private void vindicatorSettings() {
         vindicatorRidable = getBoolean("mobs.vindicator.ridable", vindicatorRidable);
         vindicatorRidableInWater = getBoolean("mobs.vindicator.ridable-in-water", vindicatorRidableInWater);
@@ -1489,6 +1496,7 @@ public class PurpurWorldConfig {
         }
         vindicatorMaxHealth = getDouble("mobs.vindicator.attributes.max_health", vindicatorMaxHealth);
         vindicatorScale = Mth.clamp(getDouble("mobs.vindicator.attributes.scale", vindicatorScale), 0.0625D, 16.0D);
+        vindicatorJohnnySpawnChance = getDouble("mobs.vindicator.johnny.spawn-chance", vindicatorJohnnySpawnChance);
     }
 
     public boolean wanderingTraderRidable = false;
@@ -1643,6 +1651,7 @@ public class PurpurWorldConfig {
     public double zombieHorseJumpStrengthMax = 1.0D;
     public double zombieHorseMovementSpeedMin = 0.2D;
     public double zombieHorseMovementSpeedMax = 0.2D;
+    public double zombieHorseSpawnChance = 0.0D;
     private void zombieHorseSettings() {
         zombieHorseRidable = getBoolean("mobs.zombie_horse.ridable", zombieHorseRidable);
         zombieHorseRidableInWater = getBoolean("mobs.zombie_horse.ridable-in-water", zombieHorseRidableInWater);
@@ -1659,6 +1668,7 @@ public class PurpurWorldConfig {
         zombieHorseJumpStrengthMax = getDouble("mobs.zombie_horse.attributes.jump_strength.max", zombieHorseJumpStrengthMax);
         zombieHorseMovementSpeedMin = getDouble("mobs.zombie_horse.attributes.movement_speed.min", zombieHorseMovementSpeedMin);
         zombieHorseMovementSpeedMax = getDouble("mobs.zombie_horse.attributes.movement_speed.max", zombieHorseMovementSpeedMax);
+        zombieHorseSpawnChance = getDouble("mobs.zombie_horse.spawn-chance", zombieHorseSpawnChance);
     }
 
     public boolean zombieVillagerRidable = false;
