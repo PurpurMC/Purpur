@@ -127,6 +127,15 @@ public class PurpurWorldConfig {
         });
     }
 
+    public boolean turtleEggsBreakFromExpOrbs = false;
+    public boolean turtleEggsBreakFromItems = false;
+    public boolean turtleEggsBreakFromMinecarts = false;
+    private void turtleEggSettings() {
+        turtleEggsBreakFromExpOrbs = getBoolean("blocks.turtle_egg.break-from-exp-orbs", turtleEggsBreakFromExpOrbs);
+        turtleEggsBreakFromItems = getBoolean("blocks.turtle_egg.break-from-items", turtleEggsBreakFromItems);
+        turtleEggsBreakFromMinecarts = getBoolean("blocks.turtle_egg.break-from-minecarts", turtleEggsBreakFromMinecarts);
+    }
+
     public boolean babiesAreRidable = true;
     public boolean untamedTamablesAreRidable = true;
     public boolean useNightVisionWhenRiding = false;
