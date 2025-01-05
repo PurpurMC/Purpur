@@ -35,11 +35,10 @@
      @Override
      public void displayClientMessage(Component chatComponent, boolean actionBar) {
          this.sendSystemMessage(chatComponent, actionBar);
-@@ -2234,6 +_,20 @@
-             this
+@@ -2235,6 +_,20 @@
          );
      }
-+
+ 
 +    // Purpur start - Component related conveniences
 +    public void sendMiniMessage(@Nullable String message) {
 +        if (message != null && !message.isEmpty()) {
@@ -53,6 +52,76 @@
 +        }
 +    }
 +    // Purpur end - Component related conveniences
- 
++
      public void sendSystemMessage(Component mesage) {
          this.sendSystemMessage(mesage, false);
+     }
+@@ -2373,7 +_,67 @@
+ 
+     public void resetLastActionTime() {
+         this.lastActionTime = Util.getMillis();
+-    }
++        this.setAfk(false); // Purpur - AFK API
++    }
++
++    // Purpur start - AFK API
++    private boolean isAfk = false;
++
++    @Override
++    public void setAfk(boolean afk) {
++        if (this.isAfk == afk) {
++            return;
++        }
++
++        String msg = afk ? org.purpurmc.purpur.PurpurConfig.afkBroadcastAway : org.purpurmc.purpur.PurpurConfig.afkBroadcastBack;
++
++        org.purpurmc.purpur.event.PlayerAFKEvent event = new org.purpurmc.purpur.event.PlayerAFKEvent(this.getBukkitEntity(), afk, this.level().purpurConfig.idleTimeoutKick, msg, !org.bukkit.Bukkit.isPrimaryThread());
++        if (!event.callEvent() || event.shouldKick()) {
++            return;
++        }
++
++        this.isAfk = afk;
++
++        if (!afk) {
++            resetLastActionTime();
++        }
++
++        msg = event.getBroadcastMsg();
++        if (msg != null && !msg.isEmpty()) {
++            String playerName = this.getGameProfile().getName();
++            if (org.purpurmc.purpur.PurpurConfig.afkBroadcastUseDisplayName) {
++                net.kyori.adventure.text.Component playerDisplayNameComponent = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(this.getBukkitEntity().getDisplayName());
++                playerName = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(playerDisplayNameComponent);
++            }
++            server.getPlayerList().broadcastMiniMessage(String.format(msg, playerName), false);
++        }
++
++        if (this.level().purpurConfig.idleTimeoutUpdateTabList) {
++            String scoreboardName = getScoreboardName();
++            String playerListName = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().serialize(getBukkitEntity().playerListName());
++            String[] split = playerListName.split(scoreboardName);
++            String prefix = (split.length > 0 ? split[0] : "").replace(org.purpurmc.purpur.PurpurConfig.afkTabListPrefix, "");
++            String suffix = (split.length > 1 ? split[1] : "").replace(org.purpurmc.purpur.PurpurConfig.afkTabListSuffix, "");
++            if (afk) {
++                getBukkitEntity().setPlayerListName(org.purpurmc.purpur.PurpurConfig.afkTabListPrefix + prefix + scoreboardName + suffix + org.purpurmc.purpur.PurpurConfig.afkTabListSuffix, true);
++            } else {
++                getBukkitEntity().setPlayerListName(prefix + scoreboardName + suffix, true);
++            }
++        }
++
++        ((ServerLevel) this.level()).updateSleepingPlayerList();
++    }
++
++    @Override
++    public boolean isAfk() {
++        return this.isAfk;
++    }
++
++    @Override
++    public boolean canBeCollidedWith() {
++        return !this.isAfk() && super.canBeCollidedWith();
++    }
++    // Purpur end - AFK API
+ 
+     public ServerStatsCounter getStats() {
+         return this.stats;

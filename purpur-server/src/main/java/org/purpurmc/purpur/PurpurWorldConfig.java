@@ -71,6 +71,24 @@ public class PurpurWorldConfig {
         return value.isEmpty() ? fallback : value;
     }
 
+    public boolean idleTimeoutKick = true;
+    public boolean idleTimeoutTickNearbyEntities = true;
+    public boolean idleTimeoutCountAsSleeping = false;
+    public boolean idleTimeoutUpdateTabList = false;
+    public boolean idleTimeoutTargetPlayer = true;
+    private void playerSettings() {
+        if (PurpurConfig.version < 19) {
+            boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
+            set("gameplay-mechanics.player.idle-timeout.mods-target", null);
+            set("gameplay-mechanics.player.idle-timeout.mobs-target", oldVal);
+        }
+        idleTimeoutKick = System.getenv("PURPUR_FORCE_IDLE_KICK") == null ? getBoolean("gameplay-mechanics.player.idle-timeout.kick-if-idle", idleTimeoutKick) : Boolean.parseBoolean(System.getenv("PURPUR_FORCE_IDLE_KICK"));
+        idleTimeoutTickNearbyEntities = getBoolean("gameplay-mechanics.player.idle-timeout.tick-nearby-entities", idleTimeoutTickNearbyEntities);
+        idleTimeoutCountAsSleeping = getBoolean("gameplay-mechanics.player.idle-timeout.count-as-sleeping", idleTimeoutCountAsSleeping);
+        idleTimeoutUpdateTabList = getBoolean("gameplay-mechanics.player.idle-timeout.update-tab-list", idleTimeoutUpdateTabList);
+        idleTimeoutTargetPlayer = getBoolean("gameplay-mechanics.player.idle-timeout.mobs-target", idleTimeoutTargetPlayer);
+    }
+
     public boolean babiesAreRidable = true;
     public boolean untamedTamablesAreRidable = true;
     public boolean useNightVisionWhenRiding = false;

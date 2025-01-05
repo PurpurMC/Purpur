@@ -1,0 +1,63 @@
+--- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -326,6 +_,20 @@
+         this.chatMessageChain = new FutureChain(server.chatExecutor); // CraftBukkit - async chat
+     }
+ 
++    // Purpur start - AFK API
++    private final com.google.common.cache.LoadingCache<CraftPlayer, Boolean> kickPermissionCache = com.google.common.cache.CacheBuilder.newBuilder()
++        .maximumSize(1000)
++        .expireAfterWrite(1, java.util.concurrent.TimeUnit.MINUTES)
++        .build(
++            new com.google.common.cache.CacheLoader<>() {
++                @Override
++                public Boolean load(CraftPlayer player) {
++                    return player.hasPermission("purpur.bypassIdleKick");
++                }
++            }
++        );
++    // Purpur end - AFK API
++
+     @Override
+     public void tick() {
+         if (this.ackBlockChangesUpTo > -1) {
+@@ -384,6 +_,12 @@
+         if (this.player.getLastActionTime() > 0L
+             && this.server.getPlayerIdleTimeout() > 0
+             && Util.getMillis() - this.player.getLastActionTime() > this.server.getPlayerIdleTimeout() * 1000L * 60L && !this.player.wonGame) { // Paper - Prevent AFK kick while watching end credits
++            // Purpur start - AFK API
++            this.player.setAfk(true);
++            if (!this.player.level().purpurConfig.idleTimeoutKick || (!Boolean.parseBoolean(System.getenv("PURPUR_FORCE_IDLE_KICK")) && kickPermissionCache.getUnchecked(this.player.getBukkitEntity()))) {
++                return;
++            }
++            // Purpur end - AFK API
+             this.player.resetLastActionTime(); // CraftBukkit - SPIGOT-854
+             this.disconnect(Component.translatable("multiplayer.disconnect.idling"), org.bukkit.event.player.PlayerKickEvent.Cause.IDLING); // Paper - kick event cause
+         }
+@@ -629,6 +_,8 @@
+                     this.lastYaw = to.getYaw();
+                     this.lastPitch = to.getPitch();
+ 
++                    if (!to.getWorld().getUID().equals(from.getWorld().getUID()) || to.getBlockX() != from.getBlockX() || to.getBlockY() != from.getBlockY() || to.getBlockZ() != from.getBlockZ() || to.getYaw() != from.getYaw() || to.getPitch() != from.getPitch()) this.player.resetLastActionTime(); // Purpur - AFK API
++
+                     Location oldTo = to.clone();
+                     PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
+                     this.cserver.getPluginManager().callEvent(event);
+@@ -1460,7 +_,7 @@
+                                     movedWrongly = true;
+                                     if (event.getLogWarning())
+                                     // Paper end
+-                                LOGGER.warn("{} moved wrongly!", this.player.getName().getString());
++                                LOGGER.warn("{} moved wrongly!, ({})", this.player.getName().getString(), d11); // Purpur - AFK API
+                                 } // Paper
+                             }
+ 
+@@ -1525,6 +_,8 @@
+                                     this.lastPosZ = to.getZ();
+                                     this.lastYaw = to.getYaw();
+                                     this.lastPitch = to.getPitch();
++
++                                    if (!to.getWorld().getUID().equals(from.getWorld().getUID()) || to.getBlockX() != from.getBlockX() || to.getBlockY() != from.getBlockY() || to.getBlockZ() != from.getBlockZ() || to.getYaw() != from.getYaw() || to.getPitch() != from.getPitch()) this.player.resetLastActionTime(); // Purpur - AFK API
+ 
+                                     Location oldTo = to.clone();
+                                     PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);

@@ -2,6 +2,7 @@ package org.purpurmc.purpur;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -157,8 +158,18 @@ public class PurpurConfig {
     }
 
     public static String cannotRideMob = "<red>You cannot mount that mob";
+    public static String afkBroadcastAway = "<yellow><italic>%s is now AFK";
+    public static String afkBroadcastBack = "<yellow><italic>%s is no longer AFK";
+    public static boolean afkBroadcastUseDisplayName = false;
+    public static String afkTabListPrefix = "[AFK] ";
+    public static String afkTabListSuffix = "";
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
+        afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
+        afkBroadcastBack = getString("settings.messages.afk-broadcast-back", afkBroadcastBack);
+        afkBroadcastUseDisplayName = getBoolean("settings.messages.afk-broadcast-use-display-name", afkBroadcastUseDisplayName);
+        afkTabListPrefix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-prefix", afkTabListPrefix)));
+        afkTabListSuffix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-suffix", afkTabListSuffix)));
     }
 
     public static int barrelRows = 3;
