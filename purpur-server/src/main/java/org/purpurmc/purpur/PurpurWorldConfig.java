@@ -84,6 +84,11 @@ public class PurpurWorldConfig {
         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
     }
 
+    public boolean disableDropsOnCrammingDeath = false;
+    private void miscGameplayMechanicsSettings() {
+        disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);
+    }
+
     public double minecartMaxSpeed = 0.4D;
     public boolean minecartPlaceAnywhere = false;
     public boolean minecartControllable = false;
