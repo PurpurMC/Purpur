@@ -329,6 +329,7 @@ public class PurpurWorldConfig {
     public boolean chickenControllable = true;
     public double chickenMaxHealth = 4.0D;
     public double chickenScale = 1.0D;
+    public boolean chickenRetaliate = false;
     private void chickenSettings() {
         chickenRidable = getBoolean("mobs.chicken.ridable", chickenRidable);
         chickenRidableInWater = getBoolean("mobs.chicken.ridable-in-water", chickenRidableInWater);
@@ -340,6 +341,7 @@ public class PurpurWorldConfig {
         }
         chickenMaxHealth = getDouble("mobs.chicken.attributes.max_health", chickenMaxHealth);
         chickenScale = Mth.clamp(getDouble("mobs.chicken.attributes.scale", chickenScale), 0.0625D, 16.0D);
+        chickenRetaliate = getBoolean("mobs.chicken.retaliate", chickenRetaliate);
     }
 
     public boolean codRidable = false;
