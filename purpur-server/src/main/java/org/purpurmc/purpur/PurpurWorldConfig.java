@@ -1,8 +1,14 @@
 package org.purpurmc.purpur;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.monster.Shulker;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import java.util.List;
@@ -87,6 +93,38 @@ public class PurpurWorldConfig {
         idleTimeoutCountAsSleeping = getBoolean("gameplay-mechanics.player.idle-timeout.count-as-sleeping", idleTimeoutCountAsSleeping);
         idleTimeoutUpdateTabList = getBoolean("gameplay-mechanics.player.idle-timeout.update-tab-list", idleTimeoutUpdateTabList);
         idleTimeoutTargetPlayer = getBoolean("gameplay-mechanics.player.idle-timeout.mobs-target", idleTimeoutTargetPlayer);
+    }
+
+    public boolean silkTouchEnabled = false;
+    public String silkTouchSpawnerName = "<reset><white>Monster Spawner";
+    public List<String> silkTouchSpawnerLore = new ArrayList<>();
+    public List<Item> silkTouchTools = new ArrayList<>();
+    public int minimumSilkTouchSpawnerRequire = 1;
+    private void silkTouchSettings() {
+        if (PurpurConfig.version < 21) {
+            String oldName = getString("gameplay-mechanics.silk-touch.spawner-name", silkTouchSpawnerName);
+            set("gameplay-mechanics.silk-touch.spawner-name", "<reset>" + ChatColor.toMM(oldName.replace("{mob}", "<mob>")));
+            List<String> list = new ArrayList<>();
+            getList("gameplay-mechanics.silk-touch.spawner-lore", List.of("Spawns a <mob>"))
+                    .forEach(line -> list.add("<reset>" + ChatColor.toMM(line.toString().replace("{mob}", "<mob>"))));
+            set("gameplay-mechanics.silk-touch.spawner-lore", list);
+        }
+        silkTouchEnabled = getBoolean("gameplay-mechanics.silk-touch.enabled", silkTouchEnabled);
+        silkTouchSpawnerName = getString("gameplay-mechanics.silk-touch.spawner-name", silkTouchSpawnerName);
+        minimumSilkTouchSpawnerRequire = getInt("gameplay-mechanics.silk-touch.minimal-level", minimumSilkTouchSpawnerRequire);
+        silkTouchSpawnerLore.clear();
+        getList("gameplay-mechanics.silk-touch.spawner-lore", List.of("Spawns a <mob>"))
+                .forEach(line -> silkTouchSpawnerLore.add(line.toString()));
+        silkTouchTools.clear();
+        getList("gameplay-mechanics.silk-touch.tools", List.of(
+                "minecraft:iron_pickaxe",
+                "minecraft:golden_pickaxe",
+                "minecraft:diamond_pickaxe",
+                "minecraft:netherite_pickaxe"
+        )).forEach(key -> {
+            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            if (item != Items.AIR) silkTouchTools.add(item);
+        });
     }
 
     public boolean babiesAreRidable = true;
