@@ -572,6 +572,7 @@ public class PurpurWorldConfig {
     public boolean foxControllable = true;
     public double foxMaxHealth = 10.0D;
     public double foxScale = 1.0D;
+    public boolean foxTypeChangesWithTulips = false;
     private void foxSettings() {
         foxRidable = getBoolean("mobs.fox.ridable", foxRidable);
         foxRidableInWater = getBoolean("mobs.fox.ridable-in-water", foxRidableInWater);
@@ -583,6 +584,7 @@ public class PurpurWorldConfig {
         }
         foxMaxHealth = getDouble("mobs.fox.attributes.max_health", foxMaxHealth);
         foxScale = Mth.clamp(getDouble("mobs.fox.attributes.scale", foxScale), 0.0625D, 16.0D);
+        foxTypeChangesWithTulips = getBoolean("mobs.fox.tulips-change-type", foxTypeChangesWithTulips);
     }
 
     public boolean frogRidable = false;
