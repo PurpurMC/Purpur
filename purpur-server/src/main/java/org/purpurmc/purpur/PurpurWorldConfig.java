@@ -376,6 +376,7 @@ public class PurpurWorldConfig {
     public boolean cowControllable = true;
     public double cowMaxHealth = 10.0D;
     public double cowScale = 1.0D;
+    public int cowFeedMushrooms = 0;
     private void cowSettings() {
         cowRidable = getBoolean("mobs.cow.ridable", cowRidable);
         cowRidableInWater = getBoolean("mobs.cow.ridable-in-water", cowRidableInWater);
@@ -387,6 +388,7 @@ public class PurpurWorldConfig {
         }
         cowMaxHealth = getDouble("mobs.cow.attributes.max_health", cowMaxHealth);
         cowScale = Mth.clamp(getDouble("mobs.cow.attributes.scale", cowScale), 0.0625D, 16.0D);
+        cowFeedMushrooms = getInt("mobs.cow.feed-mushrooms-for-mooshroom", cowFeedMushrooms);
     }
 
     public boolean creakingRidable = false;
