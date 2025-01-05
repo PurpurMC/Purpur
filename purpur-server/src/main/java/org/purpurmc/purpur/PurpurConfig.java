@@ -232,4 +232,9 @@ public class PurpurConfig {
         loggerSuppressUnrecognizedRecipeErrors = getBoolean("settings.logger.suppress-unrecognized-recipe-errors", loggerSuppressUnrecognizedRecipeErrors);
         loggerSuppressSetBlockFarChunk = getBoolean("settings.logger.suppress-setblock-in-far-chunk-errors", loggerSuppressSetBlockFarChunk);
     }
+
+    public static boolean tpsCatchup = true;
+    private static void tpsCatchup() {
+        tpsCatchup = getBoolean("settings.tps-catchup", tpsCatchup);
+    }
 }
