@@ -172,6 +172,11 @@ public class PurpurConfig {
         afkTabListSuffix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-suffix", afkTabListSuffix)));
     }
 
+    public static String serverModName = io.papermc.paper.ServerBuildInfo.buildInfo().brandName();
+    private static void serverModName() {
+        serverModName = getString("settings.server-mod-name", serverModName);
+    }
+
     public static int barrelRows = 3;
     public static boolean enderChestSixRows = false;
     public static boolean enderChestPermissionRows = false;
