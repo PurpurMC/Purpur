@@ -86,9 +86,11 @@ public class PurpurWorldConfig {
 
     public boolean disableDropsOnCrammingDeath = false;
     public boolean milkCuresBadOmen = true;
+    public double tridentLoyaltyVoidReturnHeight = 0.0D;
     private void miscGameplayMechanicsSettings() {
         disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);
         milkCuresBadOmen = getBoolean("gameplay-mechanics.milk-cures-bad-omen", milkCuresBadOmen);
+        tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
     }
 
     public double minecartMaxSpeed = 0.4D;
