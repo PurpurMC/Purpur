@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
+@@ -294,7 +_,7 @@
+     public static final int TICK_TIME = 1000000000 / MinecraftServer.TPS;
+     private static final int SAMPLE_INTERVAL = 20; // Paper - improve server tick loop
+     @Deprecated(forRemoval = true) // Paper
+-    public final double[] recentTps = new double[3];
++    public final double[] recentTps = new double[4]; // Purpur - Add 5 second tps average in /tps
+     // Spigot end
+     public volatile boolean hasFullyShutdown; // Paper - Improved watchdog support
+     public volatile boolean abnormalExit; // Paper - Improved watchdog support
 @@ -302,6 +_,7 @@
      public final io.papermc.paper.configuration.PaperConfigurations paperConfigurations; // Paper - add paper configuration files
      public boolean isIteratingOverLevels = false; // Paper - Throw exception on world create while being ticked
@@ -8,10 +17,33 @@
      public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
  
      public static <S extends MinecraftServer> S spin(Function<Thread, S> threadFunction) {
-@@ -1229,6 +_,7 @@
-                     this.recentTps[0] = tps1.getAverage();
-                     this.recentTps[1] = tps5.getAverage();
-                     this.recentTps[2] = tps15.getAverage();
+@@ -1112,6 +_,7 @@
+     private static final long MAX_CATCHUP_BUFFER = TICK_TIME * TPS * 60L;
+     private long lastTick = 0;
+     private long catchupTime = 0;
++    public final RollingAverage tps5s = new RollingAverage(5); // Purpur - Add 5 second tps average in /tps
+     public final RollingAverage tps1 = new RollingAverage(60);
+     public final RollingAverage tps5 = new RollingAverage(60 * 5);
+     public final RollingAverage tps15 = new RollingAverage(60 * 15);
+@@ -1221,14 +_,19 @@
+                 if (++MinecraftServer.currentTick % MinecraftServer.SAMPLE_INTERVAL == 0) {
+                     final long diff = currentTime - tickSection;
+                     final java.math.BigDecimal currentTps = TPS_BASE.divide(new java.math.BigDecimal(diff), 30, java.math.RoundingMode.HALF_UP);
++                    tps5s.add(currentTps, diff); // Purpur - Add 5 second tps average in /tps
+                     tps1.add(currentTps, diff);
+                     tps5.add(currentTps, diff);
+                     tps15.add(currentTps, diff);
+ 
+                     // Backwards compat with bad plugins
+-                    this.recentTps[0] = tps1.getAverage();
+-                    this.recentTps[1] = tps5.getAverage();
+-                    this.recentTps[2] = tps15.getAverage();
++                    // Purpur start - Add 5 second tps average in /tps
++                    this.recentTps[0] = tps5s.getAverage();
++                    this.recentTps[1] = tps1.getAverage();
++                    this.recentTps[2] = tps5.getAverage();
++                    this.recentTps[3] = tps15.getAverage();
++                    // Purpur end - Add 5 second tps average in /tps
 +                    lagging = recentTps[0] < org.purpurmc.purpur.PurpurConfig.laggingThreshold; // Purpur - Lagging threshold
                      tickSection = currentTime;
                  }
