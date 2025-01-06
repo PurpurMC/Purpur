@@ -308,6 +308,27 @@ public class PurpurWorldConfig {
         lavaSpeedNotNether = getInt("blocks.lava.speed.not-nether", lavaSpeedNotNether);
     }
 
+    public boolean respawnAnchorExplode = true;
+    public double respawnAnchorExplosionPower = 5.0D;
+    public boolean respawnAnchorExplosionFire = true;
+    public net.minecraft.world.level.Level.ExplosionInteraction respawnAnchorExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
+    private void respawnAnchorSettings() {
+        if (PurpurConfig.version < 31) {
+            if ("DESTROY".equals(getString("blocks.respawn_anchor.explosion-effect", respawnAnchorExplosionEffect.name()))) {
+                set("blocks.respawn_anchor.explosion-effect", "BLOCK");
+            }
+        }
+        respawnAnchorExplode = getBoolean("blocks.respawn_anchor.explode", respawnAnchorExplode);
+        respawnAnchorExplosionPower = getDouble("blocks.respawn_anchor.explosion-power", respawnAnchorExplosionPower);
+        respawnAnchorExplosionFire = getBoolean("blocks.respawn_anchor.explosion-fire", respawnAnchorExplosionFire);
+        try {
+            respawnAnchorExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.valueOf(getString("blocks.respawn_anchor.explosion-effect", respawnAnchorExplosionEffect.name()));
+        } catch (IllegalArgumentException e) {
+            log(Level.SEVERE, "Unknown value for `blocks.respawn_anchor.explosion-effect`! Using default of `BLOCK`");
+            respawnAnchorExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
+        }
+    }
+
     public boolean turtleEggsBreakFromExpOrbs = false;
     public boolean turtleEggsBreakFromItems = false;
     public boolean turtleEggsBreakFromMinecarts = false;
