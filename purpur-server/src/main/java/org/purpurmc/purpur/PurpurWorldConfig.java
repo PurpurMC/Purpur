@@ -108,6 +108,49 @@ public class PurpurWorldConfig {
         elytraDamagePerTridentBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.trident", elytraDamagePerTridentBoost);
     }
 
+    public List<Item> itemImmuneToCactus = new ArrayList<>();
+    public List<Item> itemImmuneToExplosion = new ArrayList<>();
+    public List<Item> itemImmuneToFire = new ArrayList<>();
+    public List<Item> itemImmuneToLightning = new ArrayList<>();
+    private void itemSettings() {
+        itemImmuneToCactus.clear();
+        getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
+            if (key.toString().equals("*")) {
+                BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToCactus.add(item));
+                return;
+            }
+            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            if (item != Items.AIR) itemImmuneToCactus.add(item);
+        });
+        itemImmuneToExplosion.clear();
+        getList("gameplay-mechanics.item.immune.explosion", new ArrayList<>()).forEach(key -> {
+            if (key.toString().equals("*")) {
+                BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToExplosion.add(item));
+                return;
+            }
+            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            if (item != Items.AIR) itemImmuneToExplosion.add(item);
+        });
+        itemImmuneToFire.clear();
+        getList("gameplay-mechanics.item.immune.fire", new ArrayList<>()).forEach(key -> {
+            if (key.toString().equals("*")) {
+                BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToFire.add(item));
+                return;
+            }
+            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            if (item != Items.AIR) itemImmuneToFire.add(item);
+        });
+        itemImmuneToLightning.clear();
+        getList("gameplay-mechanics.item.immune.lightning", new ArrayList<>()).forEach(key -> {
+            if (key.toString().equals("*")) {
+                BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToLightning.add(item));
+                return;
+            }
+            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            if (item != Items.AIR) itemImmuneToLightning.add(item);
+        });
+    }
+
     public double minecartMaxSpeed = 0.4D;
     public boolean minecartPlaceAnywhere = false;
     public boolean minecartControllable = false;
