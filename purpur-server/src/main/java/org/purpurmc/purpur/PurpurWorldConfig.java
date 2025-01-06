@@ -2,6 +2,7 @@ package org.purpurmc.purpur;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.logging.Level;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -265,6 +266,27 @@ public class PurpurWorldConfig {
             Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
             if (item != Items.AIR) silkTouchTools.add(item);
         });
+    }
+
+    public boolean bedExplode = true;
+    public double bedExplosionPower = 5.0D;
+    public boolean bedExplosionFire = true;
+    public net.minecraft.world.level.Level.ExplosionInteraction bedExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
+    private void bedSettings() {
+        if (PurpurConfig.version < 31) {
+            if ("DESTROY".equals(getString("blocks.bed.explosion-effect", bedExplosionEffect.name()))) {
+                set("blocks.bed.explosion-effect", "BLOCK");
+            }
+        }
+        bedExplode = getBoolean("blocks.bed.explode", bedExplode);
+        bedExplosionPower = getDouble("blocks.bed.explosion-power", bedExplosionPower);
+        bedExplosionFire = getBoolean("blocks.bed.explosion-fire", bedExplosionFire);
+        try {
+            bedExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.valueOf(getString("blocks.bed.explosion-effect", bedExplosionEffect.name()));
+        } catch (IllegalArgumentException e) {
+            log(Level.SEVERE, "Unknown value for `blocks.bed.explosion-effect`! Using default of `BLOCK`");
+            bedExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
+        }
     }
 
     public boolean dispenserApplyCursedArmor = true;
