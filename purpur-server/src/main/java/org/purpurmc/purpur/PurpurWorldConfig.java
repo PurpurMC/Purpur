@@ -211,8 +211,12 @@ public class PurpurWorldConfig {
     }
 
     public int lavaInfiniteRequiredSources = 2;
+    public int lavaSpeedNether = 10;
+    public int lavaSpeedNotNether = 30;
     private void lavaSettings() {
         lavaInfiniteRequiredSources = getInt("blocks.lava.infinite-required-sources", lavaInfiniteRequiredSources);
+        lavaSpeedNether = getInt("blocks.lava.speed.nether", lavaSpeedNether);
+        lavaSpeedNotNether = getInt("blocks.lava.speed.not-nether", lavaSpeedNotNether);
     }
 
     public boolean turtleEggsBreakFromExpOrbs = false;
