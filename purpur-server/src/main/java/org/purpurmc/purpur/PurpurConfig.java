@@ -163,6 +163,7 @@ public class PurpurConfig {
     public static boolean afkBroadcastUseDisplayName = false;
     public static String afkTabListPrefix = "[AFK] ";
     public static String afkTabListSuffix = "";
+    public static String pingCommandOutput = "<green>%s's ping is %sms";
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
         afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
@@ -170,6 +171,7 @@ public class PurpurConfig {
         afkBroadcastUseDisplayName = getBoolean("settings.messages.afk-broadcast-use-display-name", afkBroadcastUseDisplayName);
         afkTabListPrefix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-prefix", afkTabListPrefix)));
         afkTabListSuffix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-suffix", afkTabListSuffix)));
+        pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
     }
 
     public static String serverModName = io.papermc.paper.ServerBuildInfo.buildInfo().brandName();
