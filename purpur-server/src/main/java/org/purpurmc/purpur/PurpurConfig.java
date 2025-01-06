@@ -228,6 +228,11 @@ public class PurpurConfig {
         enderChestPermissionRows = getBoolean("settings.blocks.ender_chest.use-permissions-for-rows", enderChestPermissionRows);
     }
 
+    public static boolean allowWaterPlacementInTheEnd = true;
+    private static void allowWaterPlacementInEnd() {
+        allowWaterPlacementInTheEnd = getBoolean("settings.allow-water-placement-in-the-end", allowWaterPlacementInTheEnd);
+    }
+
     public static boolean loggerSuppressInitLegacyMaterialError = false;
     public static boolean loggerSuppressIgnoredAdvancementWarnings = false;
     public static boolean loggerSuppressUnrecognizedRecipeErrors = false;
