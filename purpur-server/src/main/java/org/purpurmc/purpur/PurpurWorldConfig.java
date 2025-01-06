@@ -637,6 +637,9 @@ public class PurpurWorldConfig {
     public double drownedMaxHealth = 20.0D;
     public double drownedScale = 1.0D;
     public double drownedSpawnReinforcements = 0.1D;
+    public boolean drownedJockeyOnlyBaby = true;
+    public double drownedJockeyChance = 0.05D;
+    public boolean drownedJockeyTryExistingChickens = true;
     private void drownedSettings() {
         drownedRidable = getBoolean("mobs.drowned.ridable", drownedRidable);
         drownedRidableInWater = getBoolean("mobs.drowned.ridable-in-water", drownedRidableInWater);
@@ -649,6 +652,9 @@ public class PurpurWorldConfig {
         drownedMaxHealth = getDouble("mobs.drowned.attributes.max_health", drownedMaxHealth);
         drownedScale = Mth.clamp(getDouble("mobs.drowned.attributes.scale", drownedScale), 0.0625D, 16.0D);
         drownedSpawnReinforcements = getDouble("mobs.drowned.attributes.spawn_reinforcements", drownedSpawnReinforcements);
+        drownedJockeyOnlyBaby = getBoolean("mobs.drowned.jockey.only-babies", drownedJockeyOnlyBaby);
+        drownedJockeyChance = getDouble("mobs.drowned.jockey.chance", drownedJockeyChance);
+        drownedJockeyTryExistingChickens = getBoolean("mobs.drowned.jockey.try-existing-chickens", drownedJockeyTryExistingChickens);
     }
 
     public boolean elderGuardianRidable = false;
@@ -920,6 +926,9 @@ public class PurpurWorldConfig {
     public double huskMaxHealth = 20.0D;
     public double huskScale = 1.0D;
     public double huskSpawnReinforcements = 0.1D;
+    public boolean huskJockeyOnlyBaby = true;
+    public double huskJockeyChance = 0.05D;
+    public boolean huskJockeyTryExistingChickens = true;
     private void huskSettings() {
         huskRidable = getBoolean("mobs.husk.ridable", huskRidable);
         huskRidableInWater = getBoolean("mobs.husk.ridable-in-water", huskRidableInWater);
@@ -932,6 +941,9 @@ public class PurpurWorldConfig {
         huskMaxHealth = getDouble("mobs.husk.attributes.max_health", huskMaxHealth);
         huskScale = Mth.clamp(getDouble("mobs.husk.attributes.scale", huskScale), 0.0625D, 16.0D);
         huskSpawnReinforcements = getDouble("mobs.husk.attributes.spawn_reinforcements", huskSpawnReinforcements);
+        huskJockeyOnlyBaby = getBoolean("mobs.husk.jockey.only-babies", huskJockeyOnlyBaby);
+        huskJockeyChance = getDouble("mobs.husk.jockey.chance", huskJockeyChance);
+        huskJockeyTryExistingChickens = getBoolean("mobs.husk.jockey.try-existing-chickens", huskJockeyTryExistingChickens);
     }
 
     public boolean illusionerRidable = false;
@@ -1831,6 +1843,9 @@ public class PurpurWorldConfig {
     public double zombieMaxHealth = 20.0D;
     public double zombieScale = 1.0D;
     public double zombieSpawnReinforcements = 0.1D;
+    public boolean zombieJockeyOnlyBaby = true;
+    public double zombieJockeyChance = 0.05D;
+    public boolean zombieJockeyTryExistingChickens = true;
     private void zombieSettings() {
         zombieRidable = getBoolean("mobs.zombie.ridable", zombieRidable);
         zombieRidableInWater = getBoolean("mobs.zombie.ridable-in-water", zombieRidableInWater);
@@ -1843,6 +1858,9 @@ public class PurpurWorldConfig {
         zombieMaxHealth = getDouble("mobs.zombie.attributes.max_health", zombieMaxHealth);
         zombieScale = Mth.clamp(getDouble("mobs.zombie.attributes.scale", zombieScale), 0.0625D, 16.0D);
         zombieSpawnReinforcements = getDouble("mobs.zombie.attributes.spawn_reinforcements", zombieSpawnReinforcements);
+        zombieJockeyOnlyBaby = getBoolean("mobs.zombie.jockey.only-babies", zombieJockeyOnlyBaby);
+        zombieJockeyChance = getDouble("mobs.zombie.jockey.chance", zombieJockeyChance);
+        zombieJockeyTryExistingChickens = getBoolean("mobs.zombie.jockey.try-existing-chickens", zombieJockeyTryExistingChickens);
     }
 
     public boolean zombieHorseRidable = false;
@@ -1880,6 +1898,9 @@ public class PurpurWorldConfig {
     public double zombieVillagerMaxHealth = 20.0D;
     public double zombieVillagerScale = 1.0D;
     public double zombieVillagerSpawnReinforcements = 0.1D;
+    public boolean zombieVillagerJockeyOnlyBaby = true;
+    public double zombieVillagerJockeyChance = 0.05D;
+    public boolean zombieVillagerJockeyTryExistingChickens = true;
     private void zombieVillagerSettings() {
         zombieVillagerRidable = getBoolean("mobs.zombie_villager.ridable", zombieVillagerRidable);
         zombieVillagerRidableInWater = getBoolean("mobs.zombie_villager.ridable-in-water", zombieVillagerRidableInWater);
@@ -1892,6 +1913,9 @@ public class PurpurWorldConfig {
         zombieVillagerMaxHealth = getDouble("mobs.zombie_villager.attributes.max_health", zombieVillagerMaxHealth);
         zombieVillagerScale = Mth.clamp(getDouble("mobs.zombie_villager.attributes.scale", zombieVillagerScale), 0.0625D, 16.0D);
         zombieVillagerSpawnReinforcements = getDouble("mobs.zombie_villager.attributes.spawn_reinforcements", zombieVillagerSpawnReinforcements);
+        zombieVillagerJockeyOnlyBaby = getBoolean("mobs.zombie_villager.jockey.only-babies", zombieVillagerJockeyOnlyBaby);
+        zombieVillagerJockeyChance = getDouble("mobs.zombie_villager.jockey.chance", zombieVillagerJockeyChance);
+        zombieVillagerJockeyTryExistingChickens = getBoolean("mobs.zombie_villager.jockey.try-existing-chickens", zombieVillagerJockeyTryExistingChickens);
     }
 
     public boolean zombifiedPiglinRidable = false;
@@ -1900,6 +1924,9 @@ public class PurpurWorldConfig {
     public double zombifiedPiglinMaxHealth = 20.0D;
     public double zombifiedPiglinScale = 1.0D;
     public double zombifiedPiglinSpawnReinforcements = 0.0D;
+    public boolean zombifiedPiglinJockeyOnlyBaby = true;
+    public double zombifiedPiglinJockeyChance = 0.05D;
+    public boolean zombifiedPiglinJockeyTryExistingChickens = true;
     private void zombifiedPiglinSettings() {
         zombifiedPiglinRidable = getBoolean("mobs.zombified_piglin.ridable", zombifiedPiglinRidable);
         zombifiedPiglinRidableInWater = getBoolean("mobs.zombified_piglin.ridable-in-water", zombifiedPiglinRidableInWater);
@@ -1912,5 +1939,8 @@ public class PurpurWorldConfig {
         zombifiedPiglinMaxHealth = getDouble("mobs.zombified_piglin.attributes.max_health", zombifiedPiglinMaxHealth);
         zombifiedPiglinScale = Mth.clamp(getDouble("mobs.zombified_piglin.attributes.scale", zombifiedPiglinScale), 0.0625D, 16.0D);
         zombifiedPiglinSpawnReinforcements = getDouble("mobs.zombified_piglin.attributes.spawn_reinforcements", zombifiedPiglinSpawnReinforcements);
+        zombifiedPiglinJockeyOnlyBaby = getBoolean("mobs.zombified_piglin.jockey.only-babies", zombifiedPiglinJockeyOnlyBaby);
+        zombifiedPiglinJockeyChance = getDouble("mobs.zombified_piglin.jockey.chance", zombifiedPiglinJockeyChance);
+        zombifiedPiglinJockeyTryExistingChickens = getBoolean("mobs.zombified_piglin.jockey.try-existing-chickens", zombifiedPiglinJockeyTryExistingChickens);
     }
 }
