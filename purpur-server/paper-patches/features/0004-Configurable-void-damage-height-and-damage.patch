@@ -7,26 +7,26 @@ temporarily migrate to paper's config
 drop patch on the next minecraft release
 
 diff --git a/src/main/java/io/papermc/paper/configuration/PaperConfigurations.java b/src/main/java/io/papermc/paper/configuration/PaperConfigurations.java
-index c5644d8d64f12073e39bc6ed79c8714f4560ff89..47a2cba0db36b11548d06ec21f7c7d7c9a962d6e 100644
+index 098ab351de4f84cdc943ebe855dd0022174e1e67..9f87f3da8e3f8cb16ea8f04cc233e143b174a709 100644
 --- a/src/main/java/io/papermc/paper/configuration/PaperConfigurations.java
 +++ b/src/main/java/io/papermc/paper/configuration/PaperConfigurations.java
 @@ -263,6 +263,7 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
          for (final NodePath path : RemovedConfigurations.REMOVED_WORLD_PATHS) {
              builder.addAction(path, TransformAction.remove());
          }
-+        org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.apply(builder, contextMap); // Purpur
++        org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.apply(builder, contextMap); // Purpur - Configurable void damage height and damage
          builder.build().apply(node);
  
          final ConfigurationTransformation.VersionedBuilder versionedBuilder = Transformations.versionedBuilder();
 diff --git a/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java b/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
-index b1c917d65076a3805e5b78cb946753f0c101e214..82210667376fd466d5d4cdcb56b62f6165bd5cde 100644
+index b1c917d65076a3805e5b78cb946753f0c101e214..229404b8583adc9723e3186775f38fdb97daacbc 100644
 --- a/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
 +++ b/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java
 @@ -409,6 +409,7 @@ public class WorldConfiguration extends ConfigurationPart {
          public boolean useVanillaWorldScoreboardNameColoring = false;
      }
  
-+    @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.ENVIRONMENT_KEY) // Purpur
++    @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.ENVIRONMENT_KEY) // Purpur - Configurable void damage height and damage
      public Environment environment;
  
      public class Environment extends ConfigurationPart {
@@ -34,53 +34,12 @@ index b1c917d65076a3805e5b78cb946753f0c101e214..82210667376fd466d5d4cdcb56b62f61
          public boolean disableExplosionKnockback = false;
          public boolean generateFlatBedrock = false;
          public FrostedIce frostedIce;
-+        @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.VOID_DAMAGE_KEY) // Purpur
++        @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.VOID_DAMAGE_KEY) // Purpur - Configurable void damage height and damage
          public DoubleOr.Disabled voidDamageAmount = new DoubleOr.Disabled(OptionalDouble.of(4));
-+        @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.VOID_DAMAGE_MIN_HEIGHT_OFFSET_KEY) // Purpur
++        @Setting(org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.VOID_DAMAGE_MIN_HEIGHT_OFFSET_KEY) // Purpur - Configurable void damage height and damage
          public double voidDamageMinBuildHeightOffset = -64.0;
  
          public class FrostedIce extends ConfigurationPart {
-diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 22cbe00a19a2ac0ad25b1107b1290b793903e3aa..6cec325942c44da6455f0b349ad83e1dc2b8b7d4 100644
---- a/net/minecraft/server/MinecraftServer.java
-+++ b/net/minecraft/server/MinecraftServer.java
-@@ -1270,7 +1270,15 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
-                 LOGGER.info("*************************************************************************************");
-             }
-             // Paper end - Add onboarding message for initial server start
--
-+            // Purpur start
-+            if (org.purpurmc.purpur.configuration.transformation.VoidDamageHeightMigration.HAS_BEEN_REGISTERED) {
-+                try {
-+                    org.purpurmc.purpur.PurpurConfig.config.save((File) this.options.valueOf("purpur-settings"));
-+                } catch (IOException ex) {
-+                    Bukkit.getLogger().log(java.util.logging.Level.SEVERE, "Could not save " + this.options.valueOf("purpur-settings"), ex);
-+                }
-+            }
-+            // Purpur end
-             while (this.running) {
-                 long i;
- 
-diff --git a/net/minecraft/server/dedicated/DedicatedServer.java b/net/minecraft/server/dedicated/DedicatedServer.java
-index cf63c64b8c2ac148b83325209940713a91b91bad..59a8007add25bf947b87eef3ece55bca192ba358 100644
---- a/net/minecraft/server/dedicated/DedicatedServer.java
-+++ b/net/minecraft/server/dedicated/DedicatedServer.java
-@@ -219,6 +219,15 @@ public class DedicatedServer extends MinecraftServer implements ServerInterface
-         org.spigotmc.SpigotConfig.registerCommands();
-         // Spigot end
-         io.papermc.paper.util.ObfHelper.INSTANCE.getClass(); // Paper - load mappings for stacktrace deobf and etc.
-+        // Purpur start
-+        try {
-+            org.purpurmc.purpur.PurpurConfig.init((java.io.File) options.valueOf("purpur-settings"));
-+        } catch (Exception e) {
-+            DedicatedServer.LOGGER.error("Unable to load server configuration", e);
-+            return false;
-+        }
-+        org.purpurmc.purpur.PurpurConfig.registerCommands();
-+        // Purpur end
-         // Paper start - initialize global and world-defaults configuration
-         this.paperConfigurations.initializeGlobalConfiguration(this.registryAccess());
-         this.paperConfigurations.initializeWorldDefaultsConfiguration(this.registryAccess());
 diff --git a/src/main/java/org/purpurmc/purpur/configuration/transformation/VoidDamageHeightMigration.java b/src/main/java/org/purpurmc/purpur/configuration/transformation/VoidDamageHeightMigration.java
 new file mode 100644
 index 0000000000000000000000000000000000000000..a04d23bd98075cd65a24d4de8d18281d1668480f
