@@ -1154,6 +1154,12 @@ public class PurpurWorldConfig {
     public double phantomAttackedByCrystalRadius = 0.0D;
     public float phantomAttackedByCrystalDamage = 1.0F;
     public double phantomOrbitCrystalRadius = 0.0D;
+    public int phantomSpawnMinSkyDarkness = 5;
+    public boolean phantomSpawnOnlyAboveSeaLevel = true;
+    public boolean phantomSpawnOnlyWithVisibleSky = true;
+    public double phantomSpawnLocalDifficultyChance = 3.0D;
+    public int phantomSpawnMinPerAttempt = 1;
+    public int phantomSpawnMaxPerAttempt = -1;
     private void phantomSettings() {
         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
@@ -1178,6 +1184,12 @@ public class PurpurWorldConfig {
         phantomAttackedByCrystalRadius = getDouble("mobs.phantom.attacked-by-crystal-range", phantomAttackedByCrystalRadius);
         phantomAttackedByCrystalDamage = (float) getDouble("mobs.phantom.attacked-by-crystal-damage", phantomAttackedByCrystalDamage);
         phantomOrbitCrystalRadius = getDouble("mobs.phantom.orbit-crystal-radius", phantomOrbitCrystalRadius);
+        phantomSpawnMinSkyDarkness = getInt("mobs.phantom.spawn.min-sky-darkness", phantomSpawnMinSkyDarkness);
+        phantomSpawnOnlyAboveSeaLevel = getBoolean("mobs.phantom.spawn.only-above-sea-level", phantomSpawnOnlyAboveSeaLevel);
+        phantomSpawnOnlyWithVisibleSky = getBoolean("mobs.phantom.spawn.only-with-visible-sky", phantomSpawnOnlyWithVisibleSky);
+        phantomSpawnLocalDifficultyChance = getDouble("mobs.phantom.spawn.local-difficulty-chance", phantomSpawnLocalDifficultyChance);
+        phantomSpawnMinPerAttempt = getInt("mobs.phantom.spawn.per-attempt.min", phantomSpawnMinPerAttempt);
+        phantomSpawnMaxPerAttempt = getInt("mobs.phantom.spawn.per-attempt.max", phantomSpawnMaxPerAttempt);
     }
 
     public boolean pigRidable = false;
