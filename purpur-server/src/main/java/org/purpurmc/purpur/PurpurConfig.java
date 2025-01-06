@@ -163,6 +163,7 @@ public class PurpurConfig {
     public static boolean afkBroadcastUseDisplayName = false;
     public static String afkTabListPrefix = "[AFK] ";
     public static String afkTabListSuffix = "";
+    public static String demoCommandOutput = "<green>%s has been shown the demo screen";
     public static String pingCommandOutput = "<green>%s's ping is %sms";
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
@@ -171,6 +172,7 @@ public class PurpurConfig {
         afkBroadcastUseDisplayName = getBoolean("settings.messages.afk-broadcast-use-display-name", afkBroadcastUseDisplayName);
         afkTabListPrefix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-prefix", afkTabListPrefix)));
         afkTabListSuffix = MiniMessage.miniMessage().serialize(MiniMessage.miniMessage().deserialize(getString("settings.messages.afk-tab-list-suffix", afkTabListSuffix)));
+        demoCommandOutput = getString("settings.messages.demo-command-output", demoCommandOutput);
         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
     }
 
