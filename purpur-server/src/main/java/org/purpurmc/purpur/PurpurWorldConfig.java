@@ -160,6 +160,8 @@ public class PurpurWorldConfig {
     public boolean idleTimeoutCountAsSleeping = false;
     public boolean idleTimeoutUpdateTabList = false;
     public boolean idleTimeoutTargetPlayer = true;
+    public String playerDeathExpDropEquation = "expLevel * 7";
+    public int playerDeathExpDropMax = 100;
     private void playerSettings() {
         if (PurpurConfig.version < 19) {
             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
@@ -171,6 +173,8 @@ public class PurpurWorldConfig {
         idleTimeoutCountAsSleeping = getBoolean("gameplay-mechanics.player.idle-timeout.count-as-sleeping", idleTimeoutCountAsSleeping);
         idleTimeoutUpdateTabList = getBoolean("gameplay-mechanics.player.idle-timeout.update-tab-list", idleTimeoutUpdateTabList);
         idleTimeoutTargetPlayer = getBoolean("gameplay-mechanics.player.idle-timeout.mobs-target", idleTimeoutTargetPlayer);
+        playerDeathExpDropEquation = getString("gameplay-mechanics.player.exp-dropped-on-death.equation", playerDeathExpDropEquation);
+        playerDeathExpDropMax = getInt("gameplay-mechanics.player.exp-dropped-on-death.maximum", playerDeathExpDropMax);
     }
 
     public boolean silkTouchEnabled = false;
