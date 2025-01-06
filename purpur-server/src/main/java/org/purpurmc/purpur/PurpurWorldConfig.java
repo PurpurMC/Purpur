@@ -97,6 +97,17 @@ public class PurpurWorldConfig {
         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
     }
 
+    public int elytraDamagePerSecond = 1;
+    public double elytraDamageMultiplyBySpeed = 0;
+    public int elytraDamagePerFireworkBoost = 0;
+    public int elytraDamagePerTridentBoost = 0;
+    private void elytraSettings() {
+        elytraDamagePerSecond = getInt("gameplay-mechanics.elytra.damage-per-second", elytraDamagePerSecond);
+        elytraDamageMultiplyBySpeed = getDouble("gameplay-mechanics.elytra.damage-multiplied-by-speed", elytraDamageMultiplyBySpeed);
+        elytraDamagePerFireworkBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.firework", elytraDamagePerFireworkBoost);
+        elytraDamagePerTridentBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.trident", elytraDamagePerTridentBoost);
+    }
+
     public double minecartMaxSpeed = 0.4D;
     public boolean minecartPlaceAnywhere = false;
     public boolean minecartControllable = false;
