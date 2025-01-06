@@ -1151,6 +1151,9 @@ public class PurpurWorldConfig {
     public String phantomAttackDamage = "6 + size";
     public Map<Integer, Double> phantomMaxHealthCache = new HashMap<>();
     public Map<Integer, Double> phantomAttackDamageCache = new HashMap<>();
+    public double phantomAttackedByCrystalRadius = 0.0D;
+    public float phantomAttackedByCrystalDamage = 1.0F;
+    public double phantomOrbitCrystalRadius = 0.0D;
     private void phantomSettings() {
         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
@@ -1172,6 +1175,9 @@ public class PurpurWorldConfig {
         phantomAttackDamage = getString("mobs.phantom.attributes.attack_damage", phantomAttackDamage);
         phantomMaxHealthCache.clear();
         phantomAttackDamageCache.clear();
+        phantomAttackedByCrystalRadius = getDouble("mobs.phantom.attacked-by-crystal-range", phantomAttackedByCrystalRadius);
+        phantomAttackedByCrystalDamage = (float) getDouble("mobs.phantom.attacked-by-crystal-damage", phantomAttackedByCrystalDamage);
+        phantomOrbitCrystalRadius = getDouble("mobs.phantom.orbit-crystal-radius", phantomOrbitCrystalRadius);
     }
 
     public boolean pigRidable = false;
