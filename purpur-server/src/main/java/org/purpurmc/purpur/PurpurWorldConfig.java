@@ -209,6 +209,11 @@ public class PurpurWorldConfig {
         });
     }
 
+    public boolean dispenserApplyCursedArmor = true;
+    private void dispenserSettings() {
+        dispenserApplyCursedArmor = getBoolean("blocks.dispenser.apply-cursed-to-armor-slots", dispenserApplyCursedArmor);
+    }
+
     public boolean farmlandGetsMoistFromBelow = false;
     private void farmlandSettings() {
         farmlandGetsMoistFromBelow = getBoolean("blocks.farmland.gets-moist-from-below", farmlandGetsMoistFromBelow);
