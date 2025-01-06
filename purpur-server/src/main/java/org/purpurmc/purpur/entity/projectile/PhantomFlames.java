@@ -37,6 +37,11 @@ public class PhantomFlames extends LlamaSpit {
                 phantom.getZ() + (double) (phantom.getBbWidth() + 1.0F) * 0.5D * (double) Mth.cos(phantom.yBodyRot * (float) (Math.PI / 180.0)));
     }
 
+    @Override
+    public boolean canSaveToDisk() {
+        return false;
+    }
+
     public void tick() {
         projectileTick();
 

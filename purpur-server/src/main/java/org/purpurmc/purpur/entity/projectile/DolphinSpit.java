@@ -35,6 +35,11 @@ public class DolphinSpit extends LlamaSpit {
                 dolphin.getZ() + (double) (dolphin.getBbWidth() + 1.0F) * 0.5 * (double) Mth.cos(dolphin.yBodyRot * (float) (Math.PI / 180.0)));
     }
 
+    @Override
+    public boolean canSaveToDisk() {
+        return false;
+    }
+
     public void tick() {
         projectileTick();
 
