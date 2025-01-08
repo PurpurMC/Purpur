@@ -4,6 +4,8 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import org.bukkit.Bukkit;
@@ -226,6 +228,12 @@ public class PurpurConfig {
         enderChestSixRows = getBoolean("settings.blocks.ender_chest.six-rows", enderChestSixRows);
         org.bukkit.event.inventory.InventoryType.ENDER_CHEST.setDefaultSize(enderChestSixRows ? 54 : 27);
         enderChestPermissionRows = getBoolean("settings.blocks.ender_chest.use-permissions-for-rows", enderChestPermissionRows);
+    }
+
+    public static boolean endermanShortHeight = false;
+    private static void entitySettings() {
+        endermanShortHeight = getBoolean("settings.entity.enderman.short-height", endermanShortHeight);
+        if (endermanShortHeight) EntityType.ENDERMAN.dimensions = EntityDimensions.scalable(0.6F, 1.9F);
     }
 
     public static boolean allowWaterPlacementInTheEnd = true;
