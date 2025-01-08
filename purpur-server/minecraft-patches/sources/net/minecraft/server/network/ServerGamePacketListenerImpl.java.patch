@@ -43,6 +43,73 @@
                      Location oldTo = to.clone();
                      PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
                      this.cserver.getPluginManager().callEvent(event);
+@@ -1212,31 +_,45 @@
+             Optional<String> optional = packet.title();
+             optional.ifPresent(list::add);
+             list.addAll(packet.pages());
++            // Purpur start - Allow color codes in books
++            boolean hasEditPerm = getCraftPlayer().hasPermission("purpur.book.color.edit");
++            boolean hasSignPerm = hasEditPerm || getCraftPlayer().hasPermission("purpur.book.color.sign");
++            // Purpur end - Allow color codes in books
+             Consumer<List<FilteredText>> consumer = optional.isPresent()
+-                ? texts -> this.signBook(texts.get(0), texts.subList(1, texts.size()), slot)
+-                : texts -> this.updateBookContents(texts, slot);
++                ? texts -> this.signBook(texts.get(0), texts.subList(1, texts.size()), slot, hasSignPerm) // Purpur - Allow color codes in books
++                : texts -> this.updateBookContents(texts, slot, hasEditPerm); // Purpur - Allow color codes in books
+             this.filterTextPacket(list).thenAcceptAsync(consumer, this.server);
+         }
+     }
+ 
+     private void updateBookContents(List<FilteredText> pages, int index) {
++    // Purpur start - Allow color codes in books
++        updateBookContents(pages, index, false);
++    }
++    private void updateBookContents(List<FilteredText> pages, int index, boolean hasPerm) {
++    // Purpur end - Allow color codes in books
+         // CraftBukkit start
+         ItemStack handItem = this.player.getInventory().getItem(index);
+         ItemStack item = handItem.copy();
+         // CraftBukkit end
+         if (item.has(DataComponents.WRITABLE_BOOK_CONTENT)) {
+-            List<Filterable<String>> list = pages.stream().map(this::filterableFromOutgoing).toList();
++            List<Filterable<String>> list = pages.stream().map(filteredText -> filterableFromOutgoing(filteredText).map(s -> color(s, hasPerm))).toList(); // Purpur - Allow color codes in books
+             item.set(DataComponents.WRITABLE_BOOK_CONTENT, new WritableBookContent(list));
+             this.player.getInventory().setItem(index, CraftEventFactory.handleEditBookEvent(this.player, index, handItem, item)); // CraftBukkit // Paper - Don't ignore result (see other callsite for handleEditBookEvent)
+         }
+     }
+ 
+     private void signBook(FilteredText title, List<FilteredText> pages, int index) {
++        // Purpur start - Allow color codes in books
++        signBook(title, pages, index, false);
++    }
++    private void signBook(FilteredText title, List<FilteredText> pages, int index, boolean hasPerm) {
++        // Purpur end - Allow color codes in books
+         ItemStack item = this.player.getInventory().getItem(index);
+         if (item.has(DataComponents.WRITABLE_BOOK_CONTENT)) {
+             ItemStack itemStack = item.transmuteCopy(Items.WRITTEN_BOOK);
+             itemStack.remove(DataComponents.WRITABLE_BOOK_CONTENT);
+-            List<Filterable<Component>> list = pages.stream().map(filteredText -> this.filterableFromOutgoing(filteredText).<Component>map(Component::literal)).toList();
++            List<Filterable<Component>> list = pages.stream().map((filteredText) -> this.filterableFromOutgoing(filteredText).map(s -> hexColor(s, hasPerm))).toList(); // Purpur - Allow color codes in books
+             itemStack.set(
+                 DataComponents.WRITTEN_BOOK_CONTENT,
+                 new WrittenBookContent(this.filterableFromOutgoing(title), this.player.getName().getString(), 0, list, true)
+@@ -1250,6 +_,16 @@
+         return this.player.isTextFilteringEnabled() ? Filterable.passThrough(filteredText.filteredOrEmpty()) : Filterable.from(filteredText);
+     }
+ 
++    // Purpur start - Allow color codes in books
++    private Component hexColor(String str, boolean hasPerm) {
++        return hasPerm ? PaperAdventure.asVanilla(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().deserialize(str)) : Component.literal(str);
++    }
++
++    private String color(String str, boolean hasPerm) {
++        return hasPerm ? org.bukkit.ChatColor.color(str, false) : str;
++    }
++    // Purpur end - Allow color codes in books
++
+     @Override
+     public void handleEntityTagQuery(ServerboundEntityTagQueryPacket packet) {
+         PacketUtils.ensureRunningOnSameThread(packet, this, this.player.serverLevel());
 @@ -1460,7 +_,7 @@
                                      movedWrongly = true;
                                      if (event.getLogWarning())

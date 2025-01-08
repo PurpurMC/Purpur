@@ -31,6 +31,11 @@ public final class PurpurPermissions {
 
         DefaultPermissions.registerPermission(PREFIX + "debug.f3n", "Allows the user to use F3+N keybind to swap gamemodes", PermissionDefault.FALSE, purpur);
 
+        Permission book = DefaultPermissions.registerPermission(PREFIX + "book", "Allows the user to use color codes on books", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission(PREFIX + "book.color.edit", "Allows the user to use color codes on books when editing", PermissionDefault.FALSE, book);
+        DefaultPermissions.registerPermission(PREFIX + "book.color.sign", "Allows the user to use color codes on books when signing", PermissionDefault.FALSE, book);
+        book.recalculatePermissibles();
+
         Permission ride = DefaultPermissions.registerPermission("allow.ride", "Allows the user to ride all mobs", PermissionDefault.FALSE, purpur);
         for (String mob : mobs) {
             DefaultPermissions.registerPermission("allow.ride." + mob, "Allows the user to ride " + mob, PermissionDefault.FALSE, ride);
