@@ -33,6 +33,8 @@ public final class PurpurPermissions {
 
         DefaultPermissions.registerPermission(PREFIX + "bypassIdleKick", "Allows the user to bypass being kicked while idle", PermissionDefault.FALSE, purpur);
 
+        DefaultPermissions.registerPermission(PREFIX + "inventory_totem", "Allows the user to use totem of undying anywhere in their inventory", PermissionDefault.FALSE, purpur);
+
         Permission book = DefaultPermissions.registerPermission(PREFIX + "book", "Allows the user to use color codes on books", PermissionDefault.FALSE, purpur);
         DefaultPermissions.registerPermission(PREFIX + "book.color.edit", "Allows the user to use color codes on books when editing", PermissionDefault.FALSE, book);
         DefaultPermissions.registerPermission(PREFIX + "book.color.sign", "Allows the user to use color codes on books when signing", PermissionDefault.FALSE, book);
