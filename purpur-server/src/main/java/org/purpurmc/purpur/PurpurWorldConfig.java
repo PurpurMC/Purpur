@@ -1210,6 +1210,9 @@ public class PurpurWorldConfig {
     public double phantomSpawnLocalDifficultyChance = 3.0D;
     public int phantomSpawnMinPerAttempt = 1;
     public int phantomSpawnMaxPerAttempt = -1;
+    public int phantomBurnInLight = 0;
+    public boolean phantomIgnorePlayersWithTorch = false;
+    public boolean phantomBurnInDaylight = true;
     private void phantomSettings() {
         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
@@ -1240,6 +1243,9 @@ public class PurpurWorldConfig {
         phantomSpawnLocalDifficultyChance = getDouble("mobs.phantom.spawn.local-difficulty-chance", phantomSpawnLocalDifficultyChance);
         phantomSpawnMinPerAttempt = getInt("mobs.phantom.spawn.per-attempt.min", phantomSpawnMinPerAttempt);
         phantomSpawnMaxPerAttempt = getInt("mobs.phantom.spawn.per-attempt.max", phantomSpawnMaxPerAttempt);
+        phantomBurnInLight = getInt("mobs.phantom.burn-in-light", phantomBurnInLight);
+        phantomBurnInDaylight = getBoolean("mobs.phantom.burn-in-daylight", phantomBurnInDaylight);
+        phantomIgnorePlayersWithTorch = getBoolean("mobs.phantom.ignore-players-with-torch", phantomIgnorePlayersWithTorch);
     }
 
     public boolean pigRidable = false;
