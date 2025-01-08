@@ -277,6 +277,13 @@ public class PurpurWorldConfig {
         });
     }
 
+    public boolean anvilAllowColors = false;
+    public boolean anvilColorsUseMiniMessage;
+    private void anvilSettings() {
+        anvilAllowColors = getBoolean("blocks.anvil.allow-colors", anvilAllowColors);
+        anvilColorsUseMiniMessage = getBoolean("blocks.anvil.use-mini-message", anvilColorsUseMiniMessage);
+    }
+
     public boolean bedExplode = true;
     public double bedExplosionPower = 5.0D;
     public boolean bedExplosionFire = true;

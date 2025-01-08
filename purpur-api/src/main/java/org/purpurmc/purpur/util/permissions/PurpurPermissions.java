@@ -35,6 +35,13 @@ public final class PurpurPermissions {
 
         DefaultPermissions.registerPermission(PREFIX + "inventory_totem", "Allows the user to use totem of undying anywhere in their inventory", PermissionDefault.FALSE, purpur);
 
+        Permission anvil = DefaultPermissions.registerPermission(PREFIX + "anvil", "Allows the user to use all anvil color and format abilities", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission(PREFIX + "anvil.color", "Allows the user to use color codes in an anvil", PermissionDefault.FALSE, anvil);
+        DefaultPermissions.registerPermission(PREFIX + "anvil.minimessage", "Allows the user to use minimessage tags in an anvil", PermissionDefault.FALSE, anvil);
+        DefaultPermissions.registerPermission(PREFIX + "anvil.remove_italics", "Allows the user to remove italics in an anvil", PermissionDefault.FALSE, anvil);
+        DefaultPermissions.registerPermission(PREFIX + "anvil.format", "Allows the user to use format codes in an anvil", PermissionDefault.FALSE, anvil);
+        anvil.recalculatePermissibles();
+
         Permission book = DefaultPermissions.registerPermission(PREFIX + "book", "Allows the user to use color codes on books", PermissionDefault.FALSE, purpur);
         DefaultPermissions.registerPermission(PREFIX + "book.color.edit", "Allows the user to use color codes on books when editing", PermissionDefault.FALSE, book);
         DefaultPermissions.registerPermission(PREFIX + "book.color.sign", "Allows the user to use color codes on books when signing", PermissionDefault.FALSE, book);
