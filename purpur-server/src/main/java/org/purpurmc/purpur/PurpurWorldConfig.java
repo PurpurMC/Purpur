@@ -299,8 +299,10 @@ public class PurpurWorldConfig {
     }
 
     public boolean dispenserApplyCursedArmor = true;
+    public boolean dispenserPlaceAnvils = false;
     private void dispenserSettings() {
         dispenserApplyCursedArmor = getBoolean("blocks.dispenser.apply-cursed-to-armor-slots", dispenserApplyCursedArmor);
+        dispenserPlaceAnvils = getBoolean("blocks.dispenser.place-anvils", dispenserPlaceAnvils);
     }
 
     public boolean farmlandGetsMoistFromBelow = false;
