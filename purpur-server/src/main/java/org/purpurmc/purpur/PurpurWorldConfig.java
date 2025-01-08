@@ -226,6 +226,7 @@ public class PurpurWorldConfig {
     public boolean idleTimeoutTargetPlayer = true;
     public String playerDeathExpDropEquation = "expLevel * 7";
     public int playerDeathExpDropMax = 100;
+    public boolean teleportIfOutsideBorder = false;
     private void playerSettings() {
         if (PurpurConfig.version < 19) {
             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
@@ -239,6 +240,7 @@ public class PurpurWorldConfig {
         idleTimeoutTargetPlayer = getBoolean("gameplay-mechanics.player.idle-timeout.mobs-target", idleTimeoutTargetPlayer);
         playerDeathExpDropEquation = getString("gameplay-mechanics.player.exp-dropped-on-death.equation", playerDeathExpDropEquation);
         playerDeathExpDropMax = getInt("gameplay-mechanics.player.exp-dropped-on-death.maximum", playerDeathExpDropMax);
+        teleportIfOutsideBorder = getBoolean("gameplay-mechanics.player.teleport-if-outside-border", teleportIfOutsideBorder);
     }
 
     public boolean silkTouchEnabled = false;
