@@ -198,6 +198,7 @@ public class PurpurConfig {
     public static int barrelRows = 3;
     public static boolean enderChestSixRows = false;
     public static boolean enderChestPermissionRows = false;
+    public static boolean cryingObsidianValidForPortalFrame = false;
     private static void blockSettings() {
         if (version < 3) {
             boolean oldValue = getBoolean("settings.barrel.packed-barrels", true);
@@ -228,6 +229,7 @@ public class PurpurConfig {
         enderChestSixRows = getBoolean("settings.blocks.ender_chest.six-rows", enderChestSixRows);
         org.bukkit.event.inventory.InventoryType.ENDER_CHEST.setDefaultSize(enderChestSixRows ? 54 : 27);
         enderChestPermissionRows = getBoolean("settings.blocks.ender_chest.use-permissions-for-rows", enderChestPermissionRows);
+        cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
     }
 
     public static boolean endermanShortHeight = false;
