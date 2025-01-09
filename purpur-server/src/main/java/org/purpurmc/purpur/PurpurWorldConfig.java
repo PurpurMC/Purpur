@@ -1865,6 +1865,8 @@ public class PurpurWorldConfig {
     public double witherMaxY = 320D;
     public double witherMaxHealth = 300.0D;
     public double witherScale = 1.0D;
+    public float witherHealthRegenAmount = 1.0f;
+    public int witherHealthRegenDelay = 20;
     private void witherSettings() {
         witherRidable = getBoolean("mobs.wither.ridable", witherRidable);
         witherRidableInWater = getBoolean("mobs.wither.ridable-in-water", witherRidableInWater);
@@ -1881,6 +1883,8 @@ public class PurpurWorldConfig {
         }
         witherMaxHealth = getDouble("mobs.wither.attributes.max_health", witherMaxHealth);
         witherScale = Mth.clamp(getDouble("mobs.wither.attributes.scale", witherScale), 0.0625D, 16.0D);
+        witherHealthRegenAmount = (float) getDouble("mobs.wither.health-regen-amount", witherHealthRegenAmount);
+        witherHealthRegenDelay = getInt("mobs.wither.health-regen-delay", witherHealthRegenDelay);
     }
 
     public boolean witherSkeletonRidable = false;
