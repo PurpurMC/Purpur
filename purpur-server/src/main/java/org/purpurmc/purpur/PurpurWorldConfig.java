@@ -2,6 +2,7 @@ package org.purpurmc.purpur;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -11,6 +12,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import org.apache.commons.lang.BooleanUtils;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -57,6 +59,12 @@ public class PurpurWorldConfig {
     private boolean getBoolean(String path, boolean def) {
         PurpurConfig.config.addDefault("world-settings.default." + path, def);
         return PurpurConfig.config.getBoolean("world-settings." + worldName + "." + path, PurpurConfig.config.getBoolean("world-settings.default." + path));
+    }
+
+    private boolean getBoolean(String path, Predicate<Boolean> predicate) {
+        String val = getString(path, "default").toLowerCase();
+        Boolean bool = BooleanUtils.toBooleanObject(val, "true", "false", "default");
+        return predicate.test(bool);
     }
 
     private double getDouble(String path, double def) {
@@ -219,6 +227,21 @@ public class PurpurWorldConfig {
             set("gameplay-mechanics.minecart.controllable.block-speed.grass_block", 0.3D);
             set("gameplay-mechanics.minecart.controllable.block-speed.stone", 0.5D);
         }
+    }
+
+    public boolean catSpawning;
+    public boolean patrolSpawning;
+    public boolean phantomSpawning;
+    public boolean villagerTraderSpawning;
+    public boolean villageSiegeSpawning;
+    private void mobSpawnerSettings() {
+        // values of "default" or null will default to true only if the world environment is normal (aka overworld)
+        Predicate<Boolean> predicate = (bool) -> (bool != null && bool) || (bool == null && environment == World.Environment.NORMAL);
+        catSpawning = getBoolean("gameplay-mechanics.mob-spawning.village-cats", predicate);
+        patrolSpawning = getBoolean("gameplay-mechanics.mob-spawning.raid-patrols", predicate);
+        phantomSpawning = getBoolean("gameplay-mechanics.mob-spawning.phantoms", predicate);
+        villagerTraderSpawning = getBoolean("gameplay-mechanics.mob-spawning.wandering-traders", predicate);
+        villageSiegeSpawning = getBoolean("gameplay-mechanics.mob-spawning.village-sieges", predicate);
     }
 
     public boolean idleTimeoutKick = true;
