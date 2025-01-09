@@ -99,6 +99,7 @@ public class PurpurWorldConfig {
     public boolean milkCuresBadOmen = true;
     public double tridentLoyaltyVoidReturnHeight = 0.0D;
     public boolean entitiesCanUsePortals = true;
+    public int raidCooldownSeconds = 0;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
@@ -106,6 +107,7 @@ public class PurpurWorldConfig {
         milkCuresBadOmen = getBoolean("gameplay-mechanics.milk-cures-bad-omen", milkCuresBadOmen);
         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
         entitiesCanUsePortals = getBoolean("gameplay-mechanics.entities-can-use-portals", entitiesCanUsePortals);
+        raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
     }
 
     public int elytraDamagePerSecond = 1;
