@@ -2180,6 +2180,7 @@ public class PurpurWorldConfig {
     public boolean zombifiedPiglinJockeyOnlyBaby = true;
     public double zombifiedPiglinJockeyChance = 0.05D;
     public boolean zombifiedPiglinJockeyTryExistingChickens = true;
+    public boolean zombifiedPiglinCountAsPlayerKillWhenAngry = true;
     private void zombifiedPiglinSettings() {
         zombifiedPiglinRidable = getBoolean("mobs.zombified_piglin.ridable", zombifiedPiglinRidable);
         zombifiedPiglinRidableInWater = getBoolean("mobs.zombified_piglin.ridable-in-water", zombifiedPiglinRidableInWater);
@@ -2195,5 +2196,6 @@ public class PurpurWorldConfig {
         zombifiedPiglinJockeyOnlyBaby = getBoolean("mobs.zombified_piglin.jockey.only-babies", zombifiedPiglinJockeyOnlyBaby);
         zombifiedPiglinJockeyChance = getDouble("mobs.zombified_piglin.jockey.chance", zombifiedPiglinJockeyChance);
         zombifiedPiglinJockeyTryExistingChickens = getBoolean("mobs.zombified_piglin.jockey.try-existing-chickens", zombifiedPiglinJockeyTryExistingChickens);
+        zombifiedPiglinCountAsPlayerKillWhenAngry = getBoolean("mobs.zombified_piglin.count-as-player-kill-when-angry", zombifiedPiglinCountAsPlayerKillWhenAngry);
     }
 }
