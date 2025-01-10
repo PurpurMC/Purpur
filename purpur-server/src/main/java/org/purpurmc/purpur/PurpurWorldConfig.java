@@ -971,6 +971,7 @@ public class PurpurWorldConfig {
     public boolean enderDragonAlwaysDropsFullExp = false;
     public boolean enderDragonBypassMobGriefing = false;
     public boolean enderDragonTakeDamageFromWater = false;
+    public boolean enderDragonCanRideVehicles = false;
     private void enderDragonSettings() {
         enderDragonRidable = getBoolean("mobs.ender_dragon.ridable", enderDragonRidable);
         enderDragonRidableInWater = getBoolean("mobs.ender_dragon.ridable-in-water", enderDragonRidableInWater);
@@ -989,6 +990,7 @@ public class PurpurWorldConfig {
         enderDragonAlwaysDropsFullExp = getBoolean("mobs.ender_dragon.always-drop-full-exp", enderDragonAlwaysDropsFullExp);
         enderDragonBypassMobGriefing = getBoolean("mobs.ender_dragon.bypass-mob-griefing", enderDragonBypassMobGriefing);
         enderDragonTakeDamageFromWater = getBoolean("mobs.ender_dragon.takes-damage-from-water", enderDragonTakeDamageFromWater);
+        enderDragonCanRideVehicles = getBoolean("mobs.ender_dragon.can-ride-vehicles", enderDragonCanRideVehicles);
     }
 
     public boolean endermanRidable = false;
@@ -2275,6 +2277,7 @@ public class PurpurWorldConfig {
     public int witherHealthRegenDelay = 20;
     public boolean witherBypassMobGriefing = false;
     public boolean witherTakeDamageFromWater = false;
+    public boolean witherCanRideVehicles = false;
     private void witherSettings() {
         witherRidable = getBoolean("mobs.wither.ridable", witherRidable);
         witherRidableInWater = getBoolean("mobs.wither.ridable-in-water", witherRidableInWater);
@@ -2295,6 +2298,7 @@ public class PurpurWorldConfig {
         witherHealthRegenDelay = getInt("mobs.wither.health-regen-delay", witherHealthRegenDelay);
         witherBypassMobGriefing = getBoolean("mobs.wither.bypass-mob-griefing", witherBypassMobGriefing);
         witherTakeDamageFromWater = getBoolean("mobs.wither.takes-damage-from-water", witherTakeDamageFromWater);
+        witherCanRideVehicles = getBoolean("mobs.wither.can-ride-vehicles", witherCanRideVehicles);
     }
 
     public boolean witherSkeletonRidable = false;
