@@ -195,6 +195,11 @@ public class PurpurConfig {
         useAlternateKeepAlive = getBoolean("settings.use-alternate-keepalive", useAlternateKeepAlive);
     }
 
+    public static boolean disableGiveCommandDrops = false;
+    private static void disableGiveCommandDrops() {
+        disableGiveCommandDrops = getBoolean("settings.disable-give-dropping", disableGiveCommandDrops);
+    }
+
     public static int barrelRows = 3;
     public static boolean enderChestSixRows = false;
     public static boolean enderChestPermissionRows = false;
