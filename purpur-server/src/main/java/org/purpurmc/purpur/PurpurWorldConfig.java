@@ -183,6 +183,11 @@ public class PurpurWorldConfig {
     public List<Item> itemImmuneToExplosion = new ArrayList<>();
     public List<Item> itemImmuneToFire = new ArrayList<>();
     public List<Item> itemImmuneToLightning = new ArrayList<>();
+    public boolean dontRunWithScissors = false;
+    public ResourceLocation dontRunWithScissorsItemModelReference = ResourceLocation.parse("purpurmc:scissors");
+    public boolean ignoreScissorsInWater = false;
+    public boolean ignoreScissorsInLava = false;
+    public double scissorsRunningDamage = 1D;
     private void itemSettings() {
         itemImmuneToCactus.clear();
         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
@@ -220,6 +225,11 @@ public class PurpurWorldConfig {
             Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
             if (item != Items.AIR) itemImmuneToLightning.add(item);
         });
+        dontRunWithScissors = getBoolean("gameplay-mechanics.item.shears.damage-if-sprinting", dontRunWithScissors);
+        dontRunWithScissorsItemModelReference = ResourceLocation.parse(getString("gameplay-mechanics.item.shears.damage-if-sprinting-item-model", "purpurmc:scissors"));
+        ignoreScissorsInWater = getBoolean("gameplay-mechanics.item.shears.ignore-in-water", ignoreScissorsInWater);
+        ignoreScissorsInLava = getBoolean("gameplay-mechanics.item.shears.ignore-in-lava", ignoreScissorsInLava);
+        scissorsRunningDamage = getDouble("gameplay-mechanics.item.shears.sprinting-damage", scissorsRunningDamage);
     }
 
     public double minecartMaxSpeed = 0.4D;

@@ -171,6 +171,7 @@ public class PurpurConfig {
     public static String demoCommandOutput = "<green>%s has been shown the demo screen";
     public static String pingCommandOutput = "<green>%s's ping is %sms";
     public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
+    public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
         afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
@@ -182,6 +183,12 @@ public class PurpurConfig {
         demoCommandOutput = getString("settings.messages.demo-command-output", demoCommandOutput);
         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
         tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
+        dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
+    }
+
+    public static String deathMsgRunWithScissors = "<player> slipped and fell on their shears";
+    private static void deathMessages() {
+        deathMsgRunWithScissors = getString("settings.messages.death-message.run-with-scissors", deathMsgRunWithScissors);
     }
 
     public static String serverModName = io.papermc.paper.ServerBuildInfo.buildInfo().brandName();
