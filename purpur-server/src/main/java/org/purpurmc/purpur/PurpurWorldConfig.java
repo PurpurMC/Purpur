@@ -417,6 +417,43 @@ public class PurpurWorldConfig {
         dispenserPlaceAnvils = getBoolean("blocks.dispenser.place-anvils", dispenserPlaceAnvils);
     }
 
+    public boolean baselessEndCrystalExplode = true;
+    public double baselessEndCrystalExplosionPower = 6.0D;
+    public boolean baselessEndCrystalExplosionFire = false;
+    public net.minecraft.world.level.Level.ExplosionInteraction baselessEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
+    public boolean basedEndCrystalExplode = true;
+    public double basedEndCrystalExplosionPower = 6.0D;
+    public boolean basedEndCrystalExplosionFire = false;
+    public net.minecraft.world.level.Level.ExplosionInteraction basedEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
+    private void endCrystalSettings() {
+        if (PurpurConfig.version < 31) {
+            if ("DESTROY".equals(getString("blocks.end-crystal.baseless.explosion-effect", baselessEndCrystalExplosionEffect.name()))) {
+                set("blocks.end-crystal.baseless.explosion-effect", "BLOCK");
+            }
+            if ("DESTROY".equals(getString("blocks.end-crystal.base.explosion-effect", basedEndCrystalExplosionEffect.name()))) {
+                set("blocks.end-crystal.base.explosion-effect", "BLOCK");
+            }
+        }
+        baselessEndCrystalExplode = getBoolean("blocks.end-crystal.baseless.explode", baselessEndCrystalExplode);
+        baselessEndCrystalExplosionPower = getDouble("blocks.end-crystal.baseless.explosion-power", baselessEndCrystalExplosionPower);
+        baselessEndCrystalExplosionFire = getBoolean("blocks.end-crystal.baseless.explosion-fire", baselessEndCrystalExplosionFire);
+        try {
+            baselessEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.valueOf(getString("blocks.end-crystal.baseless.explosion-effect", baselessEndCrystalExplosionEffect.name()));
+        } catch (IllegalArgumentException e) {
+            log(Level.SEVERE, "Unknown value for `blocks.end-crystal.baseless.explosion-effect`! Using default of `BLOCK`");
+            baselessEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
+        }
+        basedEndCrystalExplode = getBoolean("blocks.end-crystal.base.explode", basedEndCrystalExplode);
+        basedEndCrystalExplosionPower = getDouble("blocks.end-crystal.base.explosion-power", basedEndCrystalExplosionPower);
+        basedEndCrystalExplosionFire = getBoolean("blocks.end-crystal.base.explosion-fire", basedEndCrystalExplosionFire);
+        try {
+            basedEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.valueOf(getString("blocks.end-crystal.base.explosion-effect", basedEndCrystalExplosionEffect.name()));
+        } catch (IllegalArgumentException e) {
+            log(Level.SEVERE, "Unknown value for `blocks.end-crystal.base.explosion-effect`! Using default of `BLOCK`");
+            basedEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
+        }
+    }
+
     public boolean farmlandBypassMobGriefing = false;
     public boolean farmlandGetsMoistFromBelow = false;
     public boolean farmlandAlpha = false;
