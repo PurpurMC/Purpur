@@ -341,6 +341,7 @@ public class PurpurWorldConfig {
     public boolean totemOfUndyingWorksInInventory = false;
     public boolean playerFixStuckPortal = false;
     public boolean creativeOnePunch = false;
+    public boolean playerSleepNearMonsters = false;
     private void playerSettings() {
         if (PurpurConfig.version < 19) {
             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
@@ -358,6 +359,7 @@ public class PurpurWorldConfig {
         totemOfUndyingWorksInInventory = getBoolean("gameplay-mechanics.player.totem-of-undying-works-in-inventory", totemOfUndyingWorksInInventory);
         playerFixStuckPortal = getBoolean("gameplay-mechanics.player.fix-stuck-in-portal", playerFixStuckPortal);
         creativeOnePunch = getBoolean("gameplay-mechanics.player.one-punch-in-creative", creativeOnePunch);
+        playerSleepNearMonsters = getBoolean("gameplay-mechanics.player.sleep-ignore-nearby-mobs", playerSleepNearMonsters);
     }
 
     public boolean silkTouchEnabled = false;
