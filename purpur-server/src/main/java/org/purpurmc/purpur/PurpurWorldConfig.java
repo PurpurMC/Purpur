@@ -853,6 +853,7 @@ public class PurpurWorldConfig {
     public double endermanMaxHealth = 40.0D;
     public double endermanScale = 1.0D;
     public boolean endermanAllowGriefing = true;
+    public boolean endermanDespawnEvenWithBlock = false;
     private void endermanSettings() {
         endermanRidable = getBoolean("mobs.enderman.ridable", endermanRidable);
         endermanRidableInWater = getBoolean("mobs.enderman.ridable-in-water", endermanRidableInWater);
@@ -865,6 +866,7 @@ public class PurpurWorldConfig {
         endermanMaxHealth = getDouble("mobs.enderman.attributes.max_health", endermanMaxHealth);
         endermanScale = Mth.clamp(getDouble("mobs.enderman.attributes.scale", endermanScale), 0.0625D, 16.0D);
         endermanAllowGriefing = getBoolean("mobs.enderman.allow-griefing", endermanAllowGriefing);
+        endermanDespawnEvenWithBlock = getBoolean("mobs.enderman.can-despawn-with-held-block", endermanDespawnEvenWithBlock);
     }
 
     public boolean endermiteRidable = false;
