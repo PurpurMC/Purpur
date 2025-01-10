@@ -1353,6 +1353,7 @@ public class PurpurWorldConfig {
     public int phantomBurnInLight = 0;
     public boolean phantomIgnorePlayersWithTorch = false;
     public boolean phantomBurnInDaylight = true;
+    public boolean phantomFlamesOnSwoop = false;
     private void phantomSettings() {
         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
@@ -1386,6 +1387,7 @@ public class PurpurWorldConfig {
         phantomBurnInLight = getInt("mobs.phantom.burn-in-light", phantomBurnInLight);
         phantomBurnInDaylight = getBoolean("mobs.phantom.burn-in-daylight", phantomBurnInDaylight);
         phantomIgnorePlayersWithTorch = getBoolean("mobs.phantom.ignore-players-with-torch", phantomIgnorePlayersWithTorch);
+        phantomFlamesOnSwoop = getBoolean("mobs.phantom.flames-on-swoop", phantomFlamesOnSwoop);
     }
 
     public boolean pigRidable = false;
