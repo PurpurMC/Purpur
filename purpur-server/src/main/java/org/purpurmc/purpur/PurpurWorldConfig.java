@@ -143,8 +143,10 @@ public class PurpurWorldConfig {
     }
 
     public int entityLifeSpan = 0;
+    public float entityLeftHandedChance = 0.05f;
     private void entitySettings() {
         entityLifeSpan = getInt("gameplay-mechanics.entity-lifespan", entityLifeSpan);
+        entityLeftHandedChance = (float) getDouble("gameplay-mechanics.entity-left-handed-chance", entityLeftHandedChance);
     }
 
     public boolean infinityWorksWithoutArrows = false;
