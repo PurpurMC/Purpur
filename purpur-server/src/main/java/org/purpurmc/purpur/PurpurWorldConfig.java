@@ -1806,6 +1806,7 @@ public class PurpurWorldConfig {
     public double striderMaxHealth = 20.0D;
     public double striderScale = 1.0D;
     public int striderBreedingTicks = 6000;
+    public boolean striderGiveSaddleBack = false;
     private void striderSettings() {
         striderRidable = getBoolean("mobs.strider.ridable", striderRidable);
         striderRidableInWater = getBoolean("mobs.strider.ridable-in-water", striderRidableInWater);
@@ -1818,6 +1819,7 @@ public class PurpurWorldConfig {
         striderMaxHealth = getDouble("mobs.strider.attributes.max_health", striderMaxHealth);
         striderScale = Mth.clamp(getDouble("mobs.strider.attributes.scale", striderScale), 0.0625D, 16.0D);
         striderBreedingTicks = getInt("mobs.strider.breeding-delay-ticks", striderBreedingTicks);
+        striderGiveSaddleBack = getBoolean("mobs.strider.give-saddle-back", striderGiveSaddleBack);
     }
 
     public boolean tadpoleRidable = false;
