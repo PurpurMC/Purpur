@@ -89,8 +89,10 @@ public class PurpurWorldConfig {
     }
 
     public float armorstandStepHeight = 0.0F;
+    public boolean armorstandSetNameVisible = false;
     private void armorstandSettings() {
         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
+        armorstandSetNameVisible = getBoolean("gameplay-mechanics.armorstand.set-name-visible-when-placing-with-custom-name", armorstandSetNameVisible);
     }
 
     public boolean arrowMovementResetsDespawnCounter = true;
@@ -106,6 +108,7 @@ public class PurpurWorldConfig {
     public boolean entitiesCanUsePortals = true;
     public int raidCooldownSeconds = 0;
     public int animalBreedingCooldownSeconds = 0;
+    public boolean persistentDroppableEntityDisplayNames = true;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
@@ -115,6 +118,8 @@ public class PurpurWorldConfig {
         entitiesCanUsePortals = getBoolean("gameplay-mechanics.entities-can-use-portals", entitiesCanUsePortals);
         raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
         animalBreedingCooldownSeconds = getInt("gameplay-mechanics.animal-breeding-cooldown-seconds", animalBreedingCooldownSeconds);
+        persistentDroppableEntityDisplayNames = getBoolean("gameplay-mechanics.persistent-droppable-entity-display-names", persistentDroppableEntityDisplayNames);
+
     }
 
     public int daytimeTicks = 12000;

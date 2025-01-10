@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jason Penilla <11360596+jpenilla@users.noreply.github.com>
+Date: Tue, 17 Nov 2020 03:23:48 -0800
+Subject: [PATCH] Apply display names from item forms of entities to entities
+ and vice versa
+
+
+diff --git a/net/minecraft/world/entity/decoration/ArmorStand.java b/net/minecraft/world/entity/decoration/ArmorStand.java
+index 9f5b23fe003de62458a58b0f6af13e23606e3e85..9327841ad53bb6057394e0d009491a9e8e5c0344 100644
+--- a/net/minecraft/world/entity/decoration/ArmorStand.java
++++ b/net/minecraft/world/entity/decoration/ArmorStand.java
+@@ -561,6 +561,7 @@ public class ArmorStand extends LivingEntity {
+ 
+     private org.bukkit.event.entity.EntityDeathEvent brokenByPlayer(ServerLevel level, DamageSource damageSource) { // Paper
+         ItemStack itemStack = new ItemStack(Items.ARMOR_STAND);
++        if (level.purpurConfig.persistentDroppableEntityDisplayNames) // Purpur - Apply display names from item forms of entities to entities and vice versa
+         itemStack.set(DataComponents.CUSTOM_NAME, this.getCustomName());
+         this.drops.add(new DefaultDrop(itemStack, stack -> Block.popResource(this.level(), this.blockPosition(), stack))); // CraftBukkit - add to drops // Paper - Restore vanilla drops behavior
+         return this.brokenByAnything(level, damageSource); // Paper
+diff --git a/net/minecraft/world/entity/decoration/ItemFrame.java b/net/minecraft/world/entity/decoration/ItemFrame.java
+index 65e1d7c5ac94b1cfb921fa009be59d3e5872f0b5..3ee1d8798db666ee8d83556047e40ff217cda732 100644
+--- a/net/minecraft/world/entity/decoration/ItemFrame.java
++++ b/net/minecraft/world/entity/decoration/ItemFrame.java
+@@ -223,7 +223,11 @@ public class ItemFrame extends HangingEntity {
+                 this.removeFramedMap(item);
+             } else {
+                 if (dropItem) {
+-                    this.spawnAtLocation(level, this.getFrameItemStack());
++                    // Purpur start - Apply display names from item forms of entities to entities and vice versa
++                    final ItemStack itemFrame = this.getFrameItemStack();
++                    if (!level.purpurConfig.persistentDroppableEntityDisplayNames) itemFrame.set(DataComponents.CUSTOM_NAME, null);
++                    this.spawnAtLocation(level, itemFrame);
++                    // Purpur end - Apply display names from item forms of entities to entities and vice versa
+                 }
+ 
+                 if (!item.isEmpty()) {
+diff --git a/net/minecraft/world/entity/decoration/Painting.java b/net/minecraft/world/entity/decoration/Painting.java
+index 5b905a4d49c44b04d5795c2bf297f3c69d183d7c..b6429a2bbb6fc1e08610ab20e50f8f0414f0ad26 100644
+--- a/net/minecraft/world/entity/decoration/Painting.java
++++ b/net/minecraft/world/entity/decoration/Painting.java
+@@ -162,7 +162,11 @@ public class Painting extends HangingEntity implements VariantHolder<Holder<Pain
+         if (level.getGameRules().getBoolean(GameRules.RULE_DOENTITYDROPS)) {
+             this.playSound(SoundEvents.PAINTING_BREAK, 1.0F, 1.0F);
+             if (!(entity instanceof Player player && player.hasInfiniteMaterials())) {
+-                this.spawnAtLocation(level, Items.PAINTING);
++                // Purpur start - Apply display names from item forms of entities to entities and vice versa
++                final ItemStack painting = new ItemStack(Items.PAINTING);
++                if (!this.level().purpurConfig.persistentDroppableEntityDisplayNames) painting.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, null);
++                this.spawnAtLocation(level, painting);
++                // Purpur end - Apply display names from item forms of entities to entities and vice versa
+             }
+         }
+     }
+diff --git a/net/minecraft/world/entity/vehicle/AbstractBoat.java b/net/minecraft/world/entity/vehicle/AbstractBoat.java
+index 4e724a12f13032075aeff7cf71b9ceabd5a7bd88..b1b312e45ed4514eaa6fb3941af64b641220c5bd 100644
+--- a/net/minecraft/world/entity/vehicle/AbstractBoat.java
++++ b/net/minecraft/world/entity/vehicle/AbstractBoat.java
+@@ -879,7 +879,13 @@ public abstract class AbstractBoat extends VehicleEntity implements Leashable {
+ 
+     @Override
+     public final ItemStack getPickResult() {
+-        return new ItemStack(this.dropItem.get());
++        // Purpur start - Apply display names from item forms of entities to entities and vice versa
++        final ItemStack boat = new ItemStack(this.dropItem.get());
++        if (!this.level().purpurConfig.persistentDroppableEntityDisplayNames) {
++            boat.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, null);
++        }
++        return boat;
++        // Purpur end - Apply display names from item forms of entities to entities and vice versa
+     }
+ 
+     public static enum Status {
+diff --git a/net/minecraft/world/item/ArmorStandItem.java b/net/minecraft/world/item/ArmorStandItem.java
+index d82e6651999a2650ec8884c4c3d8de4133cb42a4..a26b9fe964c79da57aaa0f755a81934f51a79913 100644
+--- a/net/minecraft/world/item/ArmorStandItem.java
++++ b/net/minecraft/world/item/ArmorStandItem.java
+@@ -51,6 +51,10 @@ public class ArmorStandItem extends Item {
+                         return InteractionResult.FAIL;
+                     }
+                     // CraftBukkit end
++                    // Purpur start - Apply display names from item forms of entities to entities and vice versa
++                    if (!serverLevel.purpurConfig.persistentDroppableEntityDisplayNames) armorStand.setCustomName(null);
++                    if (serverLevel.purpurConfig.armorstandSetNameVisible && armorStand.getCustomName() != null) armorStand.setCustomNameVisible(true);
++                    // Purpur end - Apply display names from item forms of entities to entities and vice versa
+                     serverLevel.addFreshEntityWithPassengers(armorStand);
+                     level.playSound(
+                         null, armorStand.getX(), armorStand.getY(), armorStand.getZ(), SoundEvents.ARMOR_STAND_PLACE, SoundSource.BLOCKS, 0.75F, 0.8F
+diff --git a/net/minecraft/world/item/BoatItem.java b/net/minecraft/world/item/BoatItem.java
+index 13ce174e4f7e406f57a68ea0d3ef0ee3367f3f3b..ca86122e38688b29340cd8413ccf1746315e292a 100644
+--- a/net/minecraft/world/item/BoatItem.java
++++ b/net/minecraft/world/item/BoatItem.java
+@@ -63,6 +63,7 @@ public class BoatItem extends Item {
+                     return InteractionResult.FAIL;
+                 } else {
+                     boat.setYRot(player.getYRot());
++                    if (!level.purpurConfig.persistentDroppableEntityDisplayNames) boat.setCustomName(null); // Purpur - Apply display names from item forms of entities to entities and vice versa
+                     if (!level.noCollision(boat, boat.getBoundingBox())) {
+                         return InteractionResult.FAIL;
+                     } else {
+diff --git a/net/minecraft/world/item/HangingEntityItem.java b/net/minecraft/world/item/HangingEntityItem.java
+index 85980c7e5ad63398e0f0948fb0250f580251fe63..cd9e0398876567afc337db8f6ff0ebb0ee162383 100644
+--- a/net/minecraft/world/item/HangingEntityItem.java
++++ b/net/minecraft/world/item/HangingEntityItem.java
+@@ -62,6 +62,7 @@ public class HangingEntityItem extends Item {
+             CustomData customData = itemInHand.getOrDefault(DataComponents.ENTITY_DATA, CustomData.EMPTY);
+             if (!customData.isEmpty()) {
+                 EntityType.updateCustomEntityTag(level, player, hangingEntity, customData);
++                if (!level.purpurConfig.persistentDroppableEntityDisplayNames) hangingEntity.setCustomName(null); // Purpur - Apply display names from item forms of entities to entities and vice versa
+             }
+ 
+             if (hangingEntity.survives()) {
