@@ -8,6 +8,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.monster.Shulker;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -610,6 +611,7 @@ public class PurpurWorldConfig {
     public int catSpawnSwampHutScanRange = 16;
     public int catSpawnVillageScanRange = 48;
     public int catBreedingTicks = 6000;
+    public DyeColor catDefaultCollarColor = DyeColor.RED;
     private void catSettings() {
         catRidable = getBoolean("mobs.cat.ridable", catRidable);
         catRidableInWater = getBoolean("mobs.cat.ridable-in-water", catRidableInWater);
@@ -625,6 +627,11 @@ public class PurpurWorldConfig {
         catSpawnSwampHutScanRange = getInt("mobs.cat.scan-range-for-other-cats.swamp-hut", catSpawnSwampHutScanRange);
         catSpawnVillageScanRange = getInt("mobs.cat.scan-range-for-other-cats.village", catSpawnVillageScanRange);
         catBreedingTicks = getInt("mobs.cat.breeding-delay-ticks", catBreedingTicks);
+        try {
+            catDefaultCollarColor = DyeColor.valueOf(getString("mobs.cat.default-collar-color", catDefaultCollarColor.name()));
+        } catch (IllegalArgumentException ignore) {
+            catDefaultCollarColor = DyeColor.RED;
+        }
     }
 
     public boolean caveSpiderRidable = false;
@@ -2055,6 +2062,7 @@ public class PurpurWorldConfig {
     public boolean wolfControllable = true;
     public double wolfMaxHealth = 8.0D;
     public double wolfScale = 1.0D;
+    public DyeColor wolfDefaultCollarColor = DyeColor.RED;
     public boolean wolfMilkCuresRabies = true;
     public double wolfNaturalRabid = 0.0D;
     public int wolfBreedingTicks = 6000;
@@ -2069,6 +2077,11 @@ public class PurpurWorldConfig {
         }
         wolfMaxHealth = getDouble("mobs.wolf.attributes.max_health", wolfMaxHealth);
         wolfScale = Mth.clamp(getDouble("mobs.wolf.attributes.scale", wolfScale), 0.0625D, 16.0D);
+        try {
+            wolfDefaultCollarColor = DyeColor.valueOf(getString("mobs.wolf.default-collar-color", wolfDefaultCollarColor.name()));
+        } catch (IllegalArgumentException ignore) {
+            wolfDefaultCollarColor = DyeColor.RED;
+        }
         wolfMilkCuresRabies = getBoolean("mobs.wolf.milk-cures-rabid-wolves", wolfMilkCuresRabies);
         wolfNaturalRabid = getDouble("mobs.wolf.spawn-rabid-chance", wolfNaturalRabid);
         wolfBreedingTicks = getInt("mobs.wolf.breeding-delay-ticks", wolfBreedingTicks);
