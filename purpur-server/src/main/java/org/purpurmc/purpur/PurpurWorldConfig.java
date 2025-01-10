@@ -126,6 +126,11 @@ public class PurpurWorldConfig {
         entityLifeSpan = getInt("gameplay-mechanics.entity-lifespan", entityLifeSpan);
     }
 
+    public boolean infinityWorksWithoutArrows = false;
+    private void infinityArrowsSettings() {
+        infinityWorksWithoutArrows = getBoolean("gameplay-mechanics.infinity-bow.works-without-arrows", infinityWorksWithoutArrows);
+    }
+
     public List<Item> itemImmuneToCactus = new ArrayList<>();
     public List<Item> itemImmuneToExplosion = new ArrayList<>();
     public List<Item> itemImmuneToFire = new ArrayList<>();
