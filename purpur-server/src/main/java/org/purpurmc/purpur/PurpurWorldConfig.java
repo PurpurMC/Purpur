@@ -368,6 +368,11 @@ public class PurpurWorldConfig {
         }
     }
 
+    public boolean chestOpenWithBlockOnTop = false;
+    private void chestSettings() {
+        chestOpenWithBlockOnTop = getBoolean("blocks.chest.open-with-solid-block-on-top", chestOpenWithBlockOnTop);
+    }
+
     public boolean dispenserApplyCursedArmor = true;
     public boolean dispenserPlaceAnvils = false;
     private void dispenserSettings() {
