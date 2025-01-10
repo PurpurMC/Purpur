@@ -937,11 +937,13 @@ public class PurpurWorldConfig {
     public boolean glowSquidControllable = true;
     public double glowSquidMaxHealth = 10.0D;
     public double glowSquidScale = 1.0D;
+    public boolean glowSquidsCanFly = false;
     private void glowSquidSettings() {
         glowSquidRidable = getBoolean("mobs.glow_squid.ridable", glowSquidRidable);
         glowSquidControllable = getBoolean("mobs.glow_squid.controllable", glowSquidControllable);
         glowSquidMaxHealth = getDouble("mobs.glow_squid.attributes.max_health", glowSquidMaxHealth);
         glowSquidScale = Mth.clamp(getDouble("mobs.glow_squid.attributes.scale", glowSquidScale), 0.0625D, 16.0D);
+        glowSquidsCanFly = getBoolean("mobs.glow_squid.can-fly", glowSquidsCanFly);
     }
 
     public boolean goatRidable = false;
@@ -1628,6 +1630,7 @@ public class PurpurWorldConfig {
     public double squidScale = 1.0D;
     public boolean squidImmuneToEAR = true;
     public double squidOffsetWaterCheck = 0.0D;
+    public boolean squidsCanFly = false;
     private void squidSettings() {
         squidRidable = getBoolean("mobs.squid.ridable", squidRidable);
         squidControllable = getBoolean("mobs.squid.controllable", squidControllable);
@@ -1640,6 +1643,7 @@ public class PurpurWorldConfig {
         squidScale = Mth.clamp(getDouble("mobs.squid.attributes.scale", squidScale), 0.0625D, 16.0D);
         squidImmuneToEAR = getBoolean("mobs.squid.immune-to-EAR", squidImmuneToEAR);
         squidOffsetWaterCheck = getDouble("mobs.squid.water-offset-check", squidOffsetWaterCheck);
+        squidsCanFly = getBoolean("mobs.squid.can-fly", squidsCanFly);
     }
 
     public boolean spiderRidable = false;
