@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
+@@ -207,6 +_,8 @@
+     private final StructureManager structureManager;
+     private final StructureCheck structureCheck;
+     private final boolean tickTime;
++    private double preciseTime; // Purpur - Configurable daylight cycle
++    private boolean forceTime; // Purpur - Configurable daylight cycle
+     private final RandomSequences randomSequences;
+ 
+     // CraftBukkit start
 @@ -595,7 +_,24 @@
          // CraftBukkit end
          this.tickTime = tickTime;
@@ -26,6 +35,51 @@
          this.serverLevelData = serverLevelData;
          ChunkGenerator chunkGenerator = levelStem.generator();
          // CraftBukkit start
+@@ -681,6 +_,7 @@
+         this.chunkDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.ChunkDataController((ServerLevel)(Object)this, this.chunkTaskScheduler);
+         // Paper end - rewrite chunk system
+         this.getCraftServer().addWorld(this.getWorld()); // CraftBukkit
++        this.preciseTime = this.serverLevelData.getDayTime(); // Purpur - Configurable daylight cycle
+     }
+ 
+     // Paper start
+@@ -846,6 +_,13 @@
+             this.serverLevelData.getScheduledEvents().tick(this.server, l);
+             Profiler.get().pop();
+             if (this.serverLevelData.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
++                // Purpur start - Configurable daylight cycle
++                int incrementTicks = isDay() ? this.purpurConfig.daytimeTicks : this.purpurConfig.nighttimeTicks;
++                if (incrementTicks != 12000) {
++                    this.preciseTime += 12000 / (double) incrementTicks;
++                    this.setDayTime(this.preciseTime);
++                } else
++                // Purpur end - Configurable daylight cycle
+                 this.setDayTime(this.levelData.getDayTime() + 1L);
+             }
+         }
+@@ -853,7 +_,21 @@
+ 
+     public void setDayTime(long time) {
+         this.serverLevelData.setDayTime(time);
+-    }
++        // Purpur start - Configurable daylight cycle
++        this.preciseTime = time;
++        this.forceTime = false;
++    }
++    public void setDayTime(double i) {
++        this.serverLevelData.setDayTime((long) i);
++        this.forceTime = true;
++        // Purpur end - Configurable daylight cycle
++    }
++
++    // Purpur start - Configurable daylight cycle
++    public boolean isForceTime() {
++        return this.forceTime;
++    }
++    // Purpur end - Configurable daylight cycle
+ 
+     public void tickCustomSpawners(boolean spawnEnemies, boolean spawnFriendlies) {
+         for (CustomSpawner customSpawner : this.customSpawners) {
 @@ -934,9 +_,18 @@
                      && this.random.nextDouble() < currentDifficultyAt.getEffectiveDifficulty() * this.paperConfig().entities.spawning.skeletonHorseThunderSpawnChance.or(0.01) // Paper - Configurable spawn chances for skeleton horses
                      && !this.getBlockState(blockPos.below()).is(Blocks.LIGHTNING_ROD);

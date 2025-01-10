@@ -110,6 +110,13 @@ public class PurpurWorldConfig {
         raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
     }
 
+    public int daytimeTicks = 12000;
+    public int nighttimeTicks = 12000;
+    private void daytimeCycleSettings() {
+        daytimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.daytime", daytimeTicks);
+        nighttimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.nighttime", nighttimeTicks);
+    }
+
     public int elytraDamagePerSecond = 1;
     public double elytraDamageMultiplyBySpeed = 0;
     public int elytraDamagePerFireworkBoost = 0;
