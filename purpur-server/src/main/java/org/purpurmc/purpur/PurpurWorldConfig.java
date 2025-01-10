@@ -1024,6 +1024,8 @@ public class PurpurWorldConfig {
     public boolean endermanDespawnEvenWithBlock = false;
     public boolean endermanBypassMobGriefing = false;
     public boolean endermanTakeDamageFromWater = true;
+    public boolean endermanAggroEndermites = true;
+    public boolean endermanAggroEndermitesOnlyIfPlayerSpawned = false;
     private void endermanSettings() {
         endermanRidable = getBoolean("mobs.enderman.ridable", endermanRidable);
         endermanRidableInWater = getBoolean("mobs.enderman.ridable-in-water", endermanRidableInWater);
@@ -1033,12 +1035,18 @@ public class PurpurWorldConfig {
             set("mobs.enderman.attributes.max-health", null);
             set("mobs.enderman.attributes.max_health", oldValue);
         }
+        if (PurpurConfig.version < 15) {
+            // remove old option
+            set("mobs.enderman.aggressive-towards-spawned-endermites", null);
+        }
         endermanMaxHealth = getDouble("mobs.enderman.attributes.max_health", endermanMaxHealth);
         endermanScale = Mth.clamp(getDouble("mobs.enderman.attributes.scale", endermanScale), 0.0625D, 16.0D);
         endermanAllowGriefing = getBoolean("mobs.enderman.allow-griefing", endermanAllowGriefing);
         endermanDespawnEvenWithBlock = getBoolean("mobs.enderman.can-despawn-with-held-block", endermanDespawnEvenWithBlock);
         endermanBypassMobGriefing = getBoolean("mobs.enderman.bypass-mob-griefing", endermanBypassMobGriefing);
         endermanTakeDamageFromWater = getBoolean("mobs.enderman.takes-damage-from-water", endermanTakeDamageFromWater);
+        endermanAggroEndermites = getBoolean("mobs.enderman.aggressive-towards-endermites", endermanAggroEndermites);
+        endermanAggroEndermitesOnlyIfPlayerSpawned = getBoolean("mobs.enderman.aggressive-towards-endermites-only-spawned-by-player-thrown-ender-pearls", endermanAggroEndermitesOnlyIfPlayerSpawned);
     }
 
     public boolean endermiteRidable = false;
