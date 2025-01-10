@@ -188,6 +188,10 @@ public class PurpurWorldConfig {
     public boolean ignoreScissorsInWater = false;
     public boolean ignoreScissorsInLava = false;
     public double scissorsRunningDamage = 1D;
+    public float enderPearlDamage = 5.0F;
+    public int enderPearlCooldown = 20;
+    public int enderPearlCooldownCreative = 20;
+    public float enderPearlEndermiteChance = 0.05F;
     private void itemSettings() {
         itemImmuneToCactus.clear();
         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
@@ -230,6 +234,10 @@ public class PurpurWorldConfig {
         ignoreScissorsInWater = getBoolean("gameplay-mechanics.item.shears.ignore-in-water", ignoreScissorsInWater);
         ignoreScissorsInLava = getBoolean("gameplay-mechanics.item.shears.ignore-in-lava", ignoreScissorsInLava);
         scissorsRunningDamage = getDouble("gameplay-mechanics.item.shears.sprinting-damage", scissorsRunningDamage);
+        enderPearlDamage = (float) getDouble("gameplay-mechanics.item.ender-pearl.damage", enderPearlDamage);
+        enderPearlCooldown = getInt("gameplay-mechanics.item.ender-pearl.cooldown", enderPearlCooldown);
+        enderPearlCooldownCreative = getInt("gameplay-mechanics.item.ender-pearl.creative-cooldown", enderPearlCooldownCreative);
+        enderPearlEndermiteChance = (float) getDouble("gameplay-mechanics.item.ender-pearl.endermite-spawn-chance", enderPearlEndermiteChance);
     }
 
     public double minecartMaxSpeed = 0.4D;
