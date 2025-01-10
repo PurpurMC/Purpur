@@ -356,6 +356,17 @@ public class PurpurWorldConfig {
         farmlandGetsMoistFromBelow = getBoolean("blocks.farmland.gets-moist-from-below", farmlandGetsMoistFromBelow);
     }
 
+    public boolean furnaceUseLavaFromUnderneath = false;
+    private void furnaceSettings() {
+        if (PurpurConfig.version < 17) {
+            furnaceUseLavaFromUnderneath = getBoolean("blocks.furnace.infinite-fuel", furnaceUseLavaFromUnderneath);
+            boolean oldValue = getBoolean("blocks.furnace.infinite-fuel", furnaceUseLavaFromUnderneath);
+            set("blocks.furnace.infinite-fuel", null);
+            set("blocks.furnace.use-lava-from-underneath", oldValue);
+        }
+        furnaceUseLavaFromUnderneath = getBoolean("blocks.furnace.use-lava-from-underneath", furnaceUseLavaFromUnderneath);
+    }
+
     public int lavaInfiniteRequiredSources = 2;
     public int lavaSpeedNether = 10;
     public int lavaSpeedNotNether = 30;
