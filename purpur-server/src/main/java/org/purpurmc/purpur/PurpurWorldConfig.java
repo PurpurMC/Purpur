@@ -357,8 +357,10 @@ public class PurpurWorldConfig {
     }
 
     public boolean farmlandGetsMoistFromBelow = false;
+    public boolean farmlandAlpha = false;
     private void farmlandSettings() {
         farmlandGetsMoistFromBelow = getBoolean("blocks.farmland.gets-moist-from-below", farmlandGetsMoistFromBelow);
+        farmlandAlpha = getBoolean("blocks.farmland.use-alpha-farmland", farmlandAlpha);
     }
 
     public boolean furnaceUseLavaFromUnderneath = false;
