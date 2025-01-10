@@ -277,6 +277,19 @@ public class PurpurWorldConfig {
         villageSiegeSpawning = getBoolean("gameplay-mechanics.mob-spawning.village-sieges", predicate);
     }
 
+    public int playerNetheriteFireResistanceDuration = 0;
+    public int playerNetheriteFireResistanceAmplifier = 0;
+    public boolean playerNetheriteFireResistanceAmbient = false;
+    public boolean playerNetheriteFireResistanceShowParticles = false;
+    public boolean playerNetheriteFireResistanceShowIcon = true;
+    private void playerNetheriteFireResistance() {
+        playerNetheriteFireResistanceDuration = getInt("gameplay-mechanics.player.netherite-fire-resistance.duration", playerNetheriteFireResistanceDuration);
+        playerNetheriteFireResistanceAmplifier = getInt("gameplay-mechanics.player.netherite-fire-resistance.amplifier", playerNetheriteFireResistanceAmplifier);
+        playerNetheriteFireResistanceAmbient = getBoolean("gameplay-mechanics.player.netherite-fire-resistance.ambient", playerNetheriteFireResistanceAmbient);
+        playerNetheriteFireResistanceShowParticles = getBoolean("gameplay-mechanics.player.netherite-fire-resistance.show-particles", playerNetheriteFireResistanceShowParticles);
+        playerNetheriteFireResistanceShowIcon = getBoolean("gameplay-mechanics.player.netherite-fire-resistance.show-icon", playerNetheriteFireResistanceShowIcon);
+    }
+
     public boolean idleTimeoutKick = true;
     public boolean idleTimeoutTickNearbyEntities = true;
     public boolean idleTimeoutCountAsSleeping = false;
