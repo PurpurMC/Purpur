@@ -2,6 +2,7 @@ package org.purpurmc.purpur;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
+import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.EntityDimensions;
@@ -24,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
+import org.purpurmc.purpur.task.TPSBarTask;
 
 @SuppressWarnings("unused")
 public class PurpurConfig {
@@ -168,6 +170,7 @@ public class PurpurConfig {
     public static String creditsCommandOutput = "<green>%s has been shown the end credits";
     public static String demoCommandOutput = "<green>%s has been shown the demo screen";
     public static String pingCommandOutput = "<green>%s's ping is %sms";
+    public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
         afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
@@ -178,6 +181,7 @@ public class PurpurConfig {
         creditsCommandOutput = getString("settings.messages.credits-command-output", creditsCommandOutput);
         demoCommandOutput = getString("settings.messages.demo-command-output", demoCommandOutput);
         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
+        tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
     }
 
     public static String serverModName = io.papermc.paper.ServerBuildInfo.buildInfo().brandName();
@@ -198,6 +202,29 @@ public class PurpurConfig {
     public static boolean disableGiveCommandDrops = false;
     private static void disableGiveCommandDrops() {
         disableGiveCommandDrops = getBoolean("settings.disable-give-dropping", disableGiveCommandDrops);
+    }
+
+    public static String commandTPSBarTitle = "<gray>TPS<yellow>:</yellow> <tps> MSPT<yellow>:</yellow> <mspt> Ping<yellow>:</yellow> <ping>ms";
+    public static BossBar.Overlay commandTPSBarProgressOverlay = BossBar.Overlay.NOTCHED_20;
+    public static TPSBarTask.FillMode commandTPSBarProgressFillMode = TPSBarTask.FillMode.MSPT;
+    public static BossBar.Color commandTPSBarProgressColorGood = BossBar.Color.GREEN;
+    public static BossBar.Color commandTPSBarProgressColorMedium = BossBar.Color.YELLOW;
+    public static BossBar.Color commandTPSBarProgressColorLow = BossBar.Color.RED;
+    public static String commandTPSBarTextColorGood = "<gradient:#55ff55:#00aa00><text></gradient>";
+    public static String commandTPSBarTextColorMedium = "<gradient:#ffff55:#ffaa00><text></gradient>";
+    public static String commandTPSBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
+    public static int commandTPSBarTickInterval = 20;
+    private static void commandSettings() {
+        commandTPSBarTitle = getString("settings.command.tpsbar.title", commandTPSBarTitle);
+        commandTPSBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.tpsbar.overlay", commandTPSBarProgressOverlay.name()));
+        commandTPSBarProgressFillMode = TPSBarTask.FillMode.valueOf(getString("settings.command.tpsbar.fill-mode", commandTPSBarProgressFillMode.name()));
+        commandTPSBarProgressColorGood = BossBar.Color.valueOf(getString("settings.command.tpsbar.progress-color.good", commandTPSBarProgressColorGood.name()));
+        commandTPSBarProgressColorMedium = BossBar.Color.valueOf(getString("settings.command.tpsbar.progress-color.medium", commandTPSBarProgressColorMedium.name()));
+        commandTPSBarProgressColorLow = BossBar.Color.valueOf(getString("settings.command.tpsbar.progress-color.low", commandTPSBarProgressColorLow.name()));
+        commandTPSBarTextColorGood = getString("settings.command.tpsbar.text-color.good", commandTPSBarTextColorGood);
+        commandTPSBarTextColorMedium = getString("settings.command.tpsbar.text-color.medium", commandTPSBarTextColorMedium);
+        commandTPSBarTextColorLow = getString("settings.command.tpsbar.text-color.low", commandTPSBarTextColorLow);
+        commandTPSBarTickInterval = getInt("settings.command.tpsbar.tick-interval", commandTPSBarTickInterval);
     }
 
     public static int barrelRows = 3;
