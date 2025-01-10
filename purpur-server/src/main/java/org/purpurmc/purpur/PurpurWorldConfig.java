@@ -116,6 +116,7 @@ public class PurpurWorldConfig {
     public boolean entitiesPickUpLootBypassMobGriefing = false;
     public boolean fireballsBypassMobGriefing = false;
     public boolean projectilesBypassMobGriefing = false;
+    public boolean noteBlockIgnoreAbove = false;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
@@ -130,7 +131,7 @@ public class PurpurWorldConfig {
         entitiesPickUpLootBypassMobGriefing = getBoolean("gameplay-mechanics.entities-pick-up-loot-bypass-mob-griefing", entitiesPickUpLootBypassMobGriefing);
         fireballsBypassMobGriefing = getBoolean("gameplay-mechanics.fireballs-bypass-mob-griefing", fireballsBypassMobGriefing);
         projectilesBypassMobGriefing = getBoolean("gameplay-mechanics.projectiles-bypass-mob-griefing", projectilesBypassMobGriefing);
-
+        noteBlockIgnoreAbove = getBoolean("gameplay-mechanics.note-block-ignore-above", noteBlockIgnoreAbove);
     }
 
     public int daytimeTicks = 12000;
