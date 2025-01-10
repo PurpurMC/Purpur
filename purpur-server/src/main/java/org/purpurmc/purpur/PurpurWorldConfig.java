@@ -330,6 +330,11 @@ public class PurpurWorldConfig {
         });
     }
 
+    public int snowballDamage = -1;
+    private void snowballSettings() {
+        snowballDamage = getInt("gameplay-mechanics.projectile-damage.snowball", snowballDamage);
+    }
+
     public boolean anvilAllowColors = false;
     public boolean anvilColorsUseMiniMessage;
     private void anvilSettings() {
