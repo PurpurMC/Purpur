@@ -93,6 +93,11 @@ public class PurpurWorldConfig {
         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
     }
 
+    public boolean arrowMovementResetsDespawnCounter = true;
+    private void arrowSettings() {
+        arrowMovementResetsDespawnCounter = getBoolean("gameplay-mechanics.arrow.movement-resets-despawn-counter", arrowMovementResetsDespawnCounter);
+    }
+
     public boolean useBetterMending = false;
     public boolean boatEjectPlayersOnLand = false;
     public boolean disableDropsOnCrammingDeath = false;
