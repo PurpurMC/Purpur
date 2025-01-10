@@ -110,6 +110,7 @@ public class PurpurWorldConfig {
     }
 
     public boolean useBetterMending = false;
+    public boolean alwaysTameInCreative = false;
     public boolean boatEjectPlayersOnLand = false;
     public boolean boatsDoFallDamage = false;
     public boolean disableDropsOnCrammingDeath = false;
@@ -128,6 +129,7 @@ public class PurpurWorldConfig {
     public boolean imposeTeleportRestrictionsOnEndPortals = false;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
+        alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
         boatsDoFallDamage = getBoolean("gameplay-mechanics.boat.do-fall-damage", boatsDoFallDamage);
         disableDropsOnCrammingDeath = getBoolean("gameplay-mechanics.disable-drops-on-cramming-death", disableDropsOnCrammingDeath);
