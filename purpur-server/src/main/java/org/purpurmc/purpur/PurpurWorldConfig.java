@@ -117,6 +117,9 @@ public class PurpurWorldConfig {
     public boolean fireballsBypassMobGriefing = false;
     public boolean projectilesBypassMobGriefing = false;
     public boolean noteBlockIgnoreAbove = false;
+    public boolean imposeTeleportRestrictionsOnGateways = false;
+    public boolean imposeTeleportRestrictionsOnNetherPortals = false;
+    public boolean imposeTeleportRestrictionsOnEndPortals = false;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
@@ -132,6 +135,10 @@ public class PurpurWorldConfig {
         fireballsBypassMobGriefing = getBoolean("gameplay-mechanics.fireballs-bypass-mob-griefing", fireballsBypassMobGriefing);
         projectilesBypassMobGriefing = getBoolean("gameplay-mechanics.projectiles-bypass-mob-griefing", projectilesBypassMobGriefing);
         noteBlockIgnoreAbove = getBoolean("gameplay-mechanics.note-block-ignore-above", noteBlockIgnoreAbove);
+        imposeTeleportRestrictionsOnGateways = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-gateways", imposeTeleportRestrictionsOnGateways);
+        imposeTeleportRestrictionsOnNetherPortals = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-nether-portals", imposeTeleportRestrictionsOnNetherPortals);
+        imposeTeleportRestrictionsOnEndPortals = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-end-portals", imposeTeleportRestrictionsOnEndPortals);
+
     }
 
     public int daytimeTicks = 12000;
