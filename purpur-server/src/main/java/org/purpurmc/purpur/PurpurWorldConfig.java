@@ -90,9 +90,11 @@ public class PurpurWorldConfig {
 
     public float armorstandStepHeight = 0.0F;
     public boolean armorstandSetNameVisible = false;
+    public boolean armorstandFixNametags = false;
     private void armorstandSettings() {
         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
         armorstandSetNameVisible = getBoolean("gameplay-mechanics.armorstand.set-name-visible-when-placing-with-custom-name", armorstandSetNameVisible);
+        armorstandFixNametags = getBoolean("gameplay-mechanics.armorstand.fix-nametags", armorstandFixNametags);
     }
 
     public boolean arrowMovementResetsDespawnCounter = true;
