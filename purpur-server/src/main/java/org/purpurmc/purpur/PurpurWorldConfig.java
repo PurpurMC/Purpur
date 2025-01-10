@@ -410,10 +410,16 @@ public class PurpurWorldConfig {
     public boolean farmlandBypassMobGriefing = false;
     public boolean farmlandGetsMoistFromBelow = false;
     public boolean farmlandAlpha = false;
+    public boolean farmlandTramplingDisabled = false;
+    public boolean farmlandTramplingOnlyPlayers = false;
+    public boolean farmlandTramplingFeatherFalling = false;
     private void farmlandSettings() {
         farmlandBypassMobGriefing = getBoolean("blocks.farmland.bypass-mob-griefing", farmlandBypassMobGriefing);
         farmlandGetsMoistFromBelow = getBoolean("blocks.farmland.gets-moist-from-below", farmlandGetsMoistFromBelow);
         farmlandAlpha = getBoolean("blocks.farmland.use-alpha-farmland", farmlandAlpha);
+        farmlandTramplingDisabled = getBoolean("blocks.farmland.disable-trampling", farmlandTramplingDisabled);
+        farmlandTramplingOnlyPlayers = getBoolean("blocks.farmland.only-players-trample", farmlandTramplingOnlyPlayers);
+        farmlandTramplingFeatherFalling = getBoolean("blocks.farmland.feather-fall-distance-affects-trampling", farmlandTramplingFeatherFalling);
     }
 
     public boolean furnaceUseLavaFromUnderneath = false;
