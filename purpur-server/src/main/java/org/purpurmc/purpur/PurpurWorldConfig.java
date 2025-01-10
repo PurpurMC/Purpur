@@ -105,6 +105,7 @@ public class PurpurWorldConfig {
     public double tridentLoyaltyVoidReturnHeight = 0.0D;
     public boolean entitiesCanUsePortals = true;
     public int raidCooldownSeconds = 0;
+    public int animalBreedingCooldownSeconds = 0;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         boatEjectPlayersOnLand = getBoolean("gameplay-mechanics.boat.eject-players-on-land", boatEjectPlayersOnLand);
@@ -113,6 +114,7 @@ public class PurpurWorldConfig {
         tridentLoyaltyVoidReturnHeight = getDouble("gameplay-mechanics.trident-loyalty-void-return-height", tridentLoyaltyVoidReturnHeight);
         entitiesCanUsePortals = getBoolean("gameplay-mechanics.entities-can-use-portals", entitiesCanUsePortals);
         raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
+        animalBreedingCooldownSeconds = getInt("gameplay-mechanics.animal-breeding-cooldown-seconds", animalBreedingCooldownSeconds);
     }
 
     public int daytimeTicks = 12000;
