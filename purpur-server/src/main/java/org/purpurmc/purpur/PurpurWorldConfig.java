@@ -127,6 +127,7 @@ public class PurpurWorldConfig {
     public boolean imposeTeleportRestrictionsOnGateways = false;
     public boolean imposeTeleportRestrictionsOnNetherPortals = false;
     public boolean imposeTeleportRestrictionsOnEndPortals = false;
+    public boolean tickFluids = true;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
@@ -146,7 +147,7 @@ public class PurpurWorldConfig {
         imposeTeleportRestrictionsOnGateways = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-gateways", imposeTeleportRestrictionsOnGateways);
         imposeTeleportRestrictionsOnNetherPortals = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-nether-portals", imposeTeleportRestrictionsOnNetherPortals);
         imposeTeleportRestrictionsOnEndPortals = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-end-portals", imposeTeleportRestrictionsOnEndPortals);
-
+        tickFluids = getBoolean("gameplay-mechanics.tick-fluids", tickFluids);
     }
 
     public int daytimeTicks = 12000;
