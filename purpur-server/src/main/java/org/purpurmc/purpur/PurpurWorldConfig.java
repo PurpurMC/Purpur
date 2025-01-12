@@ -1031,6 +1031,11 @@ public class PurpurWorldConfig {
         }
     }
 
+    public boolean sculkShriekerCanSummonDefault = false;
+    private void sculkShriekerSettings() {
+        sculkShriekerCanSummonDefault = getBoolean("blocks.sculk_shrieker.can-summon-default", sculkShriekerCanSummonDefault);
+    }
+
     public boolean signAllowColors = false;
     private void signSettings() {
         signAllowColors = getBoolean("blocks.sign.allow-colors", signAllowColors);
