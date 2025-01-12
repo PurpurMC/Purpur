@@ -1985,6 +1985,11 @@ public class PurpurWorldConfig {
     public double shulkerMaxHealth = 30.0D;
     public double shulkerScale = 1.0D;
     public boolean shulkerTakeDamageFromWater = false;
+    public float shulkerSpawnFromBulletBaseChance = 1.0F;
+    public boolean shulkerSpawnFromBulletRequireOpenLid = true;
+    public double shulkerSpawnFromBulletNearbyRange = 8.0D;
+    public String shulkerSpawnFromBulletNearbyEquation = "(nearby - 1) / 5.0";
+    public boolean shulkerSpawnFromBulletRandomColor = false;
     private void shulkerSettings() {
         shulkerRidable = getBoolean("mobs.shulker.ridable", shulkerRidable);
         shulkerRidableInWater = getBoolean("mobs.shulker.ridable-in-water", shulkerRidableInWater);
@@ -1997,6 +2002,11 @@ public class PurpurWorldConfig {
         shulkerMaxHealth = getDouble("mobs.shulker.attributes.max_health", shulkerMaxHealth);
         shulkerScale = Mth.clamp(getDouble("mobs.shulker.attributes.scale", shulkerScale), 0.0625D, Shulker.MAX_SCALE);
         shulkerTakeDamageFromWater = getBoolean("mobs.shulker.takes-damage-from-water", shulkerTakeDamageFromWater);
+        shulkerSpawnFromBulletBaseChance = (float) getDouble("mobs.shulker.spawn-from-bullet.base-chance", shulkerSpawnFromBulletBaseChance);
+        shulkerSpawnFromBulletRequireOpenLid = getBoolean("mobs.shulker.spawn-from-bullet.require-open-lid", shulkerSpawnFromBulletRequireOpenLid);
+        shulkerSpawnFromBulletNearbyRange = getDouble("mobs.shulker.spawn-from-bullet.nearby-range", shulkerSpawnFromBulletNearbyRange);
+        shulkerSpawnFromBulletNearbyEquation = getString("mobs.shulker.spawn-from-bullet.nearby-equation", shulkerSpawnFromBulletNearbyEquation);
+        shulkerSpawnFromBulletRandomColor = getBoolean("mobs.shulker.spawn-from-bullet.random-color", shulkerSpawnFromBulletRandomColor);
     }
 
     public boolean silverfishRidable = false;
