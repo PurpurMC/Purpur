@@ -2913,6 +2913,7 @@ public class PurpurWorldConfig {
     public boolean villagerTakeDamageFromWater = false;
     public boolean villagerAllowTrading = true;
     public boolean villagerAlwaysDropExp = false;
+    public int villagerMinimumDemand = 0;
     private void villagerSettings() {
         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
@@ -2935,6 +2936,7 @@ public class PurpurWorldConfig {
         villagerTakeDamageFromWater = getBoolean("mobs.villager.takes-damage-from-water", villagerTakeDamageFromWater);
         villagerAllowTrading = getBoolean("mobs.villager.allow-trading", villagerAllowTrading);
         villagerAlwaysDropExp = getBoolean("mobs.villager.always-drop-exp", villagerAlwaysDropExp);
+        villagerMinimumDemand = getInt("mobs.villager.minimum-demand", villagerMinimumDemand);
     }
 
     public boolean vindicatorRidable = false;
