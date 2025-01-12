@@ -2326,6 +2326,7 @@ public class PurpurWorldConfig {
     public double shulkerSpawnFromBulletNearbyRange = 8.0D;
     public String shulkerSpawnFromBulletNearbyEquation = "(nearby - 1) / 5.0";
     public boolean shulkerSpawnFromBulletRandomColor = false;
+    public boolean shulkerChangeColorWithDye = false;
     private void shulkerSettings() {
         shulkerRidable = getBoolean("mobs.shulker.ridable", shulkerRidable);
         shulkerRidableInWater = getBoolean("mobs.shulker.ridable-in-water", shulkerRidableInWater);
@@ -2343,6 +2344,7 @@ public class PurpurWorldConfig {
         shulkerSpawnFromBulletNearbyRange = getDouble("mobs.shulker.spawn-from-bullet.nearby-range", shulkerSpawnFromBulletNearbyRange);
         shulkerSpawnFromBulletNearbyEquation = getString("mobs.shulker.spawn-from-bullet.nearby-equation", shulkerSpawnFromBulletNearbyEquation);
         shulkerSpawnFromBulletRandomColor = getBoolean("mobs.shulker.spawn-from-bullet.random-color", shulkerSpawnFromBulletRandomColor);
+        shulkerChangeColorWithDye = getBoolean("mobs.shulker.change-color-with-dye", shulkerChangeColorWithDye);
     }
 
     public boolean silverfishRidable = false;
