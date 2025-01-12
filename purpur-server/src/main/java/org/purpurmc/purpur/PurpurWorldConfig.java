@@ -2917,6 +2917,7 @@ public class PurpurWorldConfig {
     public boolean villagerLobotomizeEnabled = false;
     public int villagerLobotomizeCheckInterval = 100;
     public boolean villagerLobotomizeWaitUntilTradeLocked = false;
+    public boolean villagerDisplayTradeItem = true;
     private void villagerSettings() {
         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
@@ -2952,6 +2953,7 @@ public class PurpurWorldConfig {
         villagerLobotomizeEnabled = getBoolean("mobs.villager.lobotomize.enabled", villagerLobotomizeEnabled);
         villagerLobotomizeCheckInterval = getInt("mobs.villager.lobotomize.check-interval", villagerLobotomizeCheckInterval);
         villagerLobotomizeWaitUntilTradeLocked = getBoolean("mobs.villager.lobotomize.wait-until-trade-locked", villagerLobotomizeWaitUntilTradeLocked);
+        villagerDisplayTradeItem = getBoolean("mobs.villager.display-trade-item", villagerDisplayTradeItem);
     }
 
     public boolean vindicatorRidable = false;
