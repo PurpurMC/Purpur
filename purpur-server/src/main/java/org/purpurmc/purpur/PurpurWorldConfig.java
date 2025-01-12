@@ -835,6 +835,11 @@ public class PurpurWorldConfig {
         cactusBreaksFromSolidNeighbors = getBoolean("blocks.cactus.breaks-from-solid-neighbors", cactusBreaksFromSolidNeighbors);
     }
 
+    public boolean campFireLitWhenPlaced = true;
+    private void campFireSettings() {
+        campFireLitWhenPlaced = getBoolean("blocks.campfire.lit-when-placed", campFireLitWhenPlaced);
+    }
+
     public boolean chestOpenWithBlockOnTop = false;
     private void chestSettings() {
         chestOpenWithBlockOnTop = getBoolean("blocks.chest.open-with-solid-block-on-top", chestOpenWithBlockOnTop);
