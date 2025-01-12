@@ -221,6 +221,7 @@ public class PurpurConfig {
     public static String commandTPSBarTextColorMedium = "<gradient:#ffff55:#ffaa00><text></gradient>";
     public static String commandTPSBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
     public static int commandTPSBarTickInterval = 20;
+    public static boolean commandGamemodeRequiresPermission = false;
     private static void commandSettings() {
         commandTPSBarTitle = getString("settings.command.tpsbar.title", commandTPSBarTitle);
         commandTPSBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.tpsbar.overlay", commandTPSBarProgressOverlay.name()));
@@ -232,6 +233,7 @@ public class PurpurConfig {
         commandTPSBarTextColorMedium = getString("settings.command.tpsbar.text-color.medium", commandTPSBarTextColorMedium);
         commandTPSBarTextColorLow = getString("settings.command.tpsbar.text-color.low", commandTPSBarTextColorLow);
         commandTPSBarTickInterval = getInt("settings.command.tpsbar.tick-interval", commandTPSBarTickInterval);
+        commandGamemodeRequiresPermission = getBoolean("settings.command.gamemode.requires-specific-permission", commandGamemodeRequiresPermission);
     }
 
     public static int barrelRows = 3;
