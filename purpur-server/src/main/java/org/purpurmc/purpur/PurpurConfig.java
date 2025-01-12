@@ -392,6 +392,7 @@ public class PurpurConfig {
     public static boolean allowHigherEnchantsLevels = false;
     public static boolean allowUnsafeEnchantCommand = false;
     public static boolean replaceIncompatibleEnchants = false;
+    public static boolean clampEnchantLevels = true;
     private static void enchantmentSettings() {
         if (version < 30) {
             boolean oldValue = getBoolean("settings.enchantment.allow-unsafe-enchants", false);
@@ -415,6 +416,7 @@ public class PurpurConfig {
         allowHigherEnchantsLevels = getBoolean("settings.enchantment.anvil.allow-higher-enchants-levels", allowHigherEnchantsLevels);
         allowUnsafeEnchantCommand = getBoolean("settings.enchantment.allow-unsafe-enchant-command", allowUnsafeEnchantCommand);
         replaceIncompatibleEnchants = getBoolean("settings.enchantment.anvil.replace-incompatible-enchants", replaceIncompatibleEnchants);
+        clampEnchantLevels = getBoolean("settings.enchantment.clamp-levels", clampEnchantLevels);
     }
 
     public static boolean endermanShortHeight = false;
