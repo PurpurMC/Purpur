@@ -224,6 +224,9 @@ public class PurpurWorldConfig {
     public int glowBerriesEatGlowDuration = 0;
     public boolean shulkerBoxItemDropContentsWhenDestroyed = true;
     public boolean compassItemShowsBossBar = false;
+    public boolean snowballExtinguishesFire = false;
+    public boolean snowballExtinguishesCandles = false;
+    public boolean snowballExtinguishesCampfires = false;
     private void itemSettings() {
         itemImmuneToCactus.clear();
         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
@@ -273,6 +276,9 @@ public class PurpurWorldConfig {
         glowBerriesEatGlowDuration = getInt("gameplay-mechanics.item.glow_berries.eat-glow-duration", glowBerriesEatGlowDuration);
         shulkerBoxItemDropContentsWhenDestroyed = getBoolean("gameplay-mechanics.item.shulker_box.drop-contents-when-destroyed", shulkerBoxItemDropContentsWhenDestroyed);
         compassItemShowsBossBar = getBoolean("gameplay-mechanics.item.compass.holding-shows-bossbar", compassItemShowsBossBar);
+        snowballExtinguishesFire = getBoolean("gameplay-mechanics.item.snowball.extinguish.fire", snowballExtinguishesFire);
+        snowballExtinguishesCandles = getBoolean("gameplay-mechanics.item.snowball.extinguish.candles", snowballExtinguishesCandles);
+        snowballExtinguishesCampfires = getBoolean("gameplay-mechanics.item.snowball.extinguish.campfires", snowballExtinguishesCampfires);
     }
 
     public double minecartMaxSpeed = 0.4D;
