@@ -423,6 +423,7 @@ public class PurpurWorldConfig {
     public boolean playerRemoveBindingWithWeakness = false;
     public int shiftRightClickRepairsMendingPoints = 0;
     public int playerExpPickupDelay = 2;
+    public boolean playerVoidTrading = false;
     private void playerSettings() {
         if (PurpurConfig.version < 19) {
             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
@@ -449,6 +450,7 @@ public class PurpurWorldConfig {
         playerRemoveBindingWithWeakness = getBoolean("gameplay-mechanics.player.curse-of-binding.remove-with-weakness", playerRemoveBindingWithWeakness);
         shiftRightClickRepairsMendingPoints = getInt("gameplay-mechanics.player.shift-right-click-repairs-mending-points", shiftRightClickRepairsMendingPoints);
         playerExpPickupDelay = getInt("gameplay-mechanics.player.exp-pickup-delay-ticks", playerExpPickupDelay);
+        playerVoidTrading = getBoolean("gameplay-mechanics.player.allow-void-trading", playerVoidTrading);
     }
 
     public boolean silkTouchEnabled = false;
