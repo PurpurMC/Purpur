@@ -318,6 +318,21 @@ public class PurpurWorldConfig {
         poweredRailBoostModifier = getDouble("gameplay-mechanics.minecart.powered-rail.boost-modifier", poweredRailBoostModifier);
     }
 
+    public float entityHealthRegenAmount = 1.0F;
+    public float entityMinimalHealthPoison = 1.0F;
+    public float entityPoisonDegenerationAmount = 1.0F;
+    public float entityWitherDegenerationAmount = 1.0F;
+    public float humanHungerExhaustionAmount = 0.005F;
+    public float humanSaturationRegenAmount = 1.0F;
+    private void mobEffectSettings() {
+        entityHealthRegenAmount = (float) getDouble("gameplay-mechanics.mob-effects.health-regen-amount", entityHealthRegenAmount);
+        entityMinimalHealthPoison = (float) getDouble("gameplay-mechanics.mob-effects.minimal-health-poison-amount", entityMinimalHealthPoison);
+        entityPoisonDegenerationAmount = (float) getDouble("gameplay-mechanics.mob-effects.poison-degeneration-amount", entityPoisonDegenerationAmount);
+        entityWitherDegenerationAmount = (float) getDouble("gameplay-mechanics.mob-effects.wither-degeneration-amount", entityWitherDegenerationAmount);
+        humanHungerExhaustionAmount = (float) getDouble("gameplay-mechanics.mob-effects.hunger-exhaustion-amount", humanHungerExhaustionAmount);
+        humanSaturationRegenAmount = (float) getDouble("gameplay-mechanics.mob-effects.saturation-regen-amount", humanSaturationRegenAmount);
+    }
+
     public boolean catSpawning;
     public boolean patrolSpawning;
     public boolean phantomSpawning;
