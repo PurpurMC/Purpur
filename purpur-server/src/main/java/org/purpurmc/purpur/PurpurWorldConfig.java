@@ -935,6 +935,7 @@ public class PurpurWorldConfig {
     public boolean farmlandTramplingDisabled = false;
     public boolean farmlandTramplingOnlyPlayers = false;
     public boolean farmlandTramplingFeatherFalling = false;
+    public double farmlandTrampleHeight = -1D;
     private void farmlandSettings() {
         farmlandBypassMobGriefing = getBoolean("blocks.farmland.bypass-mob-griefing", farmlandBypassMobGriefing);
         farmlandGetsMoistFromBelow = getBoolean("blocks.farmland.gets-moist-from-below", farmlandGetsMoistFromBelow);
@@ -942,6 +943,7 @@ public class PurpurWorldConfig {
         farmlandTramplingDisabled = getBoolean("blocks.farmland.disable-trampling", farmlandTramplingDisabled);
         farmlandTramplingOnlyPlayers = getBoolean("blocks.farmland.only-players-trample", farmlandTramplingOnlyPlayers);
         farmlandTramplingFeatherFalling = getBoolean("blocks.farmland.feather-fall-distance-affects-trampling", farmlandTramplingFeatherFalling);
+        farmlandTrampleHeight = getDouble("blocks.farmland.trample-height", farmlandTrampleHeight);
     }
 
     public double floweringAzaleaGrowthChance = 0.0D;
