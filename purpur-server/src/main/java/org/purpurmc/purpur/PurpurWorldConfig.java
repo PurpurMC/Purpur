@@ -13,6 +13,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.properties.Tilt;
 import org.apache.commons.lang.BooleanUtils;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
@@ -783,6 +784,22 @@ public class PurpurWorldConfig {
             log(Level.SEVERE, "Unknown value for `blocks.bed.explosion-effect`! Using default of `BLOCK`");
             bedExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
         }
+    }
+
+    public Map<Tilt, Integer> bigDripleafTiltDelay = new HashMap<>();
+    private void bigDripleafSettings() {
+        bigDripleafTiltDelay.clear();
+        getMap("blocks.big_dripleaf.tilt-delay", Map.ofEntries(
+                Map.entry("UNSTABLE", 10),
+                Map.entry("PARTIAL", 10),
+                Map.entry("FULL", 100))
+        ).forEach((tilt, delay) -> {
+            try {
+                bigDripleafTiltDelay.put(Tilt.valueOf(tilt), (int) delay);
+            } catch (IllegalArgumentException e) {
+                PurpurConfig.log(Level.SEVERE, "Invalid big_dripleaf tilt key: " + tilt);
+            }
+        });
     }
 
     public boolean chestOpenWithBlockOnTop = false;
