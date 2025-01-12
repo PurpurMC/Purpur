@@ -1057,12 +1057,14 @@ public class PurpurWorldConfig {
     public boolean turtleEggsBreakFromMinecarts = false;
     public boolean turtleEggsBypassMobGriefing = false;
     public int turtleEggsRandomTickCrackChance = 500;
+    public boolean turtleEggsTramplingFeatherFalling = false;
     private void turtleEggSettings() {
         turtleEggsBreakFromExpOrbs = getBoolean("blocks.turtle_egg.break-from-exp-orbs", turtleEggsBreakFromExpOrbs);
         turtleEggsBreakFromItems = getBoolean("blocks.turtle_egg.break-from-items", turtleEggsBreakFromItems);
         turtleEggsBreakFromMinecarts = getBoolean("blocks.turtle_egg.break-from-minecarts", turtleEggsBreakFromMinecarts);
         turtleEggsBypassMobGriefing = getBoolean("blocks.turtle_egg.bypass-mob-griefing", turtleEggsBypassMobGriefing);
         turtleEggsRandomTickCrackChance = getInt("blocks.turtle_egg.random-tick-crack-chance", turtleEggsRandomTickCrackChance);
+        turtleEggsTramplingFeatherFalling = getBoolean("blocks.turtle_egg.feather-fall-distance-affects-trampling", turtleEggsTramplingFeatherFalling);
     }
 
     public int waterInfiniteRequiredSources = 2;
