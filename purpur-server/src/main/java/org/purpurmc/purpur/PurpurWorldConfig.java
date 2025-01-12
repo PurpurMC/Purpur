@@ -1707,6 +1707,7 @@ public class PurpurWorldConfig {
     public double piglinScale = 1.0D;
     public boolean piglinBypassMobGriefing = false;
     public boolean piglinTakeDamageFromWater = false;
+    public int piglinPortalSpawnModifier = 2000;
     private void piglinSettings() {
         piglinRidable = getBoolean("mobs.piglin.ridable", piglinRidable);
         piglinRidableInWater = getBoolean("mobs.piglin.ridable-in-water", piglinRidableInWater);
@@ -1720,6 +1721,7 @@ public class PurpurWorldConfig {
         piglinScale = Mth.clamp(getDouble("mobs.piglin.attributes.scale", piglinScale), 0.0625D, 16.0D);
         piglinBypassMobGriefing = getBoolean("mobs.piglin.bypass-mob-griefing", piglinBypassMobGriefing);
         piglinTakeDamageFromWater = getBoolean("mobs.piglin.takes-damage-from-water", piglinTakeDamageFromWater);
+        piglinPortalSpawnModifier = getInt("mobs.piglin.portal-spawn-modifier", piglinPortalSpawnModifier);
     }
 
     public boolean piglinBruteRidable = false;
