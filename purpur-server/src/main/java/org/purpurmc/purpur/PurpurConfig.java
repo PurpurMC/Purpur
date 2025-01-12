@@ -174,6 +174,9 @@ public class PurpurConfig {
     public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
     public static String uptimeCommandOutput = "<green>Server uptime is <uptime>";
     public static String unverifiedUsername = "default";
+    public static String sleepSkippingNight = "default";
+    public static String sleepingPlayersPercent = "default";
+    public static String sleepNotPossible = "default";
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
         afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
@@ -188,6 +191,9 @@ public class PurpurConfig {
         dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
         uptimeCommandOutput = getString("settings.messages.uptime-command-output", uptimeCommandOutput);
         unverifiedUsername = getString("settings.messages.unverified-username", unverifiedUsername);
+        sleepSkippingNight = getString("settings.messages.sleep-skipping-night", sleepSkippingNight);
+        sleepingPlayersPercent = getString("settings.messages.sleeping-players-percent", sleepingPlayersPercent);
+        sleepNotPossible = getString("settings.messages.sleep-not-possible", sleepNotPossible);
     }
 
     public static String deathMsgRunWithScissors = "<player> slipped and fell on their shears";
