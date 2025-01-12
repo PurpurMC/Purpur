@@ -1095,6 +1095,7 @@ public class PurpurWorldConfig {
     public double axolotlScale = 1.0D;
     public int axolotlBreedingTicks = 6000;
     public boolean axolotlTakeDamageFromWater = false;
+    public boolean axolotlAlwaysDropExp = false;
     private void axolotlSettings() {
         axolotlRidable = getBoolean("mobs.axolotl.ridable", axolotlRidable);
         axolotlControllable = getBoolean("mobs.axolotl.controllable", axolotlControllable);
@@ -1102,6 +1103,7 @@ public class PurpurWorldConfig {
         axolotlScale = Mth.clamp(getDouble("mobs.axolotl.attributes.scale", axolotlScale), 0.0625D, 16.0D);
         axolotlBreedingTicks = getInt("mobs.axolotl.breeding-delay-ticks", axolotlBreedingTicks);
         axolotlTakeDamageFromWater = getBoolean("mobs.axolotl.takes-damage-from-water", axolotlTakeDamageFromWater);
+        axolotlAlwaysDropExp = getBoolean("mobs.axolotl.always-drop-exp", axolotlAlwaysDropExp);
     }
 
     public boolean batRidable = false;
@@ -1118,6 +1120,7 @@ public class PurpurWorldConfig {
     public double batArmorToughness = 0.0D;
     public double batAttackKnockback = 0.0D;
     public boolean batTakeDamageFromWater = false;
+    public boolean batAlwaysDropExp = false;
     private void batSettings() {
         batRidable = getBoolean("mobs.bat.ridable", batRidable);
         batRidableInWater = getBoolean("mobs.bat.ridable-in-water", batRidableInWater);
@@ -1138,6 +1141,7 @@ public class PurpurWorldConfig {
         batArmorToughness = getDouble("mobs.bat.attributes.armor_toughness", batArmorToughness);
         batAttackKnockback = getDouble("mobs.bat.attributes.attack_knockback", batAttackKnockback);
         batTakeDamageFromWater = getBoolean("mobs.bat.takes-damage-from-water", batTakeDamageFromWater);
+        batAlwaysDropExp = getBoolean("mobs.bat.always-drop-exp", batAlwaysDropExp);
     }
 
     public boolean beeRidable = false;
@@ -1150,6 +1154,7 @@ public class PurpurWorldConfig {
     public boolean beeTakeDamageFromWater = true;
     public boolean beeCanWorkAtNight = false;
     public boolean beeCanWorkInRain = false;
+    public boolean beeAlwaysDropExp = false;
     private void beeSettings() {
         beeRidable = getBoolean("mobs.bee.ridable", beeRidable);
         beeRidableInWater = getBoolean("mobs.bee.ridable-in-water", beeRidableInWater);
@@ -1166,6 +1171,7 @@ public class PurpurWorldConfig {
         beeTakeDamageFromWater = getBoolean("mobs.bee.takes-damage-from-water", beeTakeDamageFromWater);
         beeCanWorkAtNight = getBoolean("mobs.bee.can-work-at-night", beeCanWorkAtNight);
         beeCanWorkInRain = getBoolean("mobs.bee.can-work-in-rain", beeCanWorkInRain);
+        beeAlwaysDropExp = getBoolean("mobs.bee.always-drop-exp", beeAlwaysDropExp);
     }
 
     public boolean blazeRidable = false;
@@ -1175,6 +1181,7 @@ public class PurpurWorldConfig {
     public double blazeMaxHealth = 20.0D;
     public double blazeScale = 1.0D;
     public boolean blazeTakeDamageFromWater = true;
+    public boolean blazeAlwaysDropExp = false;
     private void blazeSettings() {
         blazeRidable = getBoolean("mobs.blaze.ridable", blazeRidable);
         blazeRidableInWater = getBoolean("mobs.blaze.ridable-in-water", blazeRidableInWater);
@@ -1188,6 +1195,7 @@ public class PurpurWorldConfig {
         blazeMaxHealth = getDouble("mobs.blaze.attributes.max_health", blazeMaxHealth);
         blazeScale = Mth.clamp(getDouble("mobs.blaze.attributes.scale", blazeScale), 0.0625D, 16.0D);
         blazeTakeDamageFromWater = getBoolean("mobs.blaze.takes-damage-from-water", blazeTakeDamageFromWater);
+        blazeAlwaysDropExp = getBoolean("mobs.blaze.always-drop-exp", blazeAlwaysDropExp);
     }
 
     public boolean boggedRidable = false;
@@ -1233,6 +1241,7 @@ public class PurpurWorldConfig {
     public int catBreedingTicks = 6000;
     public DyeColor catDefaultCollarColor = DyeColor.RED;
     public boolean catTakeDamageFromWater = false;
+    public boolean catAlwaysDropExp = false;
     private void catSettings() {
         catRidable = getBoolean("mobs.cat.ridable", catRidable);
         catRidableInWater = getBoolean("mobs.cat.ridable-in-water", catRidableInWater);
@@ -1254,6 +1263,7 @@ public class PurpurWorldConfig {
             catDefaultCollarColor = DyeColor.RED;
         }
         catTakeDamageFromWater = getBoolean("mobs.cat.takes-damage-from-water", catTakeDamageFromWater);
+        catAlwaysDropExp = getBoolean("mobs.cat.always-drop-exp", catAlwaysDropExp);
     }
 
     public boolean caveSpiderRidable = false;
@@ -1262,6 +1272,7 @@ public class PurpurWorldConfig {
     public double caveSpiderMaxHealth = 12.0D;
     public double caveSpiderScale = 1.0D;
     public boolean caveSpiderTakeDamageFromWater = false;
+    public boolean caveSpiderAlwaysDropExp = false;
     private void caveSpiderSettings() {
         caveSpiderRidable = getBoolean("mobs.cave_spider.ridable", caveSpiderRidable);
         caveSpiderRidableInWater = getBoolean("mobs.cave_spider.ridable-in-water", caveSpiderRidableInWater);
@@ -1274,6 +1285,7 @@ public class PurpurWorldConfig {
         caveSpiderMaxHealth = getDouble("mobs.cave_spider.attributes.max_health", caveSpiderMaxHealth);
         caveSpiderScale = Mth.clamp(getDouble("mobs.cave_spider.attributes.scale", caveSpiderScale), 0.0625D, 16.0D);
         caveSpiderTakeDamageFromWater = getBoolean("mobs.cave_spider.takes-damage-from-water", caveSpiderTakeDamageFromWater);
+        caveSpiderAlwaysDropExp = getBoolean("mobs.cave_spider.always-drop-exp", caveSpiderAlwaysDropExp);
     }
 
     public boolean chickenRidable = false;
@@ -1284,6 +1296,7 @@ public class PurpurWorldConfig {
     public boolean chickenRetaliate = false;
     public int chickenBreedingTicks = 6000;
     public boolean chickenTakeDamageFromWater = false;
+    public boolean chickenAlwaysDropExp = false;
     private void chickenSettings() {
         chickenRidable = getBoolean("mobs.chicken.ridable", chickenRidable);
         chickenRidableInWater = getBoolean("mobs.chicken.ridable-in-water", chickenRidableInWater);
@@ -1298,6 +1311,7 @@ public class PurpurWorldConfig {
         chickenRetaliate = getBoolean("mobs.chicken.retaliate", chickenRetaliate);
         chickenBreedingTicks = getInt("mobs.chicken.breeding-delay-ticks", chickenBreedingTicks);
         chickenTakeDamageFromWater = getBoolean("mobs.chicken.takes-damage-from-water", chickenTakeDamageFromWater);
+        chickenAlwaysDropExp = getBoolean("mobs.chicken.always-drop-exp", chickenAlwaysDropExp);
     }
 
     public boolean codRidable = false;
@@ -1305,6 +1319,7 @@ public class PurpurWorldConfig {
     public double codMaxHealth = 3.0D;
     public double codScale = 1.0D;
     public boolean codTakeDamageFromWater = false;
+    public boolean codAlwaysDropExp = false;
     private void codSettings() {
         codRidable = getBoolean("mobs.cod.ridable", codRidable);
         codControllable = getBoolean("mobs.cod.controllable", codControllable);
@@ -1316,6 +1331,7 @@ public class PurpurWorldConfig {
         codMaxHealth = getDouble("mobs.cod.attributes.max_health", codMaxHealth);
         codScale = Mth.clamp(getDouble("mobs.cod.attributes.scale", codScale), 0.0625D, 16.0D);
         codTakeDamageFromWater = getBoolean("mobs.cod.takes-damage-from-water", codTakeDamageFromWater);
+        codAlwaysDropExp = getBoolean("mobs.cod.always-drop-exp", codAlwaysDropExp);
     }
 
     public boolean cowRidable = false;
@@ -1328,6 +1344,7 @@ public class PurpurWorldConfig {
     public boolean cowTakeDamageFromWater = false;
     public double cowNaturallyAggressiveToPlayersChance = 0.0D;
     public double cowNaturallyAggressiveToPlayersDamage = 2.0D;
+    public boolean cowAlwaysDropExp = false;
     private void cowSettings() {
         if (PurpurConfig.version < 22) {
             double oldValue = getDouble("mobs.cow.naturally-aggressive-to-players-chance", cowNaturallyAggressiveToPlayersChance);
@@ -1349,6 +1366,7 @@ public class PurpurWorldConfig {
         cowTakeDamageFromWater = getBoolean("mobs.cow.takes-damage-from-water", cowTakeDamageFromWater);
         cowNaturallyAggressiveToPlayersChance = getDouble("mobs.cow.naturally-aggressive-to-players.chance", cowNaturallyAggressiveToPlayersChance);
         cowNaturallyAggressiveToPlayersDamage = getDouble("mobs.cow.naturally-aggressive-to-players.damage", cowNaturallyAggressiveToPlayersDamage);
+        cowAlwaysDropExp = getBoolean("mobs.cow.always-drop-exp", cowAlwaysDropExp);
     }
 
     public boolean creakingRidable = false;
@@ -1375,6 +1393,7 @@ public class PurpurWorldConfig {
     public boolean creeperTakeDamageFromWater = false;
     public boolean creeperExplodeWhenKilled = false;
     public boolean creeperHealthRadius = false;
+    public boolean creeperAlwaysDropExp = false;
     private void creeperSettings() {
         creeperRidable = getBoolean("mobs.creeper.ridable", creeperRidable);
         creeperRidableInWater = getBoolean("mobs.creeper.ridable-in-water", creeperRidableInWater);
@@ -1392,6 +1411,7 @@ public class PurpurWorldConfig {
         creeperTakeDamageFromWater = getBoolean("mobs.creeper.takes-damage-from-water", creeperTakeDamageFromWater);
         creeperExplodeWhenKilled = getBoolean("mobs.creeper.explode-when-killed", creeperExplodeWhenKilled);
         creeperHealthRadius = getBoolean("mobs.creeper.health-impacts-explosion", creeperHealthRadius);
+        creeperAlwaysDropExp = getBoolean("mobs.creeper.always-drop-exp", creeperAlwaysDropExp);
     }
 
     public boolean dolphinRidable = false;
@@ -1404,6 +1424,7 @@ public class PurpurWorldConfig {
     public boolean dolphinDisableTreasureSearching = false;
     public boolean dolphinTakeDamageFromWater = false;
     public double dolphinNaturallyAggressiveToPlayersChance = 0.0D;
+    public boolean dolphinAlwaysDropExp = false;
     private void dolphinSettings() {
         dolphinRidable = getBoolean("mobs.dolphin.ridable", dolphinRidable);
         dolphinControllable = getBoolean("mobs.dolphin.controllable", dolphinControllable);
@@ -1420,6 +1441,7 @@ public class PurpurWorldConfig {
         dolphinDisableTreasureSearching = getBoolean("mobs.dolphin.disable-treasure-searching", dolphinDisableTreasureSearching);
         dolphinTakeDamageFromWater = getBoolean("mobs.dolphin.takes-damage-from-water", dolphinTakeDamageFromWater);
         dolphinNaturallyAggressiveToPlayersChance = getDouble("mobs.dolphin.naturally-aggressive-to-players-chance", dolphinNaturallyAggressiveToPlayersChance);
+        dolphinAlwaysDropExp = getBoolean("mobs.dolphin.always-drop-exp", dolphinAlwaysDropExp);
     }
 
     public boolean donkeyRidableInWater = false;
@@ -1431,6 +1453,7 @@ public class PurpurWorldConfig {
     public double donkeyMovementSpeedMax = 0.175D;
     public int donkeyBreedingTicks = 6000;
     public boolean donkeyTakeDamageFromWater = false;
+    public boolean donkeyAlwaysDropExp = false;
     private void donkeySettings() {
         donkeyRidableInWater = getBoolean("mobs.donkey.ridable-in-water", donkeyRidableInWater);
         if (PurpurConfig.version < 10) {
@@ -1448,6 +1471,7 @@ public class PurpurWorldConfig {
         donkeyMovementSpeedMax = getDouble("mobs.donkey.attributes.movement_speed.max", donkeyMovementSpeedMax);
         donkeyBreedingTicks = getInt("mobs.donkey.breeding-delay-ticks", donkeyBreedingTicks);
         donkeyTakeDamageFromWater = getBoolean("mobs.donkey.takes-damage-from-water", donkeyTakeDamageFromWater);
+        donkeyAlwaysDropExp = getBoolean("mobs.donkey.always-drop-exp", donkeyAlwaysDropExp);
     }
 
     public boolean drownedRidable = false;
@@ -1461,6 +1485,7 @@ public class PurpurWorldConfig {
     public boolean drownedJockeyTryExistingChickens = true;
     public boolean drownedTakeDamageFromWater = false;
     public boolean drownedBreakDoors = false;
+    public boolean drownedAlwaysDropExp = false;
     private void drownedSettings() {
         drownedRidable = getBoolean("mobs.drowned.ridable", drownedRidable);
         drownedRidableInWater = getBoolean("mobs.drowned.ridable-in-water", drownedRidableInWater);
@@ -1478,6 +1503,7 @@ public class PurpurWorldConfig {
         drownedJockeyTryExistingChickens = getBoolean("mobs.drowned.jockey.try-existing-chickens", drownedJockeyTryExistingChickens);
         drownedTakeDamageFromWater = getBoolean("mobs.drowned.takes-damage-from-water", drownedTakeDamageFromWater);
         drownedBreakDoors = getBoolean("mobs.drowned.can-break-doors", drownedBreakDoors);
+        drownedAlwaysDropExp = getBoolean("mobs.drowned.always-drop-exp", drownedAlwaysDropExp);
     }
 
     public boolean elderGuardianRidable = false;
@@ -1485,6 +1511,7 @@ public class PurpurWorldConfig {
     public double elderGuardianMaxHealth = 80.0D;
     public double elderGuardianScale = 1.0D;
     public boolean elderGuardianTakeDamageFromWater = false;
+    public boolean elderGuardianAlwaysDropExp = false;
     private void elderGuardianSettings() {
         elderGuardianRidable = getBoolean("mobs.elder_guardian.ridable", elderGuardianRidable);
         elderGuardianControllable = getBoolean("mobs.elder_guardian.controllable", elderGuardianControllable);
@@ -1496,6 +1523,7 @@ public class PurpurWorldConfig {
         elderGuardianMaxHealth = getDouble("mobs.elder_guardian.attributes.max_health", elderGuardianMaxHealth);
         elderGuardianScale = Mth.clamp(getDouble("mobs.elder_guardian.attributes.scale", elderGuardianScale), 0.0625D, 16.0D);
         elderGuardianTakeDamageFromWater = getBoolean("mobs.elder_guardian.takes-damage-from-water", elderGuardianTakeDamageFromWater);
+        elderGuardianAlwaysDropExp = getBoolean("mobs.elder_guardian.always-drop-exp", elderGuardianAlwaysDropExp);
     }
 
     public boolean enderDragonRidable = false;
@@ -1541,6 +1569,7 @@ public class PurpurWorldConfig {
     public boolean endermanAggroEndermitesOnlyIfPlayerSpawned = false;
     public boolean endermanDisableStareAggro = false;
     public boolean endermanIgnoreProjectiles = false;
+    public boolean endermanAlwaysDropExp = false;
     private void endermanSettings() {
         endermanRidable = getBoolean("mobs.enderman.ridable", endermanRidable);
         endermanRidableInWater = getBoolean("mobs.enderman.ridable-in-water", endermanRidableInWater);
@@ -1564,6 +1593,7 @@ public class PurpurWorldConfig {
         endermanAggroEndermitesOnlyIfPlayerSpawned = getBoolean("mobs.enderman.aggressive-towards-endermites-only-spawned-by-player-thrown-ender-pearls", endermanAggroEndermitesOnlyIfPlayerSpawned);
         endermanDisableStareAggro = getBoolean("mobs.enderman.disable-player-stare-aggression", endermanDisableStareAggro);
         endermanIgnoreProjectiles = getBoolean("mobs.enderman.ignore-projectiles", endermanIgnoreProjectiles);
+        endermanAlwaysDropExp = getBoolean("mobs.enderman.always-drop-exp", endermanAlwaysDropExp);
     }
 
     public boolean endermiteRidable = false;
@@ -1572,6 +1602,7 @@ public class PurpurWorldConfig {
     public double endermiteMaxHealth = 8.0D;
     public double endermiteScale = 1.0D;
     public boolean endermiteTakeDamageFromWater = false;
+    public boolean endermiteAlwaysDropExp = false;
     private void endermiteSettings() {
         endermiteRidable = getBoolean("mobs.endermite.ridable", endermiteRidable);
         endermiteRidableInWater = getBoolean("mobs.endermite.ridable-in-water", endermiteRidableInWater);
@@ -1584,6 +1615,7 @@ public class PurpurWorldConfig {
         endermiteMaxHealth = getDouble("mobs.endermite.attributes.max_health", endermiteMaxHealth);
         endermiteScale = Mth.clamp(getDouble("mobs.endermite.attributes.scale", endermiteScale), 0.0625D, 16.0D);
         endermiteTakeDamageFromWater = getBoolean("mobs.endermite.takes-damage-from-water", endermiteTakeDamageFromWater);
+        endermiteAlwaysDropExp = getBoolean("mobs.endermite.always-drop-exp", endermiteAlwaysDropExp);
     }
 
     public boolean evokerRidable = false;
@@ -1593,6 +1625,7 @@ public class PurpurWorldConfig {
     public double evokerScale = 1.0D;
     public boolean evokerBypassMobGriefing = false;
     public boolean evokerTakeDamageFromWater = false;
+    public boolean evokerAlwaysDropExp = false;
     private void evokerSettings() {
         evokerRidable = getBoolean("mobs.evoker.ridable", evokerRidable);
         evokerRidableInWater = getBoolean("mobs.evoker.ridable-in-water", evokerRidableInWater);
@@ -1606,6 +1639,7 @@ public class PurpurWorldConfig {
         evokerScale = Mth.clamp(getDouble("mobs.evoker.attributes.scale", evokerScale), 0.0625D, 16.0D);
         evokerBypassMobGriefing = getBoolean("mobs.evoker.bypass-mob-griefing", evokerBypassMobGriefing);
         evokerTakeDamageFromWater = getBoolean("mobs.evoker.takes-damage-from-water", evokerTakeDamageFromWater);
+        evokerAlwaysDropExp = getBoolean("mobs.evoker.always-drop-exp", evokerAlwaysDropExp);
     }
 
     public boolean foxRidable = false;
@@ -1617,6 +1651,7 @@ public class PurpurWorldConfig {
     public int foxBreedingTicks = 6000;
     public boolean foxBypassMobGriefing = false;
     public boolean foxTakeDamageFromWater = false;
+    public boolean foxAlwaysDropExp = false;
     private void foxSettings() {
         foxRidable = getBoolean("mobs.fox.ridable", foxRidable);
         foxRidableInWater = getBoolean("mobs.fox.ridable-in-water", foxRidableInWater);
@@ -1632,6 +1667,7 @@ public class PurpurWorldConfig {
         foxBreedingTicks = getInt("mobs.fox.breeding-delay-ticks", foxBreedingTicks);
         foxBypassMobGriefing = getBoolean("mobs.fox.bypass-mob-griefing", foxBypassMobGriefing);
         foxTakeDamageFromWater = getBoolean("mobs.fox.takes-damage-from-water", foxTakeDamageFromWater);
+        foxAlwaysDropExp = getBoolean("mobs.fox.always-drop-exp", foxAlwaysDropExp);
     }
 
     public boolean frogRidable = false;
@@ -1654,6 +1690,7 @@ public class PurpurWorldConfig {
     public double ghastMaxHealth = 10.0D;
     public double ghastScale = 1.0D;
     public boolean ghastTakeDamageFromWater = false;
+    public boolean ghastAlwaysDropExp = false;
     private void ghastSettings() {
         ghastRidable = getBoolean("mobs.ghast.ridable", ghastRidable);
         ghastRidableInWater = getBoolean("mobs.ghast.ridable-in-water", ghastRidableInWater);
@@ -1667,6 +1704,7 @@ public class PurpurWorldConfig {
         ghastMaxHealth = getDouble("mobs.ghast.attributes.max_health", ghastMaxHealth);
         ghastScale = Mth.clamp(getDouble("mobs.ghast.attributes.scale", ghastScale), 0.0625D, 16.0D);
         ghastTakeDamageFromWater = getBoolean("mobs.ghast.takes-damage-from-water", ghastTakeDamageFromWater);
+        ghastAlwaysDropExp = getBoolean("mobs.ghast.always-drop-exp", ghastAlwaysDropExp);
     }
 
     public boolean giantRidable = false;
@@ -1681,6 +1719,7 @@ public class PurpurWorldConfig {
     public boolean giantHaveAI = false;
     public boolean giantHaveHostileAI = false;
     public boolean giantTakeDamageFromWater = false;
+    public boolean giantAlwaysDropExp = false;
     private void giantSettings() {
         giantRidable = getBoolean("mobs.giant.ridable", giantRidable);
         giantRidableInWater = getBoolean("mobs.giant.ridable-in-water", giantRidableInWater);
@@ -1703,6 +1742,7 @@ public class PurpurWorldConfig {
         giantHaveAI = getBoolean("mobs.giant.have-ai", giantHaveAI);
         giantHaveHostileAI = getBoolean("mobs.giant.have-hostile-ai", giantHaveHostileAI);
         giantTakeDamageFromWater = getBoolean("mobs.giant.takes-damage-from-water", giantTakeDamageFromWater);
+        giantAlwaysDropExp = getBoolean("mobs.giant.always-drop-exp", giantAlwaysDropExp);
     }
 
     public boolean glowSquidRidable = false;
@@ -1711,6 +1751,7 @@ public class PurpurWorldConfig {
     public double glowSquidScale = 1.0D;
     public boolean glowSquidsCanFly = false;
     public boolean glowSquidTakeDamageFromWater = false;
+    public boolean glowSquidAlwaysDropExp = false;
     private void glowSquidSettings() {
         glowSquidRidable = getBoolean("mobs.glow_squid.ridable", glowSquidRidable);
         glowSquidControllable = getBoolean("mobs.glow_squid.controllable", glowSquidControllable);
@@ -1718,6 +1759,7 @@ public class PurpurWorldConfig {
         glowSquidScale = Mth.clamp(getDouble("mobs.glow_squid.attributes.scale", glowSquidScale), 0.0625D, 16.0D);
         glowSquidsCanFly = getBoolean("mobs.glow_squid.can-fly", glowSquidsCanFly);
         glowSquidTakeDamageFromWater = getBoolean("mobs.glow_squid.takes-damage-from-water", glowSquidTakeDamageFromWater);
+        glowSquidAlwaysDropExp = getBoolean("mobs.glow_squid.always-drop-exp", glowSquidAlwaysDropExp);
     }
 
     public boolean goatRidable = false;
@@ -1727,6 +1769,7 @@ public class PurpurWorldConfig {
     public double goatScale = 1.0D;
     public int goatBreedingTicks = 6000;
     public boolean goatTakeDamageFromWater = false;
+    public boolean goatAlwaysDropExp = false;
     private void goatSettings() {
         goatRidable = getBoolean("mobs.goat.ridable", goatRidable);
         goatRidableInWater = getBoolean("mobs.goat.ridable-in-water", goatRidableInWater);
@@ -1735,6 +1778,7 @@ public class PurpurWorldConfig {
         goatScale = Mth.clamp(getDouble("mobs.goat.attributes.scale", goatScale), 0.0625D, 16.0D);
         goatBreedingTicks = getInt("mobs.goat.breeding-delay-ticks", goatBreedingTicks);
         goatTakeDamageFromWater = getBoolean("mobs.goat.takes-damage-from-water", goatTakeDamageFromWater);
+        goatAlwaysDropExp = getBoolean("mobs.goat.always-drop-exp", goatAlwaysDropExp);
     }
 
     public boolean guardianRidable = false;
@@ -1742,6 +1786,7 @@ public class PurpurWorldConfig {
     public double guardianMaxHealth = 30.0D;
     public double guardianScale = 1.0D;
     public boolean guardianTakeDamageFromWater = false;
+    public boolean guardianAlwaysDropExp = false;
     private void guardianSettings() {
         guardianRidable = getBoolean("mobs.guardian.ridable", guardianRidable);
         guardianControllable = getBoolean("mobs.guardian.controllable", guardianControllable);
@@ -1753,6 +1798,7 @@ public class PurpurWorldConfig {
         guardianMaxHealth = getDouble("mobs.guardian.attributes.max_health", guardianMaxHealth);
         guardianScale = Mth.clamp(getDouble("mobs.guardian.attributes.scale", guardianScale), 0.0625D, 16.0D);
         guardianTakeDamageFromWater = getBoolean("mobs.guardian.takes-damage-from-water", guardianTakeDamageFromWater);
+        guardianAlwaysDropExp = getBoolean("mobs.guardian.always-drop-exp", guardianAlwaysDropExp);
     }
 
     public boolean forceHalloweenSeason = false;
@@ -1769,6 +1815,7 @@ public class PurpurWorldConfig {
     public double hoglinScale = 1.0D;
     public int hoglinBreedingTicks = 6000;
     public boolean hoglinTakeDamageFromWater = false;
+    public boolean hoglinAlwaysDropExp = false;
     private void hoglinSettings() {
         hoglinRidable = getBoolean("mobs.hoglin.ridable", hoglinRidable);
         hoglinRidableInWater = getBoolean("mobs.hoglin.ridable-in-water", hoglinRidableInWater);
@@ -1782,6 +1829,7 @@ public class PurpurWorldConfig {
         hoglinScale = Mth.clamp(getDouble("mobs.hoglin.attributes.scale", hoglinScale), 0.0625D, 16.0D);
         hoglinBreedingTicks = getInt("mobs.hoglin.breeding-delay-ticks", hoglinBreedingTicks);
         hoglinTakeDamageFromWater = getBoolean("mobs.hoglin.takes-damage-from-water", hoglinTakeDamageFromWater);
+        hoglinAlwaysDropExp = getBoolean("mobs.hoglin.always-drop-exp", hoglinAlwaysDropExp);
     }
 
     public boolean horseRidableInWater = false;
@@ -1793,6 +1841,7 @@ public class PurpurWorldConfig {
     public double horseMovementSpeedMax = 0.3375D;
     public int horseBreedingTicks = 6000;
     public boolean horseTakeDamageFromWater = false;
+    public boolean horseAlwaysDropExp = false;
     private void horseSettings() {
         horseRidableInWater = getBoolean("mobs.horse.ridable-in-water", horseRidableInWater);
         if (PurpurConfig.version < 10) {
@@ -1810,6 +1859,7 @@ public class PurpurWorldConfig {
         horseMovementSpeedMax = getDouble("mobs.horse.attributes.movement_speed.max", horseMovementSpeedMax);
         horseBreedingTicks = getInt("mobs.horse.breeding-delay-ticks", horseBreedingTicks);
         horseTakeDamageFromWater = getBoolean("mobs.horse.takes-damage-from-water", horseTakeDamageFromWater);
+        horseAlwaysDropExp = getBoolean("mobs.horse.always-drop-exp", horseAlwaysDropExp);
     }
 
     public boolean huskRidable = false;
@@ -1822,6 +1872,7 @@ public class PurpurWorldConfig {
     public double huskJockeyChance = 0.05D;
     public boolean huskJockeyTryExistingChickens = true;
     public boolean huskTakeDamageFromWater = false;
+    public boolean huskAlwaysDropExp = false;
     private void huskSettings() {
         huskRidable = getBoolean("mobs.husk.ridable", huskRidable);
         huskRidableInWater = getBoolean("mobs.husk.ridable-in-water", huskRidableInWater);
@@ -1838,6 +1889,7 @@ public class PurpurWorldConfig {
         huskJockeyChance = getDouble("mobs.husk.jockey.chance", huskJockeyChance);
         huskJockeyTryExistingChickens = getBoolean("mobs.husk.jockey.try-existing-chickens", huskJockeyTryExistingChickens);
         huskTakeDamageFromWater = getBoolean("mobs.husk.takes-damage-from-water", huskTakeDamageFromWater);
+        huskAlwaysDropExp = getBoolean("mobs.husk.always-drop-exp", huskAlwaysDropExp);
     }
 
     public boolean illusionerRidable = false;
@@ -1848,6 +1900,7 @@ public class PurpurWorldConfig {
     public double illusionerMaxHealth = 32.0D;
     public double illusionerScale = 1.0D;
     public boolean illusionerTakeDamageFromWater = false;
+    public boolean illusionerAlwaysDropExp = false;
     private void illusionerSettings() {
         illusionerRidable = getBoolean("mobs.illusioner.ridable", illusionerRidable);
         illusionerRidableInWater = getBoolean("mobs.illusioner.ridable-in-water", illusionerRidableInWater);
@@ -1866,6 +1919,7 @@ public class PurpurWorldConfig {
         illusionerMaxHealth = getDouble("mobs.illusioner.attributes.max_health", illusionerMaxHealth);
         illusionerScale = Mth.clamp(getDouble("mobs.illusioner.attributes.scale", illusionerScale), 0.0625D, 16.0D);
         illusionerTakeDamageFromWater = getBoolean("mobs.illusioner.takes-damage-from-water", illusionerTakeDamageFromWater);
+        illusionerAlwaysDropExp = getBoolean("mobs.illusioner.always-drop-exp", illusionerAlwaysDropExp);
     }
 
     public boolean ironGolemRidable = false;
@@ -1877,6 +1931,7 @@ public class PurpurWorldConfig {
     public boolean ironGolemTakeDamageFromWater = false;
     public boolean ironGolemPoppyCalm = false;
     public boolean ironGolemHealCalm = false;
+    public boolean ironGolemAlwaysDropExp = false;
     private void ironGolemSettings() {
         ironGolemRidable = getBoolean("mobs.iron_golem.ridable", ironGolemRidable);
         ironGolemRidableInWater = getBoolean("mobs.iron_golem.ridable-in-water", ironGolemRidableInWater);
@@ -1892,6 +1947,7 @@ public class PurpurWorldConfig {
         ironGolemTakeDamageFromWater = getBoolean("mobs.iron_golem.takes-damage-from-water", ironGolemTakeDamageFromWater);
         ironGolemPoppyCalm = getBoolean("mobs.iron_golem.poppy-calms-anger", ironGolemPoppyCalm);
         ironGolemHealCalm = getBoolean("mobs.iron_golem.healing-calms-anger", ironGolemHealCalm);
+        ironGolemAlwaysDropExp = getBoolean("mobs.iron_golem.always-drop-exp", ironGolemAlwaysDropExp);
     }
 
     public boolean llamaRidable = false;
@@ -1906,6 +1962,7 @@ public class PurpurWorldConfig {
     public int llamaBreedingTicks = 6000;
     public boolean llamaTakeDamageFromWater = false;
     public boolean llamaJoinCaravans = true;
+    public boolean llamaAlwaysDropExp = false;
     private void llamaSettings() {
         llamaRidable = getBoolean("mobs.llama.ridable", llamaRidable);
         llamaRidableInWater = getBoolean("mobs.llama.ridable-in-water", llamaRidableInWater);
@@ -1926,6 +1983,7 @@ public class PurpurWorldConfig {
         llamaBreedingTicks = getInt("mobs.llama.breeding-delay-ticks", llamaBreedingTicks);
         llamaTakeDamageFromWater = getBoolean("mobs.llama.takes-damage-from-water", llamaTakeDamageFromWater);
         llamaJoinCaravans = getBoolean("mobs.llama.join-caravans", llamaJoinCaravans);
+        llamaAlwaysDropExp = getBoolean("mobs.llama.always-drop-exp", llamaAlwaysDropExp);
     }
 
     public boolean magmaCubeRidable = false;
@@ -1936,6 +1994,7 @@ public class PurpurWorldConfig {
     public Map<Integer, Double> magmaCubeMaxHealthCache = new HashMap<>();
     public Map<Integer, Double> magmaCubeAttackDamageCache = new HashMap<>();
     public boolean magmaCubeTakeDamageFromWater = false;
+    public boolean magmaCubeAlwaysDropExp = false;
     private void magmaCubeSettings() {
         magmaCubeRidable = getBoolean("mobs.magma_cube.ridable", magmaCubeRidable);
         magmaCubeRidableInWater = getBoolean("mobs.magma_cube.ridable-in-water", magmaCubeRidableInWater);
@@ -1950,6 +2009,7 @@ public class PurpurWorldConfig {
         magmaCubeMaxHealthCache.clear();
         magmaCubeAttackDamageCache.clear();
         magmaCubeTakeDamageFromWater = getBoolean("mobs.magma_cube.takes-damage-from-water", magmaCubeTakeDamageFromWater);
+        magmaCubeAlwaysDropExp = getBoolean("mobs.magma_cube.always-drop-exp", magmaCubeAlwaysDropExp);
     }
 
     public boolean mooshroomRidable = false;
@@ -1959,6 +2019,7 @@ public class PurpurWorldConfig {
     public double mooshroomScale = 1.0D;
     public int mooshroomBreedingTicks = 6000;
     public boolean mooshroomTakeDamageFromWater = false;
+    public boolean mooshroomAlwaysDropExp = false;
     private void mooshroomSettings() {
         mooshroomRidable = getBoolean("mobs.mooshroom.ridable", mooshroomRidable);
         mooshroomRidableInWater = getBoolean("mobs.mooshroom.ridable-in-water", mooshroomRidableInWater);
@@ -1972,6 +2033,7 @@ public class PurpurWorldConfig {
         mooshroomScale = Mth.clamp(getDouble("mobs.mooshroom.attributes.scale", mooshroomScale), 0.0625D, 16.0D);
         mooshroomBreedingTicks = getInt("mobs.mooshroom.breeding-delay-ticks", mooshroomBreedingTicks);
         mooshroomTakeDamageFromWater = getBoolean("mobs.mooshroom.takes-damage-from-water", mooshroomTakeDamageFromWater);
+        mooshroomAlwaysDropExp = getBoolean("mobs.mooshroom.always-drop-exp", mooshroomAlwaysDropExp);
     }
 
     public boolean muleRidableInWater = false;
@@ -1983,6 +2045,7 @@ public class PurpurWorldConfig {
     public double muleMovementSpeedMax = 0.175D;
     public int muleBreedingTicks = 6000;
     public boolean muleTakeDamageFromWater = false;
+    public boolean muleAlwaysDropExp = false;
     private void muleSettings() {
         muleRidableInWater = getBoolean("mobs.mule.ridable-in-water", muleRidableInWater);
         if (PurpurConfig.version < 10) {
@@ -2000,6 +2063,7 @@ public class PurpurWorldConfig {
         muleMovementSpeedMax = getDouble("mobs.mule.attributes.movement_speed.max", muleMovementSpeedMax);
         muleBreedingTicks = getInt("mobs.mule.breeding-delay-ticks", muleBreedingTicks);
         muleTakeDamageFromWater = getBoolean("mobs.mule.takes-damage-from-water", muleTakeDamageFromWater);
+        muleAlwaysDropExp = getBoolean("mobs.mule.always-drop-exp", muleAlwaysDropExp);
     }
 
     public boolean ocelotRidable = false;
@@ -2009,6 +2073,7 @@ public class PurpurWorldConfig {
     public double ocelotScale = 1.0D;
     public int ocelotBreedingTicks = 6000;
     public boolean ocelotTakeDamageFromWater = false;
+    public boolean ocelotAlwaysDropExp = false;
     private void ocelotSettings() {
         ocelotRidable = getBoolean("mobs.ocelot.ridable", ocelotRidable);
         ocelotRidableInWater = getBoolean("mobs.ocelot.ridable-in-water", ocelotRidableInWater);
@@ -2022,6 +2087,7 @@ public class PurpurWorldConfig {
         ocelotScale = Mth.clamp(getDouble("mobs.ocelot.attributes.scale", ocelotScale), 0.0625D, 16.0D);
         ocelotBreedingTicks = getInt("mobs.ocelot.breeding-delay-ticks", ocelotBreedingTicks);
         ocelotTakeDamageFromWater = getBoolean("mobs.ocelot.takes-damage-from-water", ocelotTakeDamageFromWater);
+        ocelotAlwaysDropExp = getBoolean("mobs.ocelot.always-drop-exp", ocelotAlwaysDropExp);
     }
 
     public boolean pandaRidable = false;
@@ -2031,6 +2097,7 @@ public class PurpurWorldConfig {
     public double pandaScale = 1.0D;
     public int pandaBreedingTicks = 6000;
     public boolean pandaTakeDamageFromWater = false;
+    public boolean pandaAlwaysDropExp = false;
     private void pandaSettings() {
         pandaRidable = getBoolean("mobs.panda.ridable", pandaRidable);
         pandaRidableInWater = getBoolean("mobs.panda.ridable-in-water", pandaRidableInWater);
@@ -2044,6 +2111,7 @@ public class PurpurWorldConfig {
         pandaScale = Mth.clamp(getDouble("mobs.panda.attributes.scale", pandaScale), 0.0625D, 16.0D);
         pandaBreedingTicks = getInt("mobs.panda.breeding-delay-ticks", pandaBreedingTicks);
         pandaTakeDamageFromWater = getBoolean("mobs.panda.takes-damage-from-water", pandaTakeDamageFromWater);
+        pandaAlwaysDropExp = getBoolean("mobs.panda.always-drop-exp", pandaAlwaysDropExp);
     }
 
     public boolean parrotRidable = false;
@@ -2054,6 +2122,7 @@ public class PurpurWorldConfig {
     public double parrotScale = 1.0D;
     public boolean parrotTakeDamageFromWater = false;
     public boolean parrotBreedable = false;
+    public boolean parrotAlwaysDropExp = false;
     private void parrotSettings() {
         parrotRidable = getBoolean("mobs.parrot.ridable", parrotRidable);
         parrotRidableInWater = getBoolean("mobs.parrot.ridable-in-water", parrotRidableInWater);
@@ -2068,6 +2137,7 @@ public class PurpurWorldConfig {
         parrotScale = Mth.clamp(getDouble("mobs.parrot.attributes.scale", parrotScale), 0.0625D, 16.0D);
         parrotTakeDamageFromWater = getBoolean("mobs.parrot.takes-damage-from-water", parrotTakeDamageFromWater);
         parrotBreedable = getBoolean("mobs.parrot.can-breed", parrotBreedable);
+        parrotAlwaysDropExp = getBoolean("mobs.parrot.always-drop-exp", parrotAlwaysDropExp);
     }
 
     public boolean phantomRidable = false;
@@ -2095,6 +2165,7 @@ public class PurpurWorldConfig {
     public boolean phantomBurnInDaylight = true;
     public boolean phantomFlamesOnSwoop = false;
     public boolean phantomTakeDamageFromWater = false;
+    public boolean phantomAlwaysDropExp = false;
     private void phantomSettings() {
         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
@@ -2130,6 +2201,7 @@ public class PurpurWorldConfig {
         phantomIgnorePlayersWithTorch = getBoolean("mobs.phantom.ignore-players-with-torch", phantomIgnorePlayersWithTorch);
         phantomFlamesOnSwoop = getBoolean("mobs.phantom.flames-on-swoop", phantomFlamesOnSwoop);
         phantomTakeDamageFromWater = getBoolean("mobs.phantom.takes-damage-from-water", phantomTakeDamageFromWater);
+        phantomAlwaysDropExp = getBoolean("mobs.phantom.always-drop-exp", phantomAlwaysDropExp);
     }
 
     public boolean pigRidable = false;
@@ -2140,6 +2212,7 @@ public class PurpurWorldConfig {
     public boolean pigGiveSaddleBack = false;
     public int pigBreedingTicks = 6000;
     public boolean pigTakeDamageFromWater = false;
+    public boolean pigAlwaysDropExp = false;
     private void pigSettings() {
         pigRidable = getBoolean("mobs.pig.ridable", pigRidable);
         pigRidableInWater = getBoolean("mobs.pig.ridable-in-water", pigRidableInWater);
@@ -2154,6 +2227,7 @@ public class PurpurWorldConfig {
         pigGiveSaddleBack = getBoolean("mobs.pig.give-saddle-back", pigGiveSaddleBack);
         pigBreedingTicks = getInt("mobs.pig.breeding-delay-ticks", pigBreedingTicks);
         pigTakeDamageFromWater = getBoolean("mobs.pig.takes-damage-from-water", pigTakeDamageFromWater);
+        pigAlwaysDropExp = getBoolean("mobs.pig.always-drop-exp", pigAlwaysDropExp);
     }
 
     public boolean piglinRidable = false;
@@ -2164,6 +2238,7 @@ public class PurpurWorldConfig {
     public boolean piglinBypassMobGriefing = false;
     public boolean piglinTakeDamageFromWater = false;
     public int piglinPortalSpawnModifier = 2000;
+    public boolean piglinAlwaysDropExp = false;
     private void piglinSettings() {
         piglinRidable = getBoolean("mobs.piglin.ridable", piglinRidable);
         piglinRidableInWater = getBoolean("mobs.piglin.ridable-in-water", piglinRidableInWater);
@@ -2178,6 +2253,7 @@ public class PurpurWorldConfig {
         piglinBypassMobGriefing = getBoolean("mobs.piglin.bypass-mob-griefing", piglinBypassMobGriefing);
         piglinTakeDamageFromWater = getBoolean("mobs.piglin.takes-damage-from-water", piglinTakeDamageFromWater);
         piglinPortalSpawnModifier = getInt("mobs.piglin.portal-spawn-modifier", piglinPortalSpawnModifier);
+        piglinAlwaysDropExp = getBoolean("mobs.piglin.always-drop-exp", piglinAlwaysDropExp);
     }
 
     public boolean piglinBruteRidable = false;
@@ -2186,6 +2262,7 @@ public class PurpurWorldConfig {
     public double piglinBruteMaxHealth = 50.0D;
     public double piglinBruteScale = 1.0D;
     public boolean piglinBruteTakeDamageFromWater = false;
+    public boolean piglinBruteAlwaysDropExp = false;
     private void piglinBruteSettings() {
         piglinBruteRidable = getBoolean("mobs.piglin_brute.ridable", piglinBruteRidable);
         piglinBruteRidableInWater = getBoolean("mobs.piglin_brute.ridable-in-water", piglinBruteRidableInWater);
@@ -2198,6 +2275,7 @@ public class PurpurWorldConfig {
         piglinBruteMaxHealth = getDouble("mobs.piglin_brute.attributes.max_health", piglinBruteMaxHealth);
         piglinBruteScale = Mth.clamp(getDouble("mobs.piglin_brute.attributes.scale", piglinBruteScale), 0.0625D, 16.0D);
         piglinBruteTakeDamageFromWater = getBoolean("mobs.piglin_brute.takes-damage-from-water", piglinBruteTakeDamageFromWater);
+        piglinBruteAlwaysDropExp = getBoolean("mobs.piglin_brute.always-drop-exp", piglinBruteAlwaysDropExp);
     }
 
     public boolean pillagerRidable = false;
@@ -2207,6 +2285,7 @@ public class PurpurWorldConfig {
     public double pillagerScale = 1.0D;
     public boolean pillagerBypassMobGriefing = false;
     public boolean pillagerTakeDamageFromWater = false;
+    public boolean pillagerAlwaysDropExp = false;
     private void pillagerSettings() {
         pillagerRidable = getBoolean("mobs.pillager.ridable", pillagerRidable);
         pillagerRidableInWater = getBoolean("mobs.pillager.ridable-in-water", pillagerRidableInWater);
@@ -2220,6 +2299,7 @@ public class PurpurWorldConfig {
         pillagerScale = Mth.clamp(getDouble("mobs.pillager.attributes.scale", pillagerScale), 0.0625D, 16.0D);
         pillagerBypassMobGriefing = getBoolean("mobs.pillager.bypass-mob-griefing", pillagerBypassMobGriefing);
         pillagerTakeDamageFromWater = getBoolean("mobs.pillager.takes-damage-from-water", pillagerTakeDamageFromWater);
+        pillagerAlwaysDropExp = getBoolean("mobs.pillager.always-drop-exp", pillagerAlwaysDropExp);
     }
 
     public boolean polarBearRidable = false;
@@ -2231,6 +2311,7 @@ public class PurpurWorldConfig {
     public Item polarBearBreedableItem = null;
     public int polarBearBreedingTicks = 6000;
     public boolean polarBearTakeDamageFromWater = false;
+    public boolean polarBearAlwaysDropExp = false;
     private void polarBearSettings() {
         polarBearRidable = getBoolean("mobs.polar_bear.ridable", polarBearRidable);
         polarBearRidableInWater = getBoolean("mobs.polar_bear.ridable-in-water", polarBearRidableInWater);
@@ -2247,6 +2328,7 @@ public class PurpurWorldConfig {
         if (item != Items.AIR) polarBearBreedableItem = item;
         polarBearBreedingTicks = getInt("mobs.polar_bear.breeding-delay-ticks", polarBearBreedingTicks);
         polarBearTakeDamageFromWater = getBoolean("mobs.polar_bear.takes-damage-from-water", polarBearTakeDamageFromWater);
+        polarBearAlwaysDropExp = getBoolean("mobs.polar_bear.always-drop-exp", polarBearAlwaysDropExp);
     }
 
     public boolean pufferfishRidable = false;
@@ -2254,6 +2336,7 @@ public class PurpurWorldConfig {
     public double pufferfishMaxHealth = 3.0D;
     public double pufferfishScale = 1.0D;
     public boolean pufferfishTakeDamageFromWater = false;
+    public boolean pufferfishAlwaysDropExp = false;
     private void pufferfishSettings() {
         pufferfishRidable = getBoolean("mobs.pufferfish.ridable", pufferfishRidable);
         pufferfishControllable = getBoolean("mobs.pufferfish.controllable", pufferfishControllable);
@@ -2265,6 +2348,7 @@ public class PurpurWorldConfig {
         pufferfishMaxHealth = getDouble("mobs.pufferfish.attributes.max_health", pufferfishMaxHealth);
         pufferfishScale = Mth.clamp(getDouble("mobs.pufferfish.attributes.scale", pufferfishScale), 0.0625D, 16.0D);
         pufferfishTakeDamageFromWater = getBoolean("mobs.pufferfish.takes-damage-from-water", pufferfishTakeDamageFromWater);
+        pufferfishAlwaysDropExp = getBoolean("mobs.pufferfish.always-drop-exp", pufferfishAlwaysDropExp);
     }
 
     public boolean rabbitRidable = false;
@@ -2277,6 +2361,7 @@ public class PurpurWorldConfig {
     public int rabbitBreedingTicks = 6000;
     public boolean rabbitBypassMobGriefing = false;
     public boolean rabbitTakeDamageFromWater = false;
+    public boolean rabbitAlwaysDropExp = false;
     private void rabbitSettings() {
         rabbitRidable = getBoolean("mobs.rabbit.ridable", rabbitRidable);
         rabbitRidableInWater = getBoolean("mobs.rabbit.ridable-in-water", rabbitRidableInWater);
@@ -2293,6 +2378,7 @@ public class PurpurWorldConfig {
         rabbitBreedingTicks = getInt("mobs.rabbit.breeding-delay-ticks", rabbitBreedingTicks);
         rabbitBypassMobGriefing = getBoolean("mobs.rabbit.bypass-mob-griefing", rabbitBypassMobGriefing);
         rabbitTakeDamageFromWater = getBoolean("mobs.rabbit.takes-damage-from-water", rabbitTakeDamageFromWater);
+        rabbitAlwaysDropExp = getBoolean("mobs.rabbit.always-drop-exp", rabbitAlwaysDropExp);
     }
 
     public boolean ravagerRidable = false;
@@ -2303,6 +2389,7 @@ public class PurpurWorldConfig {
     public boolean ravagerBypassMobGriefing = false;
     public boolean ravagerTakeDamageFromWater = false;
     public List<Block> ravagerGriefableBlocks = new ArrayList<>();
+    public boolean ravagerAlwaysDropExp = false;
     private void ravagerSettings() {
         ravagerRidable = getBoolean("mobs.ravager.ridable", ravagerRidable);
         ravagerRidableInWater = getBoolean("mobs.ravager.ridable-in-water", ravagerRidableInWater);
@@ -2333,6 +2420,7 @@ public class PurpurWorldConfig {
                 ravagerGriefableBlocks.add(block);
             }
         });
+        ravagerAlwaysDropExp = getBoolean("mobs.ravager.always-drop-exp", ravagerAlwaysDropExp);
     }
 
     public boolean salmonRidable = false;
@@ -2340,6 +2428,7 @@ public class PurpurWorldConfig {
     public double salmonMaxHealth = 3.0D;
     public double salmonScale = 1.0D;
     public boolean salmonTakeDamageFromWater = false;
+    public boolean salmonAlwaysDropExp = false;
     private void salmonSettings() {
         salmonRidable = getBoolean("mobs.salmon.ridable", salmonRidable);
         salmonControllable = getBoolean("mobs.salmon.controllable", salmonControllable);
@@ -2351,6 +2440,7 @@ public class PurpurWorldConfig {
         salmonMaxHealth = getDouble("mobs.salmon.attributes.max_health", salmonMaxHealth);
         salmonScale = Mth.clamp(getDouble("mobs.salmon.attributes.scale", salmonScale), 0.0625D, 16.0D);
         salmonTakeDamageFromWater = getBoolean("mobs.salmon.takes-damage-from-water", salmonTakeDamageFromWater);
+        salmonAlwaysDropExp = getBoolean("mobs.salmon.always-drop-exp", salmonAlwaysDropExp);
     }
 
     public boolean sheepRidable = false;
@@ -2361,6 +2451,7 @@ public class PurpurWorldConfig {
     public int sheepBreedingTicks = 6000;
     public boolean sheepBypassMobGriefing = false;
     public boolean sheepTakeDamageFromWater = false;
+    public boolean sheepAlwaysDropExp = false;
     private void sheepSettings() {
         sheepRidable = getBoolean("mobs.sheep.ridable", sheepRidable);
         sheepRidableInWater = getBoolean("mobs.sheep.ridable-in-water", sheepRidableInWater);
@@ -2375,6 +2466,7 @@ public class PurpurWorldConfig {
         sheepBreedingTicks = getInt("mobs.sheep.breeding-delay-ticks", sheepBreedingTicks);
         sheepBypassMobGriefing = getBoolean("mobs.sheep.bypass-mob-griefing", sheepBypassMobGriefing);
         sheepTakeDamageFromWater = getBoolean("mobs.sheep.takes-damage-from-water", sheepTakeDamageFromWater);
+        sheepAlwaysDropExp = getBoolean("mobs.sheep.always-drop-exp", sheepAlwaysDropExp);
     }
 
     public boolean shulkerRidable = false;
@@ -2389,6 +2481,7 @@ public class PurpurWorldConfig {
     public String shulkerSpawnFromBulletNearbyEquation = "(nearby - 1) / 5.0";
     public boolean shulkerSpawnFromBulletRandomColor = false;
     public boolean shulkerChangeColorWithDye = false;
+    public boolean shulkerAlwaysDropExp = false;
     private void shulkerSettings() {
         shulkerRidable = getBoolean("mobs.shulker.ridable", shulkerRidable);
         shulkerRidableInWater = getBoolean("mobs.shulker.ridable-in-water", shulkerRidableInWater);
@@ -2407,6 +2500,7 @@ public class PurpurWorldConfig {
         shulkerSpawnFromBulletNearbyEquation = getString("mobs.shulker.spawn-from-bullet.nearby-equation", shulkerSpawnFromBulletNearbyEquation);
         shulkerSpawnFromBulletRandomColor = getBoolean("mobs.shulker.spawn-from-bullet.random-color", shulkerSpawnFromBulletRandomColor);
         shulkerChangeColorWithDye = getBoolean("mobs.shulker.change-color-with-dye", shulkerChangeColorWithDye);
+        shulkerAlwaysDropExp = getBoolean("mobs.shulker.always-drop-exp", shulkerAlwaysDropExp);
     }
 
     public boolean silverfishRidable = false;
@@ -2418,6 +2512,7 @@ public class PurpurWorldConfig {
     public double silverfishAttackDamage = 1.0D;
     public boolean silverfishBypassMobGriefing = false;
     public boolean silverfishTakeDamageFromWater = false;
+    public boolean silverfishAlwaysDropExp = false;
     private void silverfishSettings() {
         silverfishRidable = getBoolean("mobs.silverfish.ridable", silverfishRidable);
         silverfishRidableInWater = getBoolean("mobs.silverfish.ridable-in-water", silverfishRidableInWater);
@@ -2433,6 +2528,7 @@ public class PurpurWorldConfig {
         silverfishAttackDamage = getDouble("mobs.silverfish.attributes.attack_damage", silverfishAttackDamage);
         silverfishBypassMobGriefing = getBoolean("mobs.silverfish.bypass-mob-griefing", silverfishBypassMobGriefing);
         silverfishTakeDamageFromWater = getBoolean("mobs.silverfish.takes-damage-from-water", silverfishTakeDamageFromWater);
+        silverfishAlwaysDropExp = getBoolean("mobs.silverfish.always-drop-exp", silverfishAlwaysDropExp);
     }
 
     public boolean skeletonRidable = false;
@@ -2441,6 +2537,7 @@ public class PurpurWorldConfig {
     public double skeletonMaxHealth = 20.0D;
     public double skeletonScale = 1.0D;
     public boolean skeletonTakeDamageFromWater = false;
+    public boolean skeletonAlwaysDropExp = false;
     private void skeletonSettings() {
         skeletonRidable = getBoolean("mobs.skeleton.ridable", skeletonRidable);
         skeletonRidableInWater = getBoolean("mobs.skeleton.ridable-in-water", skeletonRidableInWater);
@@ -2453,6 +2550,7 @@ public class PurpurWorldConfig {
         skeletonMaxHealth = getDouble("mobs.skeleton.attributes.max_health", skeletonMaxHealth);
         skeletonScale = Mth.clamp(getDouble("mobs.skeleton.attributes.scale", skeletonScale), 0.0625D, 16.0D);
         skeletonTakeDamageFromWater = getBoolean("mobs.skeleton.takes-damage-from-water", skeletonTakeDamageFromWater);
+        skeletonAlwaysDropExp = getBoolean("mobs.skeleton.always-drop-exp", skeletonAlwaysDropExp);
     }
 
     public boolean skeletonHorseRidable = false;
@@ -2465,6 +2563,7 @@ public class PurpurWorldConfig {
     public double skeletonHorseMovementSpeedMin = 0.2D;
     public double skeletonHorseMovementSpeedMax = 0.2D;
     public boolean skeletonHorseTakeDamageFromWater = false;
+    public boolean skeletonHorseAlwaysDropExp = false;
     private void skeletonHorseSettings() {
         skeletonHorseRidable = getBoolean("mobs.skeleton_horse.ridable", skeletonHorseRidable);
         skeletonHorseRidableInWater = getBoolean("mobs.skeleton_horse.ridable-in-water", skeletonHorseRidableInWater);
@@ -2482,6 +2581,7 @@ public class PurpurWorldConfig {
         skeletonHorseMovementSpeedMin = getDouble("mobs.skeleton_horse.attributes.movement_speed.min", skeletonHorseMovementSpeedMin);
         skeletonHorseMovementSpeedMax = getDouble("mobs.skeleton_horse.attributes.movement_speed.max", skeletonHorseMovementSpeedMax);
         skeletonHorseTakeDamageFromWater = getBoolean("mobs.skeleton_horse.takes-damage-from-water", skeletonHorseTakeDamageFromWater);
+        skeletonHorseAlwaysDropExp = getBoolean("mobs.skeleton_horse.always-drop-exp", skeletonHorseAlwaysDropExp);
     }
 
     public boolean slimeRidable = false;
@@ -2492,6 +2592,7 @@ public class PurpurWorldConfig {
     public Map<Integer, Double> slimeMaxHealthCache = new HashMap<>();
     public Map<Integer, Double> slimeAttackDamageCache = new HashMap<>();
     public boolean slimeTakeDamageFromWater = false;
+    public boolean slimeAlwaysDropExp = false;
     private void slimeSettings() {
         slimeRidable = getBoolean("mobs.slime.ridable", slimeRidable);
         slimeRidableInWater = getBoolean("mobs.slime.ridable-in-water", slimeRidableInWater);
@@ -2506,6 +2607,7 @@ public class PurpurWorldConfig {
         slimeMaxHealthCache.clear();
         slimeAttackDamageCache.clear();
         slimeTakeDamageFromWater = getBoolean("mobs.slime.takes-damage-from-water", slimeTakeDamageFromWater);
+        slimeAlwaysDropExp = getBoolean("mobs.slime.always-drop-exp", slimeAlwaysDropExp);
     }
 
     public boolean snowGolemRidable = false;
@@ -2521,6 +2623,7 @@ public class PurpurWorldConfig {
     public double snowGolemAttackDistance = 1.25D;
     public boolean snowGolemBypassMobGriefing = false;
     public boolean snowGolemTakeDamageFromWater = true;
+    public boolean snowGolemAlwaysDropExp = false;
     private void snowGolemSettings() {
         snowGolemRidable = getBoolean("mobs.snow_golem.ridable", snowGolemRidable);
         snowGolemRidableInWater = getBoolean("mobs.snow_golem.ridable-in-water", snowGolemRidableInWater);
@@ -2540,6 +2643,7 @@ public class PurpurWorldConfig {
         snowGolemAttackDistance = getDouble("mobs.snow_golem.attack-distance", snowGolemAttackDistance);
         snowGolemBypassMobGriefing = getBoolean("mobs.snow_golem.bypass-mob-griefing", snowGolemBypassMobGriefing);
         snowGolemTakeDamageFromWater = getBoolean("mobs.snow_golem.takes-damage-from-water", snowGolemTakeDamageFromWater);
+        snowGolemAlwaysDropExp = getBoolean("mobs.snow_golem.always-drop-exp", snowGolemAlwaysDropExp);
     }
 
     public boolean snifferRidable = false;
@@ -2565,6 +2669,7 @@ public class PurpurWorldConfig {
     public double squidOffsetWaterCheck = 0.0D;
     public boolean squidsCanFly = false;
     public boolean squidTakeDamageFromWater = false;
+    public boolean squidAlwaysDropExp = false;
     private void squidSettings() {
         squidRidable = getBoolean("mobs.squid.ridable", squidRidable);
         squidControllable = getBoolean("mobs.squid.controllable", squidControllable);
@@ -2579,6 +2684,7 @@ public class PurpurWorldConfig {
         squidOffsetWaterCheck = getDouble("mobs.squid.water-offset-check", squidOffsetWaterCheck);
         squidsCanFly = getBoolean("mobs.squid.can-fly", squidsCanFly);
         squidTakeDamageFromWater = getBoolean("mobs.squid.takes-damage-from-water", squidTakeDamageFromWater);
+        squidAlwaysDropExp = getBoolean("mobs.squid.always-drop-exp", squidAlwaysDropExp);
     }
 
     public boolean spiderRidable = false;
@@ -2587,6 +2693,7 @@ public class PurpurWorldConfig {
     public double spiderMaxHealth = 16.0D;
     public double spiderScale = 1.0D;
     public boolean spiderTakeDamageFromWater = false;
+    public boolean spiderAlwaysDropExp = false;
     private void spiderSettings() {
         spiderRidable = getBoolean("mobs.spider.ridable", spiderRidable);
         spiderRidableInWater = getBoolean("mobs.spider.ridable-in-water", spiderRidableInWater);
@@ -2599,6 +2706,7 @@ public class PurpurWorldConfig {
         spiderMaxHealth = getDouble("mobs.spider.attributes.max_health", spiderMaxHealth);
         spiderScale = Mth.clamp(getDouble("mobs.spider.attributes.scale", spiderScale), 0.0625D, 16.0D);
         spiderTakeDamageFromWater = getBoolean("mobs.spider.takes-damage-from-water", spiderTakeDamageFromWater);
+        spiderAlwaysDropExp = getBoolean("mobs.spider.always-drop-exp", spiderAlwaysDropExp);
     }
 
     public boolean strayRidable = false;
@@ -2607,6 +2715,7 @@ public class PurpurWorldConfig {
     public double strayMaxHealth = 20.0D;
     public double strayScale = 1.0D;
     public boolean strayTakeDamageFromWater = false;
+    public boolean strayAlwaysDropExp = false;
     private void straySettings() {
         strayRidable = getBoolean("mobs.stray.ridable", strayRidable);
         strayRidableInWater = getBoolean("mobs.stray.ridable-in-water", strayRidableInWater);
@@ -2619,6 +2728,7 @@ public class PurpurWorldConfig {
         strayMaxHealth = getDouble("mobs.stray.attributes.max_health", strayMaxHealth);
         strayScale = Mth.clamp(getDouble("mobs.stray.attributes.scale", strayScale), 0.0625D, 16.0D);
         strayTakeDamageFromWater = getBoolean("mobs.stray.takes-damage-from-water", strayTakeDamageFromWater);
+        strayAlwaysDropExp = getBoolean("mobs.stray.always-drop-exp", strayAlwaysDropExp);
     }
 
     public boolean striderRidable = false;
@@ -2629,6 +2739,7 @@ public class PurpurWorldConfig {
     public int striderBreedingTicks = 6000;
     public boolean striderGiveSaddleBack = false;
     public boolean striderTakeDamageFromWater = true;
+    public boolean striderAlwaysDropExp = false;
     private void striderSettings() {
         striderRidable = getBoolean("mobs.strider.ridable", striderRidable);
         striderRidableInWater = getBoolean("mobs.strider.ridable-in-water", striderRidableInWater);
@@ -2643,6 +2754,7 @@ public class PurpurWorldConfig {
         striderBreedingTicks = getInt("mobs.strider.breeding-delay-ticks", striderBreedingTicks);
         striderGiveSaddleBack = getBoolean("mobs.strider.give-saddle-back", striderGiveSaddleBack);
         striderTakeDamageFromWater = getBoolean("mobs.strider.takes-damage-from-water", striderTakeDamageFromWater);
+        striderAlwaysDropExp = getBoolean("mobs.strider.always-drop-exp", striderAlwaysDropExp);
     }
 
     public boolean tadpoleRidable = false;
@@ -2665,6 +2777,7 @@ public class PurpurWorldConfig {
     public double traderLlamaMovementSpeedMax = 0.175D;
     public int traderLlamaBreedingTicks = 6000;
     public boolean traderLlamaTakeDamageFromWater = false;
+    public boolean traderLlamaAlwaysDropExp = false;
     private void traderLlamaSettings() {
         traderLlamaRidable = getBoolean("mobs.trader_llama.ridable", traderLlamaRidable);
         traderLlamaRidableInWater = getBoolean("mobs.trader_llama.ridable-in-water", traderLlamaRidableInWater);
@@ -2684,6 +2797,7 @@ public class PurpurWorldConfig {
         traderLlamaMovementSpeedMax = getDouble("mobs.trader_llama.attributes.movement_speed.max", traderLlamaMovementSpeedMax);
         traderLlamaBreedingTicks = getInt("mobs.trader_llama.breeding-delay-ticks", traderLlamaBreedingTicks);
         traderLlamaTakeDamageFromWater = getBoolean("mobs.trader_llama.takes-damage-from-water", traderLlamaTakeDamageFromWater);
+        traderLlamaAlwaysDropExp = getBoolean("mobs.trader_llama.always-drop-exp", traderLlamaAlwaysDropExp);
     }
 
     public boolean tropicalFishRidable = false;
@@ -2691,6 +2805,7 @@ public class PurpurWorldConfig {
     public double tropicalFishMaxHealth = 3.0D;
     public double tropicalFishScale = 1.0D;
     public boolean tropicalFishTakeDamageFromWater = false;
+    public boolean tropicalFishAlwaysDropExp = false;
     private void tropicalFishSettings() {
         tropicalFishRidable = getBoolean("mobs.tropical_fish.ridable", tropicalFishRidable);
         tropicalFishControllable = getBoolean("mobs.tropical_fish.controllable", tropicalFishControllable);
@@ -2702,6 +2817,7 @@ public class PurpurWorldConfig {
         tropicalFishMaxHealth = getDouble("mobs.tropical_fish.attributes.max_health", tropicalFishMaxHealth);
         tropicalFishScale = Mth.clamp(getDouble("mobs.tropical_fish.attributes.scale", tropicalFishScale), 0.0625D, 16.0D);
         tropicalFishTakeDamageFromWater = getBoolean("mobs.tropical_fish.takes-damage-from-water", tropicalFishTakeDamageFromWater);
+        tropicalFishAlwaysDropExp = getBoolean("mobs.tropical_fish.always-drop-exp", tropicalFishAlwaysDropExp);
     }
 
     public boolean turtleRidable = false;
@@ -2711,6 +2827,7 @@ public class PurpurWorldConfig {
     public double turtleScale = 1.0D;
     public int turtleBreedingTicks = 6000;
     public boolean turtleTakeDamageFromWater = false;
+    public boolean turtleAlwaysDropExp = false;
     private void turtleSettings() {
         turtleRidable = getBoolean("mobs.turtle.ridable", turtleRidable);
         turtleRidableInWater = getBoolean("mobs.turtle.ridable-in-water", turtleRidableInWater);
@@ -2724,6 +2841,7 @@ public class PurpurWorldConfig {
         turtleScale = Mth.clamp(getDouble("mobs.turtle.attributes.scale", turtleScale), 0.0625D, 16.0D);
         turtleBreedingTicks = getInt("mobs.turtle.breeding-delay-ticks", turtleBreedingTicks);
         turtleTakeDamageFromWater = getBoolean("mobs.turtle.takes-damage-from-water", turtleTakeDamageFromWater);
+        turtleAlwaysDropExp = getBoolean("mobs.turtle.always-drop-exp", turtleAlwaysDropExp);
     }
 
     public boolean vexRidable = false;
@@ -2733,6 +2851,7 @@ public class PurpurWorldConfig {
     public double vexMaxHealth = 14.0D;
     public double vexScale = 1.0D;
     public boolean vexTakeDamageFromWater = false;
+    public boolean vexAlwaysDropExp = false;
     private void vexSettings() {
         vexRidable = getBoolean("mobs.vex.ridable", vexRidable);
         vexRidableInWater = getBoolean("mobs.vex.ridable-in-water", vexRidableInWater);
@@ -2746,6 +2865,7 @@ public class PurpurWorldConfig {
         vexMaxHealth = getDouble("mobs.vex.attributes.max_health", vexMaxHealth);
         vexScale = Mth.clamp(getDouble("mobs.vex.attributes.scale", vexScale), 0.0625D, 16.0D);
         vexTakeDamageFromWater = getBoolean("mobs.vex.takes-damage-from-water", vexTakeDamageFromWater);
+        vexAlwaysDropExp = getBoolean("mobs.vex.always-drop-exp", vexAlwaysDropExp);
     }
 
     public boolean villagerRidable = false;
@@ -2763,6 +2883,7 @@ public class PurpurWorldConfig {
     public boolean villagerBypassMobGriefing = false;
     public boolean villagerTakeDamageFromWater = false;
     public boolean villagerAllowTrading = true;
+    public boolean villagerAlwaysDropExp = false;
     private void villagerSettings() {
         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
@@ -2784,6 +2905,7 @@ public class PurpurWorldConfig {
         villagerBypassMobGriefing = getBoolean("mobs.villager.bypass-mob-griefing", villagerBypassMobGriefing);
         villagerTakeDamageFromWater = getBoolean("mobs.villager.takes-damage-from-water", villagerTakeDamageFromWater);
         villagerAllowTrading = getBoolean("mobs.villager.allow-trading", villagerAllowTrading);
+        villagerAlwaysDropExp = getBoolean("mobs.villager.always-drop-exp", villagerAlwaysDropExp);
     }
 
     public boolean vindicatorRidable = false;
@@ -2793,6 +2915,7 @@ public class PurpurWorldConfig {
     public double vindicatorScale = 1.0D;
     public double vindicatorJohnnySpawnChance = 0D;
     public boolean vindicatorTakeDamageFromWater = false;
+    public boolean vindicatorAlwaysDropExp = false;
     private void vindicatorSettings() {
         vindicatorRidable = getBoolean("mobs.vindicator.ridable", vindicatorRidable);
         vindicatorRidableInWater = getBoolean("mobs.vindicator.ridable-in-water", vindicatorRidableInWater);
@@ -2806,6 +2929,7 @@ public class PurpurWorldConfig {
         vindicatorScale = Mth.clamp(getDouble("mobs.vindicator.attributes.scale", vindicatorScale), 0.0625D, 16.0D);
         vindicatorJohnnySpawnChance = getDouble("mobs.vindicator.johnny.spawn-chance", vindicatorJohnnySpawnChance);
         vindicatorTakeDamageFromWater = getBoolean("mobs.vindicator.takes-damage-from-water", vindicatorTakeDamageFromWater);
+        vindicatorAlwaysDropExp = getBoolean("mobs.vindicator.always-drop-exp", vindicatorAlwaysDropExp);
     }
 
     public boolean wanderingTraderRidable = false;
@@ -2818,6 +2942,7 @@ public class PurpurWorldConfig {
     public boolean wanderingTraderCanBeLeashed = false;
     public boolean wanderingTraderTakeDamageFromWater = false;
     public boolean wanderingTraderAllowTrading = true;
+    public boolean wanderingTraderAlwaysDropExp = false;
     private void wanderingTraderSettings() {
         wanderingTraderRidable = getBoolean("mobs.wandering_trader.ridable", wanderingTraderRidable);
         wanderingTraderRidableInWater = getBoolean("mobs.wandering_trader.ridable-in-water", wanderingTraderRidableInWater);
@@ -2834,6 +2959,7 @@ public class PurpurWorldConfig {
         wanderingTraderCanBeLeashed = getBoolean("mobs.wandering_trader.can-be-leashed", wanderingTraderCanBeLeashed);
         wanderingTraderTakeDamageFromWater = getBoolean("mobs.wandering_trader.takes-damage-from-water", wanderingTraderTakeDamageFromWater);
         wanderingTraderAllowTrading = getBoolean("mobs.wandering_trader.allow-trading", wanderingTraderAllowTrading);
+        wanderingTraderAlwaysDropExp = getBoolean("mobs.wandering_trader.always-drop-exp", wanderingTraderAlwaysDropExp);
     }
 
     public boolean wardenRidable = false;
@@ -2851,6 +2977,7 @@ public class PurpurWorldConfig {
     public double witchMaxHealth = 26.0D;
     public double witchScale = 1.0D;
     public boolean witchTakeDamageFromWater = false;
+    public boolean witchAlwaysDropExp = false;
     private void witchSettings() {
         witchRidable = getBoolean("mobs.witch.ridable", witchRidable);
         witchRidableInWater = getBoolean("mobs.witch.ridable-in-water", witchRidableInWater);
@@ -2863,6 +2990,7 @@ public class PurpurWorldConfig {
         witchMaxHealth = getDouble("mobs.witch.attributes.max_health", witchMaxHealth);
         witchScale = Mth.clamp(getDouble("mobs.witch.attributes.scale", witchScale), 0.0625D, 16.0D);
         witchTakeDamageFromWater = getBoolean("mobs.witch.takes-damage-from-water", witchTakeDamageFromWater);
+        witchAlwaysDropExp = getBoolean("mobs.witch.always-drop-exp", witchAlwaysDropExp);
     }
 
     public boolean witherRidable = false;
@@ -2878,6 +3006,7 @@ public class PurpurWorldConfig {
     public boolean witherCanRideVehicles = false;
     public float witherExplosionRadius = 1.0F;
     public boolean witherPlaySpawnSound = true;
+    public boolean witherAlwaysDropExp = false;
     private void witherSettings() {
         witherRidable = getBoolean("mobs.wither.ridable", witherRidable);
         witherRidableInWater = getBoolean("mobs.wither.ridable-in-water", witherRidableInWater);
@@ -2901,6 +3030,7 @@ public class PurpurWorldConfig {
         witherCanRideVehicles = getBoolean("mobs.wither.can-ride-vehicles", witherCanRideVehicles);
         witherExplosionRadius = (float) getDouble("mobs.wither.explosion-radius", witherExplosionRadius);
         witherPlaySpawnSound = getBoolean("mobs.wither.play-spawn-sound", witherPlaySpawnSound);
+        witherAlwaysDropExp = getBoolean("mobs.wither.always-drop-exp", witherAlwaysDropExp);
     }
 
     public boolean witherSkeletonRidable = false;
@@ -2909,6 +3039,7 @@ public class PurpurWorldConfig {
     public double witherSkeletonMaxHealth = 20.0D;
     public double witherSkeletonScale = 1.0D;
     public boolean witherSkeletonTakeDamageFromWater = false;
+    public boolean witherSkeletonAlwaysDropExp = false;
     private void witherSkeletonSettings() {
         witherSkeletonRidable = getBoolean("mobs.wither_skeleton.ridable", witherSkeletonRidable);
         witherSkeletonRidableInWater = getBoolean("mobs.wither_skeleton.ridable-in-water", witherSkeletonRidableInWater);
@@ -2921,6 +3052,7 @@ public class PurpurWorldConfig {
         witherSkeletonMaxHealth = getDouble("mobs.wither_skeleton.attributes.max_health", witherSkeletonMaxHealth);
         witherSkeletonScale = Mth.clamp(getDouble("mobs.wither_skeleton.attributes.scale", witherSkeletonScale), 0.0625D, 16.0D);
         witherSkeletonTakeDamageFromWater = getBoolean("mobs.wither_skeleton.takes-damage-from-water", witherSkeletonTakeDamageFromWater);
+        witherSkeletonAlwaysDropExp = getBoolean("mobs.wither_skeleton.always-drop-exp", witherSkeletonAlwaysDropExp);
     }
 
     public boolean wolfRidable = false;
@@ -2933,6 +3065,7 @@ public class PurpurWorldConfig {
     public double wolfNaturalRabid = 0.0D;
     public int wolfBreedingTicks = 6000;
     public boolean wolfTakeDamageFromWater = false;
+    public boolean wolfAlwaysDropExp = false;
     private void wolfSettings() {
         wolfRidable = getBoolean("mobs.wolf.ridable", wolfRidable);
         wolfRidableInWater = getBoolean("mobs.wolf.ridable-in-water", wolfRidableInWater);
@@ -2953,6 +3086,7 @@ public class PurpurWorldConfig {
         wolfNaturalRabid = getDouble("mobs.wolf.spawn-rabid-chance", wolfNaturalRabid);
         wolfBreedingTicks = getInt("mobs.wolf.breeding-delay-ticks", wolfBreedingTicks);
         wolfTakeDamageFromWater = getBoolean("mobs.wolf.takes-damage-from-water", wolfTakeDamageFromWater);
+        wolfAlwaysDropExp = getBoolean("mobs.wolf.always-drop-exp", wolfAlwaysDropExp);
     }
 
     public boolean zoglinRidable = false;
@@ -2961,6 +3095,7 @@ public class PurpurWorldConfig {
     public double zoglinMaxHealth = 40.0D;
     public double zoglinScale = 1.0D;
     public boolean zoglinTakeDamageFromWater = false;
+    public boolean zoglinAlwaysDropExp = false;
     private void zoglinSettings() {
         zoglinRidable = getBoolean("mobs.zoglin.ridable", zoglinRidable);
         zoglinRidableInWater = getBoolean("mobs.zoglin.ridable-in-water", zoglinRidableInWater);
@@ -2973,6 +3108,7 @@ public class PurpurWorldConfig {
         zoglinMaxHealth = getDouble("mobs.zoglin.attributes.max_health", zoglinMaxHealth);
         zoglinScale = Mth.clamp(getDouble("mobs.zoglin.attributes.scale", zoglinScale), 0.0625D, 16.0D);
         zoglinTakeDamageFromWater = getBoolean("mobs.zoglin.takes-damage-from-water", zoglinTakeDamageFromWater);
+        zoglinAlwaysDropExp = getBoolean("mobs.zoglin.always-drop-exp", zoglinAlwaysDropExp);
     }
 
     public boolean zombieRidable = false;
@@ -2987,6 +3123,7 @@ public class PurpurWorldConfig {
     public boolean zombieAggressiveTowardsVillagerWhenLagging = true;
     public boolean zombieBypassMobGriefing = false;
     public boolean zombieTakeDamageFromWater = false;
+    public boolean zombieAlwaysDropExp = false;
     private void zombieSettings() {
         zombieRidable = getBoolean("mobs.zombie.ridable", zombieRidable);
         zombieRidableInWater = getBoolean("mobs.zombie.ridable-in-water", zombieRidableInWater);
@@ -3005,6 +3142,7 @@ public class PurpurWorldConfig {
         zombieAggressiveTowardsVillagerWhenLagging = getBoolean("mobs.zombie.aggressive-towards-villager-when-lagging", zombieAggressiveTowardsVillagerWhenLagging);
         zombieBypassMobGriefing = getBoolean("mobs.zombie.bypass-mob-griefing", zombieBypassMobGriefing);
         zombieTakeDamageFromWater = getBoolean("mobs.zombie.takes-damage-from-water", zombieTakeDamageFromWater);
+        zombieAlwaysDropExp = getBoolean("mobs.zombie.always-drop-exp", zombieAlwaysDropExp);
     }
 
     public boolean zombieHorseRidable = false;
@@ -3018,6 +3156,7 @@ public class PurpurWorldConfig {
     public double zombieHorseMovementSpeedMax = 0.2D;
     public double zombieHorseSpawnChance = 0.0D;
     public boolean zombieHorseTakeDamageFromWater = false;
+    public boolean zombieHorseAlwaysDropExp = false;
     private void zombieHorseSettings() {
         zombieHorseRidable = getBoolean("mobs.zombie_horse.ridable", zombieHorseRidable);
         zombieHorseRidableInWater = getBoolean("mobs.zombie_horse.ridable-in-water", zombieHorseRidableInWater);
@@ -3036,6 +3175,7 @@ public class PurpurWorldConfig {
         zombieHorseMovementSpeedMax = getDouble("mobs.zombie_horse.attributes.movement_speed.max", zombieHorseMovementSpeedMax);
         zombieHorseSpawnChance = getDouble("mobs.zombie_horse.spawn-chance", zombieHorseSpawnChance);
         zombieHorseTakeDamageFromWater = getBoolean("mobs.zombie_horse.takes-damage-from-water", zombieHorseTakeDamageFromWater);
+        zombieHorseAlwaysDropExp = getBoolean("mobs.zombie_horse.always-drop-exp", zombieHorseAlwaysDropExp);
     }
 
     public boolean zombieVillagerRidable = false;
@@ -3051,6 +3191,7 @@ public class PurpurWorldConfig {
     public int zombieVillagerCuringTimeMin = 3600;
     public int zombieVillagerCuringTimeMax = 6000;
     public boolean zombieVillagerCureEnabled = true;
+    public boolean zombieVillagerAlwaysDropExp = false;
     private void zombieVillagerSettings() {
         zombieVillagerRidable = getBoolean("mobs.zombie_villager.ridable", zombieVillagerRidable);
         zombieVillagerRidableInWater = getBoolean("mobs.zombie_villager.ridable-in-water", zombieVillagerRidableInWater);
@@ -3070,6 +3211,7 @@ public class PurpurWorldConfig {
         zombieVillagerCuringTimeMin = getInt("mobs.zombie_villager.curing_time.min", zombieVillagerCuringTimeMin);
         zombieVillagerCuringTimeMax = getInt("mobs.zombie_villager.curing_time.max", zombieVillagerCuringTimeMax);
         zombieVillagerCureEnabled = getBoolean("mobs.zombie_villager.cure.enabled", zombieVillagerCureEnabled);
+        zombieVillagerAlwaysDropExp = getBoolean("mobs.zombie_villager.always-drop-exp", zombieVillagerAlwaysDropExp);
     }
 
     public boolean zombifiedPiglinRidable = false;
@@ -3083,6 +3225,7 @@ public class PurpurWorldConfig {
     public boolean zombifiedPiglinJockeyTryExistingChickens = true;
     public boolean zombifiedPiglinCountAsPlayerKillWhenAngry = true;
     public boolean zombifiedPiglinTakeDamageFromWater = false;
+    public boolean zombifiedPiglinAlwaysDropExp = false;
     private void zombifiedPiglinSettings() {
         zombifiedPiglinRidable = getBoolean("mobs.zombified_piglin.ridable", zombifiedPiglinRidable);
         zombifiedPiglinRidableInWater = getBoolean("mobs.zombified_piglin.ridable-in-water", zombifiedPiglinRidableInWater);
@@ -3100,6 +3243,7 @@ public class PurpurWorldConfig {
         zombifiedPiglinJockeyTryExistingChickens = getBoolean("mobs.zombified_piglin.jockey.try-existing-chickens", zombifiedPiglinJockeyTryExistingChickens);
         zombifiedPiglinCountAsPlayerKillWhenAngry = getBoolean("mobs.zombified_piglin.count-as-player-kill-when-angry", zombifiedPiglinCountAsPlayerKillWhenAngry);
         zombifiedPiglinTakeDamageFromWater = getBoolean("mobs.zombified_piglin.takes-damage-from-water", zombifiedPiglinTakeDamageFromWater);
+        zombifiedPiglinAlwaysDropExp = getBoolean("mobs.zombified_piglin.always-drop-exp", zombifiedPiglinAlwaysDropExp);
     }
 
     public float hungerStarvationDamage = 1.0F;
