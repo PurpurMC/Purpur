@@ -157,6 +157,15 @@ public class PurpurWorldConfig {
         nighttimeTicks = getInt("gameplay-mechanics.daylight-cycle-ticks.nighttime", nighttimeTicks);
     }
 
+    public int drowningAirTicks = 300;
+    public int drowningDamageInterval = 20;
+    public double damageFromDrowning = 2.0F;
+    private void drowningSettings() {
+        drowningAirTicks = getInt("gameplay-mechanics.drowning.air-ticks", drowningAirTicks);
+        drowningDamageInterval = getInt("gameplay-mechanics.drowning.ticks-per-damage", drowningDamageInterval);
+        damageFromDrowning = getDouble("gameplay-mechanics.drowning.damage-from-drowning", damageFromDrowning);
+    }
+
     public int elytraDamagePerSecond = 1;
     public double elytraDamageMultiplyBySpeed = 0;
     public int elytraDamagePerFireworkBoost = 0;
