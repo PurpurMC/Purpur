@@ -172,6 +172,7 @@ public class PurpurConfig {
     public static String pingCommandOutput = "<green>%s's ping is %sms";
     public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
     public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
+    public static String uptimeCommandOutput = "<green>Server uptime is <uptime>";
     public static String unverifiedUsername = "default";
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
@@ -185,6 +186,7 @@ public class PurpurConfig {
         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
         tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
         dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
+        uptimeCommandOutput = getString("settings.messages.uptime-command-output", uptimeCommandOutput);
         unverifiedUsername = getString("settings.messages.unverified-username", unverifiedUsername);
     }
 
@@ -237,6 +239,15 @@ public class PurpurConfig {
     public static int commandTPSBarTickInterval = 20;
     public static boolean commandGamemodeRequiresPermission = false;
     public static boolean hideHiddenPlayersFromEntitySelector = false;
+    public static String uptimeFormat = "<days><hours><minutes><seconds>";
+    public static String uptimeDay = "%02d day, ";
+    public static String uptimeDays = "%02d days, ";
+    public static String uptimeHour = "%02d hour, ";
+    public static String uptimeHours = "%02d hours, ";
+    public static String uptimeMinute = "%02d minute, and ";
+    public static String uptimeMinutes = "%02d minutes, and ";
+    public static String uptimeSecond = "%02d second";
+    public static String uptimeSeconds = "%02d seconds";
     private static void commandSettings() {
         commandTPSBarTitle = getString("settings.command.tpsbar.title", commandTPSBarTitle);
         commandTPSBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.tpsbar.overlay", commandTPSBarProgressOverlay.name()));
@@ -250,6 +261,15 @@ public class PurpurConfig {
         commandTPSBarTickInterval = getInt("settings.command.tpsbar.tick-interval", commandTPSBarTickInterval);
         commandGamemodeRequiresPermission = getBoolean("settings.command.gamemode.requires-specific-permission", commandGamemodeRequiresPermission);
         hideHiddenPlayersFromEntitySelector = getBoolean("settings.command.hide-hidden-players-from-entity-selector", hideHiddenPlayersFromEntitySelector);
+        uptimeFormat = getString("settings.command.uptime.format", uptimeFormat);
+        uptimeDay = getString("settings.command.uptime.day", uptimeDay);
+        uptimeDays = getString("settings.command.uptime.days", uptimeDays);
+        uptimeHour = getString("settings.command.uptime.hour", uptimeHour);
+        uptimeHours = getString("settings.command.uptime.hours", uptimeHours);
+        uptimeMinute = getString("settings.command.uptime.minute", uptimeMinute);
+        uptimeMinutes = getString("settings.command.uptime.minutes", uptimeMinutes);
+        uptimeSecond = getString("settings.command.uptime.second", uptimeSecond);
+        uptimeSeconds = getString("settings.command.uptime.seconds", uptimeSeconds);
     }
 
     public static int barrelRows = 3;
