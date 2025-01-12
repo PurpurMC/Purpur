@@ -31,6 +31,8 @@ public final class PurpurPermissions {
 
         DefaultPermissions.registerPermission(PREFIX + "debug.f3n", "Allows the user to use F3+N keybind to swap gamemodes", PermissionDefault.FALSE, purpur);
 
+        DefaultPermissions.registerPermission(PREFIX + "joinfullserver", "Allows the user to join a full server", PermissionDefault.OP, purpur);
+
         DefaultPermissions.registerPermission(PREFIX + "bypassIdleKick", "Allows the user to bypass being kicked while idle", PermissionDefault.FALSE, purpur);
 
         DefaultPermissions.registerPermission(PREFIX + "inventory_totem", "Allows the user to use totem of undying anywhere in their inventory", PermissionDefault.FALSE, purpur);
