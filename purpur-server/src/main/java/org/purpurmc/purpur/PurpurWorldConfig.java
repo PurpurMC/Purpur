@@ -2588,6 +2588,7 @@ public class PurpurWorldConfig {
     public boolean skeletonTakeDamageFromWater = false;
     public boolean skeletonAlwaysDropExp = false;
     public double skeletonHeadVisibilityPercent = 0.5D;
+    public int skeletonFeedWitherRoses = 0;
     private void skeletonSettings() {
         skeletonRidable = getBoolean("mobs.skeleton.ridable", skeletonRidable);
         skeletonRidableInWater = getBoolean("mobs.skeleton.ridable-in-water", skeletonRidableInWater);
@@ -2602,6 +2603,7 @@ public class PurpurWorldConfig {
         skeletonTakeDamageFromWater = getBoolean("mobs.skeleton.takes-damage-from-water", skeletonTakeDamageFromWater);
         skeletonAlwaysDropExp = getBoolean("mobs.skeleton.always-drop-exp", skeletonAlwaysDropExp);
         skeletonHeadVisibilityPercent = getDouble("mobs.skeleton.head-visibility-percent", skeletonHeadVisibilityPercent);
+        skeletonFeedWitherRoses = getInt("mobs.skeleton.feed-wither-roses", skeletonFeedWitherRoses);
     }
 
     public boolean skeletonHorseRidable = false;
