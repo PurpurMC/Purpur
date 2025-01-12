@@ -428,6 +428,11 @@ public class PurpurConfig {
         allowWaterPlacementInTheEnd = getBoolean("settings.allow-water-placement-in-the-end", allowWaterPlacementInTheEnd);
     }
 
+    public static boolean beeCountPayload = false;
+    private static void beeCountPayload() {
+        beeCountPayload = getBoolean("settings.bee-count-payload", beeCountPayload);
+    }
+
     public static boolean loggerSuppressInitLegacyMaterialError = false;
     public static boolean loggerSuppressIgnoredAdvancementWarnings = false;
     public static boolean loggerSuppressUnrecognizedRecipeErrors = false;
