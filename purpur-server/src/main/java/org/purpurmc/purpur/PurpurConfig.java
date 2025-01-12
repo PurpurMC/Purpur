@@ -172,6 +172,7 @@ public class PurpurConfig {
     public static String pingCommandOutput = "<green>%s's ping is %sms";
     public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
     public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
+    public static String unverifiedUsername = "default";
     private static void messages() {
         cannotRideMob = getString("settings.messages.cannot-ride-mob", cannotRideMob);
         afkBroadcastAway = getString("settings.messages.afk-broadcast-away", afkBroadcastAway);
@@ -184,6 +185,7 @@ public class PurpurConfig {
         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
         tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
         dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
+        unverifiedUsername = getString("settings.messages.unverified-username", unverifiedUsername);
     }
 
     public static String deathMsgRunWithScissors = "<player> slipped and fell on their shears";
