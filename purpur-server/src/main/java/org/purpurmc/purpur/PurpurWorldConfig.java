@@ -138,6 +138,7 @@ public class PurpurWorldConfig {
     public boolean imposeTeleportRestrictionsOnEndPortals = false;
     public boolean tickFluids = true;
     public double mobsBlindnessMultiplier = 1;
+    public boolean mobsIgnoreRails = false;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
@@ -159,6 +160,7 @@ public class PurpurWorldConfig {
         imposeTeleportRestrictionsOnEndPortals = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-end-portals", imposeTeleportRestrictionsOnEndPortals);
         tickFluids = getBoolean("gameplay-mechanics.tick-fluids", tickFluids);
         mobsBlindnessMultiplier = getDouble("gameplay-mechanics.entity-blindness-multiplier", mobsBlindnessMultiplier);
+        mobsIgnoreRails = getBoolean("gameplay-mechanics.mobs-ignore-rails", mobsIgnoreRails);
     }
 
     public int daytimeTicks = 12000;
