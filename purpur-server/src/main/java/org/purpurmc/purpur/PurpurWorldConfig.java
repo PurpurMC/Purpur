@@ -139,6 +139,8 @@ public class PurpurWorldConfig {
     public boolean tickFluids = true;
     public double mobsBlindnessMultiplier = 1;
     public boolean mobsIgnoreRails = false;
+    public boolean rainStopsAfterSleep = true;
+    public boolean thunderStopsAfterSleep = true;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
@@ -161,6 +163,8 @@ public class PurpurWorldConfig {
         tickFluids = getBoolean("gameplay-mechanics.tick-fluids", tickFluids);
         mobsBlindnessMultiplier = getDouble("gameplay-mechanics.entity-blindness-multiplier", mobsBlindnessMultiplier);
         mobsIgnoreRails = getBoolean("gameplay-mechanics.mobs-ignore-rails", mobsIgnoreRails);
+        rainStopsAfterSleep = getBoolean("gameplay-mechanics.rain-stops-after-sleep", rainStopsAfterSleep);
+        thunderStopsAfterSleep = getBoolean("gameplay-mechanics.thunder-stops-after-sleep", thunderStopsAfterSleep);
     }
 
     public int daytimeTicks = 12000;
