@@ -3038,4 +3038,27 @@ public class PurpurWorldConfig {
     private void hungerSettings() {
         hungerStarvationDamage = (float) getDouble("hunger.starvation-damage", hungerStarvationDamage);
     }
+
+    public int conduitDistance = 16;
+    public double conduitDamageDistance = 8;
+    public float conduitDamageAmount = 4;
+    public Block[] conduitBlocks;
+    private void conduitSettings() {
+        conduitDistance = getInt("blocks.conduit.effect-distance", conduitDistance);
+        conduitDamageDistance = getDouble("blocks.conduit.mob-damage.distance", conduitDamageDistance);
+        conduitDamageAmount = (float) getDouble("blocks.conduit.mob-damage.damage-amount", conduitDamageAmount);
+        List<Block> conduitBlockList = new ArrayList<>();
+        getList("blocks.conduit.valid-ring-blocks", new ArrayList<String>(){{
+            add("minecraft:prismarine");
+            add("minecraft:prismarine_bricks");
+            add("minecraft:sea_lantern");
+            add("minecraft:dark_prismarine");
+        }}).forEach(key -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(key.toString()));
+            if (!block.defaultBlockState().isAir()) {
+                conduitBlockList.add(block);
+            }
+        });
+        conduitBlocks = conduitBlockList.toArray(Block[]::new);
+    }
 }
