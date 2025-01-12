@@ -974,9 +974,11 @@ public class PurpurWorldConfig {
 
     public boolean mobsSpawnOnPackedIce = true;
     public boolean mobsSpawnOnBlueIce = true;
+    public boolean snowOnBlueIce = true;
     private void iceSettings() {
         mobsSpawnOnPackedIce = getBoolean("blocks.packed_ice.allow-mob-spawns", mobsSpawnOnPackedIce);
         mobsSpawnOnBlueIce = getBoolean("blocks.blue_ice.allow-mob-spawns", mobsSpawnOnBlueIce);
+        snowOnBlueIce = getBoolean("blocks.blue_ice.allow-snow-formation", snowOnBlueIce);
     }
 
     public int lavaInfiniteRequiredSources = 2;
