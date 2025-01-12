@@ -1463,6 +1463,7 @@ public class PurpurWorldConfig {
     public boolean endermanAggroEndermites = true;
     public boolean endermanAggroEndermitesOnlyIfPlayerSpawned = false;
     public boolean endermanDisableStareAggro = false;
+    public boolean endermanIgnoreProjectiles = false;
     private void endermanSettings() {
         endermanRidable = getBoolean("mobs.enderman.ridable", endermanRidable);
         endermanRidableInWater = getBoolean("mobs.enderman.ridable-in-water", endermanRidableInWater);
@@ -1485,6 +1486,7 @@ public class PurpurWorldConfig {
         endermanAggroEndermites = getBoolean("mobs.enderman.aggressive-towards-endermites", endermanAggroEndermites);
         endermanAggroEndermitesOnlyIfPlayerSpawned = getBoolean("mobs.enderman.aggressive-towards-endermites-only-spawned-by-player-thrown-ender-pearls", endermanAggroEndermitesOnlyIfPlayerSpawned);
         endermanDisableStareAggro = getBoolean("mobs.enderman.disable-player-stare-aggression", endermanDisableStareAggro);
+        endermanIgnoreProjectiles = getBoolean("mobs.enderman.ignore-projectiles", endermanIgnoreProjectiles);
     }
 
     public boolean endermiteRidable = false;
