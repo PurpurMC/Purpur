@@ -455,9 +455,11 @@ public class PurpurConfig {
 
     public static boolean useUPnP = false;
     public static boolean maxJoinsPerSecond = false;
+    public static boolean kickForOutOfOrderChat = true;
     private static void networkSettings() {
         useUPnP = getBoolean("settings.network.upnp-port-forwarding", useUPnP);
         maxJoinsPerSecond = getBoolean("settings.network.max-joins-per-second", maxJoinsPerSecond);
+        kickForOutOfOrderChat = getBoolean("settings.network.kick-for-out-of-order-chat", kickForOutOfOrderChat);
     }
 
     public static Pattern usernameValidCharactersPattern;
