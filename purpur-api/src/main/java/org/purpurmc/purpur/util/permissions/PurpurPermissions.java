@@ -29,6 +29,13 @@ public final class PurpurPermissions {
     public static Permission registerPermissions() {
         Permission purpur = DefaultPermissions.registerPermission(ROOT, "Gives the user the ability to use all Purpur utilities and commands", PermissionDefault.FALSE);
 
+        DefaultPermissions.registerPermission(PREFIX + "enderchest.rows.six", "Gives the user six rows of enderchest space", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission(PREFIX + "enderchest.rows.five", "Gives the user five rows of enderchest space", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission(PREFIX + "enderchest.rows.four", "Gives the user four rows of enderchest space", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission(PREFIX + "enderchest.rows.three", "Gives the user three rows of enderchest space", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission(PREFIX + "enderchest.rows.two", "Gives the user two rows of enderchest space", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission(PREFIX + "enderchest.rows.one", "Gives the user one row of enderchest space", PermissionDefault.FALSE, purpur);
+
         DefaultPermissions.registerPermission(PREFIX + "debug.f3n", "Allows the user to use F3+N keybind to swap gamemodes", PermissionDefault.FALSE, purpur);
 
         DefaultPermissions.registerPermission(PREFIX + "joinfullserver", "Allows the user to join a full server", PermissionDefault.OP, purpur);
