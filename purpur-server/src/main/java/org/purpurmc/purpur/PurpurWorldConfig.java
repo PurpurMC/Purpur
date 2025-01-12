@@ -363,6 +363,11 @@ public class PurpurWorldConfig {
         villageSiegeSpawning = getBoolean("gameplay-mechanics.mob-spawning.village-sieges", predicate);
     }
 
+    public boolean disableObserverClocks = false;
+    private void observerSettings() {
+        disableObserverClocks = getBoolean("blocks.observer.disable-clock", disableObserverClocks);
+    }
+
     public int playerNetheriteFireResistanceDuration = 0;
     public int playerNetheriteFireResistanceAmplifier = 0;
     public boolean playerNetheriteFireResistanceAmbient = false;
