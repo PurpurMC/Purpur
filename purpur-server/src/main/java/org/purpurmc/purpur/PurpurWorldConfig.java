@@ -1564,6 +1564,11 @@ public class PurpurWorldConfig {
         elderGuardianAlwaysDropExp = getBoolean("mobs.elder_guardian.always-drop-exp", elderGuardianAlwaysDropExp);
     }
 
+    public boolean enchantmentTableLapisPersists = false;
+    private void enchantmentTableSettings() {
+        enchantmentTableLapisPersists = getBoolean("blocks.enchantment-table.lapis-persists", enchantmentTableLapisPersists);
+    }
+
     public boolean enderDragonRidable = false;
     public boolean enderDragonRidableInWater = true;
     public boolean enderDragonControllable = true;
