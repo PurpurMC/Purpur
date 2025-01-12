@@ -143,6 +143,7 @@ public class PurpurWorldConfig {
     public boolean thunderStopsAfterSleep = true;
     public boolean persistentTileEntityLore = false;
     public boolean persistentTileEntityDisplayName = true;
+    public int mobLastHurtByPlayerTime = 100;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
@@ -175,6 +176,7 @@ public class PurpurWorldConfig {
         }
         persistentTileEntityLore = getBoolean("gameplay-mechanics.persistent-tileentity-lore", persistentTileEntityLore);
         persistentTileEntityDisplayName = getBoolean("gameplay-mechanics.persistent-tileentity-display-name", persistentTileEntityDisplayName);
+        mobLastHurtByPlayerTime = getInt("gameplay-mechanics.mob-last-hurt-by-player-time", mobLastHurtByPlayerTime);
     }
 
     public int daytimeTicks = 12000;
