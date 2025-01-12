@@ -2408,6 +2408,7 @@ public class PurpurWorldConfig {
     public boolean witherBypassMobGriefing = false;
     public boolean witherTakeDamageFromWater = false;
     public boolean witherCanRideVehicles = false;
+    public float witherExplosionRadius = 1.0F;
     private void witherSettings() {
         witherRidable = getBoolean("mobs.wither.ridable", witherRidable);
         witherRidableInWater = getBoolean("mobs.wither.ridable-in-water", witherRidableInWater);
@@ -2429,6 +2430,7 @@ public class PurpurWorldConfig {
         witherBypassMobGriefing = getBoolean("mobs.wither.bypass-mob-griefing", witherBypassMobGriefing);
         witherTakeDamageFromWater = getBoolean("mobs.wither.takes-damage-from-water", witherTakeDamageFromWater);
         witherCanRideVehicles = getBoolean("mobs.wither.can-ride-vehicles", witherCanRideVehicles);
+        witherExplosionRadius = (float) getDouble("mobs.wither.explosion-radius", witherExplosionRadius);
     }
 
     public boolean witherSkeletonRidable = false;
