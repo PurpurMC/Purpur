@@ -181,11 +181,13 @@ public class PurpurWorldConfig {
     public double elytraDamageMultiplyBySpeed = 0;
     public int elytraDamagePerFireworkBoost = 0;
     public int elytraDamagePerTridentBoost = 0;
+    public boolean elytraKineticDamage = true;
     private void elytraSettings() {
         elytraDamagePerSecond = getInt("gameplay-mechanics.elytra.damage-per-second", elytraDamagePerSecond);
         elytraDamageMultiplyBySpeed = getDouble("gameplay-mechanics.elytra.damage-multiplied-by-speed", elytraDamageMultiplyBySpeed);
         elytraDamagePerFireworkBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.firework", elytraDamagePerFireworkBoost);
         elytraDamagePerTridentBoost = getInt("gameplay-mechanics.elytra.damage-per-boost.trident", elytraDamagePerTridentBoost);
+        elytraKineticDamage = getBoolean("gameplay-mechanics.elytra.kinetic-damage", elytraKineticDamage);
     }
 
     public int entityLifeSpan = 0;
