@@ -491,6 +491,11 @@ public class PurpurWorldConfig {
         });
     }
 
+    public boolean dragonEggTeleport = true;
+    private void dragonEggSettings() {
+        dragonEggTeleport = getBoolean("blocks.dragon_egg.teleport", dragonEggTeleport);
+    }
+
     public boolean baselessEndCrystalExplode = true;
     public double baselessEndCrystalExplosionPower = 6.0D;
     public boolean baselessEndCrystalExplosionFire = false;
