@@ -1075,6 +1075,7 @@ public class PurpurWorldConfig {
     public double drownedJockeyChance = 0.05D;
     public boolean drownedJockeyTryExistingChickens = true;
     public boolean drownedTakeDamageFromWater = false;
+    public boolean drownedBreakDoors = false;
     private void drownedSettings() {
         drownedRidable = getBoolean("mobs.drowned.ridable", drownedRidable);
         drownedRidableInWater = getBoolean("mobs.drowned.ridable-in-water", drownedRidableInWater);
@@ -1091,6 +1092,7 @@ public class PurpurWorldConfig {
         drownedJockeyChance = getDouble("mobs.drowned.jockey.chance", drownedJockeyChance);
         drownedJockeyTryExistingChickens = getBoolean("mobs.drowned.jockey.try-existing-chickens", drownedJockeyTryExistingChickens);
         drownedTakeDamageFromWater = getBoolean("mobs.drowned.takes-damage-from-water", drownedTakeDamageFromWater);
+        drownedBreakDoors = getBoolean("mobs.drowned.can-break-doors", drownedBreakDoors);
     }
 
     public boolean elderGuardianRidable = false;
