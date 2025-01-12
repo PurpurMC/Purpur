@@ -450,8 +450,10 @@ public class PurpurConfig {
     }
 
     public static boolean useUPnP = false;
+    public static boolean maxJoinsPerSecond = false;
     private static void networkSettings() {
         useUPnP = getBoolean("settings.network.upnp-port-forwarding", useUPnP);
+        maxJoinsPerSecond = getBoolean("settings.network.max-joins-per-second", maxJoinsPerSecond);
     }
 
     public static Pattern usernameValidCharactersPattern;
