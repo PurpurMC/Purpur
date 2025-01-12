@@ -2,11 +2,18 @@ package org.purpurmc.purpur;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Set;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import org.bukkit.Bukkit;
@@ -297,6 +304,9 @@ public class PurpurConfig {
     public static int beeInsideBeeHive = 3;
     public static boolean anvilCumulativeCost = true;
     public static int lightningRodRange = 128;
+    public static Set<Enchantment> grindstoneIgnoredEnchants = new HashSet<>();
+    public static boolean grindstoneRemoveAttributes = false;
+    public static boolean grindstoneRemoveDisplay = false;
     private static void blockSettings() {
         if (version < 3) {
             boolean oldValue = getBoolean("settings.barrel.packed-barrels", true);
@@ -331,6 +341,21 @@ public class PurpurConfig {
         beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
         anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
         lightningRodRange = getInt("settings.blocks.lightning_rod.range", lightningRodRange);
+        ArrayList<String> defaultCurses = new ArrayList<>(){{
+            add("minecraft:binding_curse");
+            add("minecraft:vanishing_curse");
+        }};
+        if (version < 24 && !getBoolean("settings.blocks.grindstone.ignore-curses", true)) {
+            defaultCurses.clear();
+        }
+        getList("settings.blocks.grindstone.ignored-enchants", defaultCurses).forEach(key -> {
+            Registry<Enchantment> registry = MinecraftServer.getServer().registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+            Enchantment enchantment = registry.getValue(ResourceLocation.parse(key.toString()));
+            if (enchantment == null) return;
+            grindstoneIgnoredEnchants.add(enchantment);
+        });
+        grindstoneRemoveAttributes = getBoolean("settings.blocks.grindstone.remove-attributes", grindstoneRemoveAttributes);
+        grindstoneRemoveDisplay = getBoolean("settings.blocks.grindstone.remove-name-and-lore", grindstoneRemoveDisplay);
     }
 
     public static boolean allowInapplicableEnchants = false;
