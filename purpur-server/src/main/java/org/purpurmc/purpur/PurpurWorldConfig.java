@@ -2230,6 +2230,7 @@ public class PurpurWorldConfig {
     public boolean villagerClericFarmersThrowWarts = true;
     public boolean villagerBypassMobGriefing = false;
     public boolean villagerTakeDamageFromWater = false;
+    public boolean villagerAllowTrading = true;
     private void villagerSettings() {
         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
@@ -2250,6 +2251,7 @@ public class PurpurWorldConfig {
         villagerClericFarmersThrowWarts = getBoolean("mobs.villager.cleric-wart-farmers-throw-warts-at-villagers", villagerClericFarmersThrowWarts);
         villagerBypassMobGriefing = getBoolean("mobs.villager.bypass-mob-griefing", villagerBypassMobGriefing);
         villagerTakeDamageFromWater = getBoolean("mobs.villager.takes-damage-from-water", villagerTakeDamageFromWater);
+        villagerAllowTrading = getBoolean("mobs.villager.allow-trading", villagerAllowTrading);
     }
 
     public boolean vindicatorRidable = false;
@@ -2283,6 +2285,7 @@ public class PurpurWorldConfig {
     public double wanderingTraderTemptRange = 10.0D;
     public boolean wanderingTraderCanBeLeashed = false;
     public boolean wanderingTraderTakeDamageFromWater = false;
+    public boolean wanderingTraderAllowTrading = true;
     private void wanderingTraderSettings() {
         wanderingTraderRidable = getBoolean("mobs.wandering_trader.ridable", wanderingTraderRidable);
         wanderingTraderRidableInWater = getBoolean("mobs.wandering_trader.ridable-in-water", wanderingTraderRidableInWater);
@@ -2298,6 +2301,7 @@ public class PurpurWorldConfig {
         wanderingTraderTemptRange = getDouble("mobs.wandering_trader.attributes.tempt_range", wanderingTraderTemptRange);
         wanderingTraderCanBeLeashed = getBoolean("mobs.wandering_trader.can-be-leashed", wanderingTraderCanBeLeashed);
         wanderingTraderTakeDamageFromWater = getBoolean("mobs.wandering_trader.takes-damage-from-water", wanderingTraderTakeDamageFromWater);
+        wanderingTraderAllowTrading = getBoolean("mobs.wandering_trader.allow-trading", wanderingTraderAllowTrading);
     }
 
     public boolean wardenRidable = false;
