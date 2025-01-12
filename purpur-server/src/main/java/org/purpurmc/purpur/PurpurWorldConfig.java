@@ -508,6 +508,8 @@ public class PurpurWorldConfig {
     public Map<Block, Weatherable> axeWeatherables = new HashMap<>();
     public Map<Block, Tillable> hoeTillables = new HashMap<>();
     public Map<Block, Flattenable> shovelFlattenables = new HashMap<>();
+    public boolean hoeReplantsCrops = false;
+    public boolean hoeReplantsNetherWarts = false;
     private void toolSettings() {
         axeStrippables.clear();
         axeWaxables.clear();
@@ -782,6 +784,8 @@ public class PurpurWorldConfig {
             });
             shovelFlattenables.put(block, new Flattenable(into, drops));
         });
+        hoeReplantsCrops = getBoolean("tools.hoe.replant-crops", hoeReplantsCrops);
+        hoeReplantsNetherWarts = getBoolean("tools.hoe.replant-nether-warts", hoeReplantsNetherWarts);
     }
 
     public boolean anvilAllowColors = false;
