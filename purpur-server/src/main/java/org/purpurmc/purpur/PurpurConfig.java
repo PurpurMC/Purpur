@@ -205,8 +205,10 @@ public class PurpurConfig {
     }
 
     public static String deathMsgRunWithScissors = "<player> slipped and fell on their shears";
+    public static String deathMsgStonecutter = "<player> has sawed themself in half";
     private static void deathMessages() {
         deathMsgRunWithScissors = getString("settings.messages.death-message.run-with-scissors", deathMsgRunWithScissors);
+        deathMsgStonecutter = getString("settings.messages.death-message.stonecutter", deathMsgStonecutter);
     }
 
     public static boolean advancementOnlyBroadcastToAffectedPlayer = false;
