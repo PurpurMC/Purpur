@@ -206,6 +206,7 @@ public class PurpurWorldConfig {
     public int enderPearlCooldown = 20;
     public int enderPearlCooldownCreative = 20;
     public float enderPearlEndermiteChance = 0.05F;
+    public int glowBerriesEatGlowDuration = 0;
     private void itemSettings() {
         itemImmuneToCactus.clear();
         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
@@ -252,6 +253,7 @@ public class PurpurWorldConfig {
         enderPearlCooldown = getInt("gameplay-mechanics.item.ender-pearl.cooldown", enderPearlCooldown);
         enderPearlCooldownCreative = getInt("gameplay-mechanics.item.ender-pearl.creative-cooldown", enderPearlCooldownCreative);
         enderPearlEndermiteChance = (float) getDouble("gameplay-mechanics.item.ender-pearl.endermite-spawn-chance", enderPearlEndermiteChance);
+        glowBerriesEatGlowDuration = getInt("gameplay-mechanics.item.glow_berries.eat-glow-duration", glowBerriesEatGlowDuration);
     }
 
     public double minecartMaxSpeed = 0.4D;
