@@ -3061,4 +3061,15 @@ public class PurpurWorldConfig {
         });
         conduitBlocks = conduitBlockList.toArray(Block[]::new);
     }
+
+    public float cauldronRainChance = 0.05F;
+    public float cauldronPowderSnowChance = 0.1F;
+    public float cauldronDripstoneWaterFillChance = 0.17578125F;
+    public float cauldronDripstoneLavaFillChance = 0.05859375F;
+    private void cauldronSettings() {
+        cauldronRainChance = (float) getDouble("blocks.cauldron.fill-chances.rain", cauldronRainChance);
+        cauldronPowderSnowChance = (float) getDouble("blocks.cauldron.fill-chances.powder-snow", cauldronPowderSnowChance);
+        cauldronDripstoneWaterFillChance = (float) getDouble("blocks.cauldron.fill-chances.dripstone-water", cauldronDripstoneWaterFillChance);
+        cauldronDripstoneLavaFillChance = (float) getDouble("blocks.cauldron.fill-chances.dripstone-lava", cauldronDripstoneLavaFillChance);
+    }
 }
