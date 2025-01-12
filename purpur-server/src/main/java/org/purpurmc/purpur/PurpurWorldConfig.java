@@ -792,6 +792,7 @@ public class PurpurWorldConfig {
     }
 
     public boolean bedExplode = true;
+    public boolean bedExplodeOnVillagerSleep = false;
     public double bedExplosionPower = 5.0D;
     public boolean bedExplosionFire = true;
     public net.minecraft.world.level.Level.ExplosionInteraction bedExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
@@ -802,6 +803,7 @@ public class PurpurWorldConfig {
             }
         }
         bedExplode = getBoolean("blocks.bed.explode", bedExplode);
+        bedExplodeOnVillagerSleep = getBoolean("blocks.bed.explode-on-villager-sleep", bedExplodeOnVillagerSleep);
         bedExplosionPower = getDouble("blocks.bed.explosion-power", bedExplosionPower);
         bedExplosionFire = getBoolean("blocks.bed.explosion-fire", bedExplosionFire);
         try {
