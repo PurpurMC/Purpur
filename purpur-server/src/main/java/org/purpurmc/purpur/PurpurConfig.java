@@ -243,6 +243,11 @@ public class PurpurConfig {
     public static String commandTPSBarTextColorMedium = "<gradient:#ffff55:#ffaa00><text></gradient>";
     public static String commandTPSBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
     public static int commandTPSBarTickInterval = 20;
+    public static String commandCompassBarTitle = "S  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  SW  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  W  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  NW  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  N  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  NE  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  E  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  SE  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  S  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  SW  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  W  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  NW  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  N  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  NE  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  E  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  SE  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  \u25C8  \u00B7  ";
+    public static BossBar.Overlay commandCompassBarProgressOverlay = BossBar.Overlay.PROGRESS;
+    public static BossBar.Color commandCompassBarProgressColor = BossBar.Color.BLUE;
+    public static float commandCompassBarProgressPercent = 1.0F;
+    public static int commandCompassBarTickInterval = 5;
     public static boolean commandGamemodeRequiresPermission = false;
     public static boolean hideHiddenPlayersFromEntitySelector = false;
     public static String uptimeFormat = "<days><hours><minutes><seconds>";
@@ -265,6 +270,13 @@ public class PurpurConfig {
         commandTPSBarTextColorMedium = getString("settings.command.tpsbar.text-color.medium", commandTPSBarTextColorMedium);
         commandTPSBarTextColorLow = getString("settings.command.tpsbar.text-color.low", commandTPSBarTextColorLow);
         commandTPSBarTickInterval = getInt("settings.command.tpsbar.tick-interval", commandTPSBarTickInterval);
+
+        commandCompassBarTitle = getString("settings.command.compass.title", commandCompassBarTitle);
+        commandCompassBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.compass.overlay", commandCompassBarProgressOverlay.name()));
+        commandCompassBarProgressColor = BossBar.Color.valueOf(getString("settings.command.compass.progress-color", commandCompassBarProgressColor.name()));
+        commandCompassBarProgressPercent = (float) getDouble("settings.command.compass.percent", commandCompassBarProgressPercent);
+        commandCompassBarTickInterval = getInt("settings.command.compass.tick-interval", commandCompassBarTickInterval);
+
         commandGamemodeRequiresPermission = getBoolean("settings.command.gamemode.requires-specific-permission", commandGamemodeRequiresPermission);
         hideHiddenPlayersFromEntitySelector = getBoolean("settings.command.hide-hidden-players-from-entity-selector", hideHiddenPlayersFromEntitySelector);
         uptimeFormat = getString("settings.command.uptime.format", uptimeFormat);

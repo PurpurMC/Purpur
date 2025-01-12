@@ -215,6 +215,7 @@ public class PurpurWorldConfig {
     public float enderPearlEndermiteChance = 0.05F;
     public int glowBerriesEatGlowDuration = 0;
     public boolean shulkerBoxItemDropContentsWhenDestroyed = true;
+    public boolean compassItemShowsBossBar = false;
     private void itemSettings() {
         itemImmuneToCactus.clear();
         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
@@ -263,6 +264,7 @@ public class PurpurWorldConfig {
         enderPearlEndermiteChance = (float) getDouble("gameplay-mechanics.item.ender-pearl.endermite-spawn-chance", enderPearlEndermiteChance);
         glowBerriesEatGlowDuration = getInt("gameplay-mechanics.item.glow_berries.eat-glow-duration", glowBerriesEatGlowDuration);
         shulkerBoxItemDropContentsWhenDestroyed = getBoolean("gameplay-mechanics.item.shulker_box.drop-contents-when-destroyed", shulkerBoxItemDropContentsWhenDestroyed);
+        compassItemShowsBossBar = getBoolean("gameplay-mechanics.item.compass.holding-shows-bossbar", compassItemShowsBossBar);
     }
 
     public double minecartMaxSpeed = 0.4D;

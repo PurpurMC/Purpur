@@ -90,10 +90,12 @@ public abstract class BossBarTask extends BukkitRunnable {
 
     public static void startAll() {
         TPSBarTask.instance().start();
+        CompassTask.instance().start();
     }
 
     public static void stopAll() {
         TPSBarTask.instance().stop();
+        CompassTask.instance().stop();
     }
 
     public static void addToAll(ServerPlayer player) {
@@ -101,9 +103,13 @@ public abstract class BossBarTask extends BukkitRunnable {
         if (player.tpsBar()) {
             TPSBarTask.instance().addPlayer(bukkit);
         }
+        if (player.compassBar()) {
+            CompassTask.instance().addPlayer(bukkit);
+        }
     }
 
     public static void removeFromAll(Player player) {
         TPSBarTask.instance().removePlayer(player);
+        CompassTask.instance().removePlayer(player);
     }
 }
