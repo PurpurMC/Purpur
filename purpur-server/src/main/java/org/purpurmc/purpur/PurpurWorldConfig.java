@@ -993,6 +993,11 @@ public class PurpurWorldConfig {
         pistonBlockPushLimit = getInt("blocks.piston.block-push-limit", pistonBlockPushLimit);
     }
 
+    public boolean magmaBlockDamageWhenSneaking = false;
+    private void magmaBlockSettings() {
+        magmaBlockDamageWhenSneaking = getBoolean("blocks.magma-block.damage-when-sneaking", magmaBlockDamageWhenSneaking);
+    }
+
     public boolean powderSnowBypassMobGriefing = false;
     private void powderSnowSettings() {
         powderSnowBypassMobGriefing = getBoolean("blocks.powder_snow.bypass-mob-griefing", powderSnowBypassMobGriefing);
