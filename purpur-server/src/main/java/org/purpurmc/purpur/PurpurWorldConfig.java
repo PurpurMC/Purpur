@@ -519,6 +519,13 @@ public class PurpurWorldConfig {
         furnaceUseLavaFromUnderneath = getBoolean("blocks.furnace.use-lava-from-underneath", furnaceUseLavaFromUnderneath);
     }
 
+    public boolean mobsSpawnOnPackedIce = true;
+    public boolean mobsSpawnOnBlueIce = true;
+    private void iceSettings() {
+        mobsSpawnOnPackedIce = getBoolean("blocks.packed_ice.allow-mob-spawns", mobsSpawnOnPackedIce);
+        mobsSpawnOnBlueIce = getBoolean("blocks.blue_ice.allow-mob-spawns", mobsSpawnOnBlueIce);
+    }
+
     public int lavaInfiniteRequiredSources = 2;
     public int lavaSpeedNether = 10;
     public int lavaSpeedNotNether = 30;
