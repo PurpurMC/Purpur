@@ -258,6 +258,7 @@ public class PurpurConfig {
     public static boolean cryingObsidianValidForPortalFrame = false;
     public static int beeInsideBeeHive = 3;
     public static boolean anvilCumulativeCost = true;
+    public static int lightningRodRange = 128;
     private static void blockSettings() {
         if (version < 3) {
             boolean oldValue = getBoolean("settings.barrel.packed-barrels", true);
@@ -291,6 +292,7 @@ public class PurpurConfig {
         cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
         beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
         anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
+        lightningRodRange = getInt("settings.blocks.lightning_rod.range", lightningRodRange);
     }
 
     public static boolean allowInapplicableEnchants = false;
