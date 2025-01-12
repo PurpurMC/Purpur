@@ -3035,6 +3035,7 @@ public class PurpurWorldConfig {
     public boolean zombieVillagerTakeDamageFromWater = false;
     public int zombieVillagerCuringTimeMin = 3600;
     public int zombieVillagerCuringTimeMax = 6000;
+    public boolean zombieVillagerCureEnabled = true;
     private void zombieVillagerSettings() {
         zombieVillagerRidable = getBoolean("mobs.zombie_villager.ridable", zombieVillagerRidable);
         zombieVillagerRidableInWater = getBoolean("mobs.zombie_villager.ridable-in-water", zombieVillagerRidableInWater);
@@ -3053,6 +3054,7 @@ public class PurpurWorldConfig {
         zombieVillagerTakeDamageFromWater = getBoolean("mobs.zombie_villager.takes-damage-from-water", zombieVillagerTakeDamageFromWater);
         zombieVillagerCuringTimeMin = getInt("mobs.zombie_villager.curing_time.min", zombieVillagerCuringTimeMin);
         zombieVillagerCuringTimeMax = getInt("mobs.zombie_villager.curing_time.max", zombieVillagerCuringTimeMax);
+        zombieVillagerCureEnabled = getBoolean("mobs.zombie_villager.cure.enabled", zombieVillagerCureEnabled);
     }
 
     public boolean zombifiedPiglinRidable = false;
