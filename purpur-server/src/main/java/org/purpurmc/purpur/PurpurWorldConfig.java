@@ -1434,6 +1434,8 @@ public class PurpurWorldConfig {
     public double ironGolemMaxHealth = 100.0D;
     public double ironGolemScale = 1.0D;
     public boolean ironGolemTakeDamageFromWater = false;
+    public boolean ironGolemPoppyCalm = false;
+    public boolean ironGolemHealCalm = false;
     private void ironGolemSettings() {
         ironGolemRidable = getBoolean("mobs.iron_golem.ridable", ironGolemRidable);
         ironGolemRidableInWater = getBoolean("mobs.iron_golem.ridable-in-water", ironGolemRidableInWater);
@@ -1447,6 +1449,8 @@ public class PurpurWorldConfig {
         ironGolemMaxHealth = getDouble("mobs.iron_golem.attributes.max_health", ironGolemMaxHealth);
         ironGolemScale = Mth.clamp(getDouble("mobs.iron_golem.attributes.scale", ironGolemScale), 0.0625D, 16.0D);
         ironGolemTakeDamageFromWater = getBoolean("mobs.iron_golem.takes-damage-from-water", ironGolemTakeDamageFromWater);
+        ironGolemPoppyCalm = getBoolean("mobs.iron_golem.poppy-calms-anger", ironGolemPoppyCalm);
+        ironGolemHealCalm = getBoolean("mobs.iron_golem.healing-calms-anger", ironGolemHealCalm);
     }
 
     public boolean llamaRidable = false;
