@@ -262,6 +262,7 @@ public class PurpurWorldConfig {
     public boolean minecartControllableFallDamage = true;
     public double minecartControllableBaseSpeed = 0.1D;
     public Map<Block, Double> minecartControllableBlockSpeeds = new HashMap<>();
+    public double poweredRailBoostModifier = 0.06;
     private void minecartSettings() {
         if (PurpurConfig.version < 12) {
             boolean oldBool = getBoolean("gameplay-mechanics.controllable-minecarts.place-anywhere", minecartPlaceAnywhere);
@@ -314,6 +315,7 @@ public class PurpurWorldConfig {
             set("gameplay-mechanics.minecart.controllable.block-speed.grass_block", 0.3D);
             set("gameplay-mechanics.minecart.controllable.block-speed.stone", 0.5D);
         }
+        poweredRailBoostModifier = getDouble("gameplay-mechanics.minecart.powered-rail.boost-modifier", poweredRailBoostModifier);
     }
 
     public boolean catSpawning;
