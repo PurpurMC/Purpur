@@ -422,6 +422,7 @@ public class PurpurWorldConfig {
     public boolean playerRidableInWater = false;
     public boolean playerRemoveBindingWithWeakness = false;
     public int shiftRightClickRepairsMendingPoints = 0;
+    public int playerExpPickupDelay = 2;
     private void playerSettings() {
         if (PurpurConfig.version < 19) {
             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
@@ -447,6 +448,7 @@ public class PurpurWorldConfig {
         playerRidableInWater = getBoolean("gameplay-mechanics.player.ridable-in-water", playerRidableInWater);
         playerRemoveBindingWithWeakness = getBoolean("gameplay-mechanics.player.curse-of-binding.remove-with-weakness", playerRemoveBindingWithWeakness);
         shiftRightClickRepairsMendingPoints = getInt("gameplay-mechanics.player.shift-right-click-repairs-mending-points", shiftRightClickRepairsMendingPoints);
+        playerExpPickupDelay = getInt("gameplay-mechanics.player.exp-pickup-delay-ticks", playerExpPickupDelay);
     }
 
     public boolean silkTouchEnabled = false;
