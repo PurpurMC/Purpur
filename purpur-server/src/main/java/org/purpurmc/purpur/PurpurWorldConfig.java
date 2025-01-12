@@ -583,6 +583,13 @@ public class PurpurWorldConfig {
         spawnerDeactivateByRedstone = getBoolean("blocks.spawner.deactivate-by-redstone", spawnerDeactivateByRedstone);
     }
 
+    public int spongeAbsorptionArea = 65;
+    public int spongeAbsorptionRadius = 6;
+    private void spongeSettings() {
+        spongeAbsorptionArea = getInt("blocks.sponge.absorption.area", spongeAbsorptionArea);
+        spongeAbsorptionRadius = getInt("blocks.sponge.absorption.radius", spongeAbsorptionRadius);
+    }
+
     public boolean turtleEggsBreakFromExpOrbs = false;
     public boolean turtleEggsBreakFromItems = false;
     public boolean turtleEggsBreakFromMinecarts = false;
