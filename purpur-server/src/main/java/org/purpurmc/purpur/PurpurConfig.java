@@ -271,6 +271,36 @@ public class PurpurConfig {
         cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
     }
 
+    public static boolean allowInapplicableEnchants = false;
+    public static boolean allowIncompatibleEnchants = false;
+    public static boolean allowHigherEnchantsLevels = false;
+    public static boolean allowUnsafeEnchantCommand = false;
+    public static boolean replaceIncompatibleEnchants = false;
+    private static void enchantmentSettings() {
+        if (version < 30) {
+            boolean oldValue = getBoolean("settings.enchantment.allow-unsafe-enchants", false);
+            set("settings.enchantment.anvil.allow-unsafe-enchants", oldValue);
+            set("settings.enchantment.anvil.allow-inapplicable-enchants", true);
+            set("settings.enchantment.anvil.allow-incompatible-enchants", true);
+            set("settings.enchantment.anvil.allow-higher-enchants-levels", true);
+            set("settings.enchantment.allow-unsafe-enchants", null);
+        }
+        if (version < 37) {
+            boolean allowUnsafeEnchants = getBoolean("settings.enchantment.anvil.allow-unsafe-enchants", false);
+            if (!allowUnsafeEnchants) {
+                set("settings.enchantment.anvil.allow-inapplicable-enchants", false);
+                set("settings.enchantment.anvil.allow-incompatible-enchants", false);
+                set("settings.enchantment.anvil.allow-higher-enchants-levels", false);
+            }
+            set("settings.enchantment.anvil.allow-unsafe-enchants", null);
+        }
+        allowInapplicableEnchants = getBoolean("settings.enchantment.anvil.allow-inapplicable-enchants", allowInapplicableEnchants);
+        allowIncompatibleEnchants = getBoolean("settings.enchantment.anvil.allow-incompatible-enchants", allowIncompatibleEnchants);
+        allowHigherEnchantsLevels = getBoolean("settings.enchantment.anvil.allow-higher-enchants-levels", allowHigherEnchantsLevels);
+        allowUnsafeEnchantCommand = getBoolean("settings.enchantment.allow-unsafe-enchant-command", allowUnsafeEnchantCommand);
+        replaceIncompatibleEnchants = getBoolean("settings.enchantment.anvil.replace-incompatible-enchants", replaceIncompatibleEnchants);
+    }
+
     public static boolean endermanShortHeight = false;
     private static void entitySettings() {
         endermanShortHeight = getBoolean("settings.entity.enderman.short-height", endermanShortHeight);
