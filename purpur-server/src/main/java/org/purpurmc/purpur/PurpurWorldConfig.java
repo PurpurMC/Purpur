@@ -210,9 +210,11 @@ public class PurpurWorldConfig {
 
     public int entityLifeSpan = 0;
     public float entityLeftHandedChance = 0.05f;
+    public boolean entitySharedRandom = true;
     private void entitySettings() {
         entityLifeSpan = getInt("gameplay-mechanics.entity-lifespan", entityLifeSpan);
         entityLeftHandedChance = (float) getDouble("gameplay-mechanics.entity-left-handed-chance", entityLeftHandedChance);
+        entitySharedRandom = getBoolean("settings.entity.shared-random", entitySharedRandom);
     }
 
     public boolean infinityWorksWithoutArrows = false;
