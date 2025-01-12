@@ -5,6 +5,7 @@ import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Pattern;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minecraft.core.Registry;
@@ -446,5 +447,12 @@ public class PurpurConfig {
     public static boolean useUPnP = false;
     private static void networkSettings() {
         useUPnP = getBoolean("settings.network.upnp-port-forwarding", useUPnP);
+    }
+
+    public static Pattern usernameValidCharactersPattern;
+    private static void usernameValidationSettings() {
+        String defaultPattern = "^[a-zA-Z0-9_.]*$";
+        String setPattern = getString("settings.username-valid-characters", defaultPattern);
+        usernameValidCharactersPattern = Pattern.compile(setPattern == null || setPattern.isBlank() ? defaultPattern : setPattern);
     }
 }
