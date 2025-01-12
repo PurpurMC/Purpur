@@ -1775,6 +1775,7 @@ public class PurpurWorldConfig {
     public double ravagerScale = 1.0D;
     public boolean ravagerBypassMobGriefing = false;
     public boolean ravagerTakeDamageFromWater = false;
+    public List<Block> ravagerGriefableBlocks = new ArrayList<>();
     private void ravagerSettings() {
         ravagerRidable = getBoolean("mobs.ravager.ridable", ravagerRidable);
         ravagerRidableInWater = getBoolean("mobs.ravager.ridable-in-water", ravagerRidableInWater);
@@ -1788,6 +1789,23 @@ public class PurpurWorldConfig {
         ravagerScale = Mth.clamp(getDouble("mobs.ravager.attributes.scale", ravagerScale), 0.0625D, 16.0D);
         ravagerBypassMobGriefing = getBoolean("mobs.ravager.bypass-mob-griefing", ravagerBypassMobGriefing);
         ravagerTakeDamageFromWater = getBoolean("mobs.ravager.takes-damage-from-water", ravagerTakeDamageFromWater);
+        getList("mobs.ravager.griefable-blocks", new ArrayList<String>(){{
+            add("minecraft:oak_leaves");
+            add("minecraft:spruce_leaves");
+            add("minecraft:birch_leaves");
+            add("minecraft:jungle_leaves");
+            add("minecraft:acacia_leaves");
+            add("minecraft:dark_oak_leaves");
+            add("minecraft:beetroots");
+            add("minecraft:carrots");
+            add("minecraft:potatoes");
+            add("minecraft:wheat");
+        }}).forEach(key -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(key.toString()));
+            if (!block.defaultBlockState().isAir()) {
+                ravagerGriefableBlocks.add(block);
+            }
+        });
     }
 
     public boolean salmonRidable = false;
