@@ -1029,8 +1029,10 @@ public class PurpurWorldConfig {
     }
 
     public boolean spawnerDeactivateByRedstone = false;
+    public boolean spawnerFixMC238526 = false;
     private void spawnerSettings() {
         spawnerDeactivateByRedstone = getBoolean("blocks.spawner.deactivate-by-redstone", spawnerDeactivateByRedstone);
+        spawnerFixMC238526 = getBoolean("blocks.spawner.fix-mc-238526", spawnerFixMC238526);
     }
 
     public int spongeAbsorptionArea = 65;
