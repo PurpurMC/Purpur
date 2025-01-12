@@ -564,6 +564,11 @@ public class PurpurWorldConfig {
         lavaSpeedNotNether = getInt("blocks.lava.speed.not-nether", lavaSpeedNotNether);
     }
 
+    public int pistonBlockPushLimit = 12;
+    private void pistonSettings() {
+        pistonBlockPushLimit = getInt("blocks.piston.block-push-limit", pistonBlockPushLimit);
+    }
+
     public boolean powderSnowBypassMobGriefing = false;
     private void powderSnowSettings() {
         powderSnowBypassMobGriefing = getBoolean("blocks.powder_snow.bypass-mob-griefing", powderSnowBypassMobGriefing);
