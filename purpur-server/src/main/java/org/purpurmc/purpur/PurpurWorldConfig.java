@@ -1400,6 +1400,7 @@ public class PurpurWorldConfig {
     public boolean creeperExplodeWhenKilled = false;
     public boolean creeperHealthRadius = false;
     public boolean creeperAlwaysDropExp = false;
+    public double creeperHeadVisibilityPercent = 0.5D;
     private void creeperSettings() {
         creeperRidable = getBoolean("mobs.creeper.ridable", creeperRidable);
         creeperRidableInWater = getBoolean("mobs.creeper.ridable-in-water", creeperRidableInWater);
@@ -1418,6 +1419,7 @@ public class PurpurWorldConfig {
         creeperExplodeWhenKilled = getBoolean("mobs.creeper.explode-when-killed", creeperExplodeWhenKilled);
         creeperHealthRadius = getBoolean("mobs.creeper.health-impacts-explosion", creeperHealthRadius);
         creeperAlwaysDropExp = getBoolean("mobs.creeper.always-drop-exp", creeperAlwaysDropExp);
+        creeperHeadVisibilityPercent = getDouble("mobs.creeper.head-visibility-percent", creeperHeadVisibilityPercent);
     }
 
     public boolean dolphinRidable = false;
@@ -2245,6 +2247,7 @@ public class PurpurWorldConfig {
     public boolean piglinTakeDamageFromWater = false;
     public int piglinPortalSpawnModifier = 2000;
     public boolean piglinAlwaysDropExp = false;
+    public double piglinHeadVisibilityPercent = 0.5D;
     private void piglinSettings() {
         piglinRidable = getBoolean("mobs.piglin.ridable", piglinRidable);
         piglinRidableInWater = getBoolean("mobs.piglin.ridable-in-water", piglinRidableInWater);
@@ -2260,6 +2263,7 @@ public class PurpurWorldConfig {
         piglinTakeDamageFromWater = getBoolean("mobs.piglin.takes-damage-from-water", piglinTakeDamageFromWater);
         piglinPortalSpawnModifier = getInt("mobs.piglin.portal-spawn-modifier", piglinPortalSpawnModifier);
         piglinAlwaysDropExp = getBoolean("mobs.piglin.always-drop-exp", piglinAlwaysDropExp);
+        piglinHeadVisibilityPercent = getDouble("mobs.piglin.head-visibility-percent", piglinHeadVisibilityPercent);
     }
 
     public boolean piglinBruteRidable = false;
@@ -2544,6 +2548,7 @@ public class PurpurWorldConfig {
     public double skeletonScale = 1.0D;
     public boolean skeletonTakeDamageFromWater = false;
     public boolean skeletonAlwaysDropExp = false;
+    public double skeletonHeadVisibilityPercent = 0.5D;
     private void skeletonSettings() {
         skeletonRidable = getBoolean("mobs.skeleton.ridable", skeletonRidable);
         skeletonRidableInWater = getBoolean("mobs.skeleton.ridable-in-water", skeletonRidableInWater);
@@ -2557,6 +2562,7 @@ public class PurpurWorldConfig {
         skeletonScale = Mth.clamp(getDouble("mobs.skeleton.attributes.scale", skeletonScale), 0.0625D, 16.0D);
         skeletonTakeDamageFromWater = getBoolean("mobs.skeleton.takes-damage-from-water", skeletonTakeDamageFromWater);
         skeletonAlwaysDropExp = getBoolean("mobs.skeleton.always-drop-exp", skeletonAlwaysDropExp);
+        skeletonHeadVisibilityPercent = getDouble("mobs.skeleton.head-visibility-percent", skeletonHeadVisibilityPercent);
     }
 
     public boolean skeletonHorseRidable = false;
@@ -3130,6 +3136,7 @@ public class PurpurWorldConfig {
     public boolean zombieBypassMobGriefing = false;
     public boolean zombieTakeDamageFromWater = false;
     public boolean zombieAlwaysDropExp = false;
+    public double zombieHeadVisibilityPercent = 0.5D;
     private void zombieSettings() {
         zombieRidable = getBoolean("mobs.zombie.ridable", zombieRidable);
         zombieRidableInWater = getBoolean("mobs.zombie.ridable-in-water", zombieRidableInWater);
@@ -3149,6 +3156,7 @@ public class PurpurWorldConfig {
         zombieBypassMobGriefing = getBoolean("mobs.zombie.bypass-mob-griefing", zombieBypassMobGriefing);
         zombieTakeDamageFromWater = getBoolean("mobs.zombie.takes-damage-from-water", zombieTakeDamageFromWater);
         zombieAlwaysDropExp = getBoolean("mobs.zombie.always-drop-exp", zombieAlwaysDropExp);
+        zombieHeadVisibilityPercent = getDouble("mobs.zombie.head-visibility-percent", zombieHeadVisibilityPercent);
     }
 
     public boolean zombieHorseRidable = false;
