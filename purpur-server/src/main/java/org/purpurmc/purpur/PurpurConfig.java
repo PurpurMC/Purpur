@@ -307,6 +307,10 @@ public class PurpurConfig {
     public static Set<Enchantment> grindstoneIgnoredEnchants = new HashSet<>();
     public static boolean grindstoneRemoveAttributes = false;
     public static boolean grindstoneRemoveDisplay = false;
+    public static int caveVinesMaxGrowthAge = 25;
+    public static int kelpMaxGrowthAge = 25;
+    public static int twistingVinesMaxGrowthAge = 25;
+    public static int weepingVinesMaxGrowthAge = 25;
     private static void blockSettings() {
         if (version < 3) {
             boolean oldValue = getBoolean("settings.barrel.packed-barrels", true);
@@ -356,6 +360,30 @@ public class PurpurConfig {
         });
         grindstoneRemoveAttributes = getBoolean("settings.blocks.grindstone.remove-attributes", grindstoneRemoveAttributes);
         grindstoneRemoveDisplay = getBoolean("settings.blocks.grindstone.remove-name-and-lore", grindstoneRemoveDisplay);
+        caveVinesMaxGrowthAge = getInt("settings.blocks.cave_vines.max-growth-age", caveVinesMaxGrowthAge);
+        if (caveVinesMaxGrowthAge > 25) {
+            caveVinesMaxGrowthAge = 25;
+            log(Level.WARNING, "blocks.cave_vines.max-growth-age is set to above maximum allowed value of 25");
+            log(Level.WARNING, "Using value of 25 to prevent issues");
+        }
+        kelpMaxGrowthAge = getInt("settings.blocks.kelp.max-growth-age", kelpMaxGrowthAge);
+        if (kelpMaxGrowthAge > 25) {
+            kelpMaxGrowthAge = 25;
+            log(Level.WARNING, "blocks.kelp.max-growth-age is set to above maximum allowed value of 25");
+            log(Level.WARNING, "Using value of 25 to prevent issues");
+        }
+        twistingVinesMaxGrowthAge = getInt("settings.blocks.twisting_vines.max-growth-age", twistingVinesMaxGrowthAge);
+        if (twistingVinesMaxGrowthAge > 25) {
+            twistingVinesMaxGrowthAge = 25;
+            log(Level.WARNING, "blocks.twisting_vines.max-growth-age is set to above maximum allowed value of 25");
+            log(Level.WARNING, "Using value of 25 to prevent issues");
+        }
+        weepingVinesMaxGrowthAge = getInt("settings.blocks.weeping_vines.max-growth-age", weepingVinesMaxGrowthAge);
+        if (weepingVinesMaxGrowthAge > 25) {
+            weepingVinesMaxGrowthAge = 25;
+            log(Level.WARNING, "blocks.weeping_vines.max-growth-age is set to above maximum allowed value of 25");
+            log(Level.WARNING, "Using value of 25 to prevent issues");
+        }
     }
 
     public static boolean allowInapplicableEnchants = false;
