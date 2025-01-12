@@ -388,6 +388,7 @@ public class PurpurWorldConfig {
     public double playerCriticalDamageMultiplier = 1.5D;
     public int playerBurpDelay = 10;
     public boolean playerBurpWhenFull = false;
+    public boolean playerRidableInWater = false;
     private void playerSettings() {
         if (PurpurConfig.version < 19) {
             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
@@ -410,6 +411,7 @@ public class PurpurWorldConfig {
         playerCriticalDamageMultiplier = getDouble("gameplay-mechanics.player.critical-damage-multiplier", playerCriticalDamageMultiplier);
         playerBurpDelay = getInt("gameplay-mechanics.player.burp-delay", playerBurpDelay);
         playerBurpWhenFull = getBoolean("gameplay-mechanics.player.burp-when-full", playerBurpWhenFull);
+        playerRidableInWater = getBoolean("gameplay-mechanics.player.ridable-in-water", playerRidableInWater);
     }
 
     public boolean silkTouchEnabled = false;
