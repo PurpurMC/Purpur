@@ -343,6 +343,7 @@ public class PurpurWorldConfig {
     public boolean playerFixStuckPortal = false;
     public boolean creativeOnePunch = false;
     public boolean playerSleepNearMonsters = false;
+    public boolean playersSkipNight = true;
     private void playerSettings() {
         if (PurpurConfig.version < 19) {
             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
@@ -361,6 +362,7 @@ public class PurpurWorldConfig {
         playerFixStuckPortal = getBoolean("gameplay-mechanics.player.fix-stuck-in-portal", playerFixStuckPortal);
         creativeOnePunch = getBoolean("gameplay-mechanics.player.one-punch-in-creative", creativeOnePunch);
         playerSleepNearMonsters = getBoolean("gameplay-mechanics.player.sleep-ignore-nearby-mobs", playerSleepNearMonsters);
+        playersSkipNight = getBoolean("gameplay-mechanics.player.can-skip-night", playersSkipNight);
     }
 
     public boolean silkTouchEnabled = false;
