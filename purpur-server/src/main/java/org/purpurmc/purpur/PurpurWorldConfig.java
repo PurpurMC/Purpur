@@ -1298,7 +1298,14 @@ public class PurpurWorldConfig {
     public int cowFeedMushrooms = 0;
     public int cowBreedingTicks = 6000;
     public boolean cowTakeDamageFromWater = false;
+    public double cowNaturallyAggressiveToPlayersChance = 0.0D;
+    public double cowNaturallyAggressiveToPlayersDamage = 2.0D;
     private void cowSettings() {
+        if (PurpurConfig.version < 22) {
+            double oldValue = getDouble("mobs.cow.naturally-aggressive-to-players-chance", cowNaturallyAggressiveToPlayersChance);
+            set("mobs.cow.naturally-aggressive-to-players-chance", null);
+            set("mobs.cow.naturally-aggressive-to-players.chance", oldValue);
+        }
         cowRidable = getBoolean("mobs.cow.ridable", cowRidable);
         cowRidableInWater = getBoolean("mobs.cow.ridable-in-water", cowRidableInWater);
         cowControllable = getBoolean("mobs.cow.controllable", cowControllable);
@@ -1312,6 +1319,8 @@ public class PurpurWorldConfig {
         cowFeedMushrooms = getInt("mobs.cow.feed-mushrooms-for-mooshroom", cowFeedMushrooms);
         cowBreedingTicks = getInt("mobs.cow.breeding-delay-ticks", cowBreedingTicks);
         cowTakeDamageFromWater = getBoolean("mobs.cow.takes-damage-from-water", cowTakeDamageFromWater);
+        cowNaturallyAggressiveToPlayersChance = getDouble("mobs.cow.naturally-aggressive-to-players.chance", cowNaturallyAggressiveToPlayersChance);
+        cowNaturallyAggressiveToPlayersDamage = getDouble("mobs.cow.naturally-aggressive-to-players.damage", cowNaturallyAggressiveToPlayersDamage);
     }
 
     public boolean creakingRidable = false;
