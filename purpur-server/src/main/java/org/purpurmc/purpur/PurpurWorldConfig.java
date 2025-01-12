@@ -458,6 +458,17 @@ public class PurpurWorldConfig {
         anvilColorsUseMiniMessage = getBoolean("blocks.anvil.use-mini-message", anvilColorsUseMiniMessage);
     }
 
+    public int beaconLevelOne = 20;
+    public int beaconLevelTwo = 30;
+    public int beaconLevelThree = 40;
+    public int beaconLevelFour = 50;
+    private void beaconSettings() {
+        beaconLevelOne = getInt("blocks.beacon.effect-range.level-1", beaconLevelOne);
+        beaconLevelTwo = getInt("blocks.beacon.effect-range.level-2", beaconLevelTwo);
+        beaconLevelThree = getInt("blocks.beacon.effect-range.level-3", beaconLevelThree);
+        beaconLevelFour = getInt("blocks.beacon.effect-range.level-4", beaconLevelFour);
+    }
+
     public boolean bedExplode = true;
     public double bedExplosionPower = 5.0D;
     public boolean bedExplosionFire = true;
