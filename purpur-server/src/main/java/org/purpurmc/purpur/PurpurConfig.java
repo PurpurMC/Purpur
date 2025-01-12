@@ -191,6 +191,18 @@ public class PurpurConfig {
         deathMsgRunWithScissors = getString("settings.messages.death-message.run-with-scissors", deathMsgRunWithScissors);
     }
 
+    public static boolean advancementOnlyBroadcastToAffectedPlayer = false;
+    public static boolean deathMessageOnlyBroadcastToAffectedPlayer = false;
+    private static void broadcastSettings() {
+        if (version < 13) {
+            boolean oldValue = getBoolean("settings.advancement.only-broadcast-to-affected-player", false);
+            set("settings.broadcasts.advancement.only-broadcast-to-affected-player", oldValue);
+            set("settings.advancement.only-broadcast-to-affected-player", null);
+        }
+        advancementOnlyBroadcastToAffectedPlayer  = getBoolean("settings.broadcasts.advancement.only-broadcast-to-affected-player", advancementOnlyBroadcastToAffectedPlayer);
+        deathMessageOnlyBroadcastToAffectedPlayer = getBoolean("settings.broadcasts.death.only-broadcast-to-affected-player", deathMessageOnlyBroadcastToAffectedPlayer);
+    }
+
     public static String serverModName = io.papermc.paper.ServerBuildInfo.buildInfo().brandName();
     private static void serverModName() {
         serverModName = getString("settings.server-mod-name", serverModName);
