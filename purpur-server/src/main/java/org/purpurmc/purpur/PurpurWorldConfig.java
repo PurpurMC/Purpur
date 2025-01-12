@@ -375,6 +375,8 @@ public class PurpurWorldConfig {
     public boolean playerSleepNearMonsters = false;
     public boolean playersSkipNight = true;
     public double playerCriticalDamageMultiplier = 1.5D;
+    public int playerBurpDelay = 10;
+    public boolean playerBurpWhenFull = false;
     private void playerSettings() {
         if (PurpurConfig.version < 19) {
             boolean oldVal = getBoolean("gameplay-mechanics.player.idle-timeout.mods-target", idleTimeoutTargetPlayer);
@@ -395,6 +397,8 @@ public class PurpurWorldConfig {
         playerSleepNearMonsters = getBoolean("gameplay-mechanics.player.sleep-ignore-nearby-mobs", playerSleepNearMonsters);
         playersSkipNight = getBoolean("gameplay-mechanics.player.can-skip-night", playersSkipNight);
         playerCriticalDamageMultiplier = getDouble("gameplay-mechanics.player.critical-damage-multiplier", playerCriticalDamageMultiplier);
+        playerBurpDelay = getInt("gameplay-mechanics.player.burp-delay", playerBurpDelay);
+        playerBurpWhenFull = getBoolean("gameplay-mechanics.player.burp-when-full", playerBurpWhenFull);
     }
 
     public boolean silkTouchEnabled = false;
