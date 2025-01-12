@@ -408,6 +408,23 @@ public class PurpurWorldConfig {
         });
     }
 
+    public double bowProjectileOffset = 1.0D;
+    public double crossbowProjectileOffset = 1.0D;
+    public double eggProjectileOffset = 1.0D;
+    public double enderPearlProjectileOffset = 1.0D;
+    public double throwablePotionProjectileOffset = 1.0D;
+    public double tridentProjectileOffset = 1.0D;
+    public double snowballProjectileOffset = 1.0D;
+    private void projectileOffsetSettings() {
+        bowProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.bow", bowProjectileOffset);
+        crossbowProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.crossbow", crossbowProjectileOffset);
+        eggProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.egg", eggProjectileOffset);
+        enderPearlProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.ender-pearl", enderPearlProjectileOffset);
+        throwablePotionProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.throwable-potion", throwablePotionProjectileOffset);
+        tridentProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.trident", tridentProjectileOffset);
+        snowballProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.snowball", snowballProjectileOffset);
+    }
+
     public int snowballDamage = -1;
     private void snowballSettings() {
         snowballDamage = getInt("gameplay-mechanics.projectile-damage.snowball", snowballDamage);
