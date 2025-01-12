@@ -19,6 +19,12 @@ import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import java.util.List;
 import java.util.Map;
+import org.purpurmc.purpur.tool.Flattenable;
+import org.purpurmc.purpur.tool.Strippable;
+import org.purpurmc.purpur.tool.Tillable;
+import org.purpurmc.purpur.tool.Waxable;
+import org.purpurmc.purpur.tool.Weatherable;
+
 import static org.purpurmc.purpur.PurpurConfig.log;
 
 @SuppressWarnings("unused")
@@ -455,6 +461,287 @@ public class PurpurWorldConfig {
     public int snowballDamage = -1;
     private void snowballSettings() {
         snowballDamage = getInt("gameplay-mechanics.projectile-damage.snowball", snowballDamage);
+    }
+
+    public Map<Block, Strippable> axeStrippables = new HashMap<>();
+    public Map<Block, Waxable> axeWaxables = new HashMap<>();
+    public Map<Block, Weatherable> axeWeatherables = new HashMap<>();
+    public Map<Block, Tillable> hoeTillables = new HashMap<>();
+    public Map<Block, Flattenable> shovelFlattenables = new HashMap<>();
+    private void toolSettings() {
+        axeStrippables.clear();
+        axeWaxables.clear();
+        axeWeatherables.clear();
+        hoeTillables.clear();
+        shovelFlattenables.clear();
+        if (PurpurConfig.version < 18) {
+            ConfigurationSection section = PurpurConfig.config.getConfigurationSection("world-settings." + worldName + ".tools.hoe.tilling");
+            if (section != null) {
+                PurpurConfig.config.set("world-settings." + worldName + ".tools.hoe.tillables", section);
+                PurpurConfig.config.set("world-settings." + worldName + ".tools.hoe.tilling", null);
+            }
+            section = PurpurConfig.config.getConfigurationSection("world-settings.default.tools.hoe.tilling");
+            if (section != null) {
+                PurpurConfig.config.set("world-settings.default.tools.hoe.tillables", section);
+                PurpurConfig.config.set("world-settings.default.tools.hoe.tilling", null);
+            }
+        }
+        if (PurpurConfig.version < 29) {
+            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:mangrove_log", Map.of("into", "minecraft:stripped_mangrove_log", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:mangrove_wood", Map.of("into", "minecraft:stripped_mangrove_wood", "drops", new HashMap<String, Double>()));
+        }
+        if (PurpurConfig.version < 32) {
+            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:cherry_log", Map.of("into", "minecraft:stripped_cherry_log", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:cherry_wood", Map.of("into", "minecraft:stripped_cherry_wood", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:bamboo_block", Map.of("into", "minecraft:stripped_bamboo_block", "drops", new HashMap<String, Double>()));
+        }
+        if (PurpurConfig.version < 33) {
+            getList("gameplay-mechanics.shovel-turns-block-to-grass-path", new ArrayList<String>(){{
+                add("minecraft:coarse_dirt");
+                add("minecraft:dirt");
+                add("minecraft:grass_block");
+                add("minecraft:mycelium");
+                add("minecraft:podzol");
+                add("minecraft:rooted_dirt");
+            }}).forEach(key -> {
+                PurpurConfig.config.set("world-settings.default.tools.shovel.flattenables." + key.toString(), Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>()));
+            });
+            set("gameplay-mechanics.shovel-turns-block-to-grass-path", null);
+        }
+        if (PurpurConfig.version < 34) {
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_chiseled_copper", Map.of("into", "minecraft:chiseled_copper", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_exposed_chiseled_copper", Map.of("into", "minecraft:exposed_chiseled_copper", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_weathered_chiseled_copper", Map.of("into", "minecraft:weathered_chiseled_copper", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_oxidized_chiseled_copper", Map.of("into", "minecraft:oxidized_chiseled_copper", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_copper_door", Map.of("into", "minecraft:copper_door", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_exposed_copper_door", Map.of("into", "minecraft:exposed_copper_door", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_weathered_copper_door", Map.of("into", "minecraft:weathered_copper_door", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_oxidized_copper_door", Map.of("into", "minecraft:oxidized_copper_door", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_copper_trapdoor", Map.of("into", "minecraft:copper_trapdoor", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_exposed_copper_trapdoor", Map.of("into", "minecraft:exposed_copper_trapdoor", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_weathered_copper_trapdoor", Map.of("into", "minecraft:weathered_copper_trapdoor", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_oxidized_copper_trapdoor", Map.of("into", "minecraft:oxidized_copper_trapdoor", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_copper_grate", Map.of("into", "minecraft:copper_grate", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_exposed_copper_grate", Map.of("into", "minecraft:exposed_copper_grate", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_weathered_copper_grate", Map.of("into", "minecraft:weathered_copper_grate", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_oxidized_copper_grate", Map.of("into", "minecraft:oxidized_copper_grate", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_copper_bulb", Map.of("into", "minecraft:copper_bulb", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_exposed_copper_bulb", Map.of("into", "minecraft:exposed_copper_bulb", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_weathered_copper_bulb", Map.of("into", "minecraft:weathered_copper_bulb", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_oxidized_copper_bulb", Map.of("into", "minecraft:oxidized_copper_bulb", "drops", new HashMap<String, Double>()));
+
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:exposed_chiseled_copper", Map.of("into", "minecraft:chiseled_copper", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_chiseled_copper", Map.of("into", "minecraft:exposed_chiseled_copper", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_chiseled_copper", Map.of("into", "minecraft:weathered_chiseled_copper", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_cut_copper_stairs", Map.of("into", "minecraft:weathered_cut_copper_stairs", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:exposed_copper_door", Map.of("into", "minecraft:copper_door", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_copper_door", Map.of("into", "minecraft:exposed_copper_door", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_copper_door", Map.of("into", "minecraft:weathered_copper_door", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:exposed_copper_trapdoor", Map.of("into", "minecraft:copper_trapdoor", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_copper_trapdoor", Map.of("into", "minecraft:exposed_copper_trapdoor", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_copper_trapdoor", Map.of("into", "minecraft:weathered_copper_trapdoor", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:exposed_copper_grate", Map.of("into", "minecraft:copper_grate", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_copper_grate", Map.of("into", "minecraft:exposed_copper_grate", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_copper_grate", Map.of("into", "minecraft:weathered_copper_grate", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:exposed_copper_bulb", Map.of("into", "minecraft:copper_bulb", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_copper_bulb", Map.of("into", "minecraft:exposed_copper_bulb", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_copper_bulb", Map.of("into", "minecraft:weathered_copper_bulb", "drops", new HashMap<String, Double>()));
+        }
+        if (PurpurConfig.version < 38) {
+            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:pale_oak_wood", Map.of("into", "minecraft:stripped_pale_oak_wood", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.strippables.minecraft:pale_oak_log", Map.of("into", "minecraft:stripped_pale_oak_log", "drops", new HashMap<String, Double>()));
+        }
+        getMap("tools.axe.strippables", Map.ofEntries(
+                Map.entry("minecraft:oak_wood", Map.of("into", "minecraft:stripped_oak_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oak_log", Map.of("into", "minecraft:stripped_oak_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:dark_oak_wood", Map.of("into", "minecraft:stripped_dark_oak_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:dark_oak_log", Map.of("into", "minecraft:stripped_dark_oak_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:pale_oak_wood", Map.of("into", "minecraft:stripped_pale_oak_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:pale_oak_log", Map.of("into", "minecraft:stripped_pale_oak_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:acacia_wood", Map.of("into", "minecraft:stripped_acacia_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:acacia_log", Map.of("into", "minecraft:stripped_acacia_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:cherry_wood", Map.of("into", "minecraft:stripped_cherry_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:cherry_log", Map.of("into", "minecraft:stripped_cherry_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:birch_wood", Map.of("into", "minecraft:stripped_birch_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:birch_log", Map.of("into", "minecraft:stripped_birch_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:jungle_wood", Map.of("into", "minecraft:stripped_jungle_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:jungle_log", Map.of("into", "minecraft:stripped_jungle_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:spruce_wood", Map.of("into", "minecraft:stripped_spruce_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:spruce_log", Map.of("into", "minecraft:stripped_spruce_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:warped_stem", Map.of("into", "minecraft:stripped_warped_stem", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:warped_hyphae", Map.of("into", "minecraft:stripped_warped_hyphae", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:crimson_stem", Map.of("into", "minecraft:stripped_crimson_stem", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:crimson_hyphae", Map.of("into", "minecraft:stripped_crimson_hyphae", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:mangrove_wood", Map.of("into", "minecraft:stripped_mangrove_wood", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:mangrove_log", Map.of("into", "minecraft:stripped_mangrove_log", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:bamboo_block", Map.of("into", "minecraft:stripped_bamboo_block", "drops", new HashMap<String, Double>()))
+            )
+        ).forEach((blockId, obj) -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.strippables`: " + blockId); return; }
+            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.strippables." + blockId + "`"); return; }
+            String intoId = (String) map.get("into");
+            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.strippables." + blockId + ".into`: " + intoId); return; }
+            Object dropsObj = map.get("drops");
+            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.strippables." + blockId + ".drops`"); return; }
+            Map<Item, Double> drops = new HashMap<>();
+            dropsMap.forEach((itemId, chance) -> {
+                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.strippables." + blockId + ".drops`: " + itemId); return; }
+                drops.put(item, (double) chance);
+            });
+            axeStrippables.put(block, new Strippable(into, drops));
+        });
+        getMap("tools.axe.waxables", Map.ofEntries(
+                Map.entry("minecraft:waxed_copper_block", Map.of("into", "minecraft:copper_block", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_copper", Map.of("into", "minecraft:exposed_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_copper", Map.of("into", "minecraft:weathered_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_copper", Map.of("into", "minecraft:oxidized_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_cut_copper", Map.of("into", "minecraft:cut_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_cut_copper", Map.of("into", "minecraft:exposed_cut_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_cut_copper", Map.of("into", "minecraft:weathered_cut_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_cut_copper", Map.of("into", "minecraft:oxidized_cut_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_cut_copper_slab", Map.of("into", "minecraft:cut_copper_slab", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_cut_copper_slab", Map.of("into", "minecraft:exposed_cut_copper_slab", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_cut_copper_slab", Map.of("into", "minecraft:weathered_cut_copper_slab", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_cut_copper_slab", Map.of("into", "minecraft:oxidized_cut_copper_slab", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_cut_copper_stairs", Map.of("into", "minecraft:cut_copper_stairs", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_cut_copper_stairs", Map.of("into", "minecraft:exposed_cut_copper_stairs", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_cut_copper_stairs", Map.of("into", "minecraft:weathered_cut_copper_stairs", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_cut_copper_stairs", Map.of("into", "minecraft:oxidized_cut_copper_stairs", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_chiseled_copper", Map.of("into", "minecraft:chiseled_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_chiseled_copper", Map.of("into", "minecraft:exposed_chiseled_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_chiseled_copper", Map.of("into", "minecraft:weathered_chiseled_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_chiseled_copper", Map.of("into", "minecraft:oxidized_chiseled_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_copper_door", Map.of("into", "minecraft:copper_door", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_copper_door", Map.of("into", "minecraft:exposed_copper_door", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_copper_door", Map.of("into", "minecraft:weathered_copper_door", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_copper_door", Map.of("into", "minecraft:oxidized_copper_door", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_copper_trapdoor", Map.of("into", "minecraft:copper_trapdoor", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_copper_trapdoor", Map.of("into", "minecraft:exposed_copper_trapdoor", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_copper_trapdoor", Map.of("into", "minecraft:weathered_copper_trapdoor", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_copper_trapdoor", Map.of("into", "minecraft:oxidized_copper_trapdoor", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_copper_grate", Map.of("into", "minecraft:copper_grate", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_copper_grate", Map.of("into", "minecraft:exposed_copper_grate", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_copper_grate", Map.of("into", "minecraft:weathered_copper_grate", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_copper_grate", Map.of("into", "minecraft:oxidized_copper_grate", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_copper_bulb", Map.of("into", "minecraft:copper_bulb", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_copper_bulb", Map.of("into", "minecraft:exposed_copper_bulb", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_copper_bulb", Map.of("into", "minecraft:weathered_copper_bulb", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_copper_bulb", Map.of("into", "minecraft:oxidized_copper_bulb", "drops", new HashMap<String, Double>())))
+        ).forEach((blockId, obj) -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.waxables`: " + blockId); return; }
+            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.waxables." + blockId + "`"); return; }
+            String intoId = (String) map.get("into");
+            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.waxables." + blockId + ".into`: " + intoId); return; }
+            Object dropsObj = map.get("drops");
+            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.waxables." + blockId + ".drops`"); return; }
+            Map<Item, Double> drops = new HashMap<>();
+            dropsMap.forEach((itemId, chance) -> {
+                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.waxables." + blockId + ".drops`: " + itemId); return; }
+                drops.put(item, (double) chance);
+            });
+            axeWaxables.put(block, new Waxable(into, drops));
+        });
+        getMap("tools.axe.weatherables", Map.ofEntries(
+                Map.entry("minecraft:exposed_copper", Map.of("into", "minecraft:copper_block", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_copper", Map.of("into", "minecraft:exposed_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_copper", Map.of("into", "minecraft:weathered_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_cut_copper", Map.of("into", "minecraft:cut_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_cut_copper", Map.of("into", "minecraft:exposed_cut_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_cut_copper", Map.of("into", "minecraft:weathered_cut_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_chiseled_copper", Map.of("into", "minecraft:chiseled_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_chiseled_copper", Map.of("into", "minecraft:exposed_chiseled_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_chiseled_copper", Map.of("into", "minecraft:weathered_chiseled_copper", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_cut_copper_slab", Map.of("into", "minecraft:cut_copper_slab", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_cut_copper_slab", Map.of("into", "minecraft:exposed_cut_copper_slab", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_cut_copper_slab", Map.of("into", "minecraft:weathered_cut_copper_slab", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_cut_copper_stairs", Map.of("into", "minecraft:cut_copper_stairs", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_cut_copper_stairs", Map.of("into", "minecraft:exposed_cut_copper_stairs", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_cut_copper_stairs", Map.of("into", "minecraft:weathered_cut_copper_stairs", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_copper_door", Map.of("into", "minecraft:copper_door", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_copper_door", Map.of("into", "minecraft:exposed_copper_door", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_copper_door", Map.of("into", "minecraft:weathered_copper_door", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_copper_trapdoor", Map.of("into", "minecraft:copper_trapdoor", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_copper_trapdoor", Map.of("into", "minecraft:exposed_copper_trapdoor", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_copper_trapdoor", Map.of("into", "minecraft:weathered_copper_trapdoor", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_copper_grate", Map.of("into", "minecraft:copper_grate", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_copper_grate", Map.of("into", "minecraft:exposed_copper_grate", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_copper_grate", Map.of("into", "minecraft:weathered_copper_grate", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_copper_bulb", Map.of("into", "minecraft:copper_bulb", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_copper_bulb", Map.of("into", "minecraft:exposed_copper_bulb", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_copper_bulb", Map.of("into", "minecraft:weathered_copper_bulb", "drops", new HashMap<String, Double>())))
+        ).forEach((blockId, obj) -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.weatherables`: " + blockId); return; }
+            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.weatherables." + blockId + "`"); return; }
+            String intoId = (String) map.get("into");
+            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.weatherables." + blockId + ".into`: " + intoId); return; }
+            Object dropsObj = map.get("drops");
+            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.weatherables." + blockId + ".drops`"); return; }
+            Map<Item, Double> drops = new HashMap<>();
+            dropsMap.forEach((itemId, chance) -> {
+                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.weatherables." + blockId + ".drops`: " + itemId); return; }
+                drops.put(item, (double) chance);
+            });
+            axeWeatherables.put(block, new Weatherable(into, drops));
+        });
+        getMap("tools.hoe.tillables", Map.ofEntries(
+                Map.entry("minecraft:grass_block", Map.of("condition", "air_above", "into", "minecraft:farmland", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:dirt_path", Map.of("condition", "air_above", "into", "minecraft:farmland", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:dirt", Map.of("condition", "air_above", "into", "minecraft:farmland", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:coarse_dirt", Map.of("condition", "air_above", "into", "minecraft:dirt", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:rooted_dirt", Map.of("condition", "always", "into", "minecraft:dirt", "drops", Map.of("minecraft:hanging_roots", 1.0D))))
+        ).forEach((blockId, obj) -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.hoe.tillables`: " + blockId); return; }
+            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.hoe.tillables." + blockId + "`"); return; }
+            String conditionId = (String) map.get("condition");
+            Tillable.Condition condition = Tillable.Condition.get(conditionId);
+            if (condition == null) { PurpurConfig.log(Level.SEVERE, "Invalid condition for `tools.hoe.tillables." + blockId + ".condition`: " + conditionId); return; }
+            String intoId = (String) map.get("into");
+            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.hoe.tillables." + blockId + ".into`: " + intoId); return; }
+            Object dropsObj = map.get("drops");
+            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.hoe.tillables." + blockId + ".drops`"); return; }
+            Map<Item, Double> drops = new HashMap<>();
+            dropsMap.forEach((itemId, chance) -> {
+                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.hoe.tillables." + blockId + ".drops`: " + itemId); return; }
+                drops.put(item, (double) chance);
+            });
+            hoeTillables.put(block, new Tillable(condition, into, drops));
+        });
+        getMap("tools.shovel.flattenables", Map.ofEntries(
+                Map.entry("minecraft:grass_block", Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:dirt", Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:podzol", Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:coarse_dirt", Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:mycelium", Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:rooted_dirt", Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>())))
+        ).forEach((blockId, obj) -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.shovel.flattenables`: " + blockId); return; }
+            if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.shovel.flattenables." + blockId + "`"); return; }
+            String intoId = (String) map.get("into");
+            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.shovel.flattenables." + blockId + ".into`: " + intoId); return; }
+            Object dropsObj = map.get("drops");
+            if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.shovel.flattenables." + blockId + ".drops`"); return; }
+            Map<Item, Double> drops = new HashMap<>();
+            dropsMap.forEach((itemId, chance) -> {
+                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.shovel.flattenables." + blockId + ".drops`: " + itemId); return; }
+                drops.put(item, (double) chance);
+            });
+            shovelFlattenables.put(block, new Flattenable(into, drops));
+        });
     }
 
     public boolean anvilAllowColors = false;
