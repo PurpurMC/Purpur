@@ -2969,6 +2969,8 @@ public class PurpurWorldConfig {
     public double zombieVillagerJockeyChance = 0.05D;
     public boolean zombieVillagerJockeyTryExistingChickens = true;
     public boolean zombieVillagerTakeDamageFromWater = false;
+    public int zombieVillagerCuringTimeMin = 3600;
+    public int zombieVillagerCuringTimeMax = 6000;
     private void zombieVillagerSettings() {
         zombieVillagerRidable = getBoolean("mobs.zombie_villager.ridable", zombieVillagerRidable);
         zombieVillagerRidableInWater = getBoolean("mobs.zombie_villager.ridable-in-water", zombieVillagerRidableInWater);
@@ -2985,6 +2987,8 @@ public class PurpurWorldConfig {
         zombieVillagerJockeyChance = getDouble("mobs.zombie_villager.jockey.chance", zombieVillagerJockeyChance);
         zombieVillagerJockeyTryExistingChickens = getBoolean("mobs.zombie_villager.jockey.try-existing-chickens", zombieVillagerJockeyTryExistingChickens);
         zombieVillagerTakeDamageFromWater = getBoolean("mobs.zombie_villager.takes-damage-from-water", zombieVillagerTakeDamageFromWater);
+        zombieVillagerCuringTimeMin = getInt("mobs.zombie_villager.curing_time.min", zombieVillagerCuringTimeMin);
+        zombieVillagerCuringTimeMax = getInt("mobs.zombie_villager.curing_time.max", zombieVillagerCuringTimeMax);
     }
 
     public boolean zombifiedPiglinRidable = false;
