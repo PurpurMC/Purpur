@@ -2697,4 +2697,9 @@ public class PurpurWorldConfig {
         zombifiedPiglinCountAsPlayerKillWhenAngry = getBoolean("mobs.zombified_piglin.count-as-player-kill-when-angry", zombifiedPiglinCountAsPlayerKillWhenAngry);
         zombifiedPiglinTakeDamageFromWater = getBoolean("mobs.zombified_piglin.takes-damage-from-water", zombifiedPiglinTakeDamageFromWater);
     }
+
+    public float hungerStarvationDamage = 1.0F;
+    private void hungerSettings() {
+        hungerStarvationDamage = (float) getDouble("hunger.starvation-damage", hungerStarvationDamage);
+    }
 }
