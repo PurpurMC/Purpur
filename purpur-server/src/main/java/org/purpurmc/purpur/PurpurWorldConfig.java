@@ -1008,6 +1008,11 @@ public class PurpurWorldConfig {
         }
     }
 
+    public boolean signAllowColors = false;
+    private void signSettings() {
+        signAllowColors = getBoolean("blocks.sign.allow-colors", signAllowColors);
+    }
+
     public boolean slabHalfBreak = false;
     private void slabSettings() {
         slabHalfBreak = getBoolean("blocks.slab.break-individual-slabs-when-sneaking", slabHalfBreak);

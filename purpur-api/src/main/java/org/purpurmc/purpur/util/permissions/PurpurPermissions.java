@@ -56,6 +56,13 @@ public final class PurpurPermissions {
         DefaultPermissions.registerPermission(PREFIX + "book.color.sign", "Allows the user to use color codes on books when signing", PermissionDefault.FALSE, book);
         book.recalculatePermissibles();
 
+        Permission sign = DefaultPermissions.registerPermission(PREFIX + "sign", "Allows the user to use all sign abilities", PermissionDefault.FALSE, purpur);
+        DefaultPermissions.registerPermission(PREFIX + "sign.edit", "Allows the user to click signs to open sign editor", PermissionDefault.TRUE, sign);
+        DefaultPermissions.registerPermission(PREFIX + "sign.color", "Allows the user to use color codes on signs", PermissionDefault.FALSE, sign);
+        DefaultPermissions.registerPermission(PREFIX + "sign.style", "Allows the user to use style codes on signs", PermissionDefault.FALSE, sign);
+        DefaultPermissions.registerPermission(PREFIX + "sign.magic", "Allows the user to use magic/obfuscate code on signs", PermissionDefault.FALSE, sign);
+        sign.recalculatePermissibles();
+
         Permission ride = DefaultPermissions.registerPermission("allow.ride", "Allows the user to ride all mobs", PermissionDefault.FALSE, purpur);
         for (String mob : mobs) {
             DefaultPermissions.registerPermission("allow.ride." + mob, "Allows the user to ride " + mob, PermissionDefault.FALSE, ride);
