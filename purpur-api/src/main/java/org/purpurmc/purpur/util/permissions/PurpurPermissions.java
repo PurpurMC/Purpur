@@ -65,6 +65,8 @@ public final class PurpurPermissions {
         DefaultPermissions.registerPermission("allow.powered.creeper", "Allows the user to toggle creeper powered state", PermissionDefault.FALSE, powered);
         powered.recalculatePermissibles();
 
+        DefaultPermissions.registerPermission(PREFIX + "portal.instant", "Allows the user to bypass portal wait time", PermissionDefault.FALSE, purpur);
+
         purpur.recalculatePermissibles();
         return purpur;
     }
