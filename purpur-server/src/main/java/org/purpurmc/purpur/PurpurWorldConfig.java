@@ -813,6 +813,11 @@ public class PurpurWorldConfig {
         });
     }
 
+    public boolean cactusBreaksFromSolidNeighbors = true;
+    private void cactusSettings() {
+        cactusBreaksFromSolidNeighbors = getBoolean("blocks.cactus.breaks-from-solid-neighbors", cactusBreaksFromSolidNeighbors);
+    }
+
     public boolean chestOpenWithBlockOnTop = false;
     private void chestSettings() {
         chestOpenWithBlockOnTop = getBoolean("blocks.chest.open-with-solid-block-on-top", chestOpenWithBlockOnTop);
