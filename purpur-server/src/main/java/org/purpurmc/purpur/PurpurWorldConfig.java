@@ -458,6 +458,16 @@ public class PurpurWorldConfig {
         dispenserPlaceAnvils = getBoolean("blocks.dispenser.place-anvils", dispenserPlaceAnvils);
     }
 
+    public List<Block> doorRequiresRedstone = new ArrayList<>();
+    private void doorSettings() {
+        getList("blocks.door.requires-redstone", new ArrayList<String>()).forEach(key -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(key.toString()));
+            if (!block.defaultBlockState().isAir()) {
+                doorRequiresRedstone.add(block);
+            }
+        });
+    }
+
     public boolean baselessEndCrystalExplode = true;
     public double baselessEndCrystalExplosionPower = 6.0D;
     public boolean baselessEndCrystalExplosionFire = false;
