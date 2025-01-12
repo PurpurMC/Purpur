@@ -234,6 +234,7 @@ public class PurpurConfig {
     public static String commandTPSBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
     public static int commandTPSBarTickInterval = 20;
     public static boolean commandGamemodeRequiresPermission = false;
+    public static boolean hideHiddenPlayersFromEntitySelector = false;
     private static void commandSettings() {
         commandTPSBarTitle = getString("settings.command.tpsbar.title", commandTPSBarTitle);
         commandTPSBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.tpsbar.overlay", commandTPSBarProgressOverlay.name()));
@@ -246,6 +247,7 @@ public class PurpurConfig {
         commandTPSBarTextColorLow = getString("settings.command.tpsbar.text-color.low", commandTPSBarTextColorLow);
         commandTPSBarTickInterval = getInt("settings.command.tpsbar.tick-interval", commandTPSBarTickInterval);
         commandGamemodeRequiresPermission = getBoolean("settings.command.gamemode.requires-specific-permission", commandGamemodeRequiresPermission);
+        hideHiddenPlayersFromEntitySelector = getBoolean("settings.command.hide-hidden-players-from-entity-selector", hideHiddenPlayersFromEntitySelector);
     }
 
     public static int barrelRows = 3;
