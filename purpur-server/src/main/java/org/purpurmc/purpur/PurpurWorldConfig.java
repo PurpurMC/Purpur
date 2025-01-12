@@ -1729,6 +1729,13 @@ public class PurpurWorldConfig {
         guardianTakeDamageFromWater = getBoolean("mobs.guardian.takes-damage-from-water", guardianTakeDamageFromWater);
     }
 
+    public boolean forceHalloweenSeason = false;
+    public float chanceHeadHalloweenOnEntity = 0.25F;
+    private void halloweenSetting() {
+        forceHalloweenSeason = getBoolean("gameplay-mechanics.halloween.force", forceHalloweenSeason);
+        chanceHeadHalloweenOnEntity = (float) getDouble("gameplay-mechanics.halloween.head-chance", chanceHeadHalloweenOnEntity);
+    }
+
     public boolean hoglinRidable = false;
     public boolean hoglinRidableInWater = true;
     public boolean hoglinControllable = true;
