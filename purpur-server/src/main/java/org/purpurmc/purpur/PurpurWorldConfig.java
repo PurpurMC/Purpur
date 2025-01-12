@@ -2182,6 +2182,8 @@ public class PurpurWorldConfig {
     public boolean phantomFlamesOnSwoop = false;
     public boolean phantomTakeDamageFromWater = false;
     public boolean phantomAlwaysDropExp = false;
+    public int phantomMinSize = 0;
+    public int phantomMaxSize = 0;
     private void phantomSettings() {
         phantomRidable = getBoolean("mobs.phantom.ridable", phantomRidable);
         phantomRidableInWater = getBoolean("mobs.phantom.ridable-in-water", phantomRidableInWater);
@@ -2218,6 +2220,13 @@ public class PurpurWorldConfig {
         phantomFlamesOnSwoop = getBoolean("mobs.phantom.flames-on-swoop", phantomFlamesOnSwoop);
         phantomTakeDamageFromWater = getBoolean("mobs.phantom.takes-damage-from-water", phantomTakeDamageFromWater);
         phantomAlwaysDropExp = getBoolean("mobs.phantom.always-drop-exp", phantomAlwaysDropExp);
+        phantomMinSize = Mth.clamp(getInt("mobs.phantom.size.min", phantomMinSize), 0, 64);
+        phantomMaxSize = Mth.clamp(getInt("mobs.phantom.size.max", phantomMaxSize), 0, 64);
+        if (phantomMinSize > phantomMaxSize) {
+            phantomMinSize = phantomMinSize ^ phantomMaxSize;
+            phantomMaxSize = phantomMinSize ^ phantomMaxSize;
+            phantomMinSize = phantomMinSize ^ phantomMaxSize;
+        }
     }
 
     public boolean pigRidable = false;
