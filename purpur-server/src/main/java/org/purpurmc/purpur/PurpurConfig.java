@@ -414,4 +414,9 @@ public class PurpurConfig {
     private static void tpsCatchup() {
         tpsCatchup = getBoolean("settings.tps-catchup", tpsCatchup);
     }
+
+    public static boolean useUPnP = false;
+    private static void networkSettings() {
+        useUPnP = getBoolean("settings.network.upnp-port-forwarding", useUPnP);
+    }
 }
