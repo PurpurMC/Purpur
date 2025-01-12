@@ -773,6 +773,11 @@ public class PurpurWorldConfig {
         anvilColorsUseMiniMessage = getBoolean("blocks.anvil.use-mini-message", anvilColorsUseMiniMessage);
     }
 
+    public double azaleaGrowthChance = 0.0D;
+    private void azaleaSettings() {
+        azaleaGrowthChance = getDouble("blocks.azalea.growth-chance", azaleaGrowthChance);
+    }
+
     public int beaconLevelOne = 20;
     public int beaconLevelTwo = 30;
     public int beaconLevelThree = 40;
@@ -908,6 +913,11 @@ public class PurpurWorldConfig {
         farmlandTramplingDisabled = getBoolean("blocks.farmland.disable-trampling", farmlandTramplingDisabled);
         farmlandTramplingOnlyPlayers = getBoolean("blocks.farmland.only-players-trample", farmlandTramplingOnlyPlayers);
         farmlandTramplingFeatherFalling = getBoolean("blocks.farmland.feather-fall-distance-affects-trampling", farmlandTramplingFeatherFalling);
+    }
+
+    public double floweringAzaleaGrowthChance = 0.0D;
+    private void floweringAzaleaSettings() {
+        floweringAzaleaGrowthChance = getDouble("blocks.flowering_azalea.growth-chance", floweringAzaleaGrowthChance);
     }
 
     public boolean furnaceUseLavaFromUnderneath = false;
