@@ -1366,6 +1366,7 @@ public class PurpurWorldConfig {
     public double dolphinScale = 1.0D;
     public boolean dolphinDisableTreasureSearching = false;
     public boolean dolphinTakeDamageFromWater = false;
+    public double dolphinNaturallyAggressiveToPlayersChance = 0.0D;
     private void dolphinSettings() {
         dolphinRidable = getBoolean("mobs.dolphin.ridable", dolphinRidable);
         dolphinControllable = getBoolean("mobs.dolphin.controllable", dolphinControllable);
@@ -1381,6 +1382,7 @@ public class PurpurWorldConfig {
         dolphinScale = Mth.clamp(getDouble("mobs.dolphin.attributes.scale", dolphinScale), 0.0625D, 16.0D);
         dolphinDisableTreasureSearching = getBoolean("mobs.dolphin.disable-treasure-searching", dolphinDisableTreasureSearching);
         dolphinTakeDamageFromWater = getBoolean("mobs.dolphin.takes-damage-from-water", dolphinTakeDamageFromWater);
+        dolphinNaturallyAggressiveToPlayersChance = getDouble("mobs.dolphin.naturally-aggressive-to-players-chance", dolphinNaturallyAggressiveToPlayersChance);
     }
 
     public boolean donkeyRidableInWater = false;
