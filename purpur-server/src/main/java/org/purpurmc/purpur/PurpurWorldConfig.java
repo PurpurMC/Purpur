@@ -972,9 +972,13 @@ public class PurpurWorldConfig {
 
     public int spongeAbsorptionArea = 65;
     public int spongeAbsorptionRadius = 6;
+    public boolean spongeAbsorbsLava = false;
+    public boolean spongeAbsorbsWaterFromMud = false;
     private void spongeSettings() {
         spongeAbsorptionArea = getInt("blocks.sponge.absorption.area", spongeAbsorptionArea);
         spongeAbsorptionRadius = getInt("blocks.sponge.absorption.radius", spongeAbsorptionRadius);
+        spongeAbsorbsLava = getBoolean("blocks.sponge.absorbs-lava", spongeAbsorbsLava);
+        spongeAbsorbsWaterFromMud = getBoolean("blocks.sponge.absorbs-water-from-mud", spongeAbsorbsWaterFromMud);
     }
 
     public boolean turtleEggsBreakFromExpOrbs = false;
