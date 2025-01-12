@@ -433,6 +433,11 @@ public class PurpurWorldConfig {
         chestOpenWithBlockOnTop = getBoolean("blocks.chest.open-with-solid-block-on-top", chestOpenWithBlockOnTop);
     }
 
+    public boolean composterBulkProcess = false;
+    private void composterSettings() {
+        composterBulkProcess = getBoolean("blocks.composter.sneak-to-bulk-process", composterBulkProcess);
+    }
+
     public boolean dispenserApplyCursedArmor = true;
     public boolean dispenserPlaceAnvils = false;
     private void dispenserSettings() {
