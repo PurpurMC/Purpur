@@ -796,9 +796,13 @@ public class PurpurWorldConfig {
 
     public boolean anvilAllowColors = false;
     public boolean anvilColorsUseMiniMessage;
+    public int anvilRepairIngotsAmount = 0;
+    public int anvilDamageObsidianAmount = 0;
     private void anvilSettings() {
         anvilAllowColors = getBoolean("blocks.anvil.allow-colors", anvilAllowColors);
         anvilColorsUseMiniMessage = getBoolean("blocks.anvil.use-mini-message", anvilColorsUseMiniMessage);
+        anvilRepairIngotsAmount = getInt("blocks.anvil.iron-ingots-used-for-repair", anvilRepairIngotsAmount);
+        anvilDamageObsidianAmount = getInt("blocks.anvil.obsidian-used-for-damage", anvilDamageObsidianAmount);
     }
 
     public double azaleaGrowthChance = 0.0D;
