@@ -569,6 +569,11 @@ public class PurpurWorldConfig {
         powderSnowBypassMobGriefing = getBoolean("blocks.powder_snow.bypass-mob-griefing", powderSnowBypassMobGriefing);
     }
 
+    public int railActivationRange = 8;
+    private void railSettings() {
+        railActivationRange = getInt("blocks.powered-rail.activation-range", railActivationRange);
+    }
+
     public boolean respawnAnchorExplode = true;
     public double respawnAnchorExplosionPower = 5.0D;
     public boolean respawnAnchorExplosionFire = true;
