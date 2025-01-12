@@ -141,6 +141,8 @@ public class PurpurWorldConfig {
     public boolean mobsIgnoreRails = false;
     public boolean rainStopsAfterSleep = true;
     public boolean thunderStopsAfterSleep = true;
+    public boolean persistentTileEntityLore = false;
+    public boolean persistentTileEntityDisplayName = true;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
@@ -165,6 +167,14 @@ public class PurpurWorldConfig {
         mobsIgnoreRails = getBoolean("gameplay-mechanics.mobs-ignore-rails", mobsIgnoreRails);
         rainStopsAfterSleep = getBoolean("gameplay-mechanics.rain-stops-after-sleep", rainStopsAfterSleep);
         thunderStopsAfterSleep = getBoolean("gameplay-mechanics.thunder-stops-after-sleep", thunderStopsAfterSleep);
+        if (PurpurConfig.version < 35) {
+            boolean oldVal = getBoolean("gameplay-mechanics.persistent-tileentity-display-names-and-lore", persistentTileEntityLore);
+            set("gameplay-mechanics.persistent-tileentity-display-names-and-lore", null);
+            set("gameplay-mechanics.persistent-tileentity-lore", oldVal);
+            set("gameplay-mechanics.persistent-tileentity-display-name", !oldVal);
+        }
+        persistentTileEntityLore = getBoolean("gameplay-mechanics.persistent-tileentity-lore", persistentTileEntityLore);
+        persistentTileEntityDisplayName = getBoolean("gameplay-mechanics.persistent-tileentity-display-name", persistentTileEntityDisplayName);
     }
 
     public int daytimeTicks = 12000;
