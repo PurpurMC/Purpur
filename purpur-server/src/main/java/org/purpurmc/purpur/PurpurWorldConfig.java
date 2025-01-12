@@ -95,6 +95,7 @@ public class PurpurWorldConfig {
     public boolean armorstandMovement = true;
     public boolean armorstandWaterMovement = true;
     public boolean armorstandWaterFence = true;
+    public boolean armorstandPlaceWithArms = false;
     private void armorstandSettings() {
         armorstandStepHeight = (float) getDouble("gameplay-mechanics.armorstand.step-height", armorstandStepHeight);
         armorstandSetNameVisible = getBoolean("gameplay-mechanics.armorstand.set-name-visible-when-placing-with-custom-name", armorstandSetNameVisible);
@@ -102,6 +103,7 @@ public class PurpurWorldConfig {
         armorstandMovement = getBoolean("gameplay-mechanics.armorstand.can-movement-tick", armorstandMovement);
         armorstandWaterMovement = getBoolean("gameplay-mechanics.armorstand.can-move-in-water", armorstandWaterMovement);
         armorstandWaterFence = getBoolean("gameplay-mechanics.armorstand.can-move-in-water-over-fence", armorstandWaterFence);
+        armorstandPlaceWithArms = getBoolean("gameplay-mechanics.armorstand.place-with-arms-visible", armorstandPlaceWithArms);
     }
 
     public boolean arrowMovementResetsDespawnCounter = true;
