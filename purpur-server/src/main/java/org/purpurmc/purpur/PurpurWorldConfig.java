@@ -2608,6 +2608,8 @@ public class PurpurWorldConfig {
     public boolean skeletonAlwaysDropExp = false;
     public double skeletonHeadVisibilityPercent = 0.5D;
     public int skeletonFeedWitherRoses = 0;
+    public String skeletonBowAccuracy = "14 - difficulty * 4";
+    public Map<Integer, Float> skeletonBowAccuracyMap = new HashMap<>();
     private void skeletonSettings() {
         skeletonRidable = getBoolean("mobs.skeleton.ridable", skeletonRidable);
         skeletonRidableInWater = getBoolean("mobs.skeleton.ridable-in-water", skeletonRidableInWater);
@@ -2623,6 +2625,18 @@ public class PurpurWorldConfig {
         skeletonAlwaysDropExp = getBoolean("mobs.skeleton.always-drop-exp", skeletonAlwaysDropExp);
         skeletonHeadVisibilityPercent = getDouble("mobs.skeleton.head-visibility-percent", skeletonHeadVisibilityPercent);
         skeletonFeedWitherRoses = getInt("mobs.skeleton.feed-wither-roses", skeletonFeedWitherRoses);
+        final String defaultSkeletonBowAccuracy = skeletonBowAccuracy;
+        skeletonBowAccuracy = getString("mobs.skeleton.bow-accuracy", skeletonBowAccuracy);
+        for (int i = 1; i < 4; i++) {
+            final float divergence;
+            try {
+                divergence = ((Number) Entity.scriptEngine.eval("let difficulty = " + i + "; " + skeletonBowAccuracy)).floatValue();
+            } catch (javax.script.ScriptException e) {
+                e.printStackTrace();
+                break;
+            }
+            skeletonBowAccuracyMap.put(i, divergence);
+        }
     }
 
     public boolean skeletonHorseRidable = false;
