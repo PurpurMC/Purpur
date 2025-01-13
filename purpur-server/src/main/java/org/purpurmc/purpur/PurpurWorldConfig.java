@@ -224,6 +224,11 @@ public class PurpurWorldConfig {
         infinityWorksWithoutArrows = getBoolean("gameplay-mechanics.infinity-bow.works-without-arrows", infinityWorksWithoutArrows);
     }
 
+    public boolean explosionClampRadius = true;
+    private void explosionSettings() {
+        explosionClampRadius = getBoolean("gameplay-mechanics.clamp-explosion-radius", explosionClampRadius);
+    }
+
     public List<Item> itemImmuneToCactus = new ArrayList<>();
     public List<Item> itemImmuneToExplosion = new ArrayList<>();
     public List<Item> itemImmuneToFire = new ArrayList<>();
