@@ -467,11 +467,14 @@ public class PurpurConfig {
     public static boolean loggerSuppressIgnoredAdvancementWarnings = false;
     public static boolean loggerSuppressUnrecognizedRecipeErrors = false;
     public static boolean loggerSuppressSetBlockFarChunk = false;
+    public static boolean loggerSuppressLibraryLoader = false;
     private static void loggerSettings() {
         loggerSuppressInitLegacyMaterialError = getBoolean("settings.logger.suppress-init-legacy-material-errors", loggerSuppressInitLegacyMaterialError);
         loggerSuppressIgnoredAdvancementWarnings = getBoolean("settings.logger.suppress-ignored-advancement-warnings", loggerSuppressIgnoredAdvancementWarnings);
         loggerSuppressUnrecognizedRecipeErrors = getBoolean("settings.logger.suppress-unrecognized-recipe-errors", loggerSuppressUnrecognizedRecipeErrors);
         loggerSuppressSetBlockFarChunk = getBoolean("settings.logger.suppress-setblock-in-far-chunk-errors", loggerSuppressSetBlockFarChunk);
+        loggerSuppressLibraryLoader = getBoolean("settings.logger.suppress-library-loader", loggerSuppressLibraryLoader);
+        org.bukkit.plugin.java.JavaPluginLoader.SuppressLibraryLoaderLogger = loggerSuppressLibraryLoader;
     }
 
     public static boolean tpsCatchup = true;
