@@ -178,6 +178,8 @@ public class PurpurConfig {
     public static String creditsCommandOutput = "<green>%s has been shown the end credits";
     public static String demoCommandOutput = "<green>%s has been shown the demo screen";
     public static String pingCommandOutput = "<green>%s's ping is %sms";
+    public static String ramCommandOutput = "<green>Ram Usage: <used>/<xmx> (<percent>)";
+    public static String rambarCommandOutput = "<green>Rambar toggled <onoff> for <target>";
     public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
     public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
     public static String uptimeCommandOutput = "<green>Server uptime is <uptime>";
@@ -195,6 +197,8 @@ public class PurpurConfig {
         creditsCommandOutput = getString("settings.messages.credits-command-output", creditsCommandOutput);
         demoCommandOutput = getString("settings.messages.demo-command-output", demoCommandOutput);
         pingCommandOutput = getString("settings.messages.ping-command-output", pingCommandOutput);
+        ramCommandOutput = getString("settings.messages.ram-command-output", ramCommandOutput);
+        rambarCommandOutput = getString("settings.messages.rambar-command-output", rambarCommandOutput);
         tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
         dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
         uptimeCommandOutput = getString("settings.messages.uptime-command-output", uptimeCommandOutput);
@@ -243,6 +247,15 @@ public class PurpurConfig {
         disableGiveCommandDrops = getBoolean("settings.disable-give-dropping", disableGiveCommandDrops);
     }
 
+    public static String commandRamBarTitle = "<gray>Ram<yellow>:</yellow> <used>/<xmx> (<percent>)";
+    public static BossBar.Overlay commandRamBarProgressOverlay = BossBar.Overlay.NOTCHED_20;
+    public static BossBar.Color commandRamBarProgressColorGood = BossBar.Color.GREEN;
+    public static BossBar.Color commandRamBarProgressColorMedium = BossBar.Color.YELLOW;
+    public static BossBar.Color commandRamBarProgressColorLow = BossBar.Color.RED;
+    public static String commandRamBarTextColorGood = "<gradient:#55ff55:#00aa00><text></gradient>";
+    public static String commandRamBarTextColorMedium = "<gradient:#ffff55:#ffaa00><text></gradient>";
+    public static String commandRamBarTextColorLow = "<gradient:#ff5555:#aa0000><text></gradient>";
+    public static int commandRamBarTickInterval = 20;
     public static String commandTPSBarTitle = "<gray>TPS<yellow>:</yellow> <tps> MSPT<yellow>:</yellow> <mspt> Ping<yellow>:</yellow> <ping>ms";
     public static BossBar.Overlay commandTPSBarProgressOverlay = BossBar.Overlay.NOTCHED_20;
     public static TPSBarTask.FillMode commandTPSBarProgressFillMode = TPSBarTask.FillMode.MSPT;
@@ -270,6 +283,16 @@ public class PurpurConfig {
     public static String uptimeSecond = "%02d second";
     public static String uptimeSeconds = "%02d seconds";
     private static void commandSettings() {
+        commandRamBarTitle = getString("settings.command.rambar.title", commandRamBarTitle);
+        commandRamBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.rambar.overlay", commandRamBarProgressOverlay.name()));
+        commandRamBarProgressColorGood = BossBar.Color.valueOf(getString("settings.command.rambar.progress-color.good", commandRamBarProgressColorGood.name()));
+        commandRamBarProgressColorMedium = BossBar.Color.valueOf(getString("settings.command.rambar.progress-color.medium", commandRamBarProgressColorMedium.name()));
+        commandRamBarProgressColorLow = BossBar.Color.valueOf(getString("settings.command.rambar.progress-color.low", commandRamBarProgressColorLow.name()));
+        commandRamBarTextColorGood = getString("settings.command.rambar.text-color.good", commandRamBarTextColorGood);
+        commandRamBarTextColorMedium = getString("settings.command.rambar.text-color.medium", commandRamBarTextColorMedium);
+        commandRamBarTextColorLow = getString("settings.command.rambar.text-color.low", commandRamBarTextColorLow);
+        commandRamBarTickInterval = getInt("settings.command.rambar.tick-interval", commandRamBarTickInterval);
+
         commandTPSBarTitle = getString("settings.command.tpsbar.title", commandTPSBarTitle);
         commandTPSBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.tpsbar.overlay", commandTPSBarProgressOverlay.name()));
         commandTPSBarProgressFillMode = TPSBarTask.FillMode.valueOf(getString("settings.command.tpsbar.fill-mode", commandTPSBarProgressFillMode.name()));
