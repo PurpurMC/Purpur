@@ -583,4 +583,16 @@ public class PurpurConfig {
     private static void registerMinecraftDebugCommands() {
         registerMinecraftDebugCommands = getBoolean("settings.register-minecraft-debug-commands", registerMinecraftDebugCommands);
     }
+
+    public static List<String> startupCommands = new ArrayList<>();
+    private static void startupCommands() {
+        startupCommands.clear();
+        getList("settings.startup-commands", new ArrayList<String>()).forEach(line -> {
+            String command = line.toString();
+            if (command.startsWith("/")) {
+                command = command.substring(1);
+            }
+            startupCommands.add(command);
+        });
+    }
 }
