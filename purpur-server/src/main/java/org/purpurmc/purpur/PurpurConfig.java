@@ -340,6 +340,8 @@ public class PurpurConfig {
     public static int kelpMaxGrowthAge = 25;
     public static int twistingVinesMaxGrowthAge = 25;
     public static int weepingVinesMaxGrowthAge = 25;
+    public static boolean magmaBlockReverseBubbleColumnFlow = false;
+    public static boolean soulSandBlockReverseBubbleColumnFlow = false;
     private static void blockSettings() {
         if (version < 3) {
             boolean oldValue = getBoolean("settings.barrel.packed-barrels", true);
@@ -413,6 +415,8 @@ public class PurpurConfig {
             log(Level.WARNING, "blocks.weeping_vines.max-growth-age is set to above maximum allowed value of 25");
             log(Level.WARNING, "Using value of 25 to prevent issues");
         }
+        magmaBlockReverseBubbleColumnFlow = getBoolean("settings.blocks.magma-block.reverse-bubble-column-flow", magmaBlockReverseBubbleColumnFlow);
+        soulSandBlockReverseBubbleColumnFlow = getBoolean("settings.blocks.soul-sand.reverse-bubble-column-flow", soulSandBlockReverseBubbleColumnFlow);
     }
 
     public static boolean allowInapplicableEnchants = false;
