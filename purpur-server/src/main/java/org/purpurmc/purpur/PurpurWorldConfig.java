@@ -145,6 +145,7 @@ public class PurpurWorldConfig {
     public boolean persistentTileEntityDisplayName = true;
     public int mobLastHurtByPlayerTime = 100;
     public boolean milkClearsBeneficialEffects = true;
+    public boolean disableOxidationProximityPenalty = false;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
@@ -179,6 +180,7 @@ public class PurpurWorldConfig {
         persistentTileEntityDisplayName = getBoolean("gameplay-mechanics.persistent-tileentity-display-name", persistentTileEntityDisplayName);
         mobLastHurtByPlayerTime = getInt("gameplay-mechanics.mob-last-hurt-by-player-time", mobLastHurtByPlayerTime);
         milkClearsBeneficialEffects = getBoolean("gameplay-mechanics.milk-clears-beneficial-effects", milkClearsBeneficialEffects);
+        disableOxidationProximityPenalty = getBoolean("gameplay-mechanics.disable-oxidation-proximity-penalty", disableOxidationProximityPenalty);
     }
 
     public int daytimeTicks = 12000;
