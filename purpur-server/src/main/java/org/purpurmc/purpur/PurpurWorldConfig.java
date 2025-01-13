@@ -3422,4 +3422,11 @@ public class PurpurWorldConfig {
         cauldronDripstoneWaterFillChance = (float) getDouble("blocks.cauldron.fill-chances.dripstone-water", cauldronDripstoneWaterFillChance);
         cauldronDripstoneLavaFillChance = (float) getDouble("blocks.cauldron.fill-chances.dripstone-lava", cauldronDripstoneLavaFillChance);
     }
+
+    public float shearsCanDefuseTntChance = 0.00F;
+    public boolean shearsCanDefuseTnt = false;
+    private void shearsCanDefuseTntSettings() {
+        shearsCanDefuseTntChance = (float) getDouble("gameplay-mechanics.item.shears.defuse-tnt-chance", 0.00D);
+        shearsCanDefuseTnt = shearsCanDefuseTntChance > 0.00F;
+    }
 }
