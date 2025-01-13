@@ -503,6 +503,16 @@ public class PurpurConfig {
         fixProjectileLootingTransfer = getBoolean("settings.fix-projectile-looting-transfer", fixProjectileLootingTransfer);
     }
 
+    public static boolean clampAttributes = true;
+    private static void clampAttributes() {
+        clampAttributes = getBoolean("settings.clamp-attributes", clampAttributes);
+    }
+
+    public static boolean limitArmor = true;
+    private static void limitArmor() {
+        limitArmor = getBoolean("settings.limit-armor", limitArmor);
+    }
+
     private static void blastResistanceSettings() {
         getMap("settings.blast-resistance-overrides", Collections.emptyMap()).forEach((blockId, value) -> {
             Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
