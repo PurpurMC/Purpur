@@ -578,4 +578,9 @@ public class PurpurConfig {
     private static void playerDeathsAlwaysShowItem() {
         playerDeathsAlwaysShowItem = getBoolean("settings.player-deaths-always-show-item", playerDeathsAlwaysShowItem);
     }
+
+    public static boolean registerMinecraftDebugCommands = false;
+    private static void registerMinecraftDebugCommands() {
+        registerMinecraftDebugCommands = getBoolean("settings.register-minecraft-debug-commands", registerMinecraftDebugCommands);
+    }
 }
