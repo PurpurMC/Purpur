@@ -943,6 +943,7 @@ public class PurpurWorldConfig {
     public boolean basedEndCrystalExplosionFire = false;
     public net.minecraft.world.level.Level.ExplosionInteraction basedEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
     public int endCrystalCramming = 0;
+    public boolean endCrystalPlaceAnywhere = false;
     private void endCrystalSettings() {
         if (PurpurConfig.version < 31) {
             if ("DESTROY".equals(getString("blocks.end-crystal.baseless.explosion-effect", baselessEndCrystalExplosionEffect.name()))) {
@@ -971,6 +972,7 @@ public class PurpurWorldConfig {
             basedEndCrystalExplosionEffect = net.minecraft.world.level.Level.ExplosionInteraction.BLOCK;
         }
         endCrystalCramming = getInt("blocks.end-crystal.cramming-amount", endCrystalCramming);
+        endCrystalPlaceAnywhere = getBoolean("gameplay-mechanics.item.end-crystal.place-anywhere", endCrystalPlaceAnywhere);
     }
 
     public boolean farmlandBypassMobGriefing = false;
