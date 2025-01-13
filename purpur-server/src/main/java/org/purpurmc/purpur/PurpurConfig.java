@@ -509,4 +509,50 @@ public class PurpurConfig {
             block.explosionResistance = blastResistance.floatValue();
         });
     }
+    private static void blockFallMultiplierSettings() {
+        getMap("settings.block-fall-multipliers", Map.ofEntries(
+                Map.entry("minecraft:hay_block", Map.of("damage", 0.2F)),
+                Map.entry("minecraft:white_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:light_gray_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:gray_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:black_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:brown_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:pink_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:red_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:orange_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:yellow_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:green_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:lime_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:cyan_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:light_blue_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:blue_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:purple_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:magenta_bed", Map.of("distance", 0.5F))
+        )).forEach((blockId, value) -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            if (block == Blocks.AIR) {
+                log(Level.SEVERE, "Invalid block for `settings.block-fall-multipliers`: " + blockId);
+                return;
+            }
+            if (!(value instanceof Map<?, ?> map)) {
+                log(Level.SEVERE, "Invalid fall multiplier for `settings.block-fall-multipliers." + blockId + "`: " + value
+                        + ", expected a map with keys `damage` and `distance` to floats.");
+                return;
+            }
+            Object rawFallDamageMultiplier = map.get("damage");
+            if (rawFallDamageMultiplier == null) rawFallDamageMultiplier = 1F;
+            if (!(rawFallDamageMultiplier instanceof Number fallDamageMultiplier)) {
+                log(Level.SEVERE, "Invalid multiplier for `settings.block-fall-multipliers." + blockId + ".damage`: " + map.get("damage"));
+                return;
+            }
+            Object rawFallDistanceMultiplier = map.get("distance");
+            if (rawFallDistanceMultiplier == null) rawFallDistanceMultiplier = 1F;
+            if (!(rawFallDistanceMultiplier instanceof Number fallDistanceMultiplier)) {
+                log(Level.SEVERE, "Invalid multiplier for `settings.block-fall-multipliers." + blockId + ".distance`: " + map.get("distance"));
+                return;
+            }
+            block.fallDamageMultiplier = fallDamageMultiplier.floatValue();
+            block.fallDistanceMultiplier = fallDistanceMultiplier.floatValue();
+        });
+    }
 }
