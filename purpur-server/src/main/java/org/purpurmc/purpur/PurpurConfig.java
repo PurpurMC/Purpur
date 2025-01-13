@@ -3,12 +3,14 @@ package org.purpurmc.purpur;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -16,6 +18,7 @@ import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -490,5 +493,20 @@ public class PurpurConfig {
         String defaultPattern = "^[a-zA-Z0-9_.]*$";
         String setPattern = getString("settings.username-valid-characters", defaultPattern);
         usernameValidCharactersPattern = Pattern.compile(setPattern == null || setPattern.isBlank() ? defaultPattern : setPattern);
+    }
+
+    private static void blastResistanceSettings() {
+        getMap("settings.blast-resistance-overrides", Collections.emptyMap()).forEach((blockId, value) -> {
+            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            if (block == Blocks.AIR) {
+                log(Level.SEVERE, "Invalid block for `settings.blast-resistance-overrides`: " + blockId);
+                return;
+            }
+            if (!(value instanceof Number blastResistance)) {
+                log(Level.SEVERE, "Invalid blast resistance for `settings.blast-resistance-overrides." + blockId + "`: " + value);
+                return;
+            }
+            block.explosionResistance = blastResistance.floatValue();
+        });
     }
 }
