@@ -2335,6 +2335,7 @@ public class PurpurWorldConfig {
     public int piglinPortalSpawnModifier = 2000;
     public boolean piglinAlwaysDropExp = false;
     public double piglinHeadVisibilityPercent = 0.5D;
+    public boolean piglinIgnoresArmorWithGoldTrim = false;
     private void piglinSettings() {
         piglinRidable = getBoolean("mobs.piglin.ridable", piglinRidable);
         piglinRidableInWater = getBoolean("mobs.piglin.ridable-in-water", piglinRidableInWater);
@@ -2351,6 +2352,7 @@ public class PurpurWorldConfig {
         piglinPortalSpawnModifier = getInt("mobs.piglin.portal-spawn-modifier", piglinPortalSpawnModifier);
         piglinAlwaysDropExp = getBoolean("mobs.piglin.always-drop-exp", piglinAlwaysDropExp);
         piglinHeadVisibilityPercent = getDouble("mobs.piglin.head-visibility-percent", piglinHeadVisibilityPercent);
+        piglinIgnoresArmorWithGoldTrim = getBoolean("mobs.piglin.ignores-armor-with-gold-trim", piglinIgnoresArmorWithGoldTrim);
     }
 
     public boolean piglinBruteRidable = false;
