@@ -1447,6 +1447,7 @@ public class PurpurWorldConfig {
     public boolean creeperHealthRadius = false;
     public boolean creeperAlwaysDropExp = false;
     public double creeperHeadVisibilityPercent = 0.5D;
+    public boolean creeperEncircleTarget = false;
     private void creeperSettings() {
         creeperRidable = getBoolean("mobs.creeper.ridable", creeperRidable);
         creeperRidableInWater = getBoolean("mobs.creeper.ridable-in-water", creeperRidableInWater);
@@ -1466,6 +1467,7 @@ public class PurpurWorldConfig {
         creeperHealthRadius = getBoolean("mobs.creeper.health-impacts-explosion", creeperHealthRadius);
         creeperAlwaysDropExp = getBoolean("mobs.creeper.always-drop-exp", creeperAlwaysDropExp);
         creeperHeadVisibilityPercent = getDouble("mobs.creeper.head-visibility-percent", creeperHeadVisibilityPercent);
+        creeperEncircleTarget = getBoolean("mobs.creeper.encircle-target", creeperEncircleTarget);
     }
 
     public boolean dolphinRidable = false;
