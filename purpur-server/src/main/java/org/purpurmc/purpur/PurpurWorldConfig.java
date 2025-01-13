@@ -822,11 +822,13 @@ public class PurpurWorldConfig {
     public int beaconLevelTwo = 30;
     public int beaconLevelThree = 40;
     public int beaconLevelFour = 50;
+    public boolean beaconAllowEffectsWithTintedGlass = false;
     private void beaconSettings() {
         beaconLevelOne = getInt("blocks.beacon.effect-range.level-1", beaconLevelOne);
         beaconLevelTwo = getInt("blocks.beacon.effect-range.level-2", beaconLevelTwo);
         beaconLevelThree = getInt("blocks.beacon.effect-range.level-3", beaconLevelThree);
         beaconLevelFour = getInt("blocks.beacon.effect-range.level-4", beaconLevelFour);
+        beaconAllowEffectsWithTintedGlass = getBoolean("blocks.beacon.allow-effects-with-tinted-glass", beaconAllowEffectsWithTintedGlass);
     }
 
     public boolean bedExplode = true;
