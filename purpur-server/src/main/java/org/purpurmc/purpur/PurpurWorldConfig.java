@@ -2493,6 +2493,7 @@ public class PurpurWorldConfig {
     public boolean ravagerTakeDamageFromWater = false;
     public List<Block> ravagerGriefableBlocks = new ArrayList<>();
     public boolean ravagerAlwaysDropExp = false;
+    public boolean ravagerAvoidRabbits = false;
     private void ravagerSettings() {
         ravagerRidable = getBoolean("mobs.ravager.ridable", ravagerRidable);
         ravagerRidableInWater = getBoolean("mobs.ravager.ridable-in-water", ravagerRidableInWater);
@@ -2524,6 +2525,7 @@ public class PurpurWorldConfig {
             }
         });
         ravagerAlwaysDropExp = getBoolean("mobs.ravager.always-drop-exp", ravagerAlwaysDropExp);
+        ravagerAvoidRabbits = getBoolean("mobs.ravager.avoid-rabbits", ravagerAvoidRabbits);
     }
 
     public boolean salmonRidable = false;
