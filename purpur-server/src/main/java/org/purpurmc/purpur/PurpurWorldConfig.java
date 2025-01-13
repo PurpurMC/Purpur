@@ -3012,6 +3012,8 @@ public class PurpurWorldConfig {
     public boolean villagerDisplayTradeItem = true;
     public int villagerSpawnIronGolemRadius = 0;
     public int villagerSpawnIronGolemLimit = 0;
+    public int villagerAcquirePoiSearchRadius = 48;
+    public int villagerNearestBedSensorSearchRadius = 48;
     private void villagerSettings() {
         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
@@ -3050,6 +3052,8 @@ public class PurpurWorldConfig {
         villagerDisplayTradeItem = getBoolean("mobs.villager.display-trade-item", villagerDisplayTradeItem);
         villagerSpawnIronGolemRadius = getInt("mobs.villager.spawn-iron-golem.radius", villagerSpawnIronGolemRadius);
         villagerSpawnIronGolemLimit = getInt("mobs.villager.spawn-iron-golem.limit", villagerSpawnIronGolemLimit);
+        villagerAcquirePoiSearchRadius = getInt("mobs.villager.search-radius.acquire-poi", villagerAcquirePoiSearchRadius);
+        villagerNearestBedSensorSearchRadius = getInt("mobs.villager.search-radius.nearest-bed-sensor", villagerNearestBedSensorSearchRadius);
     }
 
     public boolean vindicatorRidable = false;
