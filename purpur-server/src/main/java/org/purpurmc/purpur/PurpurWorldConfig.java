@@ -876,8 +876,20 @@ public class PurpurWorldConfig {
     }
 
     public boolean cactusBreaksFromSolidNeighbors = true;
+    public boolean cactusAffectedByBonemeal = false;
     private void cactusSettings() {
         cactusBreaksFromSolidNeighbors = getBoolean("blocks.cactus.breaks-from-solid-neighbors", cactusBreaksFromSolidNeighbors);
+        cactusAffectedByBonemeal = getBoolean("blocks.cactus.affected-by-bonemeal", cactusAffectedByBonemeal);
+    }
+
+    public boolean sugarCanAffectedByBonemeal = false;
+    private void sugarCaneSettings() {
+        sugarCanAffectedByBonemeal = getBoolean("blocks.sugar_cane.affected-by-bonemeal", sugarCanAffectedByBonemeal);
+    }
+
+    public boolean netherWartAffectedByBonemeal = false;
+    private void netherWartSettings() {
+        netherWartAffectedByBonemeal = getBoolean("blocks.nether_wart.affected-by-bonemeal", netherWartAffectedByBonemeal);
     }
 
     public boolean campFireLitWhenPlaced = true;
