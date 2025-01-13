@@ -46,10 +46,6 @@ subprojects {
         }
     }
 
-    dependencies {
-        "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
-    }
-
     tasks.withType<JavaCompile> {
         options.encoding = Charsets.UTF_8.name()
         options.release = 21
