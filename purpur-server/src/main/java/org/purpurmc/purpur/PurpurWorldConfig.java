@@ -419,6 +419,7 @@ public class PurpurWorldConfig {
     public String playerDeathExpDropEquation = "expLevel * 7";
     public int playerDeathExpDropMax = 100;
     public boolean teleportIfOutsideBorder = false;
+    public boolean teleportOnNetherCeilingDamage = false;
     public boolean totemOfUndyingWorksInInventory = false;
     public boolean playerFixStuckPortal = false;
     public boolean creativeOnePunch = false;
@@ -446,6 +447,7 @@ public class PurpurWorldConfig {
         playerDeathExpDropEquation = getString("gameplay-mechanics.player.exp-dropped-on-death.equation", playerDeathExpDropEquation);
         playerDeathExpDropMax = getInt("gameplay-mechanics.player.exp-dropped-on-death.maximum", playerDeathExpDropMax);
         teleportIfOutsideBorder = getBoolean("gameplay-mechanics.player.teleport-if-outside-border", teleportIfOutsideBorder);
+        teleportOnNetherCeilingDamage = getBoolean("gameplay-mechanics.player.teleport-on-nether-ceiling-damage", teleportOnNetherCeilingDamage);
         totemOfUndyingWorksInInventory = getBoolean("gameplay-mechanics.player.totem-of-undying-works-in-inventory", totemOfUndyingWorksInInventory);
         playerFixStuckPortal = getBoolean("gameplay-mechanics.player.fix-stuck-in-portal", playerFixStuckPortal);
         creativeOnePunch = getBoolean("gameplay-mechanics.player.one-punch-in-creative", creativeOnePunch);
