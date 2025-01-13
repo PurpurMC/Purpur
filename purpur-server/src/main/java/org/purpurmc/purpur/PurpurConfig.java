@@ -573,4 +573,9 @@ public class PurpurConfig {
             block.fallDistanceMultiplier = fallDistanceMultiplier.floatValue();
         });
     }
+
+    public static boolean playerDeathsAlwaysShowItem = false;
+    private static void playerDeathsAlwaysShowItem() {
+        playerDeathsAlwaysShowItem = getBoolean("settings.player-deaths-always-show-item", playerDeathsAlwaysShowItem);
+    }
 }
