@@ -11,18 +11,12 @@ of any minor nitpicks we might have. Often, it's better for us to solve these
 problems for you than make you go back and forth trying to fix them yourself.
 
 Unfortunately, if you use an organization for your PR, it prevents Purpur from
-modifying it. This requires us to manually merge your PR, resulting in us
-closing the PR instead of marking it as merged.
-
-We much prefer to have PRs show as merged, so please do not use repositories
-on organizations for PRs.
-
-See <https://github.com/isaacs/github/issues/1681> for more information on the
-issue.
+modifying it. To avoid this, please do not use repositories on organizations
+for PRs.
 
 ## Requirements
 
-To get started with PRing changes, you'll need the following software, most of
+To get started with making changes, you'll need the following software, most of
 which can be obtained in (most) package managers such as `apt` (Debian / Ubuntu;
 you will most likely use this for WSL), `homebrew` (macOS / Linux), and more:
 
@@ -42,77 +36,101 @@ If you're compiling with Docker, you can use Adoptium's
 [`eclipse-temurin`](https://hub.docker.com/_/eclipse-temurin/) images like so:
 
 ```console
-# docker run -it -v "$(pwd)":/data --rm eclipse-temurin:21.0.3_9-jdk bash
+# docker run -it -v "$(pwd)":/data --rm eclipse-temurin:21.0.5_11-jdk bash
 Pulling image...
 
 root@abcdefg1234:/# javac -version
-javac 21.0.3
+javac 21.0.5
 ```
 
 ## Understanding Patches
 
-Paper is mostly patches and extensions to Spigot. These patches/extensions are
-split into different directories which target certain parts of the code. These
-directories are:
+Unlike the Purpur API and its implementation, modifications to Paper and Minecraft source files
+are done through patches. These patches/extensions are split into different
+three different sets of two categories, which are formatted like so:
 
-- `Purpur-API` - Modifications to `Paper-API`;
-- `Purpur-Server` - Modifications to `Paper-Server`.
+Under `purpur-api-generator`:
 
-Because the entire structure is based on patches and git, a basic understanding
+- `paper-patches` (applies to the `paper-api/` git repo)
+    - `sources`: Per-file patches to Paper API Generator classes;
+    - `features`: Larger feature patches that modify multiple Paper API Generator classes.
+
+Under `purpur-api`:
+
+- `paper-patches` (applies to the `paper-server/` git repo)
+    - `sources`: Per-file patches to Paper API classes;
+    - `features`: Larger feature patches that modify multiple Paper API classes.
+
+Under `purpur-server`:
+
+- `minecraft-patches` (applies to the `purpur-server//` git repo)
+  - `sources`: Per-file patches to Minecraft classes;
+  - `resources`: Per-file patches to Minecraft data files;
+  - `features`: Larger feature patches that modify multiple classes.
+- `paper-patches`
+  - `sources`: Per-file patches to Paper Server classes;
+  - `features`: Larger feature patches that modify multiple Paper Server classes.
+
+Because this entire structure is based on patches and git, a basic understanding
 of how to use git is required. A basic tutorial can be found here:
 <https://git-scm.com/docs/gittutorial>.
 
 Assuming you have already forked the repository:
 
 1. Clone your fork to your local machine;
-2. Type `./gradlew applyPatches` in a terminal to apply the changes from upstream.
-   On Windows, replace the `./` with `.\` at the beginning for all `gradlew` commands;
-3. cd into `Purpur-Server` for server changes, and `Purpur-API` for API changes.
-<!--You can also run `./paper server` or `./paper api` for these same directories
-respectively.
-1. You can also run `./paper setup`, which allows you to type `paper <command>`
-from anywhere in the Paper structure in most cases.-->
+2. Type `./gradlew applyAllPatches` in a terminal to apply the patches to both paper and minecraft classes.
+   On Windows, remove `./` from the beginning of `gradlew` commands;
+3. cd into `purpur-server` for server changes, `purpur-api` for API changes,
+   `paper-api` for Paper API changes, `paper-api-generator` for Paper API Generator changes,
+   and `paper-server` for Paper Server changes.
 
-`Purpur-Server` and `Purpur-API` aren't git repositories in the traditional sense:
+`purpur-server/src/minecraft/java` and `purpur-server/src/minecraft/java/resources` are not git repositories in the traditional sense.
+Its initial commits are the decompiled and deobfuscated Minecraft source and resource files. The per-file
+patches are applied on top of these files as a single, large commit, which is then followed
+by the individual feature-patch commits. `paper-api/`, `paper-api-generator/`, and `paper-server/`
+follow the same concept; each paper "project" has its own git repository that also includes it's own feature and per-file patches.
 
-- `base` points to the unmodified source before Purpur patches have been applied.
-- Each commit after `base` is a patch.
+## Understanding the Gradle Tasks
 
-## Adding Patches
+It can be overwhelming when you look over all the available gradle tasks, but it's pretty straightforward.
+Each "project" that includes a local git repository has the following available gradle tasks attached to it:
 
-Adding patches to Purpur is very simple:
+- `./gradlew apply[project]FeaturePatches` - Applies [project] feature patches
+- `./gradlew apply[project]FilePatches` - Applies [project] file patches
+- `./gradlew apply[project]Patches` - Applies all [project] patches
+- `./gradlew fixup[project]FilePatches` - Puts the currently tracked source changes into the [project] file patches commit
+- `./gradlew rebuild[project]FeaturePatches` - Rebuilds [project] feature patches
+- `./gradlew rebuild[project]FilePatches` - Rebuilds [project] file patches
+- `./gradlew rebuild[project]Patches` - Rebuilds all [project] patches
 
-1. Modify `Purpur-Server` and/or `Purpur-API` with the appropriate changes;
-1. Type `git add .` inside these directories to add your changes;
-1. Run `git commit` with the desired patch message;
-1. Run `./gradlew rebuildPatches` in the main directory to convert your commit into a new
-   patch;
-1. PR the generated patch file(s) back to this repository.
+Some additional useful tasks are listed below:
 
-Your commit will be converted into a patch that you can then PR into Purpur.
+- `./gradlew applyAllPatches` - Applies all patches defined in the paperweight-patcher project and the server project. (equivalent to running `applyPaperPatches` and then `applyAllServerPatches` in a second Gradle invocation)
+- `./gradlew applyAllServerFeaturePatches` - Applies all Minecraft and upstream server feature patches (equivalent to `applyMinecraftFeaturePatches applyServerFeaturePatches`)
+- `./gradlew applyAllServerFilePatches` - Applies all Minecraft and upstream server file patches (equivalent to `applyMinecraftFilePatches applyServerFilePatches`)
+- `./gradlew applyAllServerPatches` - Applies all Minecraft and upstream server patches (equivalent to `applyMinecraftPatches applyServerPatches`)
 
-> ❗ Please note that if you have some specific implementation detail you'd like
-> to document, you should do so in the patch message *or* in comments.
+- `./gradlew rebuildPaperSingleFilePatches` - Fixups and rebuilds all paper single-file patches. This is how you'd make changes to the `build.gradle.kts` files located under `purpur-api` and `purpur-server`
 
-## Modifying Patches
+## Modifying (per-file) patches
 
-Modifying previous patches is a bit more complex:
+This is generally what you need to do when editing files. Updating our
+per-file patches is as easy as:
+1. Making your changes;
+2. Running `./gradlew fixup[project]FilePatches` in the root directory;
+3. If nothing went wrong, rebuilding patches with `./gradlew rebuild[project]FilePatches`;
 
-### Method 1
+### Resolving rebase conflicts
+If you run into conflicts while running `fixup[project]FilePatches`, you need to go a more
+manual route:
 
 This method works by temporarily resetting your `HEAD` to the desired commit to
 edit it using `git rebase`.
 
-> ❗ While in the middle of an edit, you will not be able to compile unless you
-> *also* reset the opposing module(s) to a related commit. In the API's case,
-> you must reset the Server, and reset the API if you're editing the Server.
-> Note also that either module _may_ not compile when doing so. This is not
-> ideal nor intentional, but it happens. Feel free to fix this in a PR to us!
-
-1. If you have changes you are working on, type `git stash` to store them for
+0. If you have changes you are working on, type `git stash` to store them for
    later;
     - You can type `git stash pop` to get them back at any point.
-1. Type `git rebase -i base`;
+1. cd into the relevant local git repo and run `git rebase -i base`;
     - It should show something like
       [this](https://gist.github.com/zachbr/21e92993cb99f62ffd7905d7b02f3159) in
       the text editor you get.
@@ -120,31 +138,47 @@ edit it using `git rebase`.
       If you don't know how to use `vim` and don't want to
       learn, enter `:q!` and press enter. Before redoing this step, do
       `export EDITOR=nano` for an easier editor to use.
-1. Replace `pick` with `edit` for the commit/patch you want to modify, and
+1. Replace `pick` with `edit` for the commit/patch you want to modify (in this
+   case the very first commit, `purpur File Patches`), and
    "save" the changes;
-    - Only do this for **one** commit at a time.
 1. Make the changes you want to make to the patch;
-1. Type `git add .` to add your changes;
-1. Type `git commit --amend` to commit;
-    - **Make sure to add `--amend`** or else a new patch will be created.
-    - You can also modify the commit message and author here.
-1. Type `git rebase --continue` to finish rebasing;
-1. Type `./gradlew rebuildPatches` in the root directory;
-    - This will modify the appropriate patches based on your commits.
-1. PR your modified patch file(s) back to this repository.
+1. Run `git add .` to add your changes;
+1. Run `git commit --amend` to commit;
+1. Run `git rebase --continue` to finish rebasing;
+1. Run `./gradlew rebuild[project]FilePatches` in the root directory;
 
-### Method 2 - Fixup commits
+## Adding larger feature patches
 
-If you are simply editing a more recent commit or your change is small, simply
-making the change at HEAD and then moving the commit after you have tested it
-may be easier.
+Feature patches are exclusively used for large-scale changes that are hard to
+track and maintain and that can be optionally dropped, such as the more involved
+optimizations we have. This makes it easier to update Purpur during Minecraft updates,
+since we can temporarily drop these patches and reapply them later.
 
-This method has the benefit of being able to compile to test your change without
-messing with your HEADs.
+There is only a very small chance that you will have to use this system, but adding
+such patches is very simple:
+
+1. Modify the relevant local git repo with the appropriate changes;
+1. Run `git add .` inside that directory to add your changes;
+1. Run `git commit` with the desired patch message;
+1. Run `./gradlew rebuild[project]FeaturePatches` in the root directory.
+
+Your commit will be converted into a patch that you can then PR into Purpur.
+
+> ❗ Please note that if you have some specific implementation detail you'd like
+> to document, you should do so in the patch message *or* in comments.
+
+## Modifying larger feature patches
+
+One way of modifying feature patches is to reset to the patch commit and follow
+the instructions from the [rebase section](#resolving-rebase-conflicts). If you
+are sure there won't be any conflicts from later patches, you can also use the
+fixup method.
+
+### Fixup method
 
 #### Manual method
 
-1. Make your change while at HEAD;
+1. Make your changes;
 1. Make a temporary commit. You don't need to make a message for this;
 1. Type `git rebase -i base`, move (cut) your temporary commit and
    move it under the line of the patch you wish to modify;
@@ -153,14 +187,14 @@ messing with your HEADs.
        message.
     1. `s`/`squash`: Merge your changes into the patch and use your commit message
        and subject.
-1. Type `./gradlew rebuildPatches` in the root directory;
+1. Run `./gradlew rebuild[project]Patches` in the root directory;
     - This will modify the appropriate patches based on your commits.
-1. PR your modified patch file(s) back to this repository.
 
 #### Automatic method
 
-1. Make your change while at HEAD;
-1. Make a fixup commit. `git commit -a --fixup <hashOfPatchToFix>`;
+1. Make your changes;
+1. Make a fixup commit: `git commit -a --fixup <hash of patch to fix>`;
+    - If you want to modify a per-file patch, use `git commit -a --fixup file`
     - You can also use `--squash` instead of `--fixup` if you want the commit
       message to also be changed.
     - You can get the hash by looking at `git log` or `git blame`; your IDE can
@@ -170,25 +204,24 @@ messing with your HEADs.
 1. Rebase with autosquash: `git rebase -i --autosquash base`.
    This will automatically move your fixup commit to the right place, and you just
    need to "save" the changes.
-1. Type `./gradlew rebuildPatches` in the root directory;
-    - This will modify the appropriate patches based on your commits.
-1. PR your modified patch file(s) back to this repository.
+1. Run `./gradlew rebuild[project]Patches` in the root directory. This will modify the
+   appropriate patches based on your commits.
 
 ## Rebasing PRs
 
-Steps to rebase a PR to include the latest changes from `master`.  
-These steps assume the `origin` remote is your fork of this repository and `upstream` is the official Purpur repository.
+Steps to rebase a PR to include the latest changes from `main`.  
+These steps assume the `origin` remote is your fork of this repository and `upstream` is the official PurpurMC repository.
 
-1. Pull the latest changes from upstreams master: `git checkout master && git pull upstream master`.
-1. Checkout feature/fix branch and rebase on master: `git checkout patch-branch && git rebase master`.
+1. Fetch the latest changes from upstream's main: `git fetch upstream`.
+1. Checkout your feature/fix branch and rebase on main: `git switch patch-branch && git rebase upstream/main`.
 1. Apply updated patches: `./gradlew applyPatches`.
 1. If there are conflicts, fix them.
-1. If your PR creates new patches instead of modifying existing ones, in both the `Purpur-Server` and `Purpur-API` directories, ensure your newly-created patch is the last commit by either:
+1. If your PR creates new feature patches instead of modifying existing ones, ensure your newly-created patch is the last commit by either:
     * Renaming the patch file with a large 4-digit number in front (e.g. 9999-Patch-to-add-some-new-stuff.patch), and re-applying patches.
     * Running `git rebase --interactive base` and moving the commits to the end.
 1. Rebuild patches: `./gradlew rebuildPatches`.
 1. Commit modified patches.
-1. Force push changes: `git push --force`.
+1. Force push changes: `git push --force`. Make sure you're not deleting any of your commits or changes here!
 
 ## PR Policy
 
@@ -203,8 +236,9 @@ when making and submitting changes.
 
 ## Formatting
 
-All modifications to non-Purpur files should be marked. The one exception to this is
-when modifying javadoc comments, which should not have these markers.
+All modifications to Minecraft files and Paper files should be marked. For historical reasons,
+API and API-implementation contain a lot of these too, but they are no longer
+required.
 
 - You need to add a comment with a short and identifiable description of the patch:
   `// Purpur start - <COMMIT DESCRIPTION>`
@@ -216,16 +250,19 @@ when modifying javadoc comments, which should not have these markers.
   with `// Purpur end - <COMMIT DESCRIPTION>`.
 - One-line changes should have `// Purpur - <COMMIT DESCRIPTION>` at the end of the line.
 
+> [!NOTE] These comments are incredibly important to be able to keep track of changes
+> across files and to remember what they are for, even a decade into the future.
+
 Here's an example of how to mark changes by Purpur:
 
 ```java
-entity.getWorld().dontBeStupid(); // Purpur - Was beStupid(), which is bad
+entity.getWorld().dontBeStupid(); // Purpur - Move away from beStupid()
 entity.getFriends().forEach(Entity::explode);
 entity.updateFriends();
 
 // Purpur start - Use plugin-set spawn
 // entity.getWorld().explode(entity.getWorld().getSpawn());
-Location spawnLocation = ((CraftWorld)entity.getWorld()).getSpawnLocation();
+Location spawnLocation = ((CraftWorld) entity.getWorld()).getSpawnLocation();
 entity.getWorld().explode(new BlockPosition(spawnLocation.getX(), spawnLocation.getY(), spawnLocation.getZ()));
 // Purpur end - Use plugin-set spawn
 ```
@@ -236,29 +273,49 @@ into most IDEs and formatters by default. There are a few notes, however:
   There are exceptions, especially in Spigot-related files
 - When in doubt or the code around your change is in a clearly different style,
   use the same style as the surrounding code.
-- `var` usage is heavily discouraged, as it makes reading patch files a lot harder
-  and can lead to confusion during updates due to changed return types. The only
-  exception to this is if a line would otherwise be way too long/filled with hard
-  to parse generics in a case where the base type itself is already obvious
+- Usage of the `var` keyword is discouraged, as it makes reading patch files a
+  lot harder and can lead to confusion during updates due to changed return types.
+  The only exception to this is if a line would otherwise be way too long/filled with
+  hard to parse generics in a case where the base type itself is already obvious.
 
 ### Imports
-When adding new imports to a class in a file not created by the current patch, use the fully qualified class name
+When adding new imports to a Minecraft or Paper class, use the fully qualified class name
 instead of adding a new import to the top of the file. If you are using a type a significant number of times, you
-can add an import with a comment. However, if its only used a couple of times, the FQN is preferred to prevent future
+can add an import with a comment. However, if it's only used a couple of times, the FQN is preferred to prevent future
 patch conflicts in the import section of the file.
 
+
 ```java
-import org.bukkit.event.Event;
+import net.minecraft.server.MinecraftServer;
 // don't add import here, use FQN like below
 
-public class SomeEvent extends Event {
+public class SomeVanillaClass {
     public final org.bukkit.Location newLocation; // Purpur - add location
 }
 ```
 
+### Nullability annotations
+
+We are in the process of switching nullability annotation libraries, so you might need to use one or the other:
+
+**For classes we add**: Fields, method parameters and return types that are nullable should be marked via the
+`@Nullable` annotation from `org.jspecify.annotations`. Whenever you create a new class, add `@NullMarked`, meaning types
+are assumed to be non-null by default. For less obvious placing such as on generics or arrays, see the [JSpecify docs](https://jspecify.dev/docs/user-guide/).
+
+**For other classes**: Keep using both `@Nullable` and `@NotNull` from `org.jetbrains.annotations`. These
+will be replaced later.
+
+## Access Transformers
+Sometimes, Vanilla code already contains a field, method, or type you want to access
+but the visibility is too low (e.g. a private field in an entity class). Purpur can use access transformers
+to change the visibility or remove the final modifier from fields, methods, and classes. Inside the `build-data/paper.at`
+file, you can add ATs that are applied when you `./gradlew applyPatches`. You can read about the format of ATs
+[here](https://mcforge.readthedocs.io/en/latest/advanced/accesstransformers/#access-modifiers).
+
+<!--
 ## Patch Notes
 
-When submitting patches to Purpur, we may ask you to add notes to the patch
+When submitting feature patches to Purpur, we may ask you to add notes to the patch
 header. While we do not require it for all changes, you should add patch notes
 when the changes you're making are technical, complex, or require an explanation
 of some kind. It is very likely that your patch will remain long after we've all
@@ -269,8 +326,8 @@ These notes should express the intent of your patch, as well as any pertinent
 technical details we should keep in mind long-term. Ultimately, they exist to
 make it easier for us to maintain the patch across major version changes.
 
-If you add a message to your commit in the `Purpur-Server`/`Purpur-API`
-directories, the rebuild patches script will handle these patch notes
+If you add a message to your commit in the Minecraft source directory,
+the rebuild patches script will handle these patch notes
 automatically as part of generating the patch file. If you are not
 extremely careful, you should always just `squash` or `amend` a patch (see the
 above sections on modifying patches) and rebuild.
@@ -283,7 +340,7 @@ anything but headaches from doing it by hand.
 Underneath is an example patch header/note:
 
 ```patch
-From 02abc033533f70ef3165a97bfda3f5c2fa58633a Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Shane Freeder <theboyetronic@gmail.com>
 Date: Sun, 15 Oct 2017 00:29:07 +0100
 Subject: [PATCH] revert serverside behavior of keepalives
@@ -306,6 +363,7 @@ index a92bf8967..d0ab87d0f 100644
 --- a/src/main/java/net/minecraft/server/PlayerConnection.java
 +++ b/src/main/java/net/minecraft/server/PlayerConnection.java
 ```
+-->
 
 ## Obfuscation Helpers
 
@@ -380,12 +438,6 @@ object:
 return this.level.purpurConfig.useInhabitedTime ? this.inhabitedTime : 0;
 ```
 
-#### Committing changes
-All changes to the `PurpurConfig` and `PurpurWorldConfig` files
-should be done in the commit that created them. So do an interactive rebase
-or fixup to apply just those changes to that commit, then add a new commit
-that includes the logic that uses that option in the server somewhere.
-
 ## Testing API changes
 
 ### Using the Purpur Test Plugin
@@ -416,36 +468,9 @@ If you use Maven to build your plugin:
 
 ## Frequently Asked Questions
 
-### I can't find the NMS file I need!
-
-By default, Purpur (and upstream) only import files we make changes to. If you
-would like to make changes to a file that isn't present in `Purpur-Server`'s
-source directory, you just need to add it to our import script ran during the
-patching process.
-
-1. Save (rebuild) any patches you are in the middle of working on! Their
-   progress will be lost if you do not;
-1. Identify the name(s) of the file(s) you want to import.
-    - A complete list of all possible file names can be found at
-      `./Purpur-Server/.gradle/caches/paperweight/mc-dev-sources/net/minecraft/`. You might find
-      [MappingViewer] useful if you need to translate between Mojang and Spigot mapped names.
-1. Open the file at `./build-data/dev-imports.txt` and add the name of your file to
-   the script. Follow the instructions there;
-1. Re-patch the server `./gradlew applyPatches`;
-1. Edit away!
-
-> ❗ This change is temporary! **DO NOT COMMIT CHANGES TO THIS FILE!**  
-> Once you have made your changes to the new file, and rebuilt patches, you may
-> undo your changes to `dev-imports.txt`.
-
-Any file modified in a patch file gets automatically imported, so you only need
-this temporarily to import it to create the first patch.
-
-To undo your changes to the file, type `git checkout build-data/dev-imports.txt`.
-
 ### My commit doesn't need a build, what do I do?
 
-Well, quite simple: You add `[ci skip]` to the start of your commit subject.
+Quite simple: You add `[ci skip]` to the start of your commit subject.
 
 This case most often applies to changes to files like `README.md`, this very
 file (`CONTRIBUTING.md`), the `LICENSE.md` file, and so forth.
@@ -455,11 +480,11 @@ file (`CONTRIBUTING.md`), the `LICENSE.md` file, and so forth.
 This only applies if you're running Windows. If you're running a prior Windows
 release, either update to Windows 10/11 or move to macOS/Linux/BSD.
 
-In order to speed up patching process on Windows, it's recommended you get WSL
-2. This is available in Windows 10 v2004, build 19041 or higher. (You can check
-   your version by running `winver` in the run window (Windows key + R)). If you're
-   using an out of date version of Windows 10, update your system with the
-   [Windows 10 Update Assistant](https://www.microsoft.com/en-us/software-download/windows10) or [Windows 11 Update Assistant](https://www.microsoft.com/en-us/software-download/windows11).
+In order to speed up patching process on Windows, it's recommended you get WSL 2.
+This is available in Windows 10 v2004, build 19041 or higher. (You can check
+your version by running `winver` in the run window (Windows key + R)). If you're
+using an out of date version of Windows 10, update your system with the
+[Windows 10 Update Assistant](https://www.microsoft.com/en-us/software-download/windows10) or [Windows 11 Update Assistant](https://www.microsoft.com/en-us/software-download/windows11).
 
 To set up WSL 2, follow the information here:
 <https://docs.microsoft.com/en-us/windows/wsl/install>
@@ -473,5 +498,3 @@ everything like usual.
 > ❗ Do not use the `/mnt/` directory in WSL! Instead, mount the WSL directories
 > in Windows like described here:
 > <https://docs.microsoft.com/en-us/windows/wsl/filesystems#view-your-current-directory-in-windows-file-explorer>
-
-[MappingViewer]: https://mappings.cephx.dev/
