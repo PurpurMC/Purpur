@@ -100,22 +100,17 @@ Then run the following command in the root directory:
 The project is now ready for use in your IDE.
 
 #### Creating a patch
-Patches are effectively just commits in either `Purpur-API` or `Purpur-Server`. 
-To create one, just add a commit to either repo and run `./gradlew rebuildPatches`, and a 
-patch will be placed in the patches folder. Modifying commits will also modify its 
-corresponding patch file.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for more detailed information.
-
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 #### Compiling
 
 Use the command `./gradlew build` to build the API and server. Compiled JARs
-will be placed under `Purpur-API/build/libs` and `Purpur-Server/build/libs`.
+will be placed under `purpur-api/build/libs` and `purpur-server/build/libs`.
 **These JARs are not used to start a server.**
 
 To compile a server-ready purpurclip jar, run `./gradlew createMojmapBundlerJar`.
-To install the `purpur-api` and `purpur` dependencies to your local Maven repo, run `./gradlew publishToMavenLocal`. The compiled purpurclip jar will be in `build/libs/` not `Purpur-Server/build/libs`.
+To install the `purpur-api` and `purpur` dependencies to your local Maven repo, run `./gradlew publishToMavenLocal`. The compiled purpurclip jar will be in `purpur-server/build/libs`.
 
 Special Thanks To:
 -------------
