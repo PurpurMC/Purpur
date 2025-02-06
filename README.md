@@ -94,7 +94,7 @@ First, <u>clone</u> this repository. Do not download it.
 Then run the following command in the root directory:
 
 ```
-./gradlew applyPatches
+./gradlew applyAllPatches
 ```
 
 The project is now ready for use in your IDE.
