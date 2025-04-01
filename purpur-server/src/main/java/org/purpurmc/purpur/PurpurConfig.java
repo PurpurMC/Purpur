@@ -332,6 +332,7 @@ public class PurpurConfig {
     public static boolean cryingObsidianValidForPortalFrame = false;
     public static int beeInsideBeeHive = 3;
     public static boolean anvilCumulativeCost = true;
+    public static boolean smoothSnowAccumulation = false;
     public static int lightningRodRange = 128;
     public static Set<Enchantment> grindstoneIgnoredEnchants = new HashSet<>();
     public static boolean grindstoneRemoveAttributes = false;
@@ -375,6 +376,7 @@ public class PurpurConfig {
         cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
         beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
         anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
+        smoothSnowAccumulation = getBoolean("settings.blocks.snow.smooth-accumulation", smoothSnowAccumulation);
         lightningRodRange = getInt("settings.blocks.lightning_rod.range", lightningRodRange);
         ArrayList<String> defaultCurses = new ArrayList<>(){{
             add("minecraft:binding_curse");
