@@ -332,7 +332,7 @@ public class PurpurConfig {
     public static boolean cryingObsidianValidForPortalFrame = false;
     public static int beeInsideBeeHive = 3;
     public static boolean anvilCumulativeCost = true;
-    public static boolean smoothSnowAccumulation = false;
+    public static int smoothSnowAccumulationStep = 0;
     public static int lightningRodRange = 128;
     public static Set<Enchantment> grindstoneIgnoredEnchants = new HashSet<>();
     public static boolean grindstoneRemoveAttributes = false;
@@ -376,7 +376,16 @@ public class PurpurConfig {
         cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
         beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
         anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
-        smoothSnowAccumulation = getBoolean("settings.blocks.snow.smooth-accumulation", smoothSnowAccumulation);
+        smoothSnowAccumulationStep = getInt("settings.blocks.snow.smooth-accumulation-step", smoothSnowAccumulationStep);
+        if (smoothSnowAccumulationStep > 7) {
+            smoothSnowAccumulationStep = 7;
+            log(Level.WARNING, "blocks.snow.smooth-accumulation-step is set to above maximum allowed value of 7");
+            log(Level.WARNING, "Using value of 7 to prevent issues");
+        } else if (smoothSnowAccumulationStep < 0) {
+            smoothSnowAccumulationStep = 0;
+            log(Level.WARNING, "blocks.snow.smooth-accumulation-step is set to below minimum allowed value of 0");
+            log(Level.WARNING, "Using value of 0 to prevent issues");
+        }
         lightningRodRange = getInt("settings.blocks.lightning_rod.range", lightningRodRange);
         ArrayList<String> defaultCurses = new ArrayList<>(){{
             add("minecraft:binding_curse");
