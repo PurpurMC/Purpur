@@ -1,27 +1,25 @@
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -136,7 +_,7 @@
- import org.slf4j.Logger;
+@@ -141,6 +_,7 @@
+ import org.jetbrains.annotations.Contract;
  
- public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess, ScoreHolder, ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity {  // Paper - rewrite chunk system // Paper - optimise entity tracker
--
+ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess, ScoreHolder, DataComponentGetter, ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity { // Paper - rewrite chunk system // Paper - optimise entity tracker
 +    public static javax.script.ScriptEngine scriptEngine = new javax.script.ScriptEngineManager().getEngineByName("rhino"); // Purpur - Configurable entity base attributes
      // CraftBukkit start
+     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
      private static final int CURRENT_LEVEL = 2;
-     public boolean preserveMotion = true; // Paper - Fix Entity Teleportation and cancel velocity if teleported; keep initial motion on first setPositionRotation
-@@ -253,9 +_,10 @@
+@@ -260,8 +_,9 @@
      public double xOld;
      public double yOld;
      public double zOld;
 +    public float maxUpStep; // Purpur - Add option to set armorstand step height
      public boolean noPhysics;
-     private boolean wasOnFire;
 -    public final RandomSource random = SHARED_RANDOM; // Paper - Share random for entities to make them more random
 +    public final RandomSource random; // Paper - Share random for entities to make them more random // Add toggle for RNG manipulation
      public int tickCount;
      private int remainingFireTicks = -this.getFireImmuneTicks();
      public boolean wasTouchingWater;
-@@ -289,8 +_,8 @@
+@@ -295,8 +_,8 @@
      public PortalProcessor portalProcess;
      public int portalCooldown;
      private boolean invulnerable;
@@ -32,7 +30,7 @@
      private boolean hasGlowingTag;
      private final Set<String> tags = new io.papermc.paper.util.SizeLimitedSet<>(new it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<>(), MAX_ENTITY_TAG_COUNT); // Paper - fully limit tag size - replace set impl
      private final double[] pistonDeltas = new double[]{0.0, 0.0, 0.0};
-@@ -343,6 +_,7 @@
+@@ -350,6 +_,7 @@
      public long activatedTick = Integer.MIN_VALUE;
      public boolean isTemporarilyActive;
      public long activatedImmunityTick = Integer.MIN_VALUE;
@@ -40,7 +38,7 @@
  
      public void inactiveTick() {
      }
-@@ -523,10 +_,21 @@
+@@ -512,10 +_,21 @@
      }
      // Paper end - optimise entity tracker
  
@@ -62,15 +60,15 @@
          this.position = Vec3.ZERO;
          this.blockPosition = BlockPos.ZERO;
          this.chunkPosition = ChunkPos.ZERO;
-@@ -905,6 +_,7 @@
+@@ -885,6 +_,7 @@
              && this.level.paperConfig().environment.netherCeilingVoidDamageHeight.test(v -> this.getY() >= v)
              && (!(this instanceof Player player) || !player.getAbilities().invulnerable))) {
              // Paper end - Configurable nether ceiling damage
-+            if (this.level.purpurConfig.teleportOnNetherCeilingDamage && this.level.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER && this instanceof ServerPlayer player) player.teleport(io.papermc.paper.util.MCUtil.toLocation(this.level, this.level.getSharedSpawnPos())); else // Purpur - Add option to teleport to spawn on nether ceiling damage
++            if (this.level.purpurConfig.teleportOnNetherCeilingDamage && this.level.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER && this instanceof ServerPlayer player) player.teleport(org.bukkit.craftbukkit.util.CraftLocation.toBukkit(this.level.getSharedSpawnPos(), this.level)); else // Purpur - Add option to teleport to spawn on nether ceiling damage
              this.onBelowWorld();
          }
      }
-@@ -1827,7 +_,7 @@
+@@ -1830,7 +_,7 @@
      }
  
      public boolean fireImmune() {
@@ -78,8 +76,8 @@
 +        return this.immuneToFire != null ? immuneToFire : this.getType().fireImmune(); // Purpur - add fire immune API
      }
  
-     public boolean causeFallDamage(float fallDistance, float multiplier, DamageSource source) {
-@@ -1896,7 +_,7 @@
+     public boolean causeFallDamage(double fallDistance, float damageMultiplier, DamageSource damageSource) {
+@@ -1890,7 +_,7 @@
          return this.isInWater() || flag;
      }
  
@@ -88,7 +86,7 @@
          if (this.getVehicle() instanceof AbstractBoat abstractBoat && !abstractBoat.isUnderWater()) {
              this.wasTouchingWater = false;
          } else if (this.updateFluidHeightAndDoFluidPushing(FluidTags.WATER, 0.014)) {
-@@ -2522,6 +_,13 @@
+@@ -2512,6 +_,13 @@
                  compound.putBoolean("Paper.FreezeLock", true);
              }
              // Paper end
@@ -100,23 +98,23 @@
 +            // Purpur end - Fire immune API
 +
              return compound;
-         } catch (Throwable var9) {
-             CrashReport crashReport = CrashReport.forThrowable(var9, "Saving entity NBT");
-@@ -2671,6 +_,13 @@
-                 freezeLocked = compound.getBoolean("Paper.FreezeLock");
+         } catch (Throwable var8) {
+             CrashReport crashReport = CrashReport.forThrowable(var8, "Saving entity NBT");
+@@ -2629,6 +_,13 @@
+                 freezeLocked = compound.getBooleanOr("Paper.FreezeLock", false);
              }
              // Paper end
 +
 +            // Purpur start - Fire immune API
 +            if (compound.contains("Purpur.FireImmune")) {
-+                immuneToFire = compound.getBoolean("Purpur.FireImmune");
++                immuneToFire = compound.getBoolean("Purpur.FireImmune").orElse(null);
 +            }
 +            // Purpur end - Fire immune API
 +
-         } catch (Throwable var17) {
-             CrashReport crashReport = CrashReport.forThrowable(var17, "Loading entity NBT");
+         } catch (Throwable var8) {
+             CrashReport crashReport = CrashReport.forThrowable(var8, "Loading entity NBT");
              CrashReportCategory crashReportCategory = crashReport.addCategory("Entity being loaded");
-@@ -2917,6 +_,7 @@
+@@ -2857,6 +_,7 @@
          if (this.isAlive() && this instanceof Leashable leashable) {
              if (leashable.getLeashHolder() == player) {
                  if (!this.level().isClientSide()) {
@@ -124,7 +122,7 @@
                      // CraftBukkit start - fire PlayerUnleashEntityEvent
                      // Paper start - Expand EntityUnleashEvent
                      org.bukkit.event.player.PlayerUnleashEntityEvent event = org.bukkit.craftbukkit.event.CraftEventFactory.callPlayerUnleashEntityEvent(this, player, hand, !player.hasInfiniteMaterials());
-@@ -3242,15 +_,18 @@
+@@ -3173,15 +_,18 @@
          return Vec3.directionFromRotation(this.getRotationVector());
      }
  
@@ -144,7 +142,7 @@
              }
          }
      }
-@@ -3455,7 +_,7 @@
+@@ -3386,7 +_,7 @@
      }
  
      public int getMaxAirSupply() {
@@ -153,7 +151,7 @@
      }
  
      public int getAirSupply() {
-@@ -3950,7 +_,7 @@
+@@ -3914,7 +_,7 @@
      // CraftBukkit end
  
      public boolean canUsePortal(boolean allowPassengers) {
@@ -162,7 +160,7 @@
      }
  
      public boolean canTeleport(Level fromLevel, Level toLevel) {
-@@ -4482,6 +_,12 @@
+@@ -4451,6 +_,12 @@
          return Mth.lerp(partialTick, this.yRotO, this.yRot);
      }
  
@@ -175,7 +173,7 @@
      // Paper start - optimise collisions
      public boolean updateFluidHeightAndDoFluidPushing(final TagKey<Fluid> fluid, final double flowScale) {
          if (this.touchingUnloadedChunk()) {
-@@ -4880,7 +_,7 @@
+@@ -4859,7 +_,7 @@
      }
  
      public float maxUpStep() {

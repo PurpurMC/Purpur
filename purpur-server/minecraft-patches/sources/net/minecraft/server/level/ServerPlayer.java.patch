@@ -1,9 +1,9 @@
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
-@@ -400,6 +_,10 @@
-     public com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent playerNaturallySpawnedEvent; // Paper - PlayerNaturallySpawnCreaturesEvent
+@@ -428,6 +_,10 @@
+     public @Nullable com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent playerNaturallySpawnedEvent; // Paper - PlayerNaturallySpawnCreaturesEvent
      public @Nullable String clientBrandName = null; // Paper - Brand support
-     public org.bukkit.event.player.PlayerQuitEvent.QuitReason quitReason = null; // Paper - Add API for quit reason; there are a lot of changes to do if we change all methods leading to the event
+     public @Nullable org.bukkit.event.player.PlayerQuitEvent.QuitReason quitReason = null; // Paper - Add API for quit reason; there are a lot of changes to do if we change all methods leading to the event
 +    public boolean purpurClient = false; // Purpur - Purpur client support
 +    private boolean tpsBar = false; // Purpur - Implement TPSBar
 +    private boolean compassBar = false; // Purpur - Add compass command
@@ -11,28 +11,28 @@
  
      // Paper start - rewrite chunk system
      private ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.PlayerChunkLoaderData chunkLoader;
-@@ -568,6 +_,10 @@
-         if (tag != null) {
-             BlockPos.CODEC.parse(NbtOps.INSTANCE, tag).resultOrPartial(LOGGER::error).ifPresent(pos -> this.raidOmenPosition = pos);
-         }
+@@ -561,6 +_,10 @@
+         this.respawnConfig = compound.read("respawn", ServerPlayer.RespawnConfig.CODEC).orElse(null);
+         this.spawnExtraParticlesOnFall = compound.getBooleanOr("spawn_extra_particles_on_fall", false);
+         this.raidOmenPosition = compound.read("raid_omen_position", BlockPos.CODEC).orElse(null);
 +
-+        if (compound.contains("Purpur.TPSBar")) { this.tpsBar = compound.getBoolean("Purpur.TPSBar"); } // Purpur - Implement TPSBar
-+        if (compound.contains("Purpur.CompassBar")) { this.compassBar = compound.getBoolean("Purpur.CompassBar"); } // Purpur - Add compass command
-+        if (compound.contains("Purpur.RamBar")) { this.ramBar = compound.getBoolean("Purpur.RamBar"); } // Purpur - Implement rambar command
++        this.tpsBar = compound.getBooleanOr("Purpur.TPSBar", false); // Purpur - Implement TPSBar
++        this.compassBar = compound.getBooleanOr("Purpur.CompassBar", false); // Purpur - Add compass command
++        this.ramBar = compound.getBooleanOr("Purpur.RamBar", false); // Purpur - Implement rambar command
      }
  
      @Override
-@@ -612,6 +_,9 @@
-         }
- 
+@@ -578,6 +_,9 @@
+         compound.storeNullable("raid_omen_position", BlockPos.CODEC, this.raidOmenPosition);
          this.saveEnderPearls(compound);
+         this.getBukkitEntity().setExtraData(compound); // CraftBukkit
 +        compound.putBoolean("Purpur.TPSBar", this.tpsBar); // Purpur - Implement TPSBar
 +        compound.putBoolean("Purpur.CompassBar", this.compassBar); // Purpur - Add compass command
 +        compound.putBoolean("Purpur.RamBar", this.ramBar); // Purpur - Add rambar command
      }
  
      private void saveParentVehicle(CompoundTag tag) {
-@@ -1131,6 +_,7 @@
+@@ -1060,6 +_,7 @@
                      )
                  );
              Team team = this.getTeam();
@@ -40,7 +40,7 @@
              if (team == null || team.getDeathMessageVisibility() == Team.Visibility.ALWAYS) {
                  this.server.getPlayerList().broadcastSystemMessage(deathMessage, false);
              } else if (team.getDeathMessageVisibility() == Team.Visibility.HIDE_FOR_OTHER_TEAMS) {
-@@ -1224,6 +_,13 @@
+@@ -1166,6 +_,13 @@
          if (this.isInvulnerableTo(level, damageSource)) {
              return false;
          } else {
@@ -54,15 +54,15 @@
              Entity entity = damageSource.getEntity();
              if (!( // Paper - split the if statement. If below statement is false, hurtServer would not have been evaluated. Return false.
               !(entity instanceof Player player && !this.canHarmPlayer(player))
-@@ -1453,6 +_,7 @@
+@@ -1397,6 +_,7 @@
                  serverLevel.removePlayerImmediately(this, Entity.RemovalReason.CHANGED_DIMENSION);
                  this.unsetRemoved();
                  // CraftBukkit end
-+                this.portalPos = io.papermc.paper.util.MCUtil.toBlockPosition(exit); // Purpur - Fix stuck in portals
++                this.portalPos = org.bukkit.craftbukkit.util.CraftLocation.toBlockPosition(exit); // Purpur - Fix stuck in portals
                  this.setServerLevel(level);
                  this.connection.internalTeleport(PositionMoveRotation.of(teleportTransition), teleportTransition.relatives()); // CraftBukkit - use internal teleport without event
                  this.connection.resetPosition();
-@@ -1571,7 +_,7 @@
+@@ -1514,7 +_,7 @@
                              new AABB(vec3.x() - 8.0, vec3.y() - 5.0, vec3.z() - 8.0, vec3.x() + 8.0, vec3.y() + 5.0, vec3.z() + 8.0),
                              monster -> monster.isPreventingPlayerRest(this.serverLevel(), this)
                          );
@@ -71,7 +71,7 @@
                          return Either.left(Player.BedSleepingProblem.NOT_SAFE);
                      }
                  }
-@@ -1608,7 +_,19 @@
+@@ -1551,7 +_,19 @@
                      CriteriaTriggers.SLEPT_IN_BED.trigger(this);
                  });
                  if (!this.serverLevel().canSleepThroughNights()) {
@@ -92,7 +92,7 @@
                  }
  
                  ((ServerLevel)this.level()).updateSleepingPlayerList();
-@@ -1716,6 +_,7 @@
+@@ -1643,6 +_,7 @@
  
      @Override
      public void openTextEdit(SignBlockEntity signEntity, boolean isFrontText) {
@@ -100,7 +100,7 @@
          this.connection.send(new ClientboundBlockUpdatePacket(this.level(), signEntity.getBlockPos()));
          this.connection.send(new ClientboundOpenSignEditorPacket(signEntity.getBlockPos(), isFrontText));
      }
-@@ -2021,6 +_,26 @@
+@@ -1945,6 +_,26 @@
          this.lastSentExp = -1; // CraftBukkit - Added to reset
      }
  
@@ -127,7 +127,7 @@
      @Override
      public void displayClientMessage(Component chatComponent, boolean actionBar) {
          this.sendSystemMessage(chatComponent, actionBar);
-@@ -2242,6 +_,20 @@
+@@ -2162,6 +_,20 @@
          );
      }
  
@@ -148,7 +148,7 @@
      public void sendSystemMessage(Component mesage) {
          this.sendSystemMessage(mesage, false);
      }
-@@ -2380,7 +_,67 @@
+@@ -2300,7 +_,67 @@
  
      public void resetLastActionTime() {
          this.lastActionTime = Util.getMillis();
@@ -217,7 +217,7 @@
  
      public ServerStatsCounter getStats() {
          return this.stats;
-@@ -3085,4 +_,56 @@
+@@ -2928,4 +_,56 @@
          return (org.bukkit.craftbukkit.entity.CraftPlayer) super.getBukkitEntity();
      }
      // CraftBukkit end

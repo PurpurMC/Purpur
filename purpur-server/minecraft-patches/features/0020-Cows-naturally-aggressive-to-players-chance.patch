@@ -4,61 +4,76 @@ Date: Mon, 30 Aug 2021 22:49:53 -0500
 Subject: [PATCH] Cows naturally aggressive to players chance
 
 
+diff --git a/net/minecraft/world/entity/ai/attributes/DefaultAttributes.java b/net/minecraft/world/entity/ai/attributes/DefaultAttributes.java
+index 46022a0aabc9c319deeb75913d356eeb74f1a12c..9952eed6a8ac31c757d5c27e043b85d7a949b481 100644
+--- a/net/minecraft/world/entity/ai/attributes/DefaultAttributes.java
++++ b/net/minecraft/world/entity/ai/attributes/DefaultAttributes.java
+@@ -126,7 +126,7 @@ public class DefaultAttributes {
+         .put(EntityType.IRON_GOLEM, IronGolem.createAttributes().build())
+         .put(EntityType.LLAMA, Llama.createAttributes().build())
+         .put(EntityType.MAGMA_CUBE, MagmaCube.createAttributes().build())
+-        .put(EntityType.MOOSHROOM, Cow.createAttributes().build())
++        .put(EntityType.MOOSHROOM, net.minecraft.world.entity.animal.AbstractCow.createAttributes().build()) // Purpur - Cows naturally aggressive to players chance
+         .put(EntityType.MULE, AbstractChestedHorse.createBaseChestedHorseAttributes().build())
+         .put(EntityType.OCELOT, Ocelot.createAttributes().build())
+         .put(EntityType.PANDA, Panda.createAttributes().build())
 diff --git a/net/minecraft/world/entity/animal/Cow.java b/net/minecraft/world/entity/animal/Cow.java
-index a8c76fcbbaa4afd2d0bd568874995b91d8d67c03..b62c4449047da36d8b4d4b87d03c77906d12dc31 100644
+index 4bc6d0eb56b4674e2ac0f13010521314a95e0096..731f27cf8687ffa95c0df5601a4465b5174fe248 100644
 --- a/net/minecraft/world/entity/animal/Cow.java
 +++ b/net/minecraft/world/entity/animal/Cow.java
-@@ -32,6 +32,8 @@ import net.minecraft.world.level.Level;
- import net.minecraft.world.level.block.state.BlockState;
+@@ -22,6 +22,8 @@ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.ServerLevelAccessor;
  
- public class Cow extends Animal {
+ public class Cow extends AbstractCow {
 +    private boolean isNaturallyAggressiveToPlayers; // Purpur - Cows naturally aggressive to players chance
 +
-     private static final EntityDimensions BABY_DIMENSIONS = EntityType.COW.getDimensions().scale(0.5F).withEyeHeight(0.665F);
+     private static final EntityDataAccessor<Holder<CowVariant>> DATA_VARIANT_ID = SynchedEntityData.defineId(Cow.class, EntityDataSerializers.COW_VARIANT);
  
      public Cow(EntityType<? extends Cow> entityType, Level level) {
-@@ -60,6 +62,7 @@ public class Cow extends Animal {
+@@ -48,8 +50,9 @@ public class Cow extends AbstractCow {
+     // Purpur start - Configurable entity base attributes
+     @Override
      public void initAttributes() {
-         this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(this.level().purpurConfig.cowMaxHealth);
-         this.getAttribute(Attributes.SCALE).setBaseValue(this.level().purpurConfig.cowScale);
-+        this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(this.level().purpurConfig.cowNaturallyAggressiveToPlayersDamage); // Purpur - Cows naturally aggressive to players chance
+-        this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(this.level().purpurConfig.cowMaxHealth);
+-        this.getAttribute(Attributes.SCALE).setBaseValue(this.level().purpurConfig.cowScale);
++        this.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MAX_HEALTH).setBaseValue(this.level().purpurConfig.cowMaxHealth);
++        this.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.SCALE).setBaseValue(this.level().purpurConfig.cowScale);
++        this.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE).setBaseValue(this.level().purpurConfig.cowNaturallyAggressiveToPlayersDamage); // Purpur - Cows naturally aggressive to players chance
      }
      // Purpur end - Configurable entity base attributes
  
-@@ -77,17 +80,27 @@ public class Cow extends Animal {
+@@ -67,6 +70,13 @@ public class Cow extends AbstractCow {
      }
      // Purpur end - Toggle for water sensitive mob damage
  
-+    // Purpur start - Cows naturally aggressive to players chance
 +    @Override
-+    public net.minecraft.world.entity.SpawnGroupData finalizeSpawn(net.minecraft.world.level.ServerLevelAccessor world, net.minecraft.world.DifficultyInstance difficulty, net.minecraft.world.entity.EntitySpawnReason spawnReason, net.minecraft.world.entity.SpawnGroupData entityData) {
-+        this.isNaturallyAggressiveToPlayers = world.getLevel().purpurConfig.cowNaturallyAggressiveToPlayersChance > 0.0D && random.nextDouble() <= world.getLevel().purpurConfig.cowNaturallyAggressiveToPlayersChance;
-+        return super.finalizeSpawn(world, difficulty, spawnReason, entityData);
++    protected void registerGoals() {
++        super.registerGoals();
++        this.goalSelector.addGoal(1, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2000000476837158D, true)); // Purpur - Cows naturally aggressive to players chance
++        this.targetSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(this, net.minecraft.world.entity.player.Player.class, 10, true, false, (ignored, ignored2) -> isNaturallyAggressiveToPlayers)); // Purpur - Cows naturally aggressive to players chance
++    }
++
+     @Override
+     protected void defineSynchedData(SynchedEntityData.Builder builder) {
+         super.defineSynchedData(builder);
+@@ -79,6 +89,12 @@ public class Cow extends AbstractCow {
+         VariantUtils.writeVariant(compound, this.getVariant());
+     }
+ 
++    // Purpur start - Cows naturally aggressive to players chance
++    public static net.minecraft.world.entity.ai.attributes.AttributeSupplier.Builder createAttributes() {
++        return AbstractCow.createAttributes().add(net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE, 0.0D);
 +    }
 +    // Purpur end - Cows naturally aggressive to players chance
 +
      @Override
-     protected void registerGoals() {
-         this.goalSelector.addGoal(0, new FloatGoal(this));
-         this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur - Ridables
-         this.goalSelector.addGoal(1, new PanicGoal(this, 2.0));
-+        this.goalSelector.addGoal(1, new net.minecraft.world.entity.ai.goal.MeleeAttackGoal(this, 1.2000000476837158D, true)); // Purpur - Cows naturally aggressive to players chance
-         this.goalSelector.addGoal(2, new BreedGoal(this, 1.0));
-         this.goalSelector.addGoal(3, new TemptGoal(this, 1.25, itemStack -> level().purpurConfig.cowFeedMushrooms > 0 && (itemStack.is(net.minecraft.world.level.block.Blocks.RED_MUSHROOM.asItem()) || itemStack.is(net.minecraft.world.level.block.Blocks.BROWN_MUSHROOM.asItem())) || itemStack.is(ItemTags.COW_FOOD), false)); // Purpur - Cows eat mushrooms
-         this.goalSelector.addGoal(4, new FollowParentGoal(this, 1.25));
-         this.goalSelector.addGoal(5, new WaterAvoidingRandomStrollGoal(this, 1.0));
-         this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 6.0F));
-         this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
-+        this.targetSelector.addGoal(0, new net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal<>(this, Player.class, 10, true, false, (ignored, ignored2) -> isNaturallyAggressiveToPlayers)); // Purpur - Cows naturally aggressive to players chance
+     public void readAdditionalSaveData(CompoundTag compound) {
+         super.readAdditionalSaveData(compound);
+@@ -100,6 +116,7 @@ public class Cow extends AbstractCow {
+     public SpawnGroupData finalizeSpawn(
+         ServerLevelAccessor level, DifficultyInstance difficulty, EntitySpawnReason spawnReason, @Nullable SpawnGroupData spawnGroupData
+     ) {
++        this.isNaturallyAggressiveToPlayers = level.getLevel().purpurConfig.cowNaturallyAggressiveToPlayersChance > 0.0D && random.nextDouble() <= level.getLevel().purpurConfig.cowNaturallyAggressiveToPlayersChance; // Purpur - Cows naturally aggressive to players chance
+         CowVariants.selectVariantToSpawn(this.random, this.registryAccess(), SpawnContext.create(level, this.blockPosition())).ifPresent(this::setVariant);
+         return super.finalizeSpawn(level, difficulty, spawnReason, spawnGroupData);
      }
- 
-     @Override
-@@ -96,7 +109,7 @@ public class Cow extends Animal {
-     }
- 
-     public static AttributeSupplier.Builder createAttributes() {
--        return Animal.createAnimalAttributes().add(Attributes.MAX_HEALTH, 10.0).add(Attributes.MOVEMENT_SPEED, 0.2F);
-+        return Animal.createAnimalAttributes().add(Attributes.MAX_HEALTH, 10.0).add(Attributes.MOVEMENT_SPEED, 0.2F).add(Attributes.ATTACK_DAMAGE, 0.0D); // Purpur - Cows naturally aggressive to players chance
-     }
- 
-     @Override

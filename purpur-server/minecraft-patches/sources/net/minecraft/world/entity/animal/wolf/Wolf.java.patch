@@ -1,6 +1,6 @@
---- a/net/minecraft/world/entity/animal/Wolf.java
-+++ b/net/minecraft/world/entity/animal/Wolf.java
-@@ -94,6 +_,37 @@
+--- a/net/minecraft/world/entity/animal/wolf/Wolf.java
++++ b/net/minecraft/world/entity/animal/wolf/Wolf.java
+@@ -100,6 +_,37 @@
          EntityType<?> type = entity.getType();
          return type == EntityType.SHEEP || type == EntityType.RABBIT || type == EntityType.FOX;
      };
@@ -38,7 +38,7 @@
      private static final float START_HEALTH = 8.0F;
      private static final float TAME_HEALTH = 40.0F;
      private static final float ARMOR_REPAIR_UNIT = 0.125F;
-@@ -115,12 +_,47 @@
+@@ -122,12 +_,47 @@
          this.setPathfindingMalus(PathType.DANGER_POWDER_SNOW, -1.0F);
      }
  
@@ -56,14 +56,14 @@
 +        this.targetSelector.removeGoal(PATHFINDER_VANILLA);
 +        this.targetSelector.removeGoal(PATHFINDER_RABID);
 +        if (this.isRabid) {
-+            setOwnerUUID(null);
++            this.setOwnerReference(null);
 +            setTame(false, true);
 +            this.targetSelector.addGoal(5, PATHFINDER_RABID);
-+            if (modifyEffects) this.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.CONFUSION, 1200));
++            if (modifyEffects) this.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.NAUSEA, 1200));
 +        } else {
 +            this.targetSelector.addGoal(5, PATHFINDER_VANILLA);
 +            this.stopBeingAngry();
-+            if (modifyEffects) this.removeEffect(net.minecraft.world.effect.MobEffects.CONFUSION);
++            if (modifyEffects) this.removeEffect(net.minecraft.world.effect.MobEffects.NAUSEA);
 +        }
 +    }
 +    // Purpur end - Configurable chance for wolves to spawn rabid
@@ -86,38 +86,38 @@
          this.goalSelector.addGoal(4, new LeapAtTargetGoal(this, 0.4F));
          this.goalSelector.addGoal(5, new MeleeAttackGoal(this, 1.0, true));
          this.goalSelector.addGoal(6, new FollowOwnerGoal(this, 1.0, 10.0F, 2.0F));
-@@ -133,7 +_,7 @@
+@@ -140,7 +_,7 @@
          this.targetSelector.addGoal(2, new OwnerHurtTargetGoal(this));
          this.targetSelector.addGoal(3, new HurtByTargetGoal(this).setAlertOthers());
          this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, Player.class, 10, true, false, this::isAngryAt));
 -        this.targetSelector.addGoal(5, new NonTameRandomTargetGoal<>(this, Animal.class, false, PREY_SELECTOR));
-+        // this.targetSelector.addGoal(5, new NonTameRandomTargetGoal<>(this, Animal.class, false, PREY_SELECTOR)); // Purpur - Configurable chance for wolves to spawn rabid - moved to updatePathfinders()
++        //this.targetSelector.addGoal(5, new NonTameRandomTargetGoal<>(this, Animal.class, false, PREY_SELECTOR)); // Purpur - Configurable chance for wolves to spawn rabid - moved to updatePathfinders()
          this.targetSelector.addGoal(6, new NonTameRandomTargetGoal<>(this, Turtle.class, false, Turtle.BABY_ON_LAND_SELECTOR));
          this.targetSelector.addGoal(7, new NearestAttackableTargetGoal<>(this, AbstractSkeleton.class, false));
          this.targetSelector.addGoal(8, new ResetUniversalAngerTargetGoal<>(this, true));
-@@ -182,6 +_,7 @@
+@@ -231,6 +_,7 @@
      public void addAdditionalSaveData(CompoundTag compound) {
          super.addAdditionalSaveData(compound);
-         compound.putByte("CollarColor", (byte)this.getCollarColor().getId());
+         compound.store("CollarColor", DyeColor.LEGACY_ID_CODEC, this.getCollarColor());
 +        compound.putBoolean("Purpur.IsRabid", this.isRabid); // Purpur - Configurable chance for wolves to spawn rabid
-         this.getVariant().unwrapKey().ifPresent(resourceKey -> compound.putString("variant", resourceKey.location().toString()));
+         VariantUtils.writeVariant(compound, this.getVariant());
          this.addPersistentAngerSaveData(compound);
-     }
-@@ -196,6 +_,10 @@
-         if (compound.contains("CollarColor", 99)) {
-             this.setCollarColor(DyeColor.byId(compound.getInt("CollarColor")));
-         }
+         this.getSoundVariant()
+@@ -245,6 +_,10 @@
+         super.readAdditionalSaveData(compound);
+         VariantUtils.readVariant(compound, this.registryAccess(), Registries.WOLF_VARIANT).ifPresent(this::setVariant);
+         this.setCollarColor(compound.read("CollarColor", DyeColor.LEGACY_ID_CODEC).orElse(DEFAULT_COLLAR_COLOR));
 +        // Purpur start - Configurable chance for wolves to spawn rabid
-+        this.isRabid = compound.getBoolean("Purpur.IsRabid");
++        this.isRabid = compound.getBooleanOr("Purpur.IsRabid", false);
 +        this.updatePathfinders(false);
 +        // Purpur end - Configurable chance for wolves to spawn rabid
- 
          this.readPersistentAngerSaveData(this.level(), compound);
-     }
-@@ -215,6 +_,10 @@
+         compound.read("sound_variant", ResourceKey.codec(Registries.WOLF_SOUND_VARIANT))
+             .flatMap(resourceKey -> this.registryAccess().lookupOrThrow(Registries.WOLF_SOUND_VARIANT).get((ResourceKey<WolfSoundVariant>)resourceKey))
+@@ -269,6 +_,10 @@
          }
  
-         this.setVariant(holder);
+         this.setSoundVariant(WolfSoundVariants.pickRandomSoundVariant(this.registryAccess(), this.random));
 +        // Purpur start - Configurable chance for wolves to spawn rabid
 +        this.isRabid = level.getLevel().purpurConfig.wolfNaturalRabid > 0.0D && random.nextDouble() <= level.getLevel().purpurConfig.wolfNaturalRabid;
 +        this.updatePathfinders(false);
@@ -125,19 +125,19 @@
          return super.finalizeSpawn(level, difficulty, spawnReason, spawnGroupData);
      }
  
-@@ -263,6 +_,11 @@
+@@ -319,6 +_,11 @@
      public void tick() {
          super.tick();
          if (this.isAlive()) {
 +            // Purpur start - Configurable chance for wolves to spawn rabid
 +            if (this.age % 300 == 0 && this.isRabid()) {
-+                this.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.CONFUSION, 400));
++                this.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.NAUSEA, 400));
 +            }
 +            // Purpur end - Configurable chance for wolves to spawn rabid
              this.interestedAngleO = this.interestedAngle;
              if (this.isInterested()) {
                  this.interestedAngle = this.interestedAngle + (1.0F - this.interestedAngle) * 0.4F;
-@@ -481,13 +_,27 @@
+@@ -532,13 +_,27 @@
              itemInHand.consume(1, player);
              this.tryToTame(player);
              return InteractionResult.SUCCESS_SERVER;

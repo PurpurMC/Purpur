@@ -70,7 +70,7 @@ public class PhantomFlames extends LlamaSpit {
             this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD);
         } else if (this.level().getBlockStates(this.getBoundingBox()).noneMatch(BlockBehaviour.BlockStateBase::isAir)) {
             this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD);
-        } else if (this.isInWaterOrBubble()) {
+        } else if (this.isInWater()) {
             this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD);
         } else {
             this.setDeltaMovement(mot.scale(0.99D));

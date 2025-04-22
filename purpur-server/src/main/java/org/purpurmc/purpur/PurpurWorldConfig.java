@@ -17,7 +17,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.Tilt;
-import org.apache.commons.lang.BooleanUtils;
+import org.apache.commons.lang3.BooleanUtils;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -3404,7 +3404,7 @@ public class PurpurWorldConfig {
     public boolean zombifiedPiglinJockeyOnlyBaby = true;
     public double zombifiedPiglinJockeyChance = 0.05D;
     public boolean zombifiedPiglinJockeyTryExistingChickens = true;
-    public boolean zombifiedPiglinCountAsPlayerKillWhenAngry = true;
+    public boolean zombifiedPiglinCountAsPlayerKillWhenAngry = false;
     public boolean zombifiedPiglinTakeDamageFromWater = false;
     public boolean zombifiedPiglinAlwaysDropExp = false;
     private void zombifiedPiglinSettings() {
@@ -3415,6 +3415,9 @@ public class PurpurWorldConfig {
             double oldValue = getDouble("mobs.zombified_piglin.attributes.max-health", zombifiedPiglinMaxHealth);
             set("mobs.zombified_piglin.attributes.max-health", null);
             set("mobs.zombified_piglin.attributes.max_health", oldValue);
+        }
+        if (PurpurConfig.version < 42) {
+            set("mobs.zombified_piglin.count-as-player-kill-when-angry", false);
         }
         zombifiedPiglinMaxHealth = getDouble("mobs.zombified_piglin.attributes.max_health", zombifiedPiglinMaxHealth);
         zombifiedPiglinScale = Mth.clamp(getDouble("mobs.zombified_piglin.attributes.scale", zombifiedPiglinScale), 0.0625D, 16.0D);
