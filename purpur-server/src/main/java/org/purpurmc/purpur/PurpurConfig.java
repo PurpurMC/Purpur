@@ -610,4 +610,9 @@ public class PurpurConfig {
             startupCommands.add(command);
         });
     }
+    
+    public static boolean generateEndVoidRings = false;
+    private static void generateEndVoidRings() {
+        generateEndVoidRings = getBoolean("settings.generate-end-void-rings", generateEndVoidRings);
+    }
 }
