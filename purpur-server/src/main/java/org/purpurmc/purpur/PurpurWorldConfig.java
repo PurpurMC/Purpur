@@ -84,6 +84,11 @@ public class PurpurWorldConfig {
         return predicate.test(bool);
     }
 
+    private Boolean getBooleanOrDefault(String path, Boolean def) {
+        String val = getString(path, BooleanUtils.toString(def, "true", "false", "default")).toLowerCase();
+        return BooleanUtils.toBooleanObject(val, "true", "false", "default");
+    }
+
     private double getDouble(String path, double def) {
         if (PurpurConfig.config.get("world-settings.default." + path) == null) {
             PurpurConfig.config.addDefault("world-settings.default." + path, def);
@@ -144,9 +149,9 @@ public class PurpurWorldConfig {
     public int raidCooldownSeconds = 0;
     public int animalBreedingCooldownSeconds = 0;
     public boolean persistentDroppableEntityDisplayNames = true;
-    public boolean entitiesPickUpLootBypassMobGriefing = false;
-    public boolean fireballsBypassMobGriefing = false;
-    public boolean projectilesBypassMobGriefing = false;
+    public Boolean entitiesPickUpLootMobGriefingOverride = null;
+    public Boolean fireballsMobGriefingOverride = null;
+    public Boolean projectilesMobGriefingOverride = null;
     public boolean noteBlockIgnoreAbove = false;
     public boolean imposeTeleportRestrictionsOnGateways = false;
     public boolean imposeTeleportRestrictionsOnNetherPortals = false;
@@ -173,9 +178,20 @@ public class PurpurWorldConfig {
         raidCooldownSeconds = getInt("gameplay-mechanics.raid-cooldown-seconds", raidCooldownSeconds);
         animalBreedingCooldownSeconds = getInt("gameplay-mechanics.animal-breeding-cooldown-seconds", animalBreedingCooldownSeconds);
         persistentDroppableEntityDisplayNames = getBoolean("gameplay-mechanics.persistent-droppable-entity-display-names", persistentDroppableEntityDisplayNames);
-        entitiesPickUpLootBypassMobGriefing = getBoolean("gameplay-mechanics.entities-pick-up-loot-bypass-mob-griefing", entitiesPickUpLootBypassMobGriefing);
-        fireballsBypassMobGriefing = getBoolean("gameplay-mechanics.fireballs-bypass-mob-griefing", fireballsBypassMobGriefing);
-        projectilesBypassMobGriefing = getBoolean("gameplay-mechanics.projectiles-bypass-mob-griefing", projectilesBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("gameplay-mechanics.entities-pick-up-loot-bypass-mob-griefing", false);
+            set("gameplay-mechanics.entities-pick-up-loot-bypass-mob-griefing", null);
+            set("gameplay-mechanics.entities-pick-up-loot-mob-griefing-override", oldVal ? true : "default");
+            boolean oldVal2 = getBoolean("gameplay-mechanics.fireballs-bypass-mob-griefing", false);
+            set("gameplay-mechanics.fireballs-bypass-mob-griefing", null);
+            set("gameplay-mechanics.fireballs-mob-griefing-override", oldVal2 ? true : "default");
+            boolean oldVal3 = getBoolean("gameplay-mechanics.projectiles-bypass-mob-griefing", false);
+            set("gameplay-mechanics.projectiles-bypass-mob-griefing", null);
+            set("gameplay-mechanics.projectiles-mob-griefing-override", oldVal3 ? true : "default");
+        }
+        entitiesPickUpLootMobGriefingOverride = getBooleanOrDefault("gameplay-mechanics.entities-pick-up-loot-mob-griefing-override", entitiesPickUpLootMobGriefingOverride);
+        fireballsMobGriefingOverride = getBooleanOrDefault("gameplay-mechanics.fireballs-mob-griefing-override", fireballsMobGriefingOverride);
+        projectilesMobGriefingOverride = getBooleanOrDefault("gameplay-mechanics.projectiles-mob-griefing-override", projectilesMobGriefingOverride);
         noteBlockIgnoreAbove = getBoolean("gameplay-mechanics.note-block-ignore-above", noteBlockIgnoreAbove);
         imposeTeleportRestrictionsOnGateways = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-gateways", imposeTeleportRestrictionsOnGateways);
         imposeTeleportRestrictionsOnNetherPortals = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-nether-portals", imposeTeleportRestrictionsOnNetherPortals);
@@ -992,7 +1008,7 @@ public class PurpurWorldConfig {
         endCrystalPlaceAnywhere = getBoolean("gameplay-mechanics.item.end-crystal.place-anywhere", endCrystalPlaceAnywhere);
     }
 
-    public boolean farmlandBypassMobGriefing = false;
+    public Boolean farmlandMobGriefingOverride = null;
     public boolean farmlandGetsMoistFromBelow = false;
     public boolean farmlandAlpha = false;
     public boolean farmlandTramplingDisabled = false;
@@ -1000,7 +1016,12 @@ public class PurpurWorldConfig {
     public boolean farmlandTramplingFeatherFalling = false;
     public double farmlandTrampleHeight = -1D;
     private void farmlandSettings() {
-        farmlandBypassMobGriefing = getBoolean("blocks.farmland.bypass-mob-griefing", farmlandBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("blocks.farmland.bypass-mob-griefing", false);
+            set("blocks.farmland.bypass-mob-griefing", null);
+            set("blocks.farmland.mob-griefing-override", oldVal ? true : "default");
+        }
+        farmlandMobGriefingOverride = getBooleanOrDefault("blocks.farmland.mob-griefing-override", farmlandMobGriefingOverride);
         farmlandGetsMoistFromBelow = getBoolean("blocks.farmland.gets-moist-from-below", farmlandGetsMoistFromBelow);
         farmlandAlpha = getBoolean("blocks.farmland.use-alpha-farmland", farmlandAlpha);
         farmlandTramplingDisabled = getBoolean("blocks.farmland.disable-trampling", farmlandTramplingDisabled);
@@ -1053,9 +1074,14 @@ public class PurpurWorldConfig {
         magmaBlockDamageWhenSneaking = getBoolean("blocks.magma-block.damage-when-sneaking", magmaBlockDamageWhenSneaking);
     }
 
-    public boolean powderSnowBypassMobGriefing = false;
+    public Boolean powderSnowMobGriefingOverride = null;
     private void powderSnowSettings() {
-        powderSnowBypassMobGriefing = getBoolean("blocks.powder_snow.bypass-mob-griefing", powderSnowBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("blocks.powder_snow.bypass-mob-griefing", false);
+            set("blocks.powder_snow.bypass-mob-griefing", null);
+            set("blocks.powder_snow.mob-griefing-override", oldVal ? true : "default");
+        }
+        powderSnowMobGriefingOverride = getBooleanOrDefault("blocks.powder_snow.mob-griefing-override", powderSnowMobGriefingOverride);
     }
 
     public int railActivationRange = 8;
@@ -1125,14 +1151,19 @@ public class PurpurWorldConfig {
     public boolean turtleEggsBreakFromExpOrbs = false;
     public boolean turtleEggsBreakFromItems = false;
     public boolean turtleEggsBreakFromMinecarts = false;
-    public boolean turtleEggsBypassMobGriefing = false;
+    public Boolean turtleEggsMobGriefingOverride = null;
     public int turtleEggsRandomTickCrackChance = 500;
     public boolean turtleEggsTramplingFeatherFalling = false;
     private void turtleEggSettings() {
         turtleEggsBreakFromExpOrbs = getBoolean("blocks.turtle_egg.break-from-exp-orbs", turtleEggsBreakFromExpOrbs);
         turtleEggsBreakFromItems = getBoolean("blocks.turtle_egg.break-from-items", turtleEggsBreakFromItems);
         turtleEggsBreakFromMinecarts = getBoolean("blocks.turtle_egg.break-from-minecarts", turtleEggsBreakFromMinecarts);
-        turtleEggsBypassMobGriefing = getBoolean("blocks.turtle_egg.bypass-mob-griefing", turtleEggsBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("blocks.turtle_egg.bypass-mob-griefing", false);
+            set("blocks.turtle_egg.bypass-mob-griefing", null);
+            set("blocks.turtle_egg.mob-griefing-override", oldVal ? true : "default");
+        }
+        turtleEggsMobGriefingOverride = getBooleanOrDefault("blocks.turtle_egg.mob-griefing-override", turtleEggsMobGriefingOverride);
         turtleEggsRandomTickCrackChance = getInt("blocks.turtle_egg.random-tick-crack-chance", turtleEggsRandomTickCrackChance);
         turtleEggsTramplingFeatherFalling = getBoolean("blocks.turtle_egg.feather-fall-distance-affects-trampling", turtleEggsTramplingFeatherFalling);
     }
@@ -1488,7 +1519,7 @@ public class PurpurWorldConfig {
     public double creeperScale = 1.0D;
     public double creeperChargedChance = 0.0D;
     public boolean creeperAllowGriefing = true;
-    public boolean creeperBypassMobGriefing = false;
+    public Boolean creeperMobGriefingOverride = null;
     public boolean creeperTakeDamageFromWater = false;
     public boolean creeperExplodeWhenKilled = false;
     public boolean creeperHealthRadius = false;
@@ -1508,7 +1539,12 @@ public class PurpurWorldConfig {
         creeperScale = Mth.clamp(getDouble("mobs.creeper.attributes.scale", creeperScale), 0.0625D, 16.0D);
         creeperChargedChance = getDouble("mobs.creeper.naturally-charged-chance", creeperChargedChance);
         creeperAllowGriefing = getBoolean("mobs.creeper.allow-griefing", creeperAllowGriefing);
-        creeperBypassMobGriefing = getBoolean("mobs.creeper.bypass-mob-griefing", creeperBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.creeper.bypass-mob-griefing", false);
+            set("mobs.creeper.bypass-mob-griefing", null);
+            set("mobs.creeper.mob-griefing-override", oldVal ? true : "default");
+        }
+        creeperMobGriefingOverride = getBooleanOrDefault("mobs.creeper.mob-griefing-override", creeperMobGriefingOverride);
         creeperTakeDamageFromWater = getBoolean("mobs.creeper.takes-damage-from-water", creeperTakeDamageFromWater);
         creeperExplodeWhenKilled = getBoolean("mobs.creeper.explode-when-killed", creeperExplodeWhenKilled);
         creeperHealthRadius = getBoolean("mobs.creeper.health-impacts-explosion", creeperHealthRadius);
@@ -1640,7 +1676,7 @@ public class PurpurWorldConfig {
     public double enderDragonMaxY = 320D;
     public double enderDragonMaxHealth = 200.0D;
     public boolean enderDragonAlwaysDropsFullExp = false;
-    public boolean enderDragonBypassMobGriefing = false;
+    public Boolean enderDragonMobGriefingOverride = null;
     public boolean enderDragonTakeDamageFromWater = false;
     public boolean enderDragonCanRideVehicles = false;
     private void enderDragonSettings() {
@@ -1659,7 +1695,12 @@ public class PurpurWorldConfig {
         }
         enderDragonMaxHealth = getDouble("mobs.ender_dragon.attributes.max_health", enderDragonMaxHealth);
         enderDragonAlwaysDropsFullExp = getBoolean("mobs.ender_dragon.always-drop-full-exp", enderDragonAlwaysDropsFullExp);
-        enderDragonBypassMobGriefing = getBoolean("mobs.ender_dragon.bypass-mob-griefing", enderDragonBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.ender_dragon.bypass-mob-griefing", false);
+            set("mobs.ender_dragon.bypass-mob-griefing", null);
+            set("mobs.ender_dragon.mob-griefing-override", oldVal ? true : "default");
+        }
+        enderDragonMobGriefingOverride = getBooleanOrDefault("mobs.ender_dragon.mob-griefing-override", enderDragonMobGriefingOverride);
         enderDragonTakeDamageFromWater = getBoolean("mobs.ender_dragon.takes-damage-from-water", enderDragonTakeDamageFromWater);
         enderDragonCanRideVehicles = getBoolean("mobs.ender_dragon.can-ride-vehicles", enderDragonCanRideVehicles);
     }
@@ -1671,7 +1712,7 @@ public class PurpurWorldConfig {
     public double endermanScale = 1.0D;
     public boolean endermanAllowGriefing = true;
     public boolean endermanDespawnEvenWithBlock = false;
-    public boolean endermanBypassMobGriefing = false;
+    public Boolean endermanMobGriefingOverride = null;
     public boolean endermanTakeDamageFromWater = true;
     public boolean endermanAggroEndermites = true;
     public boolean endermanAggroEndermitesOnlyIfPlayerSpawned = false;
@@ -1695,7 +1736,12 @@ public class PurpurWorldConfig {
         endermanScale = Mth.clamp(getDouble("mobs.enderman.attributes.scale", endermanScale), 0.0625D, 16.0D);
         endermanAllowGriefing = getBoolean("mobs.enderman.allow-griefing", endermanAllowGriefing);
         endermanDespawnEvenWithBlock = getBoolean("mobs.enderman.can-despawn-with-held-block", endermanDespawnEvenWithBlock);
-        endermanBypassMobGriefing = getBoolean("mobs.enderman.bypass-mob-griefing", endermanBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.enderman.bypass-mob-griefing", false);
+            set("mobs.enderman.bypass-mob-griefing", null);
+            set("mobs.enderman.mob-griefing-override", oldVal ? true : "default");
+        }
+        endermanMobGriefingOverride = getBooleanOrDefault("mobs.enderman.mob-griefing-override", endermanMobGriefingOverride);
         endermanTakeDamageFromWater = getBoolean("mobs.enderman.takes-damage-from-water", endermanTakeDamageFromWater);
         endermanAggroEndermites = getBoolean("mobs.enderman.aggressive-towards-endermites", endermanAggroEndermites);
         endermanAggroEndermitesOnlyIfPlayerSpawned = getBoolean("mobs.enderman.aggressive-towards-endermites-only-spawned-by-player-thrown-ender-pearls", endermanAggroEndermitesOnlyIfPlayerSpawned);
@@ -1731,7 +1777,7 @@ public class PurpurWorldConfig {
     public boolean evokerControllable = true;
     public double evokerMaxHealth = 24.0D;
     public double evokerScale = 1.0D;
-    public boolean evokerBypassMobGriefing = false;
+    public Boolean evokerMobGriefingOverride = null;
     public boolean evokerTakeDamageFromWater = false;
     public boolean evokerAlwaysDropExp = false;
     private void evokerSettings() {
@@ -1745,7 +1791,12 @@ public class PurpurWorldConfig {
         }
         evokerMaxHealth = getDouble("mobs.evoker.attributes.max_health", evokerMaxHealth);
         evokerScale = Mth.clamp(getDouble("mobs.evoker.attributes.scale", evokerScale), 0.0625D, 16.0D);
-        evokerBypassMobGriefing = getBoolean("mobs.evoker.bypass-mob-griefing", evokerBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.evoker.bypass-mob-griefing", false);
+            set("mobs.evoker.bypass-mob-griefing", null);
+            set("mobs.evoker.mob-griefing-override", oldVal ? true : "default");
+        }
+        evokerMobGriefingOverride = getBooleanOrDefault("mobs.evoker.mob-griefing-override", evokerMobGriefingOverride);
         evokerTakeDamageFromWater = getBoolean("mobs.evoker.takes-damage-from-water", evokerTakeDamageFromWater);
         evokerAlwaysDropExp = getBoolean("mobs.evoker.always-drop-exp", evokerAlwaysDropExp);
     }
@@ -1757,7 +1808,7 @@ public class PurpurWorldConfig {
     public double foxScale = 1.0D;
     public boolean foxTypeChangesWithTulips = false;
     public int foxBreedingTicks = 6000;
-    public boolean foxBypassMobGriefing = false;
+    public Boolean foxMobGriefingOverride = null;
     public boolean foxTakeDamageFromWater = false;
     public boolean foxAlwaysDropExp = false;
     private void foxSettings() {
@@ -1773,7 +1824,12 @@ public class PurpurWorldConfig {
         foxScale = Mth.clamp(getDouble("mobs.fox.attributes.scale", foxScale), 0.0625D, 16.0D);
         foxTypeChangesWithTulips = getBoolean("mobs.fox.tulips-change-type", foxTypeChangesWithTulips);
         foxBreedingTicks = getInt("mobs.fox.breeding-delay-ticks", foxBreedingTicks);
-        foxBypassMobGriefing = getBoolean("mobs.fox.bypass-mob-griefing", foxBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.fox.bypass-mob-griefing", false);
+            set("mobs.fox.bypass-mob-griefing", null);
+            set("mobs.fox.mob-griefing-override", oldVal ? true : "default");
+        }
+        foxMobGriefingOverride = getBooleanOrDefault("mobs.fox.mob-griefing-override", foxMobGriefingOverride);
         foxTakeDamageFromWater = getBoolean("mobs.fox.takes-damage-from-water", foxTakeDamageFromWater);
         foxAlwaysDropExp = getBoolean("mobs.fox.always-drop-exp", foxAlwaysDropExp);
     }
@@ -2354,7 +2410,7 @@ public class PurpurWorldConfig {
     public boolean piglinControllable = true;
     public double piglinMaxHealth = 16.0D;
     public double piglinScale = 1.0D;
-    public boolean piglinBypassMobGriefing = false;
+    public Boolean piglinMobGriefingOverride = null;
     public boolean piglinTakeDamageFromWater = false;
     public int piglinPortalSpawnModifier = 2000;
     public boolean piglinAlwaysDropExp = false;
@@ -2371,7 +2427,12 @@ public class PurpurWorldConfig {
         }
         piglinMaxHealth = getDouble("mobs.piglin.attributes.max_health", piglinMaxHealth);
         piglinScale = Mth.clamp(getDouble("mobs.piglin.attributes.scale", piglinScale), 0.0625D, 16.0D);
-        piglinBypassMobGriefing = getBoolean("mobs.piglin.bypass-mob-griefing", piglinBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.piglin.bypass-mob-griefing", false);
+            set("mobs.piglin.bypass-mob-griefing", null);
+            set("mobs.piglin.mob-griefing-override", oldVal ? true : "default");
+        }
+        piglinMobGriefingOverride = getBooleanOrDefault("mobs.piglin.mob-griefing-override", piglinMobGriefingOverride);
         piglinTakeDamageFromWater = getBoolean("mobs.piglin.takes-damage-from-water", piglinTakeDamageFromWater);
         piglinPortalSpawnModifier = getInt("mobs.piglin.portal-spawn-modifier", piglinPortalSpawnModifier);
         piglinAlwaysDropExp = getBoolean("mobs.piglin.always-drop-exp", piglinAlwaysDropExp);
@@ -2406,7 +2467,7 @@ public class PurpurWorldConfig {
     public boolean pillagerControllable = true;
     public double pillagerMaxHealth = 24.0D;
     public double pillagerScale = 1.0D;
-    public boolean pillagerBypassMobGriefing = false;
+    public Boolean pillagerMobGriefingOverride = null;
     public boolean pillagerTakeDamageFromWater = false;
     public boolean pillagerAlwaysDropExp = false;
     private void pillagerSettings() {
@@ -2420,7 +2481,12 @@ public class PurpurWorldConfig {
         }
         pillagerMaxHealth = getDouble("mobs.pillager.attributes.max_health", pillagerMaxHealth);
         pillagerScale = Mth.clamp(getDouble("mobs.pillager.attributes.scale", pillagerScale), 0.0625D, 16.0D);
-        pillagerBypassMobGriefing = getBoolean("mobs.pillager.bypass-mob-griefing", pillagerBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.pillager.bypass-mob-griefing", false);
+            set("mobs.pillager.bypass-mob-griefing", null);
+            set("mobs.pillager.mob-griefing-override", oldVal ? true : "default");
+        }
+        pillagerMobGriefingOverride = getBooleanOrDefault("mobs.pillager.mob-griefing-override", pillagerMobGriefingOverride);
         pillagerTakeDamageFromWater = getBoolean("mobs.pillager.takes-damage-from-water", pillagerTakeDamageFromWater);
         pillagerAlwaysDropExp = getBoolean("mobs.pillager.always-drop-exp", pillagerAlwaysDropExp);
     }
@@ -2482,7 +2548,7 @@ public class PurpurWorldConfig {
     public double rabbitNaturalToast = 0.0D;
     public double rabbitNaturalKiller = 0.0D;
     public int rabbitBreedingTicks = 6000;
-    public boolean rabbitBypassMobGriefing = false;
+    public Boolean rabbitMobGriefingOverride = null;
     public boolean rabbitTakeDamageFromWater = false;
     public boolean rabbitAlwaysDropExp = false;
     private void rabbitSettings() {
@@ -2499,7 +2565,12 @@ public class PurpurWorldConfig {
         rabbitNaturalToast = getDouble("mobs.rabbit.spawn-toast-chance", rabbitNaturalToast);
         rabbitNaturalKiller = getDouble("mobs.rabbit.spawn-killer-rabbit-chance", rabbitNaturalKiller);
         rabbitBreedingTicks = getInt("mobs.rabbit.breeding-delay-ticks", rabbitBreedingTicks);
-        rabbitBypassMobGriefing = getBoolean("mobs.rabbit.bypass-mob-griefing", rabbitBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.rabbit.bypass-mob-griefing", false);
+            set("mobs.rabbit.bypass-mob-griefing", null);
+            set("mobs.rabbit.mob-griefing-override", oldVal ? true : "default");
+        }
+        rabbitMobGriefingOverride = getBooleanOrDefault("mobs.rabbit.mob-griefing-override", rabbitMobGriefingOverride);
         rabbitTakeDamageFromWater = getBoolean("mobs.rabbit.takes-damage-from-water", rabbitTakeDamageFromWater);
         rabbitAlwaysDropExp = getBoolean("mobs.rabbit.always-drop-exp", rabbitAlwaysDropExp);
     }
@@ -2509,7 +2580,7 @@ public class PurpurWorldConfig {
     public boolean ravagerControllable = true;
     public double ravagerMaxHealth = 100.0D;
     public double ravagerScale = 1.0D;
-    public boolean ravagerBypassMobGriefing = false;
+    public Boolean ravagerMobGriefingOverride = null;
     public boolean ravagerTakeDamageFromWater = false;
     public List<Block> ravagerGriefableBlocks = new ArrayList<>();
     public boolean ravagerAlwaysDropExp = false;
@@ -2525,7 +2596,12 @@ public class PurpurWorldConfig {
         }
         ravagerMaxHealth = getDouble("mobs.ravager.attributes.max_health", ravagerMaxHealth);
         ravagerScale = Mth.clamp(getDouble("mobs.ravager.attributes.scale", ravagerScale), 0.0625D, 16.0D);
-        ravagerBypassMobGriefing = getBoolean("mobs.ravager.bypass-mob-griefing", ravagerBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.ravager.bypass-mob-griefing", false);
+            set("mobs.ravager.bypass-mob-griefing", null);
+            set("mobs.ravager.mob-griefing-override", oldVal ? true : "default");
+        }
+        ravagerMobGriefingOverride = getBooleanOrDefault("mobs.ravager.mob-griefing-override", ravagerMobGriefingOverride);
         ravagerTakeDamageFromWater = getBoolean("mobs.ravager.takes-damage-from-water", ravagerTakeDamageFromWater);
         List<String> defaultRavagerGriefableBlocks = List.of(
             "minecraft:oak_leaves",
@@ -2595,7 +2671,7 @@ public class PurpurWorldConfig {
     public double sheepMaxHealth = 8.0D;
     public double sheepScale = 1.0D;
     public int sheepBreedingTicks = 6000;
-    public boolean sheepBypassMobGriefing = false;
+    public Boolean sheepMobGriefingOverride = null;
     public boolean sheepTakeDamageFromWater = false;
     public boolean sheepAlwaysDropExp = false;
     private void sheepSettings() {
@@ -2610,7 +2686,12 @@ public class PurpurWorldConfig {
         sheepMaxHealth = getDouble("mobs.sheep.attributes.max_health", sheepMaxHealth);
         sheepScale = Mth.clamp(getDouble("mobs.sheep.attributes.scale", sheepScale), 0.0625D, 16.0D);
         sheepBreedingTicks = getInt("mobs.sheep.breeding-delay-ticks", sheepBreedingTicks);
-        sheepBypassMobGriefing = getBoolean("mobs.sheep.bypass-mob-griefing", sheepBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.sheep.bypass-mob-griefing", false);
+            set("mobs.sheep.bypass-mob-griefing", null);
+            set("mobs.sheep.mob-griefing-override", oldVal ? true : "default");
+        }
+        sheepMobGriefingOverride = getBooleanOrDefault("mobs.sheep.mob-griefing-override", sheepMobGriefingOverride);
         sheepTakeDamageFromWater = getBoolean("mobs.sheep.takes-damage-from-water", sheepTakeDamageFromWater);
         sheepAlwaysDropExp = getBoolean("mobs.sheep.always-drop-exp", sheepAlwaysDropExp);
     }
@@ -2656,7 +2737,7 @@ public class PurpurWorldConfig {
     public double silverfishScale = 1.0D;
     public double silverfishMovementSpeed = 0.25D;
     public double silverfishAttackDamage = 1.0D;
-    public boolean silverfishBypassMobGriefing = false;
+    public Boolean silverfishMobGriefingOverride = null;
     public boolean silverfishTakeDamageFromWater = false;
     public boolean silverfishAlwaysDropExp = false;
     private void silverfishSettings() {
@@ -2672,7 +2753,12 @@ public class PurpurWorldConfig {
         silverfishScale = Mth.clamp(getDouble("mobs.silverfish.attributes.scale", silverfishScale), 0.0625D, 16.0D);
         silverfishMovementSpeed = getDouble("mobs.silverfish.attributes.movement_speed", silverfishMovementSpeed);
         silverfishAttackDamage = getDouble("mobs.silverfish.attributes.attack_damage", silverfishAttackDamage);
-        silverfishBypassMobGriefing = getBoolean("mobs.silverfish.bypass-mob-griefing", silverfishBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.silverfish.bypass-mob-griefing", false);
+            set("mobs.silverfish.bypass-mob-griefing", null);
+            set("mobs.silverfish.mob-griefing-override", oldVal ? true : "default");
+        }
+        silverfishMobGriefingOverride = getBooleanOrDefault("mobs.silverfish.mob-griefing-override", silverfishMobGriefingOverride);
         silverfishTakeDamageFromWater = getBoolean("mobs.silverfish.takes-damage-from-water", silverfishTakeDamageFromWater);
         silverfishAlwaysDropExp = getBoolean("mobs.silverfish.always-drop-exp", silverfishAlwaysDropExp);
     }
@@ -2785,7 +2871,7 @@ public class PurpurWorldConfig {
     public int snowGolemSnowBallMax = 20;
     public float snowGolemSnowBallModifier = 10.0F;
     public double snowGolemAttackDistance = 1.25D;
-    public boolean snowGolemBypassMobGriefing = false;
+    public Boolean snowGolemMobGriefingOverride = null;
     public boolean snowGolemTakeDamageFromWater = true;
     public boolean snowGolemAlwaysDropExp = false;
     private void snowGolemSettings() {
@@ -2805,7 +2891,12 @@ public class PurpurWorldConfig {
         snowGolemSnowBallMax = getInt("mobs.snow_golem.max-shoot-interval-ticks", snowGolemSnowBallMax);
         snowGolemSnowBallModifier = (float) getDouble("mobs.snow_golem.snow-ball-modifier", snowGolemSnowBallModifier);
         snowGolemAttackDistance = getDouble("mobs.snow_golem.attack-distance", snowGolemAttackDistance);
-        snowGolemBypassMobGriefing = getBoolean("mobs.snow_golem.bypass-mob-griefing", snowGolemBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.snow_golem.bypass-mob-griefing", false);
+            set("mobs.snow_golem.bypass-mob-griefing", null);
+            set("mobs.snow_golem.mob-griefing-override", oldVal ? true : "default");
+        }
+        snowGolemMobGriefingOverride = getBooleanOrDefault("mobs.snow_golem.mob-griefing-override", snowGolemMobGriefingOverride);
         snowGolemTakeDamageFromWater = getBoolean("mobs.snow_golem.takes-damage-from-water", snowGolemTakeDamageFromWater);
         snowGolemAlwaysDropExp = getBoolean("mobs.snow_golem.always-drop-exp", snowGolemAlwaysDropExp);
     }
@@ -3044,7 +3135,7 @@ public class PurpurWorldConfig {
     public int villagerBreedingTicks = 6000;
     public boolean villagerClericsFarmWarts = false;
     public boolean villagerClericFarmersThrowWarts = true;
-    public boolean villagerBypassMobGriefing = false;
+    public Boolean villagerMobGriefingOverride = null;
     public boolean villagerTakeDamageFromWater = false;
     public boolean villagerAllowTrading = true;
     public boolean villagerAlwaysDropExp = false;
@@ -3075,7 +3166,12 @@ public class PurpurWorldConfig {
         villagerBreedingTicks = getInt("mobs.villager.breeding-delay-ticks", villagerBreedingTicks);
         villagerClericsFarmWarts = getBoolean("mobs.villager.clerics-farm-warts", villagerClericsFarmWarts);
         villagerClericFarmersThrowWarts = getBoolean("mobs.villager.cleric-wart-farmers-throw-warts-at-villagers", villagerClericFarmersThrowWarts);
-        villagerBypassMobGriefing = getBoolean("mobs.villager.bypass-mob-griefing", villagerBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.villager.bypass-mob-griefing", false);
+            set("mobs.villager.bypass-mob-griefing", null);
+            set("mobs.villager.mob-griefing-override", oldVal ? true : "default");
+        }
+        villagerMobGriefingOverride = getBooleanOrDefault("mobs.villager.mob-griefing-override", villagerMobGriefingOverride);
         villagerTakeDamageFromWater = getBoolean("mobs.villager.takes-damage-from-water", villagerTakeDamageFromWater);
         villagerAllowTrading = getBoolean("mobs.villager.allow-trading", villagerAllowTrading);
         villagerAlwaysDropExp = getBoolean("mobs.villager.always-drop-exp", villagerAlwaysDropExp);
@@ -3192,7 +3288,7 @@ public class PurpurWorldConfig {
     public double witherScale = 1.0D;
     public float witherHealthRegenAmount = 1.0f;
     public int witherHealthRegenDelay = 20;
-    public boolean witherBypassMobGriefing = false;
+    public Boolean witherMobGriefingOverride = null;
     public boolean witherTakeDamageFromWater = false;
     public boolean witherCanRideVehicles = false;
     public float witherExplosionRadius = 1.0F;
@@ -3216,7 +3312,12 @@ public class PurpurWorldConfig {
         witherScale = Mth.clamp(getDouble("mobs.wither.attributes.scale", witherScale), 0.0625D, 16.0D);
         witherHealthRegenAmount = (float) getDouble("mobs.wither.health-regen-amount", witherHealthRegenAmount);
         witherHealthRegenDelay = getInt("mobs.wither.health-regen-delay", witherHealthRegenDelay);
-        witherBypassMobGriefing = getBoolean("mobs.wither.bypass-mob-griefing", witherBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.wither.bypass-mob-griefing", false);
+            set("mobs.wither.bypass-mob-griefing", null);
+            set("mobs.wither.mob-griefing-override", oldVal ? true : "default");
+        }
+        witherMobGriefingOverride = getBooleanOrDefault("mobs.wither.mob-griefing-override", witherMobGriefingOverride);
         witherTakeDamageFromWater = getBoolean("mobs.wither.takes-damage-from-water", witherTakeDamageFromWater);
         witherCanRideVehicles = getBoolean("mobs.wither.can-ride-vehicles", witherCanRideVehicles);
         witherExplosionRadius = (float) getDouble("mobs.wither.explosion-radius", witherExplosionRadius);
@@ -3312,7 +3413,7 @@ public class PurpurWorldConfig {
     public double zombieJockeyChance = 0.05D;
     public boolean zombieJockeyTryExistingChickens = true;
     public boolean zombieAggressiveTowardsVillagerWhenLagging = true;
-    public boolean zombieBypassMobGriefing = false;
+    public Boolean zombieMobGriefingOverride = null;
     public boolean zombieTakeDamageFromWater = false;
     public boolean zombieAlwaysDropExp = false;
     public double zombieHeadVisibilityPercent = 0.5D;
@@ -3332,7 +3433,12 @@ public class PurpurWorldConfig {
         zombieJockeyChance = getDouble("mobs.zombie.jockey.chance", zombieJockeyChance);
         zombieJockeyTryExistingChickens = getBoolean("mobs.zombie.jockey.try-existing-chickens", zombieJockeyTryExistingChickens);
         zombieAggressiveTowardsVillagerWhenLagging = getBoolean("mobs.zombie.aggressive-towards-villager-when-lagging", zombieAggressiveTowardsVillagerWhenLagging);
-        zombieBypassMobGriefing = getBoolean("mobs.zombie.bypass-mob-griefing", zombieBypassMobGriefing);
+        if (PurpurConfig.version < 43) {
+            boolean oldVal = getBoolean("mobs.zombie.bypass-mob-griefing", false);
+            set("mobs.zombie.bypass-mob-griefing", null);
+            set("mobs.zombie.mob-griefing-override", oldVal ? true : "default");
+        }
+        zombieMobGriefingOverride = getBooleanOrDefault("mobs.zombie.mob-griefing-override", zombieMobGriefingOverride);
         zombieTakeDamageFromWater = getBoolean("mobs.zombie.takes-damage-from-water", zombieTakeDamageFromWater);
         zombieAlwaysDropExp = getBoolean("mobs.zombie.always-drop-exp", zombieAlwaysDropExp);
         zombieHeadVisibilityPercent = getDouble("mobs.zombie.head-visibility-percent", zombieHeadVisibilityPercent);
