@@ -3534,15 +3534,15 @@ public class PurpurWorldConfig {
             set("mobs.zombified_piglin.attributes.max-health", null);
             set("mobs.zombified_piglin.attributes.max_health", oldValue);
         }
-        if (PurpurConfig.version < 42) {
-            set("mobs.zombified_piglin.count-as-player-kill-when-angry", false);
-        }
         zombifiedPiglinMaxHealth = getDouble("mobs.zombified_piglin.attributes.max_health", zombifiedPiglinMaxHealth);
         zombifiedPiglinScale = Mth.clamp(getDouble("mobs.zombified_piglin.attributes.scale", zombifiedPiglinScale), 0.0625D, 16.0D);
         zombifiedPiglinSpawnReinforcements = getDouble("mobs.zombified_piglin.attributes.spawn_reinforcements", zombifiedPiglinSpawnReinforcements);
         zombifiedPiglinJockeyOnlyBaby = getBoolean("mobs.zombified_piglin.jockey.only-babies", zombifiedPiglinJockeyOnlyBaby);
         zombifiedPiglinJockeyChance = getDouble("mobs.zombified_piglin.jockey.chance", zombifiedPiglinJockeyChance);
         zombifiedPiglinJockeyTryExistingChickens = getBoolean("mobs.zombified_piglin.jockey.try-existing-chickens", zombifiedPiglinJockeyTryExistingChickens);
+        if (PurpurConfig.version < 42) {
+            set("mobs.zombified_piglin.count-as-player-kill-when-angry", false);
+        }
         zombifiedPiglinCountAsPlayerKillWhenAngry = getBoolean("mobs.zombified_piglin.count-as-player-kill-when-angry", zombifiedPiglinCountAsPlayerKillWhenAngry);
         zombifiedPiglinTakeDamageFromWater = getBoolean("mobs.zombified_piglin.takes-damage-from-water", zombifiedPiglinTakeDamageFromWater);
         zombifiedPiglinAlwaysDropExp = getBoolean("mobs.zombified_piglin.always-drop-exp", zombifiedPiglinAlwaysDropExp);
