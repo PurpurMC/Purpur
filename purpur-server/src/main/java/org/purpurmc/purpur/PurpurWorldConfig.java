@@ -3593,4 +3593,9 @@ public class PurpurWorldConfig {
         shearsCanDefuseTntChance = (float) getDouble("gameplay-mechanics.item.shears.defuse-tnt-chance", 0.00D);
         shearsCanDefuseTnt = shearsCanDefuseTntChance > 0.00F;
     }
+
+    public boolean retainProjectileOwnerOnHitIfOwnerOffline = false;
+    private void retainProjectileOwnerOnHitIfOwnerOffline() {
+        retainProjectileOwnerOnHitIfOwnerOffline = getBoolean("gameplay-mechanics.retain-projectile-owner-on-hit-if-owner-offline", true);
+    }
 }
