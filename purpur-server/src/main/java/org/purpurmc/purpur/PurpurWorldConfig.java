@@ -1328,12 +1328,14 @@ public class PurpurWorldConfig {
     public boolean boggedControllable = true;
     public double boggedMaxHealth = 16.0D;
     public double boggedScale = 1.0D;
+    public boolean boggedBurnInDaylight = true;
     private void boggedSettings() {
         boggedRidable = getBoolean("mobs.bogged.ridable", boggedRidable);
         boggedRidableInWater = getBoolean("mobs.bogged.ridable-in-water", boggedRidableInWater);
         boggedControllable = getBoolean("mobs.bogged.controllable", boggedControllable);
         boggedMaxHealth = getDouble("mobs.bogged.attributes.max_health", boggedMaxHealth);
         boggedScale = Mth.clamp(getDouble("mobs.bogged.attributes.scale", boggedScale), 0.0625D, 16.0D);
+        boggedBurnInDaylight = getBoolean("mobs.bogged.burn-in-daylight", boggedBurnInDaylight);
     }
 
     public boolean camelRidableInWater = false;
@@ -1620,6 +1622,7 @@ public class PurpurWorldConfig {
     public boolean drownedTakeDamageFromWater = false;
     public boolean drownedBreakDoors = false;
     public boolean drownedAlwaysDropExp = false;
+    public boolean drownedBurnInDaylight = true;
     private void drownedSettings() {
         drownedRidable = getBoolean("mobs.drowned.ridable", drownedRidable);
         drownedRidableInWater = getBoolean("mobs.drowned.ridable-in-water", drownedRidableInWater);
@@ -1638,6 +1641,7 @@ public class PurpurWorldConfig {
         drownedTakeDamageFromWater = getBoolean("mobs.drowned.takes-damage-from-water", drownedTakeDamageFromWater);
         drownedBreakDoors = getBoolean("mobs.drowned.can-break-doors", drownedBreakDoors);
         drownedAlwaysDropExp = getBoolean("mobs.drowned.always-drop-exp", drownedAlwaysDropExp);
+        drownedBurnInDaylight = getBoolean("mobs.drowned.burn-in-daylight", drownedBurnInDaylight);
     }
 
     public boolean elderGuardianRidable = false;
@@ -2792,6 +2796,7 @@ public class PurpurWorldConfig {
     public int skeletonFeedWitherRoses = 0;
     public String skeletonBowAccuracy = "14 - difficulty * 4";
     public Map<Integer, Float> skeletonBowAccuracyMap = new HashMap<>();
+    public boolean skeletonBurnInDaylight = true;
     private void skeletonSettings() {
         skeletonRidable = getBoolean("mobs.skeleton.ridable", skeletonRidable);
         skeletonRidableInWater = getBoolean("mobs.skeleton.ridable-in-water", skeletonRidableInWater);
@@ -2819,6 +2824,7 @@ public class PurpurWorldConfig {
             }
             skeletonBowAccuracyMap.put(i, divergence);
         }
+        skeletonBurnInDaylight = getBoolean("mobs.skeleton.burn-in-daylight", skeletonBurnInDaylight);
     }
 
     public boolean skeletonHorseRidable = false;
@@ -2989,6 +2995,7 @@ public class PurpurWorldConfig {
     public double strayScale = 1.0D;
     public boolean strayTakeDamageFromWater = false;
     public boolean strayAlwaysDropExp = false;
+    public boolean strayBurnInDaylight = true;
     private void straySettings() {
         strayRidable = getBoolean("mobs.stray.ridable", strayRidable);
         strayRidableInWater = getBoolean("mobs.stray.ridable-in-water", strayRidableInWater);
@@ -3002,6 +3009,7 @@ public class PurpurWorldConfig {
         strayScale = Mth.clamp(getDouble("mobs.stray.attributes.scale", strayScale), 0.0625D, 16.0D);
         strayTakeDamageFromWater = getBoolean("mobs.stray.takes-damage-from-water", strayTakeDamageFromWater);
         strayAlwaysDropExp = getBoolean("mobs.stray.always-drop-exp", strayAlwaysDropExp);
+        strayBurnInDaylight = getBoolean("mobs.stray.burn-in-daylight", strayBurnInDaylight);
     }
 
     public boolean striderRidable = false;
@@ -3435,6 +3443,7 @@ public class PurpurWorldConfig {
     public boolean zombieTakeDamageFromWater = false;
     public boolean zombieAlwaysDropExp = false;
     public double zombieHeadVisibilityPercent = 0.5D;
+    public boolean zombieBurnInDaylight = true;
     private void zombieSettings() {
         zombieRidable = getBoolean("mobs.zombie.ridable", zombieRidable);
         zombieRidableInWater = getBoolean("mobs.zombie.ridable-in-water", zombieRidableInWater);
@@ -3460,6 +3469,7 @@ public class PurpurWorldConfig {
         zombieTakeDamageFromWater = getBoolean("mobs.zombie.takes-damage-from-water", zombieTakeDamageFromWater);
         zombieAlwaysDropExp = getBoolean("mobs.zombie.always-drop-exp", zombieAlwaysDropExp);
         zombieHeadVisibilityPercent = getDouble("mobs.zombie.head-visibility-percent", zombieHeadVisibilityPercent);
+        zombieBurnInDaylight = getBoolean("mobs.zombie.burn-in-daylight", zombieBurnInDaylight);
     }
 
     public boolean zombieHorseRidable = false;
@@ -3509,6 +3519,7 @@ public class PurpurWorldConfig {
     public int zombieVillagerCuringTimeMax = 6000;
     public boolean zombieVillagerCureEnabled = true;
     public boolean zombieVillagerAlwaysDropExp = false;
+    public boolean zombieVillagerBurnInDaylight = true;
     private void zombieVillagerSettings() {
         zombieVillagerRidable = getBoolean("mobs.zombie_villager.ridable", zombieVillagerRidable);
         zombieVillagerRidableInWater = getBoolean("mobs.zombie_villager.ridable-in-water", zombieVillagerRidableInWater);
@@ -3529,6 +3540,7 @@ public class PurpurWorldConfig {
         zombieVillagerCuringTimeMax = getInt("mobs.zombie_villager.curing_time.max", zombieVillagerCuringTimeMax);
         zombieVillagerCureEnabled = getBoolean("mobs.zombie_villager.cure.enabled", zombieVillagerCureEnabled);
         zombieVillagerAlwaysDropExp = getBoolean("mobs.zombie_villager.always-drop-exp", zombieVillagerAlwaysDropExp);
+        zombieVillagerBurnInDaylight = getBoolean("mobs.zombie_villager.burn-in-daylight", zombieVillagerBurnInDaylight);
     }
 
     public boolean zombifiedPiglinRidable = false;
