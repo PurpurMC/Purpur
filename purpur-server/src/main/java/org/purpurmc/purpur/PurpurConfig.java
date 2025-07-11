@@ -599,6 +599,11 @@ public class PurpurConfig {
         registerMinecraftDebugCommands = getBoolean("settings.register-minecraft-debug-commands", registerMinecraftDebugCommands);
     }
 
+    public static boolean registerMinecraftDisabledCommands = false;
+    private static void registerMinecraftDisabledCommands() {
+        registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDebugCommands);
+    }
+
     public static List<String> startupCommands = new ArrayList<>();
     private static void startupCommands() {
         startupCommands.clear();
