@@ -664,6 +664,30 @@ public class PurpurWorldConfig {
             PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_lightning_rod", Map.of("into", "minecraft:exposed_lightning_rod", "drops", new HashMap<String, Double>()));
             PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_lightning_rod", Map.of("into", "minecraft:weathered_lightning_rod", "drops", new HashMap<String, Double>()));
         }
+        if (PurpurConfig.version < 45) {
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_copper_bars", Map.of("into", "minecraft:copper_bars", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_exposed_copper_bars", Map.of("into", "minecraft:exposed_copper_bars", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_weathered_copper_bars", Map.of("into", "minecraft:weathered_copper_bars", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_oxidized_copper_bars", Map.of("into", "minecraft:oxidized_copper_bars", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_copper_chain", Map.of("into", "minecraft:copper_chain", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_exposed_copper_chain", Map.of("into", "minecraft:exposed_copper_chain", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_weathered_copper_chain", Map.of("into", "minecraft:weathered_copper_chain", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_oxidized_copper_chain", Map.of("into", "minecraft:oxidized_copper_chain", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_copper_lantern", Map.of("into", "minecraft:copper_lantern", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_exposed_copper_lantern", Map.of("into", "minecraft:exposed_copper_lantern", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_weathered_copper_lantern", Map.of("into", "minecraft:weathered_copper_lantern", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.waxables.minecraft:waxed_oxidized_copper_lantern", Map.of("into", "minecraft:oxidized_copper_lantern", "drops", new HashMap<String, Double>()));
+
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:exposed_copper_bars", Map.of("into", "minecraft:copper_bars", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_copper_bars", Map.of("into", "minecraft:exposed_copper_bars", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_copper_bars", Map.of("into", "minecraft:weathered_copper_bars", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:exposed_copper_chain", Map.of("into", "minecraft:copper_chain", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_copper_chain", Map.of("into", "minecraft:exposed_copper_chain", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_copper_chain", Map.of("into", "minecraft:weathered_copper_chain", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:exposed_copper_lantern", Map.of("into", "minecraft:copper_lantern", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:weathered_copper_lantern", Map.of("into", "minecraft:exposed_copper_lantern", "drops", new HashMap<String, Double>()));
+            PurpurConfig.config.set("world-settings.default.tools.axe.weatherables.minecraft:oxidized_copper_lantern", Map.of("into", "minecraft:weathered_copper_lantern", "drops", new HashMap<String, Double>()));
+        }
         getMap("tools.axe.strippables", Map.ofEntries(
                 Map.entry("minecraft:oak_wood", Map.of("into", "minecraft:stripped_oak_wood", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:oak_log", Map.of("into", "minecraft:stripped_oak_log", "drops", new HashMap<String, Double>())),
@@ -754,7 +778,19 @@ public class PurpurWorldConfig {
                 Map.entry("minecraft:waxed_lightning_rod", Map.of("into", "minecraft:lightning_rod", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:waxed_exposed_lightning_rod", Map.of("into", "minecraft:exposed_lightning_rod", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:waxed_weathered_lightning_rod", Map.of("into", "minecraft:weathered_lightning_rod", "drops", new HashMap<String, Double>())),
-                Map.entry("minecraft:waxed_oxidized_lightning_rod", Map.of("into", "minecraft:oxidized_lightning_rod", "drops", new HashMap<String, Double>())))
+                Map.entry("minecraft:waxed_oxidized_lightning_rod", Map.of("into", "minecraft:oxidized_lightning_rod", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_copper_bars", Map.of("into", "minecraft:copper_bars", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_copper_bars", Map.of("into", "minecraft:exposed_copper_bars", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_copper_bars", Map.of("into", "minecraft:weathered_copper_bars", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_copper_bars", Map.of("into", "minecraft:oxidized_copper_bars", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_copper_chain", Map.of("into", "minecraft:copper_chain", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_copper_chain", Map.of("into", "minecraft:exposed_copper_chain", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_copper_chain", Map.of("into", "minecraft:weathered_copper_chain", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_copper_chain", Map.of("into", "minecraft:oxidized_copper_chain", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_copper_lantern", Map.of("into", "minecraft:copper_lantern", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_exposed_copper_lantern", Map.of("into", "minecraft:exposed_copper_lantern", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_weathered_copper_lantern", Map.of("into", "minecraft:weathered_copper_lantern", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:waxed_oxidized_copper_lantern", Map.of("into", "minecraft:oxidized_copper_lantern", "drops", new HashMap<String, Double>())))
         ).forEach((blockId, obj) -> {
             Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
             if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.waxables`: " + blockId); return; }
@@ -808,7 +844,16 @@ public class PurpurWorldConfig {
                 Map.entry("minecraft:oxidized_copper_golem_statue", Map.of("into", "minecraft:weathered_copper_golem_statue", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:exposed_lightning_rod", Map.of("into", "minecraft:lightning_rod", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:weathered_lightning_rod", Map.of("into", "minecraft:exposed_lightning_rod", "drops", new HashMap<String, Double>())),
-                Map.entry("minecraft:oxidized_lightning_rod", Map.of("into", "minecraft:weathered_lightning_rod", "drops", new HashMap<String, Double>())))
+                Map.entry("minecraft:oxidized_lightning_rod", Map.of("into", "minecraft:weathered_lightning_rod", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_copper_bars", Map.of("into", "minecraft:copper_bars", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_copper_bars", Map.of("into", "minecraft:exposed_copper_bars", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_copper_bars", Map.of("into", "minecraft:weathered_copper_bars", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_copper_chain", Map.of("into", "minecraft:copper_chain", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_copper_chain", Map.of("into", "minecraft:exposed_copper_chain", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_copper_chain", Map.of("into", "minecraft:weathered_copper_chain", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:exposed_copper_lantern", Map.of("into", "minecraft:copper_lantern", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:weathered_copper_lantern", Map.of("into", "minecraft:exposed_copper_lantern", "drops", new HashMap<String, Double>())),
+                Map.entry("minecraft:oxidized_copper_lantern", Map.of("into", "minecraft:weathered_copper_lantern", "drops", new HashMap<String, Double>())))
         ).forEach((blockId, obj) -> {
             Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
             if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.weatherables`: " + blockId); return; }
