@@ -4,6 +4,7 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import net.minecraft.server.MinecraftServer;
 import org.purpurmc.purpur.PurpurConfig;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -44,7 +45,7 @@ public class TPSBarTask extends BossBarTask {
         }
         tick = 0;
 
-        this.tps = Math.max(Math.min(Bukkit.getTPS()[0], 20.0D), 0.0D);
+        this.tps = Math.max(Math.min(MinecraftServer.getServer().getTPS5s(), 20.0D), 0.0D);
         this.mspt = Bukkit.getAverageTickTime();
 
         super.run();
