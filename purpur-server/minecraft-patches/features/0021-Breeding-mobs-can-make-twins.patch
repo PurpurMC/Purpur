@@ -1,0 +1,623 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: madebytwentyfive <madebytwentyfive@gmail.com>
+Date: Mon, 27 Oct 2025 02:52:19 +0100
+Subject: [PATCH] Breeding mobs can make twins
+
+
+diff --git a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
+index 0fa52865c293e74c9e5f3d1fd93a0e24435a9055..4f469cc47e74d075e94e0d8a0244d1e0ae7c7b9a 100644
+--- a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
++++ b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
+@@ -106,6 +106,10 @@ public class VillagerMakeLove extends Behavior<Villager> {
+     }
+ 
+     private Optional<Villager> breed(ServerLevel level, Villager parent, Villager partner) {
++        return breed(level, parent, partner, false); // Purpur - Breeding mobs can make twins
++    }
++
++    private Optional<Villager> breed(ServerLevel level, Villager parent, Villager partner, boolean isTwin) { // Purpur - Breeding mobs can make twins
+         Villager breedOffspring = parent.getBreedOffspring(level, partner);
+         if (breedOffspring == null) {
+             return Optional.empty();
+@@ -124,6 +128,11 @@ public class VillagerMakeLove extends Behavior<Villager> {
+             level.addFreshEntityWithPassengers(breedOffspring, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.BREEDING);
+             // CraftBukkit end - call EntityBreedEvent
+             level.broadcastEntityEvent(breedOffspring, (byte)12);
++            // Purpur start - Breeding mobs can make twins
++            if (!isTwin && level.purpurConfig.villagerBreedingTwinChance > 0.0D && level.random.nextDouble() <= level.purpurConfig.villagerBreedingTwinChance) {
++                breed(level, parent, partner, true);
++            }
++            // Purpur end - Breeding mobs can make twins
+             return Optional.of(breedOffspring);
+         }
+     }
+diff --git a/net/minecraft/world/entity/animal/Animal.java b/net/minecraft/world/entity/animal/Animal.java
+index 643d40772770f0ebed0170bfed29e739f521d46d..73cd9578c226a4d7abc1a2df16555d0aa1140a42 100644
+--- a/net/minecraft/world/entity/animal/Animal.java
++++ b/net/minecraft/world/entity/animal/Animal.java
+@@ -42,6 +42,7 @@ public abstract class Animal extends AgeableMob {
+     public EntityReference<ServerPlayer> loveCause;
+     public @Nullable ItemStack breedItem; // CraftBukkit - Add breedItem variable
+     public abstract int getPurpurBreedTime(); // Purpur - Make entity breeding times configurable
++    public abstract boolean canMakeTwin(); // Purpur - Breeding mobs can make twins
+ 
+     protected Animal(EntityType<? extends Animal> type, Level level) {
+         super(type, level);
+@@ -222,6 +223,10 @@ public abstract class Animal extends AgeableMob {
+     }
+ 
+     public void spawnChildFromBreeding(ServerLevel level, Animal partner) {
++        spawnChildFromBreeding(level, partner, false); // Purpur - Breeding mobs can make twins
++    }
++
++    public void spawnChildFromBreeding(ServerLevel level, Animal partner, boolean isTwin) { // Purpur - Breeding mobs can make twins
+         AgeableMob breedOffspring = this.getBreedOffspring(level, partner);
+         if (breedOffspring != null) {
+             //breedOffspring.setBaby(true); // Purpur - Add adjustable breeding cooldown to config - moved down
+@@ -250,6 +255,8 @@ public abstract class Animal extends AgeableMob {
+             this.finalizeSpawnChildFromBreeding(level, partner, breedOffspring, experience);
+             level.addFreshEntityWithPassengers(breedOffspring, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.BREEDING);
+             // CraftBukkit end - Call EntityBreedEvent
++
++            if (!isTwin && canMakeTwin()) spawnChildFromBreeding(level, partner, true); // Purpur - Breeding mobs can make twins
+         }
+     }
+ 
+diff --git a/net/minecraft/world/entity/animal/Bee.java b/net/minecraft/world/entity/animal/Bee.java
+index 968ec5a7188cc4e4a60956e12e44c4b746cf78d1..13af721d78f472f8d93171c0112d765ee2778697 100644
+--- a/net/minecraft/world/entity/animal/Bee.java
++++ b/net/minecraft/world/entity/animal/Bee.java
+@@ -502,6 +502,13 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.beeBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.beeBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     public int getRemainingPersistentAngerTime() {
+         return this.entityData.get(DATA_REMAINING_ANGER_TIME);
+diff --git a/net/minecraft/world/entity/animal/Cat.java b/net/minecraft/world/entity/animal/Cat.java
+index aff91b88efcb2e089d5d0faebb4fc8cb8a48accd..bd5a9c0a1c8c59bc0675ec113b4f5f4ccaef4e43 100644
+--- a/net/minecraft/world/entity/animal/Cat.java
++++ b/net/minecraft/world/entity/animal/Cat.java
+@@ -146,6 +146,13 @@ public class Cat extends TamableAnimal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.catBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.catBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void registerGoals() {
+         this.temptGoal = new Cat.CatTemptGoal(this, 0.6, stack -> stack.is(ItemTags.CAT_FOOD), true);
+diff --git a/net/minecraft/world/entity/animal/Chicken.java b/net/minecraft/world/entity/animal/Chicken.java
+index c36d35bcef9eee3da3371fc3c06f3fca124c3d80..785c861fc4a004ef189a15c2aaa8b19a48f9ec7b 100644
+--- a/net/minecraft/world/entity/animal/Chicken.java
++++ b/net/minecraft/world/entity/animal/Chicken.java
+@@ -123,6 +123,13 @@ public class Chicken extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.chickenBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.chickenBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(0, new FloatGoal(this));
+diff --git a/net/minecraft/world/entity/animal/Cow.java b/net/minecraft/world/entity/animal/Cow.java
+index c3d225f555b44d73196a3c34ca0b3a0c19434be5..736e6dc46c70af7940ffa9ab0df1c444db40fce3 100644
+--- a/net/minecraft/world/entity/animal/Cow.java
++++ b/net/minecraft/world/entity/animal/Cow.java
+@@ -78,6 +78,13 @@ public class Cow extends AbstractCow {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.cowBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.cowBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void registerGoals() {
+         super.registerGoals();
+diff --git a/net/minecraft/world/entity/animal/Fox.java b/net/minecraft/world/entity/animal/Fox.java
+index a78af2629a9df93ea17b21c05f3d688692250920..b0005b48449fcfe47b8002f8449e97ad3ab6a8bf 100644
+--- a/net/minecraft/world/entity/animal/Fox.java
++++ b/net/minecraft/world/entity/animal/Fox.java
+@@ -209,6 +209,13 @@ public class Fox extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.foxBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.foxBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void defineSynchedData(SynchedEntityData.Builder builder) {
+         super.defineSynchedData(builder);
+diff --git a/net/minecraft/world/entity/animal/HappyGhast.java b/net/minecraft/world/entity/animal/HappyGhast.java
+index e85f17f362548f13a414a41f711900add788b2f7..5549162c477a48a9c315ed976f9429eee2259b30 100644
+--- a/net/minecraft/world/entity/animal/HappyGhast.java
++++ b/net/minecraft/world/entity/animal/HappyGhast.java
+@@ -166,6 +166,13 @@ public class HappyGhast extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return false;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void ageBoundaryReached() {
+         if (this.isBaby()) {
+diff --git a/net/minecraft/world/entity/animal/MushroomCow.java b/net/minecraft/world/entity/animal/MushroomCow.java
+index 3b18ea446cc7e19295a9fa37b74c3a02be421e55..9032d1a9114f11b3dce5a0324e70139059f9d90a 100644
+--- a/net/minecraft/world/entity/animal/MushroomCow.java
++++ b/net/minecraft/world/entity/animal/MushroomCow.java
+@@ -108,6 +108,13 @@ public class MushroomCow extends AbstractCow implements Shearable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.mooshroomBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.mooshroomBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     public float getWalkTargetValue(BlockPos pos, LevelReader level) {
+         return level.getBlockState(pos.below()).is(Blocks.MYCELIUM) ? 10.0F : level.getPathfindingCostFromLightLevels(pos);
+diff --git a/net/minecraft/world/entity/animal/Ocelot.java b/net/minecraft/world/entity/animal/Ocelot.java
+index 72cbb5bf9023272f6e169a2956d2035706dd8a57..6168aea37565c2869bd00800c51aa4b41fc73fef 100644
+--- a/net/minecraft/world/entity/animal/Ocelot.java
++++ b/net/minecraft/world/entity/animal/Ocelot.java
+@@ -110,6 +110,13 @@ public class Ocelot extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.ocelotBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.ocelotBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     public boolean isTrusting() {
+         return this.entityData.get(DATA_TRUSTING);
+     }
+diff --git a/net/minecraft/world/entity/animal/Panda.java b/net/minecraft/world/entity/animal/Panda.java
+index c97ec93732d10197ee978477dc07c097d45bbe15..6352319d3839a4e878aafa2c211071b86ce514de 100644
+--- a/net/minecraft/world/entity/animal/Panda.java
++++ b/net/minecraft/world/entity/animal/Panda.java
+@@ -163,6 +163,13 @@ public class Panda extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.pandaBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.pandaBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected boolean canDispenserEquipIntoSlot(EquipmentSlot slot) {
+         return slot == EquipmentSlot.MAINHAND && this.canPickUpLoot();
+diff --git a/net/minecraft/world/entity/animal/Parrot.java b/net/minecraft/world/entity/animal/Parrot.java
+index 17d3814887adbc62d7a2f6eccc6e05e61b30bb29..ca22c486601aca804fb8d019fe53858e5d22c82d 100644
+--- a/net/minecraft/world/entity/animal/Parrot.java
++++ b/net/minecraft/world/entity/animal/Parrot.java
+@@ -222,6 +222,13 @@ public class Parrot extends ShoulderRidingEntity implements FlyingAnimal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return false;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Nullable
+     @Override
+     public SpawnGroupData finalizeSpawn(
+diff --git a/net/minecraft/world/entity/animal/Pig.java b/net/minecraft/world/entity/animal/Pig.java
+index 2b9342497a408248f24682f547d93125ce268d86..1bddc64ddf93c5eb96b419de486cda1635c00950 100644
+--- a/net/minecraft/world/entity/animal/Pig.java
++++ b/net/minecraft/world/entity/animal/Pig.java
+@@ -112,6 +112,13 @@ public class Pig extends Animal implements ItemSteerable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.pigBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.pigBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(0, new FloatGoal(this));
+diff --git a/net/minecraft/world/entity/animal/PolarBear.java b/net/minecraft/world/entity/animal/PolarBear.java
+index 9ac8beb6075502e3b18064429cb71c5d5b1d8831..2128c65b3023acd8243ccaa6abe8ad0c9a83d4fa 100644
+--- a/net/minecraft/world/entity/animal/PolarBear.java
++++ b/net/minecraft/world/entity/animal/PolarBear.java
+@@ -146,6 +146,13 @@ public class PolarBear extends Animal implements NeutralMob {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.polarBearBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.polarBearBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Nullable
+     @Override
+     public AgeableMob getBreedOffspring(ServerLevel level, AgeableMob partner) {
+diff --git a/net/minecraft/world/entity/animal/Rabbit.java b/net/minecraft/world/entity/animal/Rabbit.java
+index f91e63d9bd382bf2ef76766def08342a91eae29c..a176e3ba86b1ce84f22bcd361a9d9260ae2fb8ae 100644
+--- a/net/minecraft/world/entity/animal/Rabbit.java
++++ b/net/minecraft/world/entity/animal/Rabbit.java
+@@ -174,6 +174,13 @@ public class Rabbit extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.rabbitBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.rabbitBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     public void registerGoals() {
+         this.goalSelector.addGoal(1, new FloatGoal(this));
+diff --git a/net/minecraft/world/entity/animal/Turtle.java b/net/minecraft/world/entity/animal/Turtle.java
+index 22401f6b05ab371568f76eb64af28bd762c21ce8..404046f62ebbe7d4ec187f0f8dc611800c769196 100644
+--- a/net/minecraft/world/entity/animal/Turtle.java
++++ b/net/minecraft/world/entity/animal/Turtle.java
+@@ -132,6 +132,13 @@ public class Turtle extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.turtleBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.turtleBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     public void setHomePos(BlockPos homePos) {
+         this.homePos = homePos;
+     }
+diff --git a/net/minecraft/world/entity/animal/armadillo/Armadillo.java b/net/minecraft/world/entity/animal/armadillo/Armadillo.java
+index cee8103cf9406600930f34b4801748db0e2fb8ed..679c8e3fbb8de158f05b7a6edd63cbe206ec3f84 100644
+--- a/net/minecraft/world/entity/animal/armadillo/Armadillo.java
++++ b/net/minecraft/world/entity/animal/armadillo/Armadillo.java
+@@ -114,6 +114,13 @@ public class Armadillo extends Animal {
+     }
+     // Purpur end - Make entity breeding times configurable
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.armadilloBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.armadilloBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void defineSynchedData(SynchedEntityData.Builder builder) {
+         super.defineSynchedData(builder);
+diff --git a/net/minecraft/world/entity/animal/axolotl/Axolotl.java b/net/minecraft/world/entity/animal/axolotl/Axolotl.java
+index 3cc8ee115e889ced4457596b9c5fce438157e980..7656b3feb2a68c1b0759aa301e5c1643ac845993 100644
+--- a/net/minecraft/world/entity/animal/axolotl/Axolotl.java
++++ b/net/minecraft/world/entity/animal/axolotl/Axolotl.java
+@@ -167,6 +167,13 @@ public class Axolotl extends Animal implements Bucketable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.axolotlBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.axolotlBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     public float getWalkTargetValue(BlockPos pos, LevelReader level) {
+         return 0.0F;
+diff --git a/net/minecraft/world/entity/animal/camel/Camel.java b/net/minecraft/world/entity/animal/camel/Camel.java
+index cc71c575a8fb62c41198c6e1f27bd0e88380f5bc..c007347b3710ad617a04813f2d5ac059c3d4fc46 100644
+--- a/net/minecraft/world/entity/animal/camel/Camel.java
++++ b/net/minecraft/world/entity/animal/camel/Camel.java
+@@ -104,6 +104,13 @@ public class Camel extends AbstractHorse {
+     }
+     // Purpur end - Make entity breeding times configurable
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.camelBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.camelBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void addAdditionalSaveData(ValueOutput output) {
+         super.addAdditionalSaveData(output);
+diff --git a/net/minecraft/world/entity/animal/frog/Frog.java b/net/minecraft/world/entity/animal/frog/Frog.java
+index 78863bd593acaa46f33a49fadbd0cdb025074c11..0acd32e82a7bd94d30afb28a9791dfda1a4166fd 100644
+--- a/net/minecraft/world/entity/animal/frog/Frog.java
++++ b/net/minecraft/world/entity/animal/frog/Frog.java
+@@ -171,6 +171,13 @@ public class Frog extends Animal {
+     }
+     // Purpur end - Make entity breeding times configurable
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return false;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected Brain.Provider<Frog> brainProvider() {
+         return Brain.provider(MEMORY_TYPES, SENSOR_TYPES);
+diff --git a/net/minecraft/world/entity/animal/goat/Goat.java b/net/minecraft/world/entity/animal/goat/Goat.java
+index 6b6461a61a1738d64220f571b8cf7b46605327c0..fe6b584f04f1fdf56e2771f7c638166731f7ef5d 100644
+--- a/net/minecraft/world/entity/animal/goat/Goat.java
++++ b/net/minecraft/world/entity/animal/goat/Goat.java
+@@ -152,6 +152,13 @@ public class Goat extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.goatBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.goatBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected Brain.Provider<Goat> brainProvider() {
+         return Brain.provider(MEMORY_TYPES, SENSOR_TYPES);
+diff --git a/net/minecraft/world/entity/animal/horse/Donkey.java b/net/minecraft/world/entity/animal/horse/Donkey.java
+index 2e44d50b3a8b3e69602f96d45474d823403547c8..e32f8f44cf884391b1c7205069ead21cf82eb585 100644
+--- a/net/minecraft/world/entity/animal/horse/Donkey.java
++++ b/net/minecraft/world/entity/animal/horse/Donkey.java
+@@ -61,6 +61,13 @@ public class Donkey extends AbstractChestedHorse {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.donkeyBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.donkeyBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     public SoundEvent getAmbientSound() {
+         return SoundEvents.DONKEY_AMBIENT;
+diff --git a/net/minecraft/world/entity/animal/horse/Horse.java b/net/minecraft/world/entity/animal/horse/Horse.java
+index e437557688c9726222840c8a2dc94a2b40380b53..c89b9bc0d8e9270ddf933b085ed71226eb674b23 100644
+--- a/net/minecraft/world/entity/animal/horse/Horse.java
++++ b/net/minecraft/world/entity/animal/horse/Horse.java
+@@ -92,6 +92,13 @@ public class Horse extends AbstractHorse {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.horseBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.horseBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void randomizeAttributes(RandomSource random) {
+         this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(generateMaxHealth(random::nextInt));
+diff --git a/net/minecraft/world/entity/animal/horse/Llama.java b/net/minecraft/world/entity/animal/horse/Llama.java
+index cd231252ad71334578943325d5f14982af778849..80a0788493dedb23cf61226af95748f1f0fb4271 100644
+--- a/net/minecraft/world/entity/animal/horse/Llama.java
++++ b/net/minecraft/world/entity/animal/horse/Llama.java
+@@ -175,6 +175,13 @@ public class Llama extends AbstractChestedHorse implements RangedAttackMob {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.llamaBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.llamaBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     public boolean isTraderLlama() {
+         return false;
+     }
+diff --git a/net/minecraft/world/entity/animal/horse/Mule.java b/net/minecraft/world/entity/animal/horse/Mule.java
+index b7ff4f9838581479e773b03922f57f529b1e2ee9..8e6313d8df57ae836d002f69d6cf5fa84c2b3a03 100644
+--- a/net/minecraft/world/entity/animal/horse/Mule.java
++++ b/net/minecraft/world/entity/animal/horse/Mule.java
+@@ -60,6 +60,13 @@ public class Mule extends AbstractChestedHorse {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.muleBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.muleBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     public SoundEvent getAmbientSound() {
+         return SoundEvents.MULE_AMBIENT;
+diff --git a/net/minecraft/world/entity/animal/horse/SkeletonHorse.java b/net/minecraft/world/entity/animal/horse/SkeletonHorse.java
+index 986746435e837dd1de8ee86f7dcd796ef095d73b..a0d55e9dba0194e242e78ee1b66a08a819629cee 100644
+--- a/net/minecraft/world/entity/animal/horse/SkeletonHorse.java
++++ b/net/minecraft/world/entity/animal/horse/SkeletonHorse.java
+@@ -87,6 +87,13 @@ public class SkeletonHorse extends AbstractHorse {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return false;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     public static AttributeSupplier.Builder createAttributes() {
+         return createBaseHorseAttributes().add(Attributes.MAX_HEALTH, 15.0).add(Attributes.MOVEMENT_SPEED, 0.2F);
+     }
+diff --git a/net/minecraft/world/entity/animal/horse/TraderLlama.java b/net/minecraft/world/entity/animal/horse/TraderLlama.java
+index be8b7e4f449183ce20138ffbdd0c856859455ce8..b0a23cc7794ba4b21e5b2f7da631bd32e7261d2d 100644
+--- a/net/minecraft/world/entity/animal/horse/TraderLlama.java
++++ b/net/minecraft/world/entity/animal/horse/TraderLlama.java
+@@ -91,6 +91,13 @@ public class TraderLlama extends Llama {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.traderLlamaBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.traderLlamaBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     public boolean isTraderLlama() {
+         return true;
+diff --git a/net/minecraft/world/entity/animal/horse/ZombieHorse.java b/net/minecraft/world/entity/animal/horse/ZombieHorse.java
+index 384bb954ea633c8e8ac239539925948b9dde6168..823d367a7ed0e789180501ca384c143140e8c317 100644
+--- a/net/minecraft/world/entity/animal/horse/ZombieHorse.java
++++ b/net/minecraft/world/entity/animal/horse/ZombieHorse.java
+@@ -83,6 +83,13 @@ public class ZombieHorse extends AbstractHorse {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return false;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     public static AttributeSupplier.Builder createAttributes() {
+         return createBaseHorseAttributes().add(Attributes.MAX_HEALTH, 15.0).add(Attributes.MOVEMENT_SPEED, 0.2F);
+     }
+diff --git a/net/minecraft/world/entity/animal/sheep/Sheep.java b/net/minecraft/world/entity/animal/sheep/Sheep.java
+index 21d66dd46650afae2091e236dfec760c096c34f8..847ae28d00ff2b28dbad69c1cf8c23a153de1b8a 100644
+--- a/net/minecraft/world/entity/animal/sheep/Sheep.java
++++ b/net/minecraft/world/entity/animal/sheep/Sheep.java
+@@ -108,6 +108,13 @@ public class Sheep extends Animal implements Shearable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.sheepBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.sheepBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void registerGoals() {
+         this.eatBlockGoal = new EatBlockGoal(this);
+diff --git a/net/minecraft/world/entity/animal/sniffer/Sniffer.java b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
+index d7e61ce6e2b77817f4eca913f2c319096e7f244f..55e7b9d92b35ca4bf0aaeb3e3ffc548822f5a43f 100644
+--- a/net/minecraft/world/entity/animal/sniffer/Sniffer.java
++++ b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
+@@ -120,6 +120,13 @@ public class Sniffer extends Animal {
+     }
+     // Purpur end - Make entity breeding times configurable
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return false;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void defineSynchedData(SynchedEntityData.Builder builder) {
+         super.defineSynchedData(builder);
+diff --git a/net/minecraft/world/entity/animal/wolf/Wolf.java b/net/minecraft/world/entity/animal/wolf/Wolf.java
+index 353507a7483afd6428fb10c461ff5c4162a97704..b096590c9e712ad7252c900b527974e8dbaf81b1 100644
+--- a/net/minecraft/world/entity/animal/wolf/Wolf.java
++++ b/net/minecraft/world/entity/animal/wolf/Wolf.java
+@@ -237,6 +237,13 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.wolfBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.wolfBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(1, new FloatGoal(this));
+diff --git a/net/minecraft/world/entity/monster/Strider.java b/net/minecraft/world/entity/monster/Strider.java
+index da7644dd2b9e86ec8947250ff998fb554e881161..5141839b6705b4cb6bab375282b1e73dd853c4db 100644
+--- a/net/minecraft/world/entity/monster/Strider.java
++++ b/net/minecraft/world/entity/monster/Strider.java
+@@ -131,6 +131,13 @@ public class Strider extends Animal implements ItemSteerable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.striderBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.striderBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     public static boolean checkStriderSpawnRules(
+         EntityType<Strider> entityType, LevelAccessor level, EntitySpawnReason spawnReason, BlockPos pos, RandomSource random
+     ) {
+diff --git a/net/minecraft/world/entity/monster/hoglin/Hoglin.java b/net/minecraft/world/entity/monster/hoglin/Hoglin.java
+index 4dbfee2698fbd63c0832440265b6128aee5380d8..41f0c969b97cd7d8893429678c98cca246ac773e 100644
+--- a/net/minecraft/world/entity/monster/hoglin/Hoglin.java
++++ b/net/minecraft/world/entity/monster/hoglin/Hoglin.java
+@@ -141,6 +141,13 @@ public class Hoglin extends Animal implements Enemy, HoglinBase {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breeding mobs can make twins
++    @Override
++    public boolean canMakeTwin() {
++        return this.level().purpurConfig.hoglinBreedingTwinChance > 0.0D && random.nextDouble() <= this.level().purpurConfig.hoglinBreedingTwinChance;
++    }
++    // Purpur end - Breeding mobs can make twins
++
+     @VisibleForTesting
+     public void setTimeInOverworld(int timeInOverworld) {
+         this.timeInOverworld = timeInOverworld;
