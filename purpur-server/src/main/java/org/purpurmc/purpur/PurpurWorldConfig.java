@@ -2809,6 +2809,7 @@ public class PurpurWorldConfig {
     public Boolean sheepMobGriefingOverride = null;
     public boolean sheepTakeDamageFromWater = false;
     public boolean sheepAlwaysDropExp = false;
+    public double sheepNaturalJeb = 0.0D;
     private void sheepSettings() {
         sheepRidable = getBoolean("mobs.sheep.ridable", sheepRidable);
         sheepRidableInWater = getBoolean("mobs.sheep.ridable-in-water", sheepRidableInWater);
@@ -2829,6 +2830,7 @@ public class PurpurWorldConfig {
         sheepMobGriefingOverride = getBooleanOrDefault("mobs.sheep.mob-griefing-override", sheepMobGriefingOverride);
         sheepTakeDamageFromWater = getBoolean("mobs.sheep.takes-damage-from-water", sheepTakeDamageFromWater);
         sheepAlwaysDropExp = getBoolean("mobs.sheep.always-drop-exp", sheepAlwaysDropExp);
+        sheepNaturalJeb = getDouble("mobs.sheep.spawn-jeb-chance", sheepNaturalJeb);
     }
 
     public boolean shulkerRidable = false;
