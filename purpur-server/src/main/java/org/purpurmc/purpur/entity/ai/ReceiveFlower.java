@@ -4,13 +4,16 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityReference;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.animal.IronGolem;
+import net.minecraft.world.entity.animal.golem.IronGolem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 
 import java.util.EnumSet;
 import java.util.UUID;
+import org.jetbrains.annotations.NotNull;
 
 public class ReceiveFlower extends Goal {
     private final IronGolem irongolem;
@@ -30,11 +33,12 @@ public class ReceiveFlower extends Goal {
         if (!this.irongolem.isAngry()) {
             return false;
         }
-        UUID uuid = this.irongolem.getPersistentAngerTarget();
-        if (uuid == null) {
+        EntityReference<LivingEntity> persistentAngerTarget = this.irongolem.getPersistentAngerTarget();
+        if (persistentAngerTarget == null) {
             return false;
         }
-        Entity target = ((ServerLevel) this.irongolem.level()).getEntity(uuid);
+
+        LivingEntity target = EntityReference.getLivingEntity(persistentAngerTarget, this.irongolem.level());
         if (!(target instanceof ServerPlayer player)) {
             return false;
         }

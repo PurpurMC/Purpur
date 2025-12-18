@@ -1,6 +1,14 @@
 --- a/net/minecraft/world/level/block/SpawnerBlock.java
 +++ b/net/minecraft/world/level/block/SpawnerBlock.java
-@@ -43,6 +_,57 @@
+@@ -14,6 +_,7 @@
+ import org.jspecify.annotations.Nullable;
+ 
+ public class SpawnerBlock extends BaseEntityBlock {
++    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+     public static final MapCodec<SpawnerBlock> CODEC = simpleCodec(SpawnerBlock::new);
+ 
+     @Override
+@@ -37,6 +_,62 @@
          );
      }
  
@@ -13,8 +21,13 @@
 +            net.minecraft.world.level.SpawnData nextSpawnData = blockEntity instanceof SpawnerBlockEntity spawnerBlock ? spawnerBlock.getSpawner().nextSpawnData : null;
 +            java.util.Optional<net.minecraft.world.entity.EntityType<?>> type = java.util.Optional.empty();
 +            if (nextSpawnData != null) {
-+                type = net.minecraft.world.entity.EntityType.by(nextSpawnData.getEntityToSpawn());
-+                net.minecraft.world.level.SpawnData.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE, nextSpawnData).result().ifPresent(tag -> item.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.EMPTY.update(compoundTag -> compoundTag.put("Purpur.SpawnData", tag))));
++                try (net.minecraft.util.ProblemReporter.ScopedCollector scopedCollector = new net.minecraft.util.ProblemReporter.ScopedCollector(blockEntity.problemPath(), LOGGER)) {
++                    net.minecraft.world.level.storage.ValueInput valueInput = net.minecraft.world.level.storage.TagValueInput.create(scopedCollector, player.level().registryAccess(), nextSpawnData.entityToSpawn());
++                    type = net.minecraft.world.entity.EntityType.by(valueInput);
++                }
++                net.minecraft.nbt.CompoundTag spawnDataTag = new net.minecraft.nbt.CompoundTag();
++                spawnDataTag.storeNullable("SpawnData", net.minecraft.world.level.SpawnData.CODEC, nextSpawnData);
++                item.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.EMPTY.update(compoundTag -> compoundTag.put("Purpur.SpawnData", spawnDataTag)));
 +            }
 +
 +            if (type.isPresent()) {
@@ -29,10 +42,10 @@
 +                    item.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, io.papermc.paper.adventure.PaperAdventure.asVanilla(displayName));
 +                }
 +
-+                List<String> lore = level.purpurConfig.silkTouchSpawnerLore;
++                java.util.List<String> lore = level.purpurConfig.silkTouchSpawnerLore;
 +                if (lore != null && !lore.isEmpty()) {
 +
-+                    List<Component> loreComponentList = new java.util.ArrayList<>();
++                    java.util.List<net.minecraft.network.chat.Component> loreComponentList = new java.util.ArrayList<>();
 +                    for (String line : lore) {
 +                        net.kyori.adventure.text.Component lineComponent = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(line, net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.component("mob", mobName));
 +                        if (line.startsWith("<reset>")) {
@@ -43,7 +56,7 @@
 +
 +                    item.set(net.minecraft.core.component.DataComponents.LORE, new net.minecraft.world.item.component.ItemLore(loreComponentList, loreComponentList));
 +                }
-+                item.set(net.minecraft.core.component.DataComponents.HIDE_ADDITIONAL_TOOLTIP, net.minecraft.util.Unit.INSTANCE);
++                item.set(net.minecraft.core.component.DataComponents.TOOLTIP_DISPLAY, net.minecraft.world.item.component.TooltipDisplay.DEFAULT.withHidden(net.minecraft.core.component.DataComponents.BLOCK_ENTITY_DATA, true));
 +            }
 +            popResource(level, pos, item);
 +        }
@@ -58,7 +71,7 @@
      @Override
      protected void spawnAfterBreak(BlockState state, ServerLevel level, BlockPos pos, ItemStack stack, boolean dropExperience) {
          super.spawnAfterBreak(state, level, pos, stack, dropExperience);
-@@ -51,6 +_,7 @@
+@@ -45,6 +_,7 @@
  
      @Override
      public int getExpDrop(BlockState state, ServerLevel level, BlockPos pos, ItemStack stack, boolean dropExperience) {

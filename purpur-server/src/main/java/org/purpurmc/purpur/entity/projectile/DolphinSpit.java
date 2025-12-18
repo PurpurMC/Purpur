@@ -6,7 +6,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.animal.Dolphin;
+import net.minecraft.world.entity.animal.dolphin.Dolphin;
 import net.minecraft.world.entity.projectile.LlamaSpit;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.Level;
@@ -57,7 +57,7 @@ public class DolphinSpit extends LlamaSpit {
         Vec3 motDouble = mot.scale(2.0);
         for (int i = 0; i < 5; i++) {
             ((ServerLevel) level()).sendParticlesSource(null, ParticleTypes.BUBBLE,
-                    false, true,
+                    true, false,
                     getX() + random.nextFloat() / 2 - 0.25F,
                     getY() + random.nextFloat() / 2 - 0.25F,
                     getZ() + random.nextFloat() / 2 - 0.25F,

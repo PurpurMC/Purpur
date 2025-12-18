@@ -1,0 +1,73 @@
+--- a/net/minecraft/world/entity/animal/bee/Bee.java
++++ b/net/minecraft/world/entity/animal/bee/Bee.java
+@@ -171,7 +_,7 @@
+         // Paper end - Fix MC-167279
+         this.lookControl = new Bee.BeeLookControl(this);
+         this.setPathfindingMalus(PathType.DANGER_FIRE, -1.0F);
+-        this.setPathfindingMalus(PathType.WATER, -1.0F);
++        if (this.level().purpurConfig.beeCanInstantlyStartDrowning) this.setPathfindingMalus(PathType.WATER, -1.0F); // Purpur - bee can instantly start drowning in water option
+         this.setPathfindingMalus(PathType.WATER_BORDER, 16.0F);
+         this.setPathfindingMalus(PathType.COCOA, -1.0F);
+         this.setPathfindingMalus(PathType.FENCE, -1.0F);
+@@ -360,13 +_,19 @@
+         if (this.stayOutOfHiveCountdown <= 0 && !this.beePollinateGoal.isPollinating() && !this.hasStung() && this.getTarget() == null) {
+             boolean flag = this.hasNectar()
+                 || this.isTiredOfLookingForNectar()
+-                || this.level().environmentAttributes().getValue(EnvironmentAttributes.BEES_STAY_IN_HIVE, this.position());
++                || this.level().environmentAttributes().getValue(EnvironmentAttributes.BEES_STAY_IN_HIVE, this.position()) || isNightOrRaining(this.level()); // Purpur - Bee can work when raining or at night
+             return flag && !this.isHiveNearFire();
+         } else {
+             return false;
+         }
+     }
+ 
++    // Purpur start - Bee can work when raining or at night
++    public static boolean isNightOrRaining(Level level) {
++        return level.dimensionType().hasSkyLight() && (level.isDarkOutside() && !level.purpurConfig.beeCanWorkAtNight || level.isRaining() && !level.purpurConfig.beeCanWorkInRain); // Purpur - Bee can work when raining or at night
++    }
++    // Purpur end - Bee can work when raining or at night
++
+     public void setStayOutOfHiveCountdown(int stayOutOfHiveCountdown) {
+         this.stayOutOfHiveCountdown = stayOutOfHiveCountdown;
+     }
+@@ -387,7 +_,7 @@
+     @Override
+     protected void customServerAiStep(ServerLevel level) {
+         boolean hasStung = this.hasStung();
+-        if (this.isInWater()) {
++        if (this.level().purpurConfig.beeCanInstantlyStartDrowning && this.isInWater()) { // Purpur - bee can instantly start drowning in water option
+             this.underWaterTicks++;
+         } else {
+             this.underWaterTicks = 0;
+@@ -397,6 +_,7 @@
+             this.hurtServer(level, this.damageSources().drown(), 1.0F);
+         }
+ 
++        if (hasStung && !this.level().purpurConfig.beeDiesAfterSting) setHasStung(false); else // Purpur - Stop bees from dying after stinging
+         if (hasStung) {
+             this.timeSinceSting++;
+             if (this.timeSinceSting % 5 == 0 && this.random.nextInt(Mth.clamp(1200 - this.timeSinceSting, 1, 1200)) == 0) {
+@@ -1130,6 +_,7 @@
+                     Bee.this.savedFlowerPos = optional.get();
+                     Bee.this.navigation
+                         .moveTo(Bee.this.savedFlowerPos.getX() + 0.5, Bee.this.savedFlowerPos.getY() + 0.5, Bee.this.savedFlowerPos.getZ() + 0.5, 1.2F);
++                    new org.purpurmc.purpur.event.entity.BeeFoundFlowerEvent((org.bukkit.entity.Bee) Bee.this.getBukkitEntity(), org.bukkit.craftbukkit.util.CraftLocation.toBukkit(Bee.this.savedFlowerPos, Bee.this.level())).callEvent(); // Purpur - Bee API
+                     return true;
+                 } else {
+                     Bee.this.remainingCooldownBeforeLocatingNewFlower = Mth.nextInt(Bee.this.random, 20, 60);
+@@ -1176,6 +_,7 @@
+             this.pollinating = false;
+             Bee.this.navigation.stop();
+             Bee.this.remainingCooldownBeforeLocatingNewFlower = 200;
++            new org.purpurmc.purpur.event.entity.BeeStopPollinatingEvent((org.bukkit.entity.Bee) Bee.this.getBukkitEntity(), Bee.this.savedFlowerPos == null ? null : org.bukkit.craftbukkit.util.CraftLocation.toBukkit(Bee.this.savedFlowerPos, Bee.this.level()), Bee.this.hasNectar()).callEvent(); // Purpur - Bee API
+         }
+ 
+         @Override
+@@ -1222,6 +_,7 @@
+                                 this.setWantedPos();
+                             }
+ 
++                            if (this.successfulPollinatingTicks == 0) new org.purpurmc.purpur.event.entity.BeeStartedPollinatingEvent((org.bukkit.entity.Bee) Bee.this.getBukkitEntity(), org.bukkit.craftbukkit.util.CraftLocation.toBukkit(Bee.this.savedFlowerPos, Bee.this.level())).callEvent(); // Purpur - Bee API
+                             this.successfulPollinatingTicks++;
+                             if (Bee.this.random.nextFloat() < 0.05F && this.successfulPollinatingTicks > this.lastSoundPlayedTick + 60) {
+                                 this.lastSoundPlayedTick = this.successfulPollinatingTicks;

@@ -1,28 +1,26 @@
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -136,7 +_,7 @@
+@@ -153,6 +_,7 @@
  import org.slf4j.Logger;
  
- public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess, ScoreHolder, ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity {  // Paper - rewrite chunk system // Paper - optimise entity tracker
--
+ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Nameable, ItemOwner, SlotProvider, EntityAccess, ScoreHolder, DataComponentGetter, ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity { // Paper - rewrite chunk system // Paper - optimise entity tracker
 +    public static javax.script.ScriptEngine scriptEngine = new javax.script.ScriptEngineManager().getEngineByName("rhino"); // Purpur - Configurable entity base attributes
      // CraftBukkit start
      private static final int CURRENT_LEVEL = 2;
-     public boolean preserveMotion = true; // Paper - Fix Entity Teleportation and cancel velocity if teleported; keep initial motion on first setPositionRotation
-@@ -253,9 +_,10 @@
+     static boolean isLevelAtLeast(ValueInput input, int level) {
+@@ -282,8 +_,9 @@
      public double xOld;
      public double yOld;
      public double zOld;
 +    public float maxUpStep; // Purpur - Add option to set armorstand step height
      public boolean noPhysics;
-     private boolean wasOnFire;
 -    public final RandomSource random = SHARED_RANDOM; // Paper - Share random for entities to make them more random
 +    public final RandomSource random; // Paper - Share random for entities to make them more random // Add toggle for RNG manipulation
      public int tickCount;
-     private int remainingFireTicks = -this.getFireImmuneTicks();
+     private int remainingFireTicks;
      public boolean wasTouchingWater;
-@@ -289,8 +_,8 @@
-     public PortalProcessor portalProcess;
+@@ -316,8 +_,8 @@
+     public @Nullable PortalProcessor portalProcess;
      public int portalCooldown;
      private boolean invulnerable;
 -    protected UUID uuid = Mth.createInsecureUUID(this.random);
@@ -32,7 +30,7 @@
      private boolean hasGlowingTag;
      private final Set<String> tags = new io.papermc.paper.util.SizeLimitedSet<>(new it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<>(), MAX_ENTITY_TAG_COUNT); // Paper - fully limit tag size - replace set impl
      private final double[] pistonDeltas = new double[]{0.0, 0.0, 0.0};
-@@ -342,6 +_,7 @@
+@@ -373,6 +_,7 @@
      public long activatedTick = Integer.MIN_VALUE;
      public boolean isTemporarilyActive;
      public long activatedImmunityTick = Integer.MIN_VALUE;
@@ -40,7 +38,7 @@
  
      public void inactiveTick() {
      }
-@@ -522,10 +_,21 @@
+@@ -535,10 +_,21 @@
      }
      // Paper end - optimise entity tracker
  
@@ -50,10 +48,10 @@
 +    }
 +    // Purpur end - Add canSaveToDisk to Entity
 +
-     public Entity(EntityType<?> entityType, Level level) {
-         this.type = entityType;
+     public Entity(EntityType<?> type, Level level) {
+         this.type = type;
          this.level = level;
-         this.dimensions = entityType.getDimensions();
+         this.dimensions = type.getDimensions();
 +        // Purpur start - Add toggle for RNG manipulation
 +        this.random = level == null || level.purpurConfig.entitySharedRandom ? SHARED_RANDOM : RandomSource.create();
 +        this.uuid = Mth.createInsecureUUID(this.random);
@@ -62,15 +60,15 @@
          this.position = Vec3.ZERO;
          this.blockPosition = BlockPos.ZERO;
          this.chunkPosition = ChunkPos.ZERO;
-@@ -904,6 +_,7 @@
+@@ -931,6 +_,7 @@
              && this.level.paperConfig().environment.netherCeilingVoidDamageHeight.test(v -> this.getY() >= v)
              && (!(this instanceof Player player) || !player.getAbilities().invulnerable))) {
              // Paper end - Configurable nether ceiling damage
-+            if (this.level.purpurConfig.teleportOnNetherCeilingDamage && this.level.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER && this instanceof ServerPlayer player) player.teleport(io.papermc.paper.util.MCUtil.toLocation(this.level, this.level.getSharedSpawnPos())); else // Purpur - Add option to teleport to spawn on nether ceiling damage
++            if (this.level.purpurConfig.teleportOnNetherCeilingDamage && this.level.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER && this instanceof ServerPlayer player) player.teleport(org.bukkit.craftbukkit.util.CraftLocation.toBukkit(this.level.levelData.getRespawnData().pos(), this.level)); else // Purpur - Add option to teleport to spawn on nether ceiling damage
              this.onBelowWorld();
          }
      }
-@@ -1826,7 +_,7 @@
+@@ -1960,7 +_,7 @@
      }
  
      public boolean fireImmune() {
@@ -78,53 +76,38 @@
 +        return this.immuneToFire != null ? immuneToFire : this.getType().fireImmune(); // Purpur - add fire immune API
      }
  
-     public boolean causeFallDamage(float fallDistance, float multiplier, DamageSource source) {
-@@ -1895,7 +_,7 @@
-         return this.isInWater() || flag;
-     }
- 
--    public void updateInWaterStateAndDoWaterCurrentPushing() {
-+    public void updateInWaterStateAndDoWaterCurrentPushing() { // Purpur - Movement options for armor stands - package-private -> public - TODO: use AT file
-         if (this.getVehicle() instanceof AbstractBoat abstractBoat && !abstractBoat.isUnderWater()) {
-             this.wasTouchingWater = false;
-         } else if (this.updateFluidHeightAndDoFluidPushing(FluidTags.WATER, 0.014)) {
-@@ -2521,6 +_,13 @@
-                 compound.putBoolean("Paper.FreezeLock", true);
+     public boolean causeFallDamage(double fallDistance, float damageMultiplier, DamageSource damageSource) {
+@@ -2658,6 +_,11 @@
+                 output.putBoolean("Paper.FreezeLock", true);
              }
              // Paper end
-+
 +            // Purpur start - Fire immune API
 +            if (immuneToFire != null) {
-+                compound.putBoolean("Purpur.FireImmune", immuneToFire);
++                output.putBoolean("Purpur.FireImmune", immuneToFire);
 +            }
 +            // Purpur end - Fire immune API
-+
-             return compound;
-         } catch (Throwable var9) {
-             CrashReport crashReport = CrashReport.forThrowable(var9, "Saving entity NBT");
-@@ -2670,6 +_,13 @@
-                 freezeLocked = compound.getBoolean("Paper.FreezeLock");
+         } catch (Throwable var7) {
+             CrashReport crashReport = CrashReport.forThrowable(var7, "Saving entity NBT");
+             CrashReportCategory crashReportCategory = crashReport.addCategory("Entity being saved");
+@@ -2778,6 +_,9 @@
              }
+             freezeLocked = input.getBooleanOr("Paper.FreezeLock", false);
              // Paper end
 +
-+            // Purpur start - Fire immune API
-+            if (compound.contains("Purpur.FireImmune")) {
-+                immuneToFire = compound.getBoolean("Purpur.FireImmune");
-+            }
-+            // Purpur end - Fire immune API
++            immuneToFire = input.read("Purpur.FireImmune", com.mojang.serialization.Codec.BOOL).orElse(null); // Purpur - Fire immune API
 +
-         } catch (Throwable var17) {
-             CrashReport crashReport = CrashReport.forThrowable(var17, "Loading entity NBT");
+         } catch (Throwable var7) {
+             CrashReport crashReport = CrashReport.forThrowable(var7, "Loading entity NBT");
              CrashReportCategory crashReportCategory = crashReport.addCategory("Entity being loaded");
-@@ -2916,6 +_,7 @@
-         if (this.isAlive() && this instanceof Leashable leashable) {
-             if (leashable.getLeashHolder() == player) {
-                 if (!this.level().isClientSide()) {
-+                    if (hand == InteractionHand.OFF_HAND && (level().purpurConfig.villagerCanBeLeashed || level().purpurConfig.wanderingTraderCanBeLeashed) && this instanceof net.minecraft.world.entity.npc.AbstractVillager) return InteractionResult.CONSUME; // Purpur - Allow leashing villagers
-                     // CraftBukkit start - fire PlayerUnleashEntityEvent
-                     // Paper start - Expand EntityUnleashEvent
-                     org.bukkit.event.player.PlayerUnleashEntityEvent event = org.bukkit.craftbukkit.event.CraftEventFactory.callPlayerUnleashEntityEvent(this, player, hand, !player.hasInfiniteMaterials());
-@@ -3241,15 +_,18 @@
+@@ -3041,6 +_,7 @@
+             if (this.isAlive() && this instanceof Leashable leashable2) {
+                 if (leashable2.getLeashHolder() == player) {
+                     if (!this.level().isClientSide()) {
++                        if (hand == InteractionHand.OFF_HAND && (level().purpurConfig.villagerCanBeLeashed || level().purpurConfig.wanderingTraderCanBeLeashed) && this instanceof net.minecraft.world.entity.npc.villager.AbstractVillager) return InteractionResult.CONSUME; // Purpur - Allow leashing villagers
+                         // Paper start - EntityUnleashEvent
+                         if (!org.bukkit.craftbukkit.event.CraftEventFactory.handlePlayerUnleashEntityEvent(
+                             leashable2, player, hand, !player.hasInfiniteMaterials(), true
+@@ -3471,15 +_,18 @@
          return Vec3.directionFromRotation(this.getRotationVector());
      }
  
@@ -144,7 +127,7 @@
              }
          }
      }
-@@ -3454,7 +_,7 @@
+@@ -3685,7 +_,7 @@
      }
  
      public int getMaxAirSupply() {
@@ -153,8 +136,8 @@
      }
  
      public int getAirSupply() {
-@@ -3949,7 +_,7 @@
-     // CraftBukkit end
+@@ -4220,7 +_,7 @@
+     }
  
      public boolean canUsePortal(boolean allowPassengers) {
 -        return (allowPassengers || !this.isPassenger()) && this.isAlive();
@@ -162,7 +145,7 @@
      }
  
      public boolean canTeleport(Level fromLevel, Level toLevel) {
-@@ -4481,6 +_,12 @@
+@@ -4739,6 +_,12 @@
          return Mth.lerp(partialTick, this.yRotO, this.yRot);
      }
  
@@ -175,7 +158,7 @@
      // Paper start - optimise collisions
      public boolean updateFluidHeightAndDoFluidPushing(final TagKey<Fluid> fluid, final double flowScale) {
          if (this.touchingUnloadedChunk()) {
-@@ -4879,7 +_,7 @@
+@@ -5159,7 +_,7 @@
      }
  
      public float maxUpStep() {

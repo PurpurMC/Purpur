@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/block/entity/ConduitBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/ConduitBlockEntity.java
-@@ -155,7 +_,7 @@
+@@ -150,7 +_,7 @@
                          BlockPos blockPos1 = pos.offset(i, i1, i2x);
                          BlockState blockState = level.getBlockState(blockPos1);
  
@@ -9,7 +9,7 @@
                              if (blockState.is(block)) {
                                  positions.add(blockPos1);
                              }
-@@ -170,13 +_,13 @@
+@@ -165,13 +_,13 @@
  
      private static void applyEffects(Level level, BlockPos pos, List<BlockPos> positions) {
          // CraftBukkit start
@@ -26,49 +26,41 @@
          // CraftBukkit start
          return i;
      }
-@@ -213,17 +_,17 @@
-             blockEntity.destroyTargetUUID = null;
-         } else if (blockEntity.destroyTarget == null) {
-             List<LivingEntity> entitiesOfClass = level.getEntitiesOfClass(
--                LivingEntity.class, getDestroyRangeAABB(pos), collidedEntity -> collidedEntity instanceof Enemy && collidedEntity.isInWaterOrRain()
-+                LivingEntity.class, getDestroyRangeAABB(pos, level), collidedEntity -> collidedEntity instanceof Enemy && collidedEntity.isInWaterOrRain() // Purpur - Conduit behavior configuration
-             );
-             if (!entitiesOfClass.isEmpty()) {
-                 blockEntity.destroyTarget = entitiesOfClass.get(level.random.nextInt(entitiesOfClass.size()));
-             }
--        } else if (!blockEntity.destroyTarget.isAlive() || !pos.closerThan(blockEntity.destroyTarget.blockPosition(), 8.0)) {
-+        } else if (!blockEntity.destroyTarget.isAlive() || !pos.closerThan(blockEntity.destroyTarget.blockPosition(), level.purpurConfig.conduitDamageDistance)) { // Purpur - Conduit behavior configuration
-             blockEntity.destroyTarget = null;
-         }
- 
-         if (damageTarget && blockEntity.destroyTarget != null) { // CraftBukkit
--            if (blockEntity.destroyTarget.hurtServer((net.minecraft.server.level.ServerLevel) level, level.damageSources().magic().directBlock(level, pos), 4.0F)) // CraftBukkit
-+            if (blockEntity.destroyTarget.hurtServer((net.minecraft.server.level.ServerLevel) level, level.damageSources().magic().directBlock(level, pos), level.purpurConfig.conduitDamageAmount)) // CraftBukkit // Purpur - Conduit behavior configuration
+@@ -201,7 +_,7 @@
+         EntityReference<LivingEntity> entityReference = updateDestroyTarget(blockEntity.destroyTarget, level, pos, canDestroy);
+         LivingEntity livingEntity = EntityReference.getLivingEntity(entityReference, level);
+         if (damageTarget && livingEntity != null) { // CraftBukkit
+-            if (livingEntity.hurtServer(level, level.damageSources().magic().eventBlockDamager(level, pos), 4.0F)) // CraftBukkit - move up
++            if (livingEntity.hurtServer(level, level.damageSources().magic().eventBlockDamager(level, pos), level.purpurConfig.conduitDamageAmount)) // CraftBukkit - move up // Purpur - Conduit behavior configuration
              level.playSound(
-                 null,
-                 blockEntity.destroyTarget.getX(),
-@@ -253,16 +_,22 @@
+                 null, livingEntity.getX(), livingEntity.getY(), livingEntity.getZ(), SoundEvents.CONDUIT_ATTACK_TARGET, SoundSource.BLOCKS, 1.0F, 1.0F
+             );
+@@ -222,19 +_,25 @@
+             return selectNewTarget(level, pos);
+         } else {
+             LivingEntity livingEntity = EntityReference.getLivingEntity(destroyTarget, level);
+-            return livingEntity != null && livingEntity.isAlive() && pos.closerThan(livingEntity.blockPosition(), 8.0) ? destroyTarget : null;
++            return livingEntity != null && livingEntity.isAlive() && pos.closerThan(livingEntity.blockPosition(), level.purpurConfig.conduitDamageDistance) ? destroyTarget : null; // Purpur - Conduit behavior configuration
+         }
+     }
+ 
+     private static @Nullable EntityReference<LivingEntity> selectNewTarget(ServerLevel level, BlockPos pos) {
+         List<LivingEntity> entitiesOfClass = level.getEntitiesOfClass(
+-            LivingEntity.class, getDestroyRangeAABB(pos), livingEntity -> livingEntity instanceof Enemy && livingEntity.isInWaterOrRain()
++            LivingEntity.class, getDestroyRangeAABB(pos, level), livingEntity -> livingEntity instanceof Enemy && livingEntity.isInWaterOrRain() // Purpur - Conduit behavior configuration
+         );
+         return entitiesOfClass.isEmpty() ? null : EntityReference.of(Util.getRandom(entitiesOfClass, level.random));
      }
  
      public static AABB getDestroyRangeAABB(BlockPos pos) {
+-        return new AABB(pos).inflate(8.0);
 +        // Purpur start - Conduit behavior configuration
 +        return getDestroyRangeAABB(pos, null);
 +    }
 +
 +    private static AABB getDestroyRangeAABB(BlockPos pos, Level level) {
 +        // Purpur end - Conduit behavior configuration
-         int x = pos.getX();
-         int y = pos.getY();
-         int z = pos.getZ();
--        return new AABB(x, y, z, x + 1, y + 1, z + 1).inflate(8.0);
-+        return new AABB(x, y, z, x + 1, y + 1, z + 1).inflate(level == null ? 8.0 : level.purpurConfig.conduitDamageDistance); // Purpur - Conduit behavior configuration
++        return new AABB(pos).inflate(level == null ? 8.0 : level.purpurConfig.conduitDamageDistance); // Purpur - Conduit behavior configuration
      }
  
-     @Nullable
-     private static LivingEntity findDestroyTarget(Level level, BlockPos pos, UUID targetId) {
-         List<LivingEntity> entitiesOfClass = level.getEntitiesOfClass(
--            LivingEntity.class, getDestroyRangeAABB(pos), collidedEntity -> collidedEntity.getUUID().equals(targetId)
-+            LivingEntity.class, getDestroyRangeAABB(pos, level), collidedEntity -> collidedEntity.getUUID().equals(targetId) // Purpur - Conduit behavior configuration
-         );
-         return entitiesOfClass.size() == 1 ? entitiesOfClass.get(0) : null;
-     }
+     private static void animationTick(Level level, BlockPos pos, List<BlockPos> positions, @Nullable Entity entity, int tickCount) {

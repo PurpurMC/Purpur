@@ -50,7 +50,7 @@ public class LookControllerWASD extends LookControl {
             (byte) Mth.floor(entity.getXRot() * 256.0F / 360.0F),
             entity.onGround
         );
-        ((ServerLevel) entity.level()).getChunkSource().broadcast(entity, entityPacket);
+        ((ServerLevel) entity.level()).getChunkSource().sendToTrackingPlayers(entity, entityPacket);
     }
 
     public void setOffsets(float yaw, float pitch) {

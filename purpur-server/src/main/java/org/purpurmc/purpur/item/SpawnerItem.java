@@ -1,5 +1,6 @@
 package org.purpurmc.purpur.item;
 
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
@@ -27,10 +28,12 @@ public class SpawnerItem extends BlockItem {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof SpawnerBlockEntity spawner) {
                 CompoundTag customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
-                if (customData.contains("Purpur.mob_type")) {
-                    EntityType.byString(customData.getString("Purpur.mob_type")).ifPresent(type -> spawner.getSpawner().setEntityId(type, level, level.random, pos));
+                Optional<String> mobTypeStringOptional = customData.getString("Purpur.mob_type");
+                if (mobTypeStringOptional.isPresent()) {
+                    EntityType.byString(mobTypeStringOptional.get()).ifPresent(type -> spawner.getSpawner().setEntityId(type, level, level.random, pos));
                 } else if (customData.contains("Purpur.SpawnData")) {
-                    net.minecraft.world.level.SpawnData.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, customData.getCompound("Purpur.SpawnData")).result()
+                    customData.getCompound("Purpur.SpawnData")
+                        .flatMap(spawnerData -> spawnerData.read("SpawnData", net.minecraft.world.level.SpawnData.CODEC))
                         .ifPresent(spawnData -> spawner.getSpawner().nextSpawnData = spawnData);
                 }
             }

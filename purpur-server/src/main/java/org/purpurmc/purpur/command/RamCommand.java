@@ -6,13 +6,14 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.server.permissions.Permissions;
 import org.purpurmc.purpur.PurpurConfig;
 import org.purpurmc.purpur.task.RamBarTask;
 
 public class RamCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("ram")
-                .requires(listener -> listener.hasPermission(2, "bukkit.command.ram"))
+                .requires(listener -> listener.hasPermission(Permissions.COMMANDS_GAMEMASTER, "bukkit.command.ram"))
                 .executes(context -> {
                     CommandSourceStack sender = context.getSource();
                     RamBarTask ramBar = RamBarTask.instance();

@@ -1,37 +1,37 @@
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
-@@ -459,6 +_,12 @@
-                     if (d < 0.0) {
-                         double damagePerBlock = this.level().getWorldBorder().getDamagePerBlock();
-                         if (damagePerBlock > 0.0) {
-+                            // Purpur start - Add option to teleport to spawn if outside world border
-+                            if (this.level().purpurConfig.teleportIfOutsideBorder && this instanceof ServerPlayer serverPlayer) {
-+                                serverPlayer.teleport(io.papermc.paper.util.MCUtil.toLocation(this.level(), this.level().getSharedSpawnPos()));
-+                                return;
-+                            }
-+                            // Purpur end - Add option to teleport to spawn if outside world border
-                             this.hurtServer(serverLevel1, this.damageSources().outOfBorder(), Math.max(1, Mth.floor(-d * damagePerBlock)));
-                         }
+@@ -447,6 +_,12 @@
+                 if (d < 0.0) {
+                     double damagePerBlock = serverLevel1.getWorldBorder().getDamagePerBlock();
+                     if (damagePerBlock > 0.0) {
++                        // Purpur start - Add option to teleport to spawn if outside world border
++                        if (this.level().purpurConfig.teleportIfOutsideBorder && this instanceof ServerPlayer serverPlayer) {
++                            serverPlayer.teleport(org.bukkit.craftbukkit.util.CraftLocation.toBukkit(this.level().levelData.getRespawnData().pos(), this.level()));
++                            return;
++                        }
++                        // Purpur end - Add option to teleport to spawn if outside world border
+                         this.hurtServer(serverLevel1, this.damageSources().outOfBorder(), Math.max(1, Mth.floor(-d * damagePerBlock)));
                      }
-@@ -472,7 +_,7 @@
-                     && (!flag || !((Player)this).getAbilities().invulnerable);
-                 if (flag1) {
-                     this.setAirSupply(this.decreaseAirSupply(this.getAirSupply()));
--                    if (this.getAirSupply() == -20) {
-+                    if (this.getAirSupply() == -this.level().purpurConfig.drowningDamageInterval) { // Purpur - Drowning Settings
+                 }
+@@ -462,7 +_,7 @@
+                     if (this.shouldTakeDrowningDamage()) {
                          this.setAirSupply(0);
-                         Vec3 deltaMovement = this.getDeltaMovement();
- 
-@@ -492,7 +_,7 @@
-                                 );
-                         }
- 
--                        this.hurt(this.damageSources().drown(), 2.0F);
-+                        this.hurt(this.damageSources().drown(), (float) this.level().purpurConfig.damageFromDrowning); // Purpur - Drowning Settings
+                         serverLevel1.broadcastEntityEvent(this, EntityEvent.DROWN_PARTICLES);
+-                        this.hurtServer(serverLevel1, this.damageSources().drown(), 2.0F);
++                        this.hurtServer(serverLevel1, this.damageSources().drown(), (float) this.level().purpurConfig.damageFromDrowning); // Purpur - Drowning Settings
                      }
-                 } else if (this.getAirSupply() < this.getMaxAirSupply()) {
+                 } else if (this.getAirSupply() < this.getMaxAirSupply() && MobEffectUtil.shouldEffectsRefillAirsupply(this)) {
                      this.setAirSupply(this.increaseAirSupply(this.getAirSupply()));
-@@ -1009,14 +_,32 @@
+@@ -522,7 +_,7 @@
+     }
+ 
+     protected boolean shouldTakeDrowningDamage() {
+-        return this.getAirSupply() <= -20;
++        return this.getAirSupply() <= -this.level().purpurConfig.drowningDamageInterval; // Purpur - Drowning Settings
+     }
+ 
+     @Override
+@@ -1050,14 +_,32 @@
          if (lookingEntity != null) {
              ItemStack itemBySlot = this.getItemBySlot(EquipmentSlot.HEAD);
              EntityType<?> type = lookingEntity.getType();
@@ -72,7 +72,7 @@
  
          return d;
      }
-@@ -1063,6 +_,7 @@
+@@ -1104,6 +_,7 @@
              Iterator<MobEffectInstance> iterator = this.activeEffects.values().iterator();
              while (iterator.hasNext()) {
                  MobEffectInstance effect = iterator.next();
@@ -80,7 +80,7 @@
                  EntityPotionEffectEvent event = CraftEventFactory.callEntityPotionEffectChangeEvent(this, effect, null, cause, EntityPotionEffectEvent.Action.CLEARED);
                  if (event.isCancelled()) {
                      continue;
-@@ -1372,6 +_,24 @@
+@@ -1424,6 +_,24 @@
                  this.stopSleeping();
              }
  
@@ -105,27 +105,38 @@
              this.noActionTime = 0;
              if (amount < 0.0F) {
                  amount = 0.0F;
-@@ -1536,11 +_,11 @@
-     protected Player resolvePlayerResponsibleForDamage(DamageSource damageSource) {
+@@ -1685,10 +_,10 @@
+     protected @Nullable Player resolvePlayerResponsibleForDamage(DamageSource damageSource) {
          Entity entity = damageSource.getEntity();
          if (entity instanceof Player player) {
--            this.lastHurtByPlayerTime = 100;
-+            this.lastHurtByPlayerTime = this.level().purpurConfig.mobLastHurtByPlayerTime; // Purpur - Config for mob last hurt by player time
-             this.lastHurtByPlayer = player;
-             return player;
+-            this.setLastHurtByPlayer(player, 100);
++            this.setLastHurtByPlayer(player, this.level().purpurConfig.mobLastHurtByPlayerTime); // Purpur - Config for mob last hurt by player time
          } else if (entity instanceof Wolf wolf && wolf.isTame()) {
--            this.lastHurtByPlayerTime = 100;
-+            this.lastHurtByPlayerTime = this.level().purpurConfig.mobLastHurtByPlayerTime; // Purpur - Config for mob last hurt by player time
-             if (wolf.getOwner() instanceof Player player1) {
-                 this.lastHurtByPlayer = player1;
+             if (wolf.getOwnerReference() != null) {
+-                this.setLastHurtByPlayer(wolf.getOwnerReference().getUUID(), 100);
++                this.setLastHurtByPlayer(wolf.getOwnerReference().getUUID(), this.level().purpurConfig.mobLastHurtByPlayerTime); // Purpur - Config for mob last hurt by player time
              } else {
-@@ -1594,6 +_,18 @@
+                 this.lastHurtByPlayer = null;
+                 this.lastHurtByPlayerMemoryTime = 0;
+@@ -1739,6 +_,30 @@
                  }
              }
  
 +            // Purpur start - Totems work in inventory
 +            if (level().purpurConfig.totemOfUndyingWorksInInventory && this instanceof ServerPlayer player && (itemStack == null || itemStack.getItem() != Items.TOTEM_OF_UNDYING) && player.getBukkitEntity().hasPermission("purpur.inventory_totem")) {
-+                for (ItemStack item : player.getInventory().items) {
++                for (ItemStack item : player.getInventory().getNonEquipmentItems()) {
++                    if (item.getItem() == Items.TOTEM_OF_UNDYING) {
++                        itemInHand = item;
++                        itemStack = item.copy();
++                        break;
++                    }
++                }
++            }
++            // Purpur end - Totems work in inventory
++
++            // Purpur start - Totems work in inventory
++            if (level().purpurConfig.totemOfUndyingWorksInInventory && this instanceof ServerPlayer player && (itemStack == null || itemStack.getItem() != Items.TOTEM_OF_UNDYING) && player.getBukkitEntity().hasPermission("purpur.inventory_totem")) {
++                for (ItemStack item : player.getInventory().getNonEquipmentItems()) {
 +                    if (item.getItem() == Items.TOTEM_OF_UNDYING) {
 +                        itemInHand = item;
 +                        itemStack = item.copy();
@@ -138,15 +149,15 @@
              final org.bukkit.inventory.EquipmentSlot handSlot = (hand != null) ? org.bukkit.craftbukkit.CraftEquipmentSlot.getHand(hand) : null;
              final EntityResurrectEvent event = new EntityResurrectEvent((org.bukkit.entity.LivingEntity) this.getBukkitEntity(), handSlot);
              event.setCancelled(itemStack == null);
-@@ -1790,6 +_,7 @@
-         boolean flag = this.lastHurtByPlayerTime > 0;
+@@ -1920,6 +_,7 @@
+         boolean flag = this.lastHurtByPlayerMemoryTime > 0;
          this.dropEquipment(level); // CraftBukkit - from below
-         if (this.shouldDropLoot() && level.getGameRules().getBoolean(GameRules.RULE_DOMOBLOOT)) {
+         if (this.shouldDropLoot(level)) {
 +            if (!(damageSource.is(net.minecraft.world.damagesource.DamageTypes.CRAMMING) && level().purpurConfig.disableDropsOnCrammingDeath)) { // Purpur - Disable loot drops on death by cramming
              this.dropFromLootTable(level, damageSource, flag);
              // Paper start
              final boolean prev = this.clearEquipmentSlots;
-@@ -1798,6 +_,7 @@
+@@ -1928,6 +_,7 @@
              // Paper end
              this.dropCustomDeathLoot(level, damageSource, flag);
              this.clearEquipmentSlots = prev; // Paper
@@ -154,7 +165,7 @@
          }
  
          // CraftBukkit start - Call death event // Paper start - call advancement triggers with correct entity equipment
-@@ -2989,6 +_,7 @@
+@@ -3202,6 +_,7 @@
              float f = (float)(d * 10.0 - 3.0);
              if (f > 0.0F) {
                  this.playSound(this.getFallDamageSound((int)f), 1.0F, 1.0F);
@@ -162,7 +173,7 @@
                  this.hurt(this.damageSources().flyIntoWall(), f);
              }
          }
-@@ -4398,6 +_,12 @@
+@@ -4666,6 +_,12 @@
              ? slot == EquipmentSlot.MAINHAND && this.canUseSlot(EquipmentSlot.MAINHAND)
              : slot == equippable.slot() && this.canUseSlot(equippable.slot()) && equippable.canBeEquippedBy(this.getType());
      }

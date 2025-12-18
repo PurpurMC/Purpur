@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: draycia <lonelyyordle@gmail.com>
+Date: Sun, 12 Apr 2020 20:41:59 -0700
+Subject: [PATCH] Phantoms burn in light
+
+
+diff --git a/net/minecraft/world/entity/monster/Phantom.java b/net/minecraft/world/entity/monster/Phantom.java
+index 7077beafe2251fcc4e37578091bfaa02714268b9..6e8fe1b694ade45ffbf0b9bb39b954deffeb2402 100644
+--- a/net/minecraft/world/entity/monster/Phantom.java
++++ b/net/minecraft/world/entity/monster/Phantom.java
+@@ -54,6 +54,7 @@ public class Phantom extends Mob implements Enemy {
+     public java.util.@Nullable UUID spawningEntity;
+     public boolean shouldBurnInDay = true;
+     // Paper end
++    private static final net.minecraft.world.item.crafting.Ingredient TORCH = net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.TORCH, net.minecraft.world.item.Items.SOUL_TORCH); // Purpur - Phantoms burn in light
+ 
+     public Phantom(EntityType<? extends Phantom> type, Level level) {
+         super(type, level);
+@@ -238,7 +239,11 @@ public class Phantom extends Mob implements Enemy {
+     // Paper start
+     @Override
+     public boolean isSunBurnTick() {
+-        return this.shouldBurnInDay && super.isSunBurnTick();
++        // Purpur start - API for any mob to burn daylight
++        boolean burnFromDaylight = this.shouldBurnInDay && super.isSunBurnTick() && this.level().purpurConfig.phantomBurnInDaylight;
++        boolean burnFromLightSource = this.level().purpurConfig.phantomBurnInLight > 0 && this.level().getMaxLocalRawBrightness(blockPosition()) >= this.level().purpurConfig.phantomBurnInLight;
++        return burnFromDaylight || burnFromLightSource;
++        // Purpur end - API for any mob to burn daylight
+     }
+     // Paper end
+ 
+@@ -366,6 +371,7 @@ public class Phantom extends Mob implements Enemy {
+                 List<Player> nearbyPlayers = serverLevel.getNearbyPlayers(
+                     this.attackTargeting, Phantom.this, Phantom.this.getBoundingBox().inflate(16.0, 64.0, 16.0)
+                 );
++                if (level().purpurConfig.phantomIgnorePlayersWithTorch) nearbyPlayers.removeIf(human -> TORCH.test(human.getItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND)) || TORCH.test(human.getItemInHand(net.minecraft.world.InteractionHand.OFF_HAND))); // Purpur - Phantoms burn in light
+                 if (!nearbyPlayers.isEmpty()) {
+                     nearbyPlayers.sort(Comparator.<Player, Double>comparing(Entity::getY).reversed());
+ 
+@@ -736,6 +742,12 @@ public class Phantom extends Mob implements Enemy {
+                 return false;
+             } else if (!target.isAlive()) {
+                 return false;
++            // Purpur start - Phantoms burn in light
++            } else if (level().purpurConfig.phantomBurnInLight > 0 && level().getLightEmission(new BlockPos(Phantom.this)) >= level().purpurConfig.phantomBurnInLight) {
++                return false;
++            } else if (level().purpurConfig.phantomIgnorePlayersWithTorch && (TORCH.test(target.getItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND)) || TORCH.test(target.getItemInHand(net.minecraft.world.InteractionHand.OFF_HAND)))) {
++                return false;
++            // Purpur end - Phantoms burn in light
+             } else if (target instanceof Player player && (target.isSpectator() || player.isCreative())) {
+                 return false;
+             } else if (!this.canUse()) {

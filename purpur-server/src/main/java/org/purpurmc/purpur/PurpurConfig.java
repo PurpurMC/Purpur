@@ -12,7 +12,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
@@ -74,8 +74,8 @@ public class PurpurConfig {
         commands = new HashMap<>();
         commands.put("purpur", new PurpurCommand("purpur"));
 
-        version = getInt("config-version", 39);
-        set("config-version", 39);
+        version = getInt("config-version", 46);
+        set("config-version", 46);
 
         readConfig(PurpurConfig.class, null);
 
@@ -332,6 +332,7 @@ public class PurpurConfig {
     public static boolean cryingObsidianValidForPortalFrame = false;
     public static int beeInsideBeeHive = 3;
     public static boolean anvilCumulativeCost = true;
+    public static int smoothSnowAccumulationStep = 0;
     public static int lightningRodRange = 128;
     public static Set<Enchantment> grindstoneIgnoredEnchants = new HashSet<>();
     public static boolean grindstoneRemoveAttributes = false;
@@ -375,6 +376,16 @@ public class PurpurConfig {
         cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
         beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
         anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
+        smoothSnowAccumulationStep = getInt("settings.blocks.snow.smooth-accumulation-step", smoothSnowAccumulationStep);
+        if (smoothSnowAccumulationStep > 7) {
+            smoothSnowAccumulationStep = 7;
+            log(Level.WARNING, "blocks.snow.smooth-accumulation-step is set to above maximum allowed value of 7");
+            log(Level.WARNING, "Using value of 7 to prevent issues");
+        } else if (smoothSnowAccumulationStep < 0) {
+            smoothSnowAccumulationStep = 0;
+            log(Level.WARNING, "blocks.snow.smooth-accumulation-step is set to below minimum allowed value of 0");
+            log(Level.WARNING, "Using value of 0 to prevent issues");
+        }
         lightningRodRange = getInt("settings.blocks.lightning_rod.range", lightningRodRange);
         ArrayList<String> defaultCurses = new ArrayList<>(){{
             add("minecraft:binding_curse");
@@ -385,7 +396,7 @@ public class PurpurConfig {
         }
         getList("settings.blocks.grindstone.ignored-enchants", defaultCurses).forEach(key -> {
             Registry<Enchantment> registry = MinecraftServer.getServer().registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
-            Enchantment enchantment = registry.getValue(ResourceLocation.parse(key.toString()));
+            Enchantment enchantment = registry.getValue(Identifier.parse(key.toString()));
             if (enchantment == null) return;
             grindstoneIgnoredEnchants.add(enchantment);
         });
@@ -519,7 +530,7 @@ public class PurpurConfig {
 
     private static void blastResistanceSettings() {
         getMap("settings.blast-resistance-overrides", Collections.emptyMap()).forEach((blockId, value) -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId));
             if (block == Blocks.AIR) {
                 log(Level.SEVERE, "Invalid block for `settings.blast-resistance-overrides`: " + blockId);
                 return;
@@ -551,7 +562,7 @@ public class PurpurConfig {
                 Map.entry("minecraft:purple_bed", Map.of("distance", 0.5F)),
                 Map.entry("minecraft:magenta_bed", Map.of("distance", 0.5F))
         )).forEach((blockId, value) -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId));
             if (block == Blocks.AIR) {
                 log(Level.SEVERE, "Invalid block for `settings.block-fall-multipliers`: " + blockId);
                 return;
@@ -586,6 +597,11 @@ public class PurpurConfig {
     public static boolean registerMinecraftDebugCommands = false;
     private static void registerMinecraftDebugCommands() {
         registerMinecraftDebugCommands = getBoolean("settings.register-minecraft-debug-commands", registerMinecraftDebugCommands);
+    }
+
+    public static boolean registerMinecraftDisabledCommands = false;
+    private static void registerMinecraftDisabledCommands() {
+        registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDebugCommands);
     }
 
     public static List<String> startupCommands = new ArrayList<>();

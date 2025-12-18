@@ -1,21 +1,22 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -207,6 +_,8 @@
+@@ -218,6 +_,8 @@
      private final StructureManager structureManager;
      private final StructureCheck structureCheck;
      private final boolean tickTime;
 +    private double preciseTime; // Purpur - Configurable daylight cycle
 +    private boolean forceTime; // Purpur - Configurable daylight cycle
      private final RandomSequences randomSequences;
+     final LevelDebugSynchronizers debugSynchronizers = new LevelDebugSynchronizers(this);
  
-     // CraftBukkit start
-@@ -595,7 +_,24 @@
+@@ -622,8 +_,25 @@
          // CraftBukkit end
          this.tickTime = tickTime;
          this.server = server;
 -        this.customSpawners = customSpawners;
++        this.customSpawners = new ArrayList<>(); // Purpur - Allow toggling special MobSpawners per world
+         this.serverLevelData = serverLevelData;
 +        // Purpur start - Allow toggling special MobSpawners per world
-+        this.customSpawners = new ArrayList<>();
 +        if (purpurConfig.phantomSpawning) {
 +            this.customSpawners.add(new net.minecraft.world.level.levelgen.PhantomSpawner());
 +        }
@@ -29,13 +30,13 @@
 +            this.customSpawners.add(new net.minecraft.world.entity.ai.village.VillageSiege());
 +        }
 +        if (purpurConfig.villagerTraderSpawning) {
-+            this.customSpawners.add(new net.minecraft.world.entity.npc.WanderingTraderSpawner(serverLevelData));
++            this.customSpawners.add(new net.minecraft.world.entity.npc.wanderingtrader.WanderingTraderSpawner(serverLevelData));
 +        }
 +        // Purpur end - Allow toggling special MobSpawners per world
-         this.serverLevelData = serverLevelData;
          ChunkGenerator chunkGenerator = levelStem.generator();
          // CraftBukkit start
-@@ -681,6 +_,7 @@
+         this.serverLevelData.setWorld(this);
+@@ -709,6 +_,7 @@
          this.chunkDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.ChunkDataController((ServerLevel)(Object)this, this.chunkTaskScheduler);
          // Paper end - rewrite chunk system
          this.getCraftServer().addWorld(this.getWorld()); // CraftBukkit
@@ -43,21 +44,21 @@
      }
  
      // Paper start
-@@ -727,7 +_,7 @@
+@@ -760,7 +_,7 @@
          }
  
-         int _int = this.getGameRules().getInt(GameRules.RULE_PLAYERS_SLEEPING_PERCENTAGE);
--        if (this.sleepStatus.areEnoughSleeping(_int) && this.sleepStatus.areEnoughDeepSleeping(_int, this.players)) {
-+        if (this.purpurConfig.playersSkipNight && this.sleepStatus.areEnoughSleeping(_int) && this.sleepStatus.areEnoughDeepSleeping(_int, this.players)) { // Purpur - Config for skipping night
+         int i = this.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
+-        if (this.sleepStatus.areEnoughSleeping(i) && this.sleepStatus.areEnoughDeepSleeping(i, this.players)) {
++        if (this.purpurConfig.playersSkipNight && this.sleepStatus.areEnoughSleeping(i) && this.sleepStatus.areEnoughDeepSleeping(i, this.players)) { // Purpur - Config for skipping night
              // Paper start - create time skip event - move up calculations
              final long newDayTime = this.levelData.getDayTime() + 24000L;
              org.bukkit.event.world.TimeSkipEvent event = new org.bukkit.event.world.TimeSkipEvent(
-@@ -846,6 +_,13 @@
+@@ -895,6 +_,13 @@
              this.serverLevelData.getScheduledEvents().tick(this.server, l);
              Profiler.get().pop();
-             if (this.serverLevelData.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
+             if (this.getGameRules().get(GameRules.ADVANCE_TIME)) {
 +                // Purpur start - Configurable daylight cycle
-+                int incrementTicks = isDay() ? this.purpurConfig.daytimeTicks : this.purpurConfig.nighttimeTicks;
++                int incrementTicks = isBrightOutside() ? this.purpurConfig.daytimeTicks : this.purpurConfig.nighttimeTicks;
 +                if (incrementTicks != 12000) {
 +                    this.preciseTime += 12000 / (double) incrementTicks;
 +                    this.setDayTime(this.preciseTime);
@@ -66,11 +67,10 @@
                  this.setDayTime(this.levelData.getDayTime() + 1L);
              }
          }
-@@ -853,7 +_,21 @@
+@@ -902,6 +_,20 @@
  
      public void setDayTime(long time) {
          this.serverLevelData.setDayTime(time);
--    }
 +        // Purpur start - Configurable daylight cycle
 +        this.preciseTime = time;
 +        this.forceTime = false;
@@ -84,33 +84,68 @@
 +    // Purpur start - Configurable daylight cycle
 +    public boolean isForceTime() {
 +        return this.forceTime;
-+    }
 +    // Purpur end - Configurable daylight cycle
+     }
  
-     public void tickCustomSpawners(boolean spawnEnemies, boolean spawnFriendlies) {
-         for (CustomSpawner customSpawner : this.customSpawners) {
-@@ -934,9 +_,18 @@
+     public long getDayCount() {
+@@ -1010,9 +_,17 @@
                      && this.random.nextDouble() < currentDifficultyAt.getEffectiveDifficulty() * this.paperConfig().entities.spawning.skeletonHorseThunderSpawnChance.or(0.01) // Paper - Configurable spawn chances for skeleton horses
-                     && !this.getBlockState(blockPos.below()).is(Blocks.LIGHTNING_ROD);
+                     && !this.getBlockState(blockPos.below()).is(BlockTags.LIGHTNING_RODS);
                  if (flag) {
+-                    SkeletonHorse skeletonHorse = EntityType.SKELETON_HORSE.create(this, EntitySpawnReason.EVENT);
 +                    // Purpur start - Special mobs naturally spawn
-+                    net.minecraft.world.entity.animal.horse.AbstractHorse entityhorseskeleton;
++                    net.minecraft.world.entity.animal.equine.AbstractHorse skeletonHorse;
 +                    if (purpurConfig.zombieHorseSpawnChance > 0D && random.nextDouble() <= purpurConfig.zombieHorseSpawnChance) {
-+                        entityhorseskeleton = EntityType.ZOMBIE_HORSE.create(this, EntitySpawnReason.EVENT);
++                        skeletonHorse = EntityType.ZOMBIE_HORSE.create(this, EntitySpawnReason.EVENT);
 +                    } else {
-+                        entityhorseskeleton = EntityType.SKELETON_HORSE.create(this, EntitySpawnReason.EVENT);
-+                        if (entityhorseskeleton != null) ((SkeletonHorse) entityhorseskeleton).setTrap(true);
++                        skeletonHorse = EntityType.SKELETON_HORSE.create(this, EntitySpawnReason.EVENT);
++                        if (skeletonHorse != null) ((SkeletonHorse) skeletonHorse).setTrap(true);
 +                    }
 +                    // Purpur end - Special mobs naturally spawn
-                     SkeletonHorse skeletonHorse = EntityType.SKELETON_HORSE.create(this, EntitySpawnReason.EVENT);
                      if (skeletonHorse != null) {
 -                        skeletonHorse.setTrap(true);
 +                        //skeletonHorse.setTrap(true); // Purpur - Special mobs naturally spawn - moved up
                          skeletonHorse.setAge(0);
                          skeletonHorse.setPos(blockPos.getX(), blockPos.getY(), blockPos.getZ());
                          this.addFreshEntity(skeletonHorse, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.LIGHTNING); // CraftBukkit
-@@ -1009,7 +_,7 @@
-                 pointOfInterestType -> pointOfInterestType.is(PoiTypes.LIGHTNING_ROD),
+@@ -1047,9 +_,35 @@
+                 if (blockState.is(Blocks.SNOW)) {
+                     int layersValue = blockState.getValue(SnowLayerBlock.LAYERS);
+                     if (layersValue < Math.min(i, 8)) {
++                        // Purpur start - Smooth snow accumulation
++                        boolean canSnow = true;
++                        // Ensure snow doesn't get more than N layers taller than its neighbors
++                        // We only need to check blocks that are taller than the minimum step height
++                        if (org.purpurmc.purpur.PurpurConfig.smoothSnowAccumulationStep > 0 && layersValue >= org.purpurmc.purpur.PurpurConfig.smoothSnowAccumulationStep) {
++                            int layersValueMin = layersValue - org.purpurmc.purpur.PurpurConfig.smoothSnowAccumulationStep;
++                            for (Direction direction : Direction.Plane.HORIZONTAL) {
++                                BlockPos blockPosNeighbor = heightmapPos.relative(direction);
++                                BlockState blockStateNeighbor = this.getBlockState(blockPosNeighbor);
++                                if (blockStateNeighbor.is(Blocks.SNOW)) {
++                                    // Special check for snow layers, if neighbors are too short, don't accumulate
++                                    int layersValueNeighbor = blockStateNeighbor.getValue(SnowLayerBlock.LAYERS);
++                                    if (layersValueNeighbor <= layersValueMin) {
++                                        canSnow = false;
++                                        break;
++                                    }
++                                } else if (!Block.isFaceFull(blockStateNeighbor.getCollisionShape(this, blockPosNeighbor), direction.getOpposite())) {
++                                    // Since our layer is tall enough already, if we have a non-full neighbor block, don't accumulate
++                                    canSnow = false;
++                                    break;
++                                }
++                            }
++                        }
++                        if (canSnow) {
++                        // Purpur end - Smooth snow accumulation
+                         BlockState blockState1 = blockState.setValue(SnowLayerBlock.LAYERS, layersValue + 1);
+                         Block.pushEntitiesUp(blockState, blockState1, this, heightmapPos);
+                         org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockFormEvent(this, heightmapPos, blockState1, 3, null); // CraftBukkit
++                        } // Purpur - Smooth snow accumulation
+                     }
+                 } else {
+                     org.bukkit.craftbukkit.event.CraftEventFactory.handleBlockFormEvent(this, heightmapPos, Blocks.SNOW.defaultBlockState(), 3, null); // CraftBukkit
+@@ -1070,7 +_,7 @@
+                 poiType -> poiType.is(PoiTypes.LIGHTNING_ROD),
                  blockPos -> blockPos.getY() == this.getHeight(Heightmap.Types.WORLD_SURFACE, blockPos.getX(), blockPos.getZ()) - 1,
                  pos,
 -                128,
@@ -118,10 +153,10 @@
                  PoiManager.Occupancy.ANY
              );
          return optional.map(blockPos -> blockPos.above(1));
-@@ -1057,8 +_,26 @@
-                 int _int = this.getGameRules().getInt(GameRules.RULE_PLAYERS_SLEEPING_PERCENTAGE);
+@@ -1119,8 +_,26 @@
+                 int i = this.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
                  Component component;
-                 if (this.sleepStatus.areEnoughSleeping(_int)) {
+                 if (this.sleepStatus.areEnoughSleeping(i)) {
 +                    // Purpur start - Customizable sleeping actionbar messages
 +                    if (org.purpurmc.purpur.PurpurConfig.sleepSkippingNight.isBlank()) {
 +                        return;
@@ -139,13 +174,13 @@
 +                    if (!org.purpurmc.purpur.PurpurConfig.sleepingPlayersPercent.equalsIgnoreCase("default")) {
 +                        component = io.papermc.paper.adventure.PaperAdventure.asVanilla(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(org.purpurmc.purpur.PurpurConfig.sleepingPlayersPercent,
 +                            net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.parsed("count", Integer.toString(this.sleepStatus.amountSleeping())),
-+                            net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.parsed("total", Integer.toString(this.sleepStatus.sleepersNeeded(_int)))));
++                            net.kyori.adventure.text.minimessage.tag.resolver.Placeholder.parsed("total", Integer.toString(this.sleepStatus.sleepersNeeded(i)))));
 +                    } else
 +                    // Purpur end - Customizable sleeping actionbar messages
-                     component = Component.translatable("sleep.players_sleeping", this.sleepStatus.amountSleeping(), this.sleepStatus.sleepersNeeded(_int));
+                     component = Component.translatable("sleep.players_sleeping", this.sleepStatus.amountSleeping(), this.sleepStatus.sleepersNeeded(i));
                  }
  
-@@ -1191,6 +_,7 @@
+@@ -1275,6 +_,7 @@
      @VisibleForTesting
      public void resetWeatherCycle() {
          // CraftBukkit start
@@ -153,7 +188,7 @@
          this.serverLevelData.setRaining(false, org.bukkit.event.weather.WeatherChangeEvent.Cause.SLEEP); // Paper - Add cause to Weather/ThunderChangeEvents
          // If we stop due to everyone sleeping we should reset the weather duration to some other random value.
          // Not that everyone ever manages to get the whole server to sleep at the same time....
-@@ -1198,6 +_,7 @@
+@@ -1282,6 +_,7 @@
              this.serverLevelData.setRainTime(0);
          }
          // CraftBukkit end
@@ -161,7 +196,16 @@
          this.serverLevelData.setThundering(false, org.bukkit.event.weather.ThunderChangeEvent.Cause.SLEEP); // Paper - Add cause to Weather/ThunderChangeEvents
          // CraftBukkit start
          // If we stop due to everyone sleeping we should reset the weather duration to some other random value.
-@@ -2676,7 +_,7 @@
+@@ -1954,7 +_,7 @@
+         Explosion.BlockInteraction blockInteraction = switch (explosionInteraction) {
+             case NONE -> Explosion.BlockInteraction.KEEP;
+             case BLOCK -> this.getDestroyType(GameRules.BLOCK_EXPLOSION_DROP_DECAY);
+-            case MOB -> this.getGameRules().get(GameRules.MOB_GRIEFING)
++            case MOB -> ((source instanceof net.minecraft.world.entity.projectile.hurtingprojectile.LargeFireball) ? this.getGameRules().get(GameRules.MOB_GRIEFING, this.purpurConfig.fireballsMobGriefingOverride) : this.getGameRules().get(GameRules.MOB_GRIEFING)) // Purpur - Add mobGriefing override to everything affected
+                 ? this.getDestroyType(GameRules.MOB_EXPLOSION_DROP_DECAY)
+                 : Explosion.BlockInteraction.KEEP;
+             case TNT -> this.getDestroyType(GameRules.TNT_EXPLOSION_DROP_DECAY);
+@@ -2846,7 +_,7 @@
              // Spigot start
              if (entity.getBukkitEntity() instanceof org.bukkit.inventory.InventoryHolder && (!(entity instanceof ServerPlayer) || entity.getRemovalReason() != Entity.RemovalReason.KILLED)) { // SPIGOT-6876: closeInventory clears death message
                  // Paper start - Fix merchant inventory not closing on entity removal
