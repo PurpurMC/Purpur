@@ -1,0 +1,131 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: granny <granny@purpurmc.org>
+Date: Sun, 27 Aug 2023 02:09:51 -0700
+Subject: [PATCH] lightning transforms blocks
+
+
+diff --git a/net/minecraft/world/entity/LightningBolt.java b/net/minecraft/world/entity/LightningBolt.java
+index e81eabf901e755e1254fff98cdd1e609cf07aab8..d971384c64baf6954f92ac9d2c1c9f782b11a6e3 100644
+--- a/net/minecraft/world/entity/LightningBolt.java
++++ b/net/minecraft/world/entity/LightningBolt.java
+@@ -38,6 +38,10 @@ public class LightningBolt extends Entity {
+     public boolean visualOnly;
+     private @Nullable ServerPlayer cause;
+     private final Set<Entity> hitEntities = Sets.newHashSet();
++    // Purpur start - lightning transforms blocks
++    public List<org.bukkit.craftbukkit.block.CraftBlockState> blocks;
++    private BlockPos blockPos;
++    // Purpur end - lightning transforms blocks
+     private int blocksSetOnFire;
+     public boolean isEffect; // Paper - Properly handle lightning effects api
+ 
+@@ -46,6 +50,10 @@ public class LightningBolt extends Entity {
+         this.life = 2;
+         this.seed = this.random.nextLong();
+         this.flashes = this.random.nextInt(3) + 1;
++        // Purpur start - lightning transforms blocks
++        this.blocks = this.getTransformedBlocks();
++        this.blockPos = this.getStrikePosition();
++        // Purpur end - lightning transforms blocks
+     }
+ 
+     public void setVisualOnly(boolean visualOnly) {
+@@ -73,6 +81,65 @@ public class LightningBolt extends Entity {
+         }
+     }
+ 
++    // Purpur start - lightning transforms blocks
++    private List<org.bukkit.craftbukkit.block.CraftBlockState> getTransformedBlocks() {
++        if (!level().purpurConfig.lightningTransformsBlocks) return new java.util.ArrayList<>();
++
++        BlockPos blockposition = this.getStrikePosition();
++        BlockState iblockdata = this.level().getBlockState(blockposition);
++        BlockPos pos;
++        BlockState iblockdata2;
++
++        if (iblockdata.is(net.minecraft.world.level.block.Blocks.LIGHTNING_ROD)) {
++            pos = blockposition.below();
++            iblockdata2 = this.level().getBlockState(pos);
++        } else {
++            iblockdata2 = iblockdata;
++            pos = blockposition;
++        }
++
++        if (level().purpurConfig.lightningTurnsSandIntoGlass && iblockdata2.is(net.minecraft.world.level.block.Blocks.SAND)) {
++            level().setBlock(pos, net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState(), 2);
++        } else if (level().purpurConfig.lightningTurnsStoneIntoObsidian && iblockdata2.is(net.minecraft.world.level.block.Blocks.STONE)) {
++            level().setBlock(pos, net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState(), 2);
++        } else if (level().purpurConfig.lightningTurnsWaterIntoStone && iblockdata2.is(net.minecraft.world.level.block.Blocks.WATER)) {
++            level().setBlock(pos, net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), 2);
++        } else if (!level().purpurConfig.lightningTurnsNearbySandIntoGlass) {
++            return new java.util.ArrayList<>();
++        }
++
++        org.bukkit.craftbukkit.util.BlockStateListPopulator blockList = new org.bukkit.craftbukkit.util.BlockStateListPopulator(level());
++        BlockPos.breadthFirstTraversal(
++                pos,
++                level().purpurConfig.lightningTurnsNearbySandIntoGlassMaxDepth,
++                level().purpurConfig.lightningTurnsNearbySandIntoGlassMaxIterations,
++                (validPos, queueAdder) -> {
++                    for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.values()) {
++                        queueAdder.accept(validPos.relative(direction));
++                    }
++                },
++        blockPos -> {
++                    if (blockPos.equals(pos)) {
++                        return BlockPos.TraversalNodeStatus.ACCEPT;
++                    } else {
++                        BlockState iblockdata3 = blockList.getBlockState(blockPos);
++
++                        if (!iblockdata3.is(net.minecraft.world.level.block.Blocks.SAND)) { // Purpur
++                            return BlockPos.TraversalNodeStatus.SKIP;
++                        } else {
++                            blockList.setBlock(blockPos, net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState(), 3);
++                            return BlockPos.TraversalNodeStatus.ACCEPT;
++                        }
++                    }
++                }
++            );
++
++        this.blockPos = pos; // TODO find a way to not need this variable
++
++        return blockList.getSnapshotBlocks();
++    }
++    // Purpur end - lightning transforms blocks
++
+     @Override
+     public void tick() {
+         super.tick();
+@@ -107,6 +174,7 @@ public class LightningBolt extends Entity {
+                 }
+ 
+                 this.powerLightningRod();
++                if (level().purpurConfig.lightningTransformsBlocks) net.minecraft.world.level.block.SpongeBlock.processBlocksBreadthFirstSearch(level(), this.blockPos, this.blocks, false); // Purpur - lightning transforms blocks
+                 clearCopperOnLightningStrike(this.level(), this.getStrikePosition(), this); // Paper - Call EntityChangeBlockEvent
+                 this.gameEvent(GameEvent.LIGHTNING_STRIKE);
+             }
+diff --git a/net/minecraft/world/level/block/SpongeBlock.java b/net/minecraft/world/level/block/SpongeBlock.java
+index 83185c5341fe0033f542520bc1436a31eed27bf5..73d9f24586e960359be9fd8d941c3d2c7584de43 100644
+--- a/net/minecraft/world/level/block/SpongeBlock.java
++++ b/net/minecraft/world/level/block/SpongeBlock.java
+@@ -102,13 +102,20 @@ public class SpongeBlock extends Block {
+             );
+         // CraftBukkit start
+         java.util.List<org.bukkit.craftbukkit.block.CraftBlockState> snapshots = blockList.getSnapshotBlocks(); // Is a clone
++    // Purpur start - lightning transforms blocks
++        return processBlocksBreadthFirstSearch(level, pos, snapshots, true);
++    }
++    public static boolean processBlocksBreadthFirstSearch(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos, java.util.List<org.bukkit.craftbukkit.block.CraftBlockState> snapshots, boolean emitSpongeAbscorbEvent) {
++    // Purpur end - lightning transforms blocks
+         if (!snapshots.isEmpty()) {
+             final org.bukkit.block.Block sponge = org.bukkit.craftbukkit.block.CraftBlock.at(level, pos);
+ 
++            if (emitSpongeAbscorbEvent) { // Purpur - lightning transforms blocks
+             org.bukkit.event.block.SpongeAbsorbEvent event = new org.bukkit.event.block.SpongeAbsorbEvent(sponge, (java.util.List<org.bukkit.block.BlockState>) (java.util.List) snapshots);
+             if (!event.callEvent()) {
+                 return false;
+             }
++            } // Purpur - lightning transforms blocks
+ 
+             for (org.bukkit.craftbukkit.block.CraftBlockState snapshot : snapshots) {
+                 BlockPos blockPos = snapshot.getPosition();
