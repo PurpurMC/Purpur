@@ -1,0 +1,223 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Racci <tangentmoons@gmail.com>
+Date: Sat, 4 Dec 2021 00:07:05 +1100
+Subject: [PATCH] Potion NamespacedKey
+
+
+diff --git a/src/main/java/net/minecraft/world/effect/MobEffectInstance.java b/src/main/java/net/minecraft/world/effect/MobEffectInstance.java
+index 32cf6ea96aaa2e6bd0cc28fa88492ceea3d34052..9787dd4fc6ca2ed8aba3db7674ad2dc26a529a7a 100644
+--- a/src/main/java/net/minecraft/world/effect/MobEffectInstance.java
++++ b/src/main/java/net/minecraft/world/effect/MobEffectInstance.java
+@@ -53,6 +53,7 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+     private boolean showIcon;
+     @Nullable
+     public MobEffectInstance hiddenEffect;
++    private org.bukkit.NamespacedKey key; // Purpur - add key
+     private final MobEffectInstance.BlendState blendState = new MobEffectInstance.BlendState();
+ 
+     public MobEffectInstance(Holder<MobEffect> effect) {
+@@ -71,8 +72,14 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         this(effect, duration, amplifier, ambient, visible, visible);
+     }
+ 
++    // Purpur start
++    public MobEffectInstance(Holder<MobEffect> effect, int duration, int amplifier, boolean ambient, boolean showParticles, boolean showIcon, @Nullable org.bukkit.NamespacedKey key) {
++        this(effect, duration, amplifier, ambient, showParticles, showIcon, null, key);
++    // Purpur end
++    }
++
+     public MobEffectInstance(Holder<MobEffect> effect, int duration, int amplifier, boolean ambient, boolean showParticles, boolean showIcon) {
+-        this(effect, duration, amplifier, ambient, showParticles, showIcon, null);
++        this(effect, duration, amplifier, ambient, showParticles, showIcon, null, null); // Purpur
+     }
+ 
+     public MobEffectInstance(
+@@ -82,7 +89,8 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         boolean ambient,
+         boolean showParticles,
+         boolean showIcon,
+-        @Nullable MobEffectInstance hiddenEffect
++        @Nullable MobEffectInstance hiddenEffect,
++        @Nullable org.bukkit.NamespacedKey key // Purpur
+     ) {
+         this.effect = effect;
+         this.duration = duration;
+@@ -90,6 +98,7 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         this.ambient = ambient;
+         this.visible = showParticles;
+         this.showIcon = showIcon;
++        this.key = key; // Purpur - add key
+         this.hiddenEffect = hiddenEffect;
+     }
+ 
+@@ -135,6 +144,7 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         this.ambient = that.ambient;
+         this.visible = that.visible;
+         this.showIcon = that.showIcon;
++        this.key = that.key; // Purpur - add key
+     }
+ 
+     public boolean update(MobEffectInstance that) {
+@@ -179,6 +189,13 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+             bl = true;
+         }
+ 
++        // Purpur start
++        if (that.key != this.key) {
++            this.key = that.key;
++            bl = true;
++        }
++        // Purpur end
++
+         return bl;
+     }
+ 
+@@ -222,6 +239,17 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+         return this.showIcon;
+     }
+ 
++    // Purpur start
++    public boolean hasKey() {
++        return this.key != null;
++    }
++
++    @Nullable
++    public org.bukkit.NamespacedKey getKey() {
++        return this.key;
++    }
++    // Purpur end
++
+     public boolean tick(LivingEntity entity, Runnable overwriteCallback) {
+         if (this.hasRemainingDuration()) {
+             int i = this.isInfiniteDuration() ? entity.tickCount : this.duration;
+@@ -286,6 +314,12 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+             string = string + ", Show Icon: false";
+         }
+ 
++        // Purpur start
++        if (this.hasKey()) {
++            string = string + ", Key: " + this.key;
++        }
++        // Purpur end
++
+         return string;
+     }
+ 
+@@ -300,6 +334,7 @@ public class MobEffectInstance implements Comparable<MobEffectInstance> {
+                 && this.duration == mobEffectInstance.duration
+                 && this.amplifier == mobEffectInstance.amplifier
+                 && this.ambient == mobEffectInstance.ambient
++                && this.key == mobEffectInstance.key // Purpur - add key
+                 && this.effect.equals(mobEffectInstance.effect);
+     }
+ 
+diff --git a/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaPotion.java b/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaPotion.java
+index 4a9e6a679530025caa710a152c5249299ceffdf9..ea4f3f606aad69965384c73eb1273ed0644297b8 100644
+--- a/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaPotion.java
++++ b/src/main/java/org/bukkit/craftbukkit/inventory/CraftMetaPotion.java
+@@ -42,6 +42,7 @@ class CraftMetaPotion extends CraftMetaItem implements PotionMeta {
+     static final ItemMetaKey POTION_EFFECTS = new ItemMetaKey("custom-effects");
+     static final ItemMetaKey POTION_COLOR = new ItemMetaKey("custom-color");
+     static final ItemMetaKey DEFAULT_POTION = new ItemMetaKey("potion-type");
++    static final ItemMetaKey KEY = new ItemMetaKey("key", "namespacedkey"); // Purpur - add key
+ 
+     private PotionType type;
+     private List<PotionEffect> customEffects;
+@@ -91,7 +92,13 @@ class CraftMetaPotion extends CraftMetaItem implements PotionMeta {
+                 boolean ambient = effect.isAmbient();
+                 boolean particles = effect.isVisible();
+                 boolean icon = effect.showIcon();
+-                this.customEffects.add(new PotionEffect(type, duration, amp, ambient, particles, icon));
++                // Purpur start
++                NamespacedKey key = null;
++                if (tag.contains(CraftMetaPotion.KEY.NBT)) {
++                    key = NamespacedKey.fromString(effect.getString(CraftMetaPotion.KEY.NBT));
++                }
++                this.customEffects.add(new PotionEffect(type, duration, amp, ambient, particles, icon, key));
++                // Purpur end
+             }
+         });
+     }
+@@ -130,6 +137,11 @@ class CraftMetaPotion extends CraftMetaItem implements PotionMeta {
+         if (this.customEffects != null) {
+             for (PotionEffect effect : this.customEffects) {
+                 effectList.add(new MobEffectInstance(CraftPotionEffectType.bukkitToMinecraftHolder(effect.getType()), effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles(), effect.hasIcon()));
++                // Purpur start
++                if (effect.hasKey()) {
++                    effectData.putString(CraftMetaPotion.KEY.NBT, effect.getKey().toString());
++                }
++                // Purpur end
+             }
+         }
+ 
+@@ -196,7 +208,7 @@ class CraftMetaPotion extends CraftMetaItem implements PotionMeta {
+         if (index != -1) {
+             if (overwrite) {
+                 PotionEffect old = this.customEffects.get(index);
+-                if (old.getAmplifier() == effect.getAmplifier() && old.getDuration() == effect.getDuration() && old.isAmbient() == effect.isAmbient()) {
++                if (old.getAmplifier() == effect.getAmplifier() && old.getDuration() == effect.getDuration() && old.isAmbient() == effect.isAmbient() && old.getKey() == effect.getKey()) { // Purpur - add key
+                     return false;
+                 }
+                 this.customEffects.set(index, effect);
+diff --git a/src/main/java/org/bukkit/craftbukkit/potion/CraftPotionUtil.java b/src/main/java/org/bukkit/craftbukkit/potion/CraftPotionUtil.java
+index 14c58cf8d255c51473fd3d0092faeaf5a3c1ae0c..3ee9c14440046872b83de628b7f460d0782e9315 100644
+--- a/src/main/java/org/bukkit/craftbukkit/potion/CraftPotionUtil.java
++++ b/src/main/java/org/bukkit/craftbukkit/potion/CraftPotionUtil.java
+@@ -11,7 +11,7 @@ public class CraftPotionUtil {
+     public static MobEffectInstance fromBukkit(PotionEffect effect) {
+         Holder<MobEffect> type = CraftPotionEffectType.bukkitToMinecraftHolder(effect.getType());
+         // Paper - Note: do not copy over the hidden effect, as this method is only used for applying to entities which we do not want to convert over.
+-        return new MobEffectInstance(type, effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles(), effect.hasIcon()); // Paper
++        return new MobEffectInstance(type, effect.getDuration(), effect.getAmplifier(), effect.isAmbient(), effect.hasParticles(), effect.hasIcon(), effect.getKey()); // Paper // Purpur - add key
+     }
+ 
+     public static PotionEffect toBukkit(MobEffectInstance effect) {
+@@ -20,7 +20,7 @@ public class CraftPotionUtil {
+         int duration = effect.getDuration();
+         boolean ambient = effect.isAmbient();
+         boolean particles = effect.isVisible();
+-        return new PotionEffect(type, duration, amp, ambient, particles, effect.showIcon(), effect.hiddenEffect == null ? null : toBukkit(effect.hiddenEffect)); // Paper
++        return new PotionEffect(type, duration, amp, ambient, particles, effect.showIcon(), effect.hiddenEffect == null ? null : toBukkit(effect.hiddenEffect), effect.getKey()); // Paper // Purpur - add key
+     }
+ 
+     public static boolean equals(Holder<MobEffect> mobEffect, PotionEffectType type) {
+diff --git a/src/test/java/org/bukkit/potion/PotionTest.java b/src/test/java/org/bukkit/potion/PotionTest.java
+index cbcd1c21646308b2a9706095e2e12177ca06734d..b3ccaea713e858e334cc91d1ae498e589e3daafa 100644
+--- a/src/test/java/org/bukkit/potion/PotionTest.java
++++ b/src/test/java/org/bukkit/potion/PotionTest.java
+@@ -10,6 +10,7 @@ import net.minecraft.world.effect.MobEffect;
+ import net.minecraft.world.effect.MobEffectInstance;
+ import net.minecraft.world.item.alchemy.Potion;
+ import org.bukkit.craftbukkit.legacy.FieldRename;
++import org.bukkit.NamespacedKey; // Purpur
+ import org.bukkit.craftbukkit.potion.CraftPotionEffectType;
+ import org.bukkit.support.AbstractTestingBase;
+ import org.junit.jupiter.api.Test;
+@@ -47,4 +48,27 @@ public class PotionTest extends AbstractTestingBase {
+             assertEquals(bukkit, byName, "Same type not returned by name " + key);
+         }
+     }
++
++    // Purpur start
++    @Test
++    public void testNamespacedKey() {
++        NamespacedKey key = new NamespacedKey("testnamespace", "testkey");
++        PotionEffect namedSpacedEffect = new PotionEffect(PotionEffectType.DOLPHINS_GRACE, 20, 0, true, true, true, key);
++        assertNotNull(namedSpacedEffect.getKey());
++        assertTrue(namedSpacedEffect.hasKey());
++        assertFalse(namedSpacedEffect.withKey(null).hasKey());
++
++        PotionEffect effect = new PotionEffect(PotionEffectType.DOLPHINS_GRACE, 20, 0, true, true, true);
++        assertNull(effect.getKey());
++        assertFalse(effect.hasKey());
++        assertTrue(namedSpacedEffect.withKey(key).hasKey());
++
++        Map<String, Object> s1 = namedSpacedEffect.serialize();
++        Map<String, Object> s2 = effect.serialize();
++        assertTrue(s1.containsKey("namespacedKey"));
++        assertFalse(s2.containsKey("namespacedKey"));
++        assertNotNull(new PotionEffect(s1).getKey());
++        assertNull(new PotionEffect(s2).getKey());
++    }
++    // Purpur end
+ }

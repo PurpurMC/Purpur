@@ -1,0 +1,82 @@
+--- a/net/minecraft/world/level/Level.java
++++ b/net/minecraft/world/level/Level.java
+@@ -166,11 +_,55 @@
+     }
+     // Paper end - add paper world config
+ 
++    public final org.purpurmc.purpur.PurpurWorldConfig purpurConfig; // Purpur - Purpur config files
+     public static @Nullable BlockPos lastPhysicsProblem; // Spigot
+     private int tileTickPosition;
+     public final Map<ServerExplosion.CacheKey, Float> explosionDensityCache = new java.util.HashMap<>(); // Paper - Optimize explosions
+     public java.util.ArrayDeque<net.minecraft.world.level.block.RedstoneTorchBlock.Toggle> redstoneUpdateInfos; // Paper - Faster redstone torch rapid clock removal; Move from Map in BlockRedstoneTorch to here
+ 
++    // Purpur start - Add adjustable breeding cooldown to config
++    private com.google.common.cache.Cache<BreedingCooldownPair, Object> playerBreedingCooldowns;
++
++    private com.google.common.cache.Cache<BreedingCooldownPair, Object> getNewBreedingCooldownCache() {
++        return com.google.common.cache.CacheBuilder.newBuilder().expireAfterWrite(this.purpurConfig.animalBreedingCooldownSeconds, java.util.concurrent.TimeUnit.SECONDS).build();
++    }
++
++    public void resetBreedingCooldowns() {
++        this.playerBreedingCooldowns = this.getNewBreedingCooldownCache();
++    }
++
++    public boolean hasBreedingCooldown(java.util.UUID player, Class<? extends net.minecraft.world.entity.animal.Animal> animalType) { // Purpur
++        return this.playerBreedingCooldowns.getIfPresent(new BreedingCooldownPair(player, animalType)) != null;
++    }
++
++    public void addBreedingCooldown(java.util.UUID player, Class<? extends net.minecraft.world.entity.animal.Animal> animalType) {
++        this.playerBreedingCooldowns.put(new BreedingCooldownPair(player, animalType), new Object());
++    }
++
++    private static final class BreedingCooldownPair {
++        private final java.util.UUID playerUUID;
++        private final Class<? extends net.minecraft.world.entity.animal.Animal> animalType;
++
++        public BreedingCooldownPair(java.util.UUID playerUUID, Class<? extends net.minecraft.world.entity.animal.Animal> animalType) {
++            this.playerUUID = playerUUID;
++            this.animalType = animalType;
++        }
++
++        @Override
++        public boolean equals(Object o) {
++            if (this == o) return true;
++            if (o == null || getClass() != o.getClass()) return false;
++            BreedingCooldownPair that = (BreedingCooldownPair) o;
++            return playerUUID.equals(that.playerUUID) && animalType.equals(that.animalType);
++        }
++
++        @Override
++        public int hashCode() {
++            return java.util.Objects.hash(playerUUID, animalType);
++        }
++    }
++    // Purpur end - Add adjustable breeding cooldown to config
++
+     public CraftWorld getWorld() {
+         return this.world;
+     }
+@@ -846,6 +_,8 @@
+         // Paper end - getblock optimisations - cache world height/sections
+         this.spigotConfig = new org.spigotmc.SpigotWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) levelData).getLevelName()); // Spigot
+         this.paperConfig = paperWorldConfigCreator.apply(this.spigotConfig); // Paper - create paper world config
++        this.purpurConfig = new org.purpurmc.purpur.PurpurWorldConfig(((net.minecraft.world.level.storage.PrimaryLevelData) levelData).getLevelName(), environment); // Purpur - Purpur config files
++        this.playerBreedingCooldowns = this.getNewBreedingCooldownCache(); // Purpur - Add adjustable breeding cooldown to config
+         this.generator = generator;
+         this.world = new CraftWorld((ServerLevel) this, generator, biomeProvider, environment);
+ 
+@@ -2091,4 +_,14 @@
+         return this.moonrise$getEntityLookup().getEntityCount(); // Paper - rewrite chunk system
+     }
+     // Paper end - allow patching this logic
++    
++    // Purpur start - Add allow water in end world option
++    public boolean isNether() {
++        return getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER;
++    }
++
++    public boolean isTheEnd() {
++        return getWorld().getEnvironment() == org.bukkit.World.Environment.THE_END;
++    }
++    // Purpur end - Add allow water in end world option
+ }

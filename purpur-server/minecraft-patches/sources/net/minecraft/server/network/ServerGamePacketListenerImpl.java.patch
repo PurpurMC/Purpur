@@ -1,0 +1,233 @@
+--- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -346,6 +_,20 @@
+     }
+     // Paper end - configuration phase API
+ 
++    // Purpur start - AFK API
++    private final com.google.common.cache.LoadingCache<org.bukkit.craftbukkit.entity.CraftPlayer, Boolean> kickPermissionCache = com.google.common.cache.CacheBuilder.newBuilder()
++        .maximumSize(1000)
++        .expireAfterWrite(1, java.util.concurrent.TimeUnit.MINUTES)
++        .build(
++            new com.google.common.cache.CacheLoader<>() {
++                @Override
++                public Boolean load(org.bukkit.craftbukkit.entity.CraftPlayer player) {
++                    return player.hasPermission("purpur.bypassIdleKick");
++                }
++            }
++        );
++    // Purpur end - AFK API
++
+     @Override
+     public void tick() {
+         if (this.ackBlockChangesUpTo > -1) {
+@@ -363,6 +_,12 @@
+                 && this.server.playerIdleTimeout() > 0
+                 && Util.getMillis() - this.player.getLastActionTime() > TimeUnit.MINUTES.toMillis(this.server.playerIdleTimeout())
+                 && !this.player.wonGame) {
++                // Purpur start - AFK API
++                this.player.setAfk(true);
++                if (!this.player.level().purpurConfig.idleTimeoutKick || (!Boolean.parseBoolean(System.getenv("PURPUR_FORCE_IDLE_KICK")) && kickPermissionCache.getUnchecked(this.player.getBukkitEntity()))) {
++                    return;
++                }
++                // Purpur end - AFK API
+                 this.disconnect(Component.translatable("multiplayer.disconnect.idling"), org.bukkit.event.player.PlayerKickEvent.Cause.IDLING); // Paper - kick event cause
+             }
+         }
+@@ -682,6 +_,8 @@
+                     this.lastYaw = to.getYaw();
+                     this.lastPitch = to.getPitch();
+ 
++                    if (!to.getWorld().getUID().equals(from.getWorld().getUID()) || to.getBlockX() != from.getBlockX() || to.getBlockY() != from.getBlockY() || to.getBlockZ() != from.getBlockZ() || to.getYaw() != from.getYaw() || to.getPitch() != from.getPitch()) this.player.resetLastActionTime(); // Purpur - AFK API
++
+                     Location oldTo = to.clone();
+                     PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
+                     this.cserver.getPluginManager().callEvent(event);
+@@ -761,6 +_,7 @@
+         PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
+         if (packet.getId() == this.awaitingTeleport) {
+             if (this.awaitingPositionFromClient == null) {
++                ServerGamePacketListenerImpl.LOGGER.warn("Disconnected on accept teleport packet. Was not expecting position data from client at this time"); // Purpur - Add more logger output for invalid movement kicks
+                 this.disconnect(Component.translatable("multiplayer.disconnect.invalid_player_movement"), org.bukkit.event.player.PlayerKickEvent.Cause.INVALID_PLAYER_MOVEMENT); // Paper - kick event cause
+                 return;
+             }
+@@ -1301,6 +_,10 @@
+             final int maxBookPageSize = pageMax.intValue();
+             final double multiplier = Math.clamp(io.papermc.paper.configuration.GlobalConfiguration.get().itemValidation.bookSize.totalMultiplier, 0.3D, 1D);
+             long byteAllowed = maxBookPageSize;
++            // Purpur start - PlayerBookTooLargeEvent
++            int slot = packet.slot();
++            ItemStack itemstack = Inventory.isHotbarSlot(slot) || slot == Inventory.SLOT_OFFHAND ? this.player.getInventory().getItem(slot) : ItemStack.EMPTY;
++            // Purpur end - PlayerBookTooLargeEvent
+             for (final String page : pageList) {
+                 final int byteLength = page.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+                 byteTotal += byteLength;
+@@ -1325,7 +_,8 @@
+             }
+ 
+             if (byteTotal > byteAllowed) {
+-                ServerGamePacketListenerImpl.LOGGER.warn("{} tried to send a book too large. Book size: {} - Allowed: {} - Pages: {}", this.player.getScoreboardName(), byteTotal, byteAllowed, pageList.size());
++                ServerGamePacketListenerImpl.LOGGER.warn("{} tried to send too large of a book. Book size: {} - Allowed: {} - Pages: {}", this.player.getScoreboardName(), byteTotal, byteAllowed, pageList.size());
++                org.purpurmc.purpur.event.player.PlayerBookTooLargeEvent event = new org.purpurmc.purpur.event.player.PlayerBookTooLargeEvent(player.getBukkitEntity(), itemstack.asBukkitCopy()); if (event.shouldKickPlayer()) // Purpur - PlayerBookTooLargeEvent
+                 this.disconnectAsync(Component.literal("Book too large!"), org.bukkit.event.player.PlayerKickEvent.Cause.ILLEGAL_ACTION); // Paper - kick event cause // Paper - add proper async disconnect
+                 return;
+             }
+@@ -1344,31 +_,45 @@
+             Optional<String> optional = packet.title();
+             optional.ifPresent(list::add);
+             list.addAll(packet.pages());
++            // Purpur start - Allow color codes in books
++            boolean hasEditPerm = getCraftPlayer().hasPermission("purpur.book.color.edit");
++            boolean hasSignPerm = hasEditPerm || getCraftPlayer().hasPermission("purpur.book.color.sign");
++            // Purpur end - Allow color codes in books
+             Consumer<List<FilteredText>> consumer = optional.isPresent()
+-                ? texts -> this.signBook(texts.get(0), texts.subList(1, texts.size()), slot)
+-                : list1 -> this.updateBookContents(list1, slot);
++                ? texts -> this.signBook(texts.get(0), texts.subList(1, texts.size()), slot, hasSignPerm) // Purpur - Allow color codes in books
++                : list1 -> this.updateBookContents(list1, slot, hasEditPerm); // Purpur - Allow color codes in books
+             this.filterTextPacket(list).thenAcceptAsync(consumer, this.server);
+         }
+     }
+ 
+     private void updateBookContents(List<FilteredText> pages, int index) {
++    // Purpur start - Allow color codes in books
++        updateBookContents(pages, index, false);
++    }
++    private void updateBookContents(List<FilteredText> pages, int index, boolean hasPerm) {
++    // Purpur end - Allow color codes in books
+         // CraftBukkit start
+         ItemStack handItem = this.player.getInventory().getItem(index);
+         ItemStack item = handItem.copy();
+         // CraftBukkit end
+         if (item.has(DataComponents.WRITABLE_BOOK_CONTENT)) {
+-            List<Filterable<String>> list = pages.stream().map(this::filterableFromOutgoing).toList();
++            List<Filterable<String>> list = pages.stream().map(filteredText -> filterableFromOutgoing(filteredText).map(s -> color(s, hasPerm))).toList(); // Purpur - Allow color codes in books
+             item.set(DataComponents.WRITABLE_BOOK_CONTENT, new WritableBookContent(list));
+             this.player.getInventory().setItem(index, CraftEventFactory.handleEditBookEvent(this.player, index, handItem, item)); // CraftBukkit // Paper - Don't ignore result (see other callsite for handleEditBookEvent)
+         }
+     }
+ 
+     private void signBook(FilteredText title, List<FilteredText> pages, int index) {
++        // Purpur start - Allow color codes in books
++        signBook(title, pages, index, false);
++    }
++    private void signBook(FilteredText title, List<FilteredText> pages, int index, boolean hasPerm) {
++        // Purpur end - Allow color codes in books
+         ItemStack item = this.player.getInventory().getItem(index);
+         if (item.has(DataComponents.WRITABLE_BOOK_CONTENT)) {
+             ItemStack itemStack = item.transmuteCopy(Items.WRITTEN_BOOK);
+             itemStack.remove(DataComponents.WRITABLE_BOOK_CONTENT);
+-            List<Filterable<Component>> list = pages.stream().map(filteredText -> this.filterableFromOutgoing(filteredText).<Component>map(Component::literal)).toList();
++            List<Filterable<Component>> list = pages.stream().map((filteredText) -> this.filterableFromOutgoing(filteredText).map(s -> hexColor(s, hasPerm))).toList(); // Purpur - Allow color codes in books
+             itemStack.set(
+                 DataComponents.WRITTEN_BOOK_CONTENT, new WrittenBookContent(this.filterableFromOutgoing(title), this.player.getPlainTextName(), 0, list, true)
+             );
+@@ -1381,6 +_,16 @@
+         return this.player.isTextFilteringEnabled() ? Filterable.passThrough(filteredText.filteredOrEmpty()) : Filterable.from(filteredText);
+     }
+ 
++    // Purpur start - Allow color codes in books
++    private Component hexColor(String str, boolean hasPerm) {
++        return hasPerm ? PaperAdventure.asVanilla(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().deserialize(str)) : Component.literal(str);
++    }
++
++    private String color(String str, boolean hasPerm) {
++        return hasPerm ? org.bukkit.ChatColor.color(str, false) : str;
++    }
++    // Purpur end - Allow color codes in books
++
+     @Override
+     public void handleEntityTagQuery(ServerboundEntityTagQueryPacket packet) {
+         PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
+@@ -1420,7 +_,15 @@
+     @Override
+     public void handleMovePlayer(ServerboundMovePlayerPacket packet) {
+         PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
+-        if (containsInvalidValues(packet.getX(0.0), packet.getY(0.0), packet.getZ(0.0), packet.getYRot(0.0F), packet.getXRot(0.0F))) {
++        // Purpur start - Add more logger output for invalid movement kicks
++        boolean invalidX = Double.isNaN(packet.getX(0.0));
++        boolean invalidY = Double.isNaN(packet.getY(0.0));
++        boolean invalidZ = Double.isNaN(packet.getZ(0.0));
++        boolean invalidYaw = !Floats.isFinite(packet.getYRot(0.0F));
++        boolean invalidPitch = !Floats.isFinite(packet.getXRot(0.0F));
++        if (invalidX || invalidY || invalidZ || invalidYaw || invalidPitch) {
++            ServerGamePacketListenerImpl.LOGGER.warn(String.format("Disconnected on move player packet. Invalid data: x=%b, y=%b, z=%b, yaw=%b, pitch=%b", invalidX, invalidY, invalidZ, invalidYaw, invalidPitch));
++        // Purpur end - Add more logger output for invalid movement kicks
+             this.disconnect(Component.translatable("multiplayer.disconnect.invalid_player_movement"), org.bukkit.event.player.PlayerKickEvent.Cause.INVALID_PLAYER_MOVEMENT); // Paper - kick event cause
+         } else {
+             ServerLevel serverLevel = this.player.level();
+@@ -1603,7 +_,7 @@
+                                         movedWrongly = true;
+                                         if (event.getLogWarning())
+                                      // Paper end
+-                                    LOGGER.warn("{} moved wrongly!", this.player.getPlainTextName());
++                                    LOGGER.warn("{} moved wrongly!, ({})", this.player.getPlainTextName(), verticalDelta); // Purpur - AFK API
+                                     } // Paper
+                                 }
+ 
+@@ -1668,6 +_,8 @@
+                                         this.lastYaw = to.getYaw();
+                                         this.lastPitch = to.getPitch();
+ 
++                                        if (!to.getWorld().getUID().equals(from.getWorld().getUID()) || to.getBlockX() != from.getBlockX() || to.getBlockY() != from.getBlockY() || to.getBlockZ() != from.getBlockZ() || to.getYaw() != from.getYaw() || to.getPitch() != from.getPitch()) this.player.resetLastActionTime(); // Purpur - AFK API
++
+                                         Location oldTo = to.clone();
+                                         PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
+                                         this.cserver.getPluginManager().callEvent(event);
+@@ -1723,6 +_,13 @@
+                                         this.player.tryResetCurrentImpulseContext();
+                                     }
+ 
++                                    // Purpur start - Dont run with scissors!
++                                    if (this.player.level().purpurConfig.dontRunWithScissors && this.player.isSprinting() && !(this.player.level().purpurConfig.ignoreScissorsInWater && this.player.isInWater()) && !(this.player.level().purpurConfig.ignoreScissorsInLava && this.player.isInLava()) && (isScissors(this.player.getItemInHand(InteractionHand.MAIN_HAND)) || isScissors(this.player.getItemInHand(InteractionHand.OFF_HAND))) && (int) (Math.random() * 10) == 0) {
++                                        this.player.hurtServer(this.player.level(), this.player.damageSources().scissors(), (float) this.player.level().purpurConfig.scissorsRunningDamage);
++                                        if (!org.purpurmc.purpur.PurpurConfig.dontRunWithScissors.isBlank()) this.player.sendActionBarMessage(org.purpurmc.purpur.PurpurConfig.dontRunWithScissors);
++                                    }
++                                    // Purpur end - Dont run with scissors!
++
+                                     this.player.checkMovementStatistics(this.player.getX() - x, this.player.getY() - y, this.player.getZ() - z);
+                                     this.lastGoodX = this.player.getX();
+                                     this.lastGoodY = this.player.getY();
+@@ -1740,6 +_,17 @@
+         }
+     }
+ 
++    // Purpur start - Dont run with scissors!
++    public boolean isScissors(ItemStack stack) {
++        if (!stack.is(Items.SHEARS)) return false;
++
++        Identifier itemModelReference = stack.get(net.minecraft.core.component.DataComponents.ITEM_MODEL);
++        if (itemModelReference != null && itemModelReference.equals(this.player.level().purpurConfig.dontRunWithScissorsItemModelReference)) return true;
++
++        return stack.getOrDefault(DataComponents.CUSTOM_MODEL_DATA, net.minecraft.world.item.component.CustomModelData.EMPTY).equals(net.minecraft.world.item.component.CustomModelData.EMPTY);
++    }
++    // Purpur end - Dont run with scissors!
++
+     private boolean shouldCheckPlayerMovement(boolean isElytraMovement) {
+         if (this.isSingleplayerOwner()) {
+             return false;
+@@ -2154,6 +_,7 @@
+ 
+                 boolean cancelled;
+                 if (hitResult == null || hitResult.getType() != HitResult.Type.BLOCK) {
++                    if (this.player.gameMode.shiftClickMended(itemInHand)) return; // Purpur - Shift right click to use exp for mending
+                     org.bukkit.event.player.PlayerInteractEvent event = CraftEventFactory.callPlayerInteractEvent(this.player, Action.RIGHT_CLICK_AIR, itemInHand, hand);
+                     cancelled = event.useItemInHand() == Event.Result.DENY;
+                 } else {
+@@ -2800,6 +_,7 @@
+ 
+                 AABB boundingBox = target.getBoundingBox();
+                 if (packet.isWithinRange(this.player, boundingBox, io.papermc.paper.configuration.GlobalConfiguration.get().misc.clientInteractionLeniencyDistance.or(3.0))) { // Paper - configurable lenience value for interact range
++                    if (target instanceof net.minecraft.world.entity.Mob mob) mob.ticksSinceLastInteraction = 0; // Purpur - Entity lifespan
+                     packet.dispatch(
+                         new ServerboundInteractPacket.Handler() {
+                             private void performInteraction(InteractionHand hand, ServerGamePacketListenerImpl.EntityInteraction entityInteraction, PlayerInteractEntityEvent event) { // CraftBukkit
+@@ -3545,7 +_,7 @@
+     @Override
+     public void handleChangeGameMode(ServerboundChangeGameModePacket packet) {
+         PacketUtils.ensureRunningOnSameThread(packet, this, this.player.level());
+-        if (!GameModeCommand.PERMISSION_CHECK.check(this.player.permissions())) {
++        if (!GameModeCommand.PERMISSION_CHECK.check(this.player.permissions()) && !player.getBukkitEntity().hasPermission("purpur.debug.f3n")) { // Purpur - Add permission for F3+N debug
+             LOGGER.warn(
+                 "Player {} tried to change game mode to {} without required permissions",
+                 this.player.getGameProfile().name(),

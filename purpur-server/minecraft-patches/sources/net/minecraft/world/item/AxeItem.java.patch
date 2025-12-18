@@ -1,0 +1,70 @@
+--- a/net/minecraft/world/item/AxeItem.java
++++ b/net/minecraft/world/item/AxeItem.java
+@@ -65,13 +_,15 @@
+         if (playerHasBlockingItemUseIntent(context)) {
+             return InteractionResult.PASS;
+         } else {
+-            Optional<BlockState> optional = this.evaluateNewBlockState(level, clickedPos, player, level.getBlockState(clickedPos));
++            Optional<org.purpurmc.purpur.tool.Actionable> optional = this.evaluateActionable(level, clickedPos, player, level.getBlockState(clickedPos)); // Purpur - Tool actionable options
+             if (optional.isEmpty()) {
+                 return InteractionResult.PASS;
+             } else {
++                org.purpurmc.purpur.tool.Actionable actionable = optional.get(); // Purpur - Tool actionable options
++                BlockState state = actionable.into().withPropertiesOf(level.getBlockState(clickedPos)); // Purpur - Tool actionable options
+                 ItemStack itemInHand = context.getItemInHand();
+                 // Paper start - EntityChangeBlockEvent
+-                if (!org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(player, clickedPos, optional.get())) {
++                if (!org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(player, clickedPos, state)) { // Purpur - Tool actionable options
+                     return InteractionResult.PASS;
+                 }
+                 // Paper end
+@@ -79,8 +_,15 @@
+                     CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger((ServerPlayer)player, clickedPos, itemInHand);
+                 }
+ 
+-                level.setBlock(clickedPos, optional.get(), Block.UPDATE_ALL_IMMEDIATE);
+-                level.gameEvent(GameEvent.BLOCK_CHANGE, clickedPos, GameEvent.Context.of(player, optional.get()));
++                // Purpur start - Tool actionable options
++                level.setBlock(clickedPos, state, Block.UPDATE_ALL_IMMEDIATE);
++                actionable.drops().forEach((drop, chance) -> {
++                    if (level.random.nextDouble() < chance) {
++                        Block.popResourceFromFace(level, clickedPos, context.getClickedFace(), new ItemStack(drop));
++                    }
++                });
++                level.gameEvent(GameEvent.BLOCK_CHANGE, clickedPos, GameEvent.Context.of(player, state));
++                // Purpur end - Tool actionable options
+                 if (player != null) {
+                     itemInHand.hurtAndBreak(1, player, context.getHand().asEquipmentSlot());
+                 }
+@@ -97,21 +_,23 @@
+             && !player.isSecondaryUseActive();
+     }
+ 
+-    private Optional<BlockState> evaluateNewBlockState(Level level, BlockPos pos, @Nullable Player player, BlockState state) {
+-        Optional<BlockState> stripped = this.getStripped(state);
++    private Optional<org.purpurmc.purpur.tool.Actionable> evaluateActionable(Level level, BlockPos pos, @Nullable Player player, BlockState state) { // Purpur - Tool actionable options
++        Optional<org.purpurmc.purpur.tool.Actionable> stripped = Optional.ofNullable(level.purpurConfig.axeStrippables.get(state.getBlock())); // Purpur - Tool actionable options
+         if (stripped.isPresent()) {
+-            level.playSound(player, pos, SoundEvents.AXE_STRIP, SoundSource.BLOCKS, 1.0F, 1.0F);
++            level.playSound(STRIPPABLES.containsKey(state.getBlock()) ? player : null, pos, SoundEvents.AXE_STRIP, SoundSource.BLOCKS, 1.0F, 1.0F); // Purpur - force sound
+             return stripped;
+         } else {
+-            Optional<BlockState> previous = WeatheringCopper.getPrevious(state);
++            Optional<org.purpurmc.purpur.tool.Actionable> previous = Optional.ofNullable(level.purpurConfig.axeWeatherables.get(state.getBlock())); // Purpur - Tool actionable options
+             if (previous.isPresent()) {
+-                spawnSoundAndParticle(level, pos, player, state, SoundEvents.AXE_SCRAPE, LevelEvent.PARTICLES_SCRAPE);
++                spawnSoundAndParticle(level, pos, WeatheringCopper.getPrevious(state).isPresent() ? player : null, state, SoundEvents.AXE_SCRAPE, LevelEvent.PARTICLES_SCRAPE); // Purpur - Tool actionable options - force sound
+                 return previous;
+             } else {
+-                Optional<BlockState> optional = Optional.ofNullable(HoneycombItem.WAX_OFF_BY_BLOCK.get().get(state.getBlock()))
+-                    .map(block -> block.withPropertiesOf(state));
++                // Purpur start - Tool actionable options
++                Optional<org.purpurmc.purpur.tool.Actionable> optional = Optional.ofNullable(level.purpurConfig.axeWaxables.get(state.getBlock()));
++                //    .map(block -> block.withPropertiesOf(state));
++                // Purpur end - Tool actionable options
+                 if (optional.isPresent()) {
+-                    spawnSoundAndParticle(level, pos, player, state, SoundEvents.AXE_WAX_OFF, LevelEvent.PARTICLES_WAX_OFF);
++                    spawnSoundAndParticle(level, pos, HoneycombItem.WAX_OFF_BY_BLOCK.get().containsKey(state.getBlock()) ? player : null, state, SoundEvents.AXE_WAX_OFF, LevelEvent.PARTICLES_WAX_OFF); // Purpur - Tool actionable options - force sound
+                     return optional;
+                 } else {
+                     return Optional.empty();

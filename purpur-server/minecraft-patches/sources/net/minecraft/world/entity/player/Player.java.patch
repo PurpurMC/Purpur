@@ -1,0 +1,111 @@
+--- a/net/minecraft/world/entity/player/Player.java
++++ b/net/minecraft/world/entity/player/Player.java
+@@ -179,11 +_,20 @@
+     private int currentImpulseContextResetGraceTime = 0;
+     public boolean affectsSpawning = true; // Paper - Affects Spawning API
+     public net.kyori.adventure.util.TriState flyingFallDamage = net.kyori.adventure.util.TriState.NOT_SET; // Paper - flying fall damage
++    public int burpDelay = 0; // Purpur - Burp delay
++    public boolean canPortalInstant = false; // Purpur - Add portal permission bypass
+ 
+     // CraftBukkit start
+     public boolean fauxSleeping;
+     public int oldLevel = -1;
+ 
++    // Purpur start - AFK API
++    public abstract void setAfk(boolean afk);
++
++    public boolean isAfk() {
++        return false;
++    }
++    // Purpur end - AFK API
+     @Override
+     public org.bukkit.craftbukkit.entity.CraftHumanEntity getBukkitEntity() {
+         return (org.bukkit.craftbukkit.entity.CraftHumanEntity) super.getBukkitEntity();
+@@ -245,6 +_,12 @@
+ 
+     @Override
+     public void tick() {
++        // Purpur start - Burp delay
++        if (this.burpDelay > 0 && --this.burpDelay == 0) {
++            this.level().playSound(null, getX(), getY(), getZ(), SoundEvents.PLAYER_BURP, SoundSource.PLAYERS, 1.0F, this.level().random.nextFloat() * 0.1F + 0.9F);
++        }
++        // Purpur end - Burp delay
++
+         this.noPhysics = this.isSpectator();
+         if (this.isSpectator() || this.isPassenger()) {
+             this.setOnGround(false);
+@@ -302,6 +_,17 @@
+             this.turtleHelmetTick();
+         }
+ 
++        // Purpur start - Full netherite armor grants fire resistance
++        if (this.level().purpurConfig.playerNetheriteFireResistanceDuration > 0 && this.level().getGameTime() % 20 == 0) {
++            if (this.getItemBySlot(EquipmentSlot.HEAD).is(Items.NETHERITE_HELMET)
++                && this.getItemBySlot(EquipmentSlot.CHEST).is(Items.NETHERITE_CHESTPLATE)
++                && this.getItemBySlot(EquipmentSlot.LEGS).is(Items.NETHERITE_LEGGINGS)
++                && this.getItemBySlot(EquipmentSlot.FEET).is(Items.NETHERITE_BOOTS)) {
++                this.addEffect(new MobEffectInstance(MobEffects.FIRE_RESISTANCE, this.level().purpurConfig.playerNetheriteFireResistanceDuration, this.level().purpurConfig.playerNetheriteFireResistanceAmplifier, this.level().purpurConfig.playerNetheriteFireResistanceAmbient, this.level().purpurConfig.playerNetheriteFireResistanceShowParticles, this.level().purpurConfig.playerNetheriteFireResistanceShowIcon), org.bukkit.event.entity.EntityPotionEffectEvent.Cause.NETHERITE_ARMOR);
++            }
++        }
++        // Purpur end - Full netherite armor grants fire resistance
++
+         this.cooldowns.tick();
+         this.updatePlayerPose();
+         if (this.currentImpulseContextResetGraceTime > 0) {
+@@ -510,7 +_,7 @@
+             List<Entity> list = Lists.newArrayList();
+ 
+             for (Entity entity : entities) {
+-                if (entity.getType() == EntityType.EXPERIENCE_ORB) {
++                if (entity.getType() == EntityType.EXPERIENCE_ORB && entity.level().purpurConfig.playerExpPickupDelay >= 0) { // Purpur - Configurable player pickup exp delay
+                     list.add(entity);
+                 } else if (!entity.isRemoved()) {
+                     this.touch(entity);
+@@ -1052,7 +_,7 @@
+                     flag2 = flag2 && !this.level().paperConfig().entities.behavior.disablePlayerCrits; // Paper - Toggleable player crits
+                     if (flag2) {
+                         damageSource = damageSource.critical(); // Paper - critical damage API
+-                        f *= 1.5F;
++                        f *= (float) this.level().purpurConfig.playerCriticalDamageMultiplier; // Purpur - Add config change multiplier critical damage value
+                     }
+ 
+                     float f2 = f + f1;
+@@ -1764,7 +_,23 @@
+ 
+     @Override
+     protected int getBaseExperienceReward(ServerLevel level) {
+-        return !level.getGameRules().get(GameRules.KEEP_INVENTORY) && !this.isSpectator() ? Math.min(this.experienceLevel * 7, 100) : 0;
++        // Purpur start - Add player death exp control options
++        if (!level.getGameRules().get(GameRules.KEEP_INVENTORY) && !this.isSpectator()) {
++            int toDrop;
++            try {
++                toDrop = Math.round(((Number) scriptEngine.eval("let expLevel = " + experienceLevel + "; " +
++                    "let expTotal = " + totalExperience + "; " +
++                    "let exp = " + experienceProgress + "; " +
++                    level().purpurConfig.playerDeathExpDropEquation)).floatValue());
++            } catch (javax.script.ScriptException e) {
++                e.printStackTrace();
++                toDrop = experienceLevel * 7;
++            }
++            return Math.min(toDrop, level().purpurConfig.playerDeathExpDropMax);
++        } else {
++            return 0;
++        }
++        // Purpur end - Add player death exp control options
+     }
+ 
+     @Override
+@@ -1807,6 +_,13 @@
+     public boolean addItem(ItemStack stack) {
+         return this.inventory.add(stack);
+     }
++
++    // Purpur start - Player ridable in water option
++    @Override
++    public boolean dismountsUnderwater() {
++        return !level().purpurConfig.playerRidableInWater;
++    }
++    // Purpur end - Player ridable in water option
+ 
+     public abstract @Nullable GameType gameMode();
+ 

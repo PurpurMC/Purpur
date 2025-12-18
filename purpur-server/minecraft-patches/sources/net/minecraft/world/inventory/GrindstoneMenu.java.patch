@@ -1,0 +1,138 @@
+--- a/net/minecraft/world/inventory/GrindstoneMenu.java
++++ b/net/minecraft/world/inventory/GrindstoneMenu.java
+@@ -92,11 +_,13 @@
+             @Override
+             public void onTake(Player player, ItemStack stack) {
+                 access.execute((level, blockPos) -> {
++                    ItemStack itemstack = activeQuickItem == null ? stack : activeQuickItem; // Purpur - Grindstone API
+                     if (level instanceof ServerLevel) {
+                         // Paper start - Fire BlockExpEvent on grindstone use
+                         org.bukkit.event.block.BlockExpEvent event = new org.bukkit.event.block.BlockExpEvent(org.bukkit.craftbukkit.block.CraftBlock.at(level, blockPos), this.getExperienceAmount(level));
+                         event.callEvent();
+-                        ExperienceOrb.awardWithDirection((ServerLevel) level, Vec3.atCenterOf(blockPos), Vec3.ZERO, event.getExpToDrop(), org.bukkit.entity.ExperienceOrb.SpawnReason.GRINDSTONE, player, null);
++                        org.purpurmc.purpur.event.inventory.GrindstoneTakeResultEvent grindstoneTakeResultEvent = new org.purpurmc.purpur.event.inventory.GrindstoneTakeResultEvent(player.getBukkitEntity(), getBukkitView(), org.bukkit.craftbukkit.inventory.CraftItemStack.asCraftMirror(itemstack), event.getExpToDrop()); grindstoneTakeResultEvent.callEvent(); // Purpur - Grindstone API
++                        ExperienceOrb.awardWithDirection((ServerLevel) level, Vec3.atCenterOf(blockPos), Vec3.ZERO, grindstoneTakeResultEvent.getExperienceAmount(), org.bukkit.entity.ExperienceOrb.SpawnReason.GRINDSTONE, player, null); // Purpur - Grindstone API
+                         // Paper end - Fire BlockExpEvent on grindstone use
+                     }
+ 
+@@ -125,7 +_,7 @@
+                 for (Entry<Holder<Enchantment>> entry : enchantmentsForCrafting.entrySet()) {
+                     Holder<Enchantment> holder = entry.getKey();
+                     int intValue = entry.getIntValue();
+-                    if (!holder.is(EnchantmentTags.CURSE)) {
++                    if (!org.purpurmc.purpur.PurpurConfig.grindstoneIgnoredEnchants.contains(holder.value())) { // Purpur - Config for grindstones
+                         i += holder.value().getMinCost(intValue);
+                     }
+                 }
+@@ -203,15 +_,75 @@
+ 
+             for (Entry<Holder<Enchantment>> entry : enchantmentsForCrafting.entrySet()) {
+                 Holder<Enchantment> holder = entry.getKey();
+-                if (!holder.is(EnchantmentTags.CURSE) || mutable.getLevel(holder) == 0) {
++                if (!org.purpurmc.purpur.PurpurConfig.grindstoneIgnoredEnchants.contains(holder.value()) || mutable.getLevel(holder) == 0) { // Purpur - Config for grindstones
+                     mutable.upgrade(holder, entry.getIntValue());
+                 }
+             }
+         });
+     }
+ 
++    // Purpur start - Config for grindstones
++    private java.util.List<net.minecraft.core.component.DataComponentType<?>> GRINDSTONE_REMOVE_ATTRIBUTES_REMOVAL_LIST = java.util.List.of(
++        // DataComponents.MAX_STACK_SIZE,
++        // DataComponents.DAMAGE,
++        // DataComponents.BLOCK_STATE,
++        DataComponents.CUSTOM_DATA,
++        // DataComponents.MAX_DAMAGE,
++        // DataComponents.UNBREAKABLE,
++        // DataComponents.CUSTOM_NAME,
++        // DataComponents.ITEM_NAME,
++        // DataComponents.LORE,
++        // DataComponents.RARITY,
++        // DataComponents.ENCHANTMENTS,
++        // DataComponents.CAN_PLACE_ON,
++        // DataComponents.CAN_BREAK,
++        DataComponents.ATTRIBUTE_MODIFIERS,
++        DataComponents.CUSTOM_MODEL_DATA,
++        // DataComponents.HIDE_ADDITIONAL_TOOLTIP,
++        // DataComponents.HIDE_TOOLTIP,
++        // DataComponents.REPAIR_COST,
++        // DataComponents.CREATIVE_SLOT_LOCK,
++        // DataComponents.ENCHANTMENT_GLINT_OVERRIDE,
++        // DataComponents.INTANGIBLE_PROJECTILE,
++        // DataComponents.FOOD,
++        // DataComponents.FIRE_RESISTANT,
++        // DataComponents.TOOL,
++        // DataComponents.STORED_ENCHANTMENTS,
++        DataComponents.DYED_COLOR,
++        // DataComponents.MAP_COLOR,
++        // DataComponents.MAP_ID,
++        // DataComponents.MAP_DECORATIONS,
++        // DataComponents.MAP_POST_PROCESSING,
++        // DataComponents.CHARGED_PROJECTILES,
++        // DataComponents.BUNDLE_CONTENTS,
++        // DataComponents.POTION_CONTENTS,
++        DataComponents.SUSPICIOUS_STEW_EFFECTS
++        // DataComponents.WRITABLE_BOOK_CONTENT,
++        // DataComponents.WRITTEN_BOOK_CONTENT,
++        // DataComponents.TRIM,
++        // DataComponents.DEBUG_STICK_STATE,
++        // DataComponents.ENTITY_DATA,
++        // DataComponents.BUCKET_ENTITY_DATA,
++        // DataComponents.BLOCK_ENTITY_DATA,
++        // DataComponents.INSTRUMENT,
++        // DataComponents.OMINOUS_BOTTLE_AMPLIFIER,
++        // DataComponents.RECIPES,
++        // DataComponents.LODESTONE_TRACKER,
++        // DataComponents.FIREWORK_EXPLOSION,
++        // DataComponents.FIREWORKS,
++        // DataComponents.PROFILE,
++        // DataComponents.NOTE_BLOCK_SOUND,
++        // DataComponents.BANNER_PATTERNS,
++        // DataComponents.BASE_COLOR,
++        // DataComponents.POT_DECORATIONS,
++        // DataComponents.CONTAINER,
++        // DataComponents.BEES,
++        // DataComponents.LOCK,
++        // DataComponents.CONTAINER_LOOT,
++    );
++    // Purpur end - Config for grindstones
+     private ItemStack removeNonCursesFrom(ItemStack item) {
+-        ItemEnchantments itemEnchantments = EnchantmentHelper.updateEnchantments(item, mutable -> mutable.removeIf(holder -> !holder.is(EnchantmentTags.CURSE)));
++        ItemEnchantments itemEnchantments = EnchantmentHelper.updateEnchantments(item, mutable -> mutable.removeIf(holder -> !org.purpurmc.purpur.PurpurConfig.grindstoneIgnoredEnchants.contains(holder.value()))); // Purpur - Config for grindstones
+         if (item.is(Items.ENCHANTED_BOOK) && itemEnchantments.isEmpty()) {
+             item = item.transmuteCopy(Items.BOOK);
+         }
+@@ -223,6 +_,23 @@
+         }
+ 
+         item.set(DataComponents.REPAIR_COST, i);
++
++        // Purpur start - Config for grindstones
++        net.minecraft.core.component.DataComponentPatch.Builder builder = net.minecraft.core.component.DataComponentPatch.builder();
++        if (org.purpurmc.purpur.PurpurConfig.grindstoneRemoveAttributes) {
++            item.getComponents().forEach(typedDataComponent -> {
++                if (GRINDSTONE_REMOVE_ATTRIBUTES_REMOVAL_LIST.contains(typedDataComponent.type())) {
++                    builder.remove(typedDataComponent.type());
++                }
++            });
++        }
++        if (org.purpurmc.purpur.PurpurConfig.grindstoneRemoveDisplay) {
++            builder.remove(DataComponents.CUSTOM_NAME);
++            builder.remove(DataComponents.LORE);
++        }
++        item.applyComponents(builder.build());
++        // Purpur end - Config for grindstones
++
+         return item;
+     }
+ 
+@@ -279,7 +_,9 @@
+                 return ItemStack.EMPTY;
+             }
+ 
++            this.activeQuickItem = itemStack; // Purpur - Grindstone API
+             slot.onTake(player, item);
++            this.activeQuickItem = null; // Purpur - Grindstone API
+         }
+ 
+         return itemStack;

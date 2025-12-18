@@ -1,0 +1,65 @@
+--- a/net/minecraft/world/entity/monster/Creeper.java
++++ b/net/minecraft/world/entity/monster/Creeper.java
+@@ -56,6 +_,7 @@
+     public int explosionRadius = 3;
+     public boolean droppedSkulls;
+     public @Nullable Entity entityIgniter; // CraftBukkit
++    private boolean exploding = false; // Purpur - Config to make Creepers explode on death
+ 
+     public Creeper(EntityType<? extends Creeper> type, Level level) {
+         super(type, level);
+@@ -159,6 +_,27 @@
+         return false; // CraftBukkit
+     }
+ 
++    // Purpur start - Special mobs naturally spawn
++    @Override
++    public net.minecraft.world.entity.SpawnGroupData finalizeSpawn(net.minecraft.world.level.ServerLevelAccessor world, net.minecraft.world.DifficultyInstance difficulty, net.minecraft.world.entity.EntitySpawnReason spawnReason, net.minecraft.world.entity.@Nullable SpawnGroupData entityData) {
++        double chance = world.getLevel().purpurConfig.creeperChargedChance;
++        if (chance > 0D && random.nextDouble() <= chance) {
++            setPowered(true);
++        }
++        return super.finalizeSpawn(world, difficulty, spawnReason, entityData);
++    }
++    // Purpur end - Special mobs naturally spawn
++
++    // Purpur start - Config to make Creepers explode on death
++    @Override
++    protected org.bukkit.event.entity.EntityDeathEvent dropAllDeathLoot(ServerLevel world, DamageSource damageSource) {
++        if (!this.exploding && this.level().purpurConfig.creeperExplodeWhenKilled && damageSource.getEntity() instanceof net.minecraft.server.level.ServerPlayer) {
++            this.explodeCreeper();
++        }
++        return super.dropAllDeathLoot(world, damageSource);
++    }
++    // Purpur end - Config to make Creepers explode on death
++
+     @Override
+     public SoundEvent getHurtSound(DamageSource damageSource) {
+         return SoundEvents.CREEPER_HURT;
+@@ -243,14 +_,16 @@
+     }
+ 
+     public void explodeCreeper() {
++        this.exploding = true; // Purpur - Config to make Creepers explode on death
+         if (this.level() instanceof ServerLevel serverLevel) {
+             float f = this.isPowered() ? 2.0F : 1.0F;
++            float multiplier = serverLevel.purpurConfig.creeperHealthRadius ? this.getHealth() / this.getMaxHealth() : 1; // Purpur - Config for health to impact Creeper explosion radius
+             // CraftBukkit start
+-            org.bukkit.event.entity.ExplosionPrimeEvent event = org.bukkit.craftbukkit.event.CraftEventFactory.callExplosionPrimeEvent(this, this.explosionRadius * f, false);
++            org.bukkit.event.entity.ExplosionPrimeEvent event = org.bukkit.craftbukkit.event.CraftEventFactory.callExplosionPrimeEvent(this, (this.explosionRadius * f) * multiplier, false); // Purpur - Config for health to impact Creeper explosion radius
+             if (!event.isCancelled()) {
+             // CraftBukkit end
+             this.dead = true;
+-            serverLevel.explode(this, this.getX(), this.getY(), this.getZ(), event.getRadius(), event.getFire(), Level.ExplosionInteraction.MOB); // CraftBukkit // Paper - fix DamageSource API (revert to vanilla, no, just no, don't change this)
++            serverLevel.explode(this, this.getX(), this.getY(), this.getZ(), event.getRadius(), event.getFire(), serverLevel.getGameRules().get(net.minecraft.world.level.gamerules.GameRules.MOB_GRIEFING) && level().purpurConfig.creeperAllowGriefing ? Level.ExplosionInteraction.MOB : Level.ExplosionInteraction.NONE); // CraftBukkit // Paper - fix DamageSource API (revert to vanilla, no, just no, don't change this) // Purpur - Add enderman and creeper griefing controls
+             this.spawnLingeringCloud();
+             this.triggerOnDeathMobEffects(serverLevel, Entity.RemovalReason.KILLED);
+             this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.EXPLODE); // CraftBukkit - add Bukkit remove cause
+@@ -261,6 +_,7 @@
+             }
+             // CraftBukkit end
+         }
++        this.exploding = false; // Purpur - Config to make Creepers explode on death
+     }
+ 
+     private void spawnLingeringCloud() {

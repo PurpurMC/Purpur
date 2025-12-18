@@ -1,0 +1,80 @@
+--- a/net/minecraft/world/entity/Mob.java
++++ b/net/minecraft/world/entity/Mob.java
+@@ -150,6 +_,7 @@
+     private int homeRadius = -1;
+     public boolean aware = true; // CraftBukkit
+     public net.kyori.adventure.util.TriState despawnInPeacefulOverride = net.kyori.adventure.util.TriState.NOT_SET; // Paper - allow changing despawnInPeaceful
++    public int ticksSinceLastInteraction; // Purpur - Entity lifespan
+ 
+     protected Mob(EntityType<? extends Mob> type, Level level) {
+         super(type, level);
+@@ -292,6 +_,7 @@
+                 target = null;
+             }
+         }
++        if (target instanceof net.minecraft.server.level.ServerPlayer) this.ticksSinceLastInteraction = 0; // Purpur - Entity lifespan
+         this.target = target;
+         return true;
+         // CraftBukkit end
+@@ -335,7 +_,27 @@
+         }
+ 
+         profilerFiller.pop();
+-    }
++        incrementTicksSinceLastInteraction(); // Purpur - Entity lifespan
++    }
++
++    // Purpur start - Entity lifespan
++    private void incrementTicksSinceLastInteraction() {
++        ++this.ticksSinceLastInteraction;
++        if (getRider() != null) {
++            this.ticksSinceLastInteraction = 0;
++            return;
++        }
++        if (this.level().purpurConfig.entityLifeSpan <= 0) {
++            return; // feature disabled
++        }
++        if (!this.removeWhenFarAway(0) || isPersistenceRequired() || requiresCustomPersistence() || hasCustomName()) {
++            return; // mob persistent
++        }
++        if (this.ticksSinceLastInteraction > this.level().purpurConfig.entityLifeSpan) {
++            this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD);
++        }
++    }
++    // Purpur end - Entity lifespan
+ 
+     @Override
+     protected void playHurtSound(DamageSource damageSource) {
+@@ -439,6 +_,7 @@
+             output.putString("Paper.DespawnInPeacefulOverride", this.despawnInPeacefulOverride.name());
+         }
+         // Paper end - allow changing despawnInPeaceful
++        output.putInt("Purpur.ticksSinceLastInteraction", this.ticksSinceLastInteraction); // Purpur - Entity lifespan
+     }
+ 
+     @Override
+@@ -466,6 +_,7 @@
+         this.lootTableSeed = input.getLongOr("DeathLootTableSeed", 0L);
+         this.setNoAi(input.getBooleanOr("NoAI", false));
+         this.aware = input.getBooleanOr("Bukkit.Aware", true); // CraftBukkit
++        this.ticksSinceLastInteraction = input.getIntOr("Purpur.ticksSinceLastInteraction", 0); // Purpur- Entity lifespan
+         // Paper start - allow changing despawnInPeaceful
+         this.despawnInPeacefulOverride = readDespawnInPeacefulOverride(input);
+     }
+@@ -1246,7 +_,7 @@
+             );
+         }
+ 
+-        this.setLeftHanded(random.nextFloat() < 0.05F);
++        this.setLeftHanded(random.nextFloat() < level.getLevel().purpurConfig.entityLeftHandedChance); // Purpur - Changeable Mob Left Handed Chance
+         return spawnGroupData;
+     }
+ 
+@@ -1597,6 +_,7 @@
+         }
+ 
+         this.lungeForwardMaybe();
++        if (target instanceof net.minecraft.server.level.ServerPlayer) this.ticksSinceLastInteraction = 0; // Purpur - Entity lifespan
+         return flag;
+     }
+ 

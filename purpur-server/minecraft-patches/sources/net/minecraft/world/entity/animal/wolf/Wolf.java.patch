@@ -1,0 +1,168 @@
+--- a/net/minecraft/world/entity/animal/wolf/Wolf.java
++++ b/net/minecraft/world/entity/animal/wolf/Wolf.java
+@@ -100,6 +_,37 @@
+         EntityType<?> type = entity.getType();
+         return type == EntityType.SHEEP || type == EntityType.RABBIT || type == EntityType.FOX;
+     };
++    // Purpur start - Configurable chance for wolves to spawn rabid
++    private boolean isRabid = false;
++    private static final TargetingConditions.Selector RABID_PREDICATE = (entity, ignored) -> entity instanceof net.minecraft.server.level.ServerPlayer || entity instanceof net.minecraft.world.entity.Mob;
++    private final net.minecraft.world.entity.ai.goal.Goal PATHFINDER_VANILLA = new NonTameRandomTargetGoal<>(this, Animal.class, false, PREY_SELECTOR);
++    private final net.minecraft.world.entity.ai.goal.Goal PATHFINDER_RABID = new NonTameRandomTargetGoal<>(this, LivingEntity.class, false, RABID_PREDICATE);
++    private static final class AvoidRabidWolfGoal extends AvoidEntityGoal<Wolf> {
++        private final Wolf wolf;
++
++        public AvoidRabidWolfGoal(Wolf wolf, float distance, double minSpeed, double maxSpeed) {
++            super(wolf, Wolf.class, distance, minSpeed, maxSpeed);
++            this.wolf = wolf;
++        }
++
++        @Override
++        public boolean canUse() {
++            return super.canUse() && !this.wolf.isRabid() && this.toAvoid != null && this.toAvoid.isRabid(); // wolves which are not rabid run away from rabid wolves
++        }
++
++        @Override
++        public void start() {
++            this.wolf.setTarget(null);
++            super.start();
++        }
++
++        @Override
++        public void tick() {
++            this.wolf.setTarget(null);
++            super.tick();
++        }
++    }
++    // Purpur end - Configurable chance for wolves to spawn rabid
+     private static final float START_HEALTH = 8.0F;
+     private static final float TAME_HEALTH = 40.0F;
+     private static final float ARMOR_REPAIR_UNIT = 0.125F;
+@@ -121,12 +_,47 @@
+         this.setPathfindingMalus(PathType.DANGER_POWDER_SNOW, -1.0F);
+     }
+ 
++    // Purpur start - Configurable chance for wolves to spawn rabid
++    public boolean isRabid() {
++        return this.isRabid;
++    }
++
++    public void setRabid(boolean isRabid) {
++        this.isRabid = isRabid;
++        updatePathfinders(true);
++    }
++
++    public void updatePathfinders(boolean modifyEffects) {
++        this.targetSelector.removeGoal(PATHFINDER_VANILLA);
++        this.targetSelector.removeGoal(PATHFINDER_RABID);
++        if (this.isRabid) {
++            this.setOwnerReference(null);
++            setTame(false, true);
++            this.targetSelector.addGoal(5, PATHFINDER_RABID);
++            if (modifyEffects) this.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.NAUSEA, 1200));
++        } else {
++            this.targetSelector.addGoal(5, PATHFINDER_VANILLA);
++            this.stopBeingAngry();
++            if (modifyEffects) this.removeEffect(net.minecraft.world.effect.MobEffects.NAUSEA);
++        }
++    }
++    // Purpur end - Configurable chance for wolves to spawn rabid
++
++    // Purpur start - Configurable default collar color
++    @Override
++    public void tame(Player player) {
++        setCollarColor(level().purpurConfig.wolfDefaultCollarColor);
++        super.tame(player);
++    }
++    // Purpur end - Configurable default collar color
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(1, new FloatGoal(this));
+         this.goalSelector.addGoal(1, new TamableAnimal.TamableAnimalPanicGoal(1.5, DamageTypeTags.PANIC_ENVIRONMENTAL_CAUSES));
+         this.goalSelector.addGoal(2, new SitWhenOrderedToGoal(this));
+         this.goalSelector.addGoal(3, new Wolf.WolfAvoidEntityGoal<>(this, Llama.class, 24.0F, 1.5, 1.5));
++        this.goalSelector.addGoal(3, new AvoidRabidWolfGoal(this, 24.0F, 1.5D, 1.5D)); // Purpur - Configurable chance for wolves to spawn rabid
+         this.goalSelector.addGoal(4, new LeapAtTargetGoal(this, 0.4F));
+         this.goalSelector.addGoal(5, new MeleeAttackGoal(this, 1.0, true));
+         this.goalSelector.addGoal(6, new FollowOwnerGoal(this, 1.0, 10.0F, 2.0F));
+@@ -139,7 +_,7 @@
+         this.targetSelector.addGoal(2, new OwnerHurtTargetGoal(this));
+         this.targetSelector.addGoal(3, new HurtByTargetGoal(this).setAlertOthers());
+         this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, Player.class, 10, true, false, this::isAngryAt));
+-        this.targetSelector.addGoal(5, new NonTameRandomTargetGoal<>(this, Animal.class, false, PREY_SELECTOR));
++        //this.targetSelector.addGoal(5, new NonTameRandomTargetGoal<>(this, Animal.class, false, PREY_SELECTOR)); // Purpur - Configurable chance for wolves to spawn rabid - moved to updatePathfinders()
+         this.targetSelector.addGoal(6, new NonTameRandomTargetGoal<>(this, Turtle.class, false, Turtle.BABY_ON_LAND_SELECTOR));
+         this.targetSelector.addGoal(7, new NearestAttackableTargetGoal<>(this, AbstractSkeleton.class, false));
+         this.targetSelector.addGoal(8, new ResetUniversalAngerTargetGoal<>(this, true));
+@@ -229,6 +_,7 @@
+     protected void addAdditionalSaveData(ValueOutput output) {
+         super.addAdditionalSaveData(output);
+         output.store("CollarColor", DyeColor.LEGACY_ID_CODEC, this.getCollarColor());
++        output.putBoolean("Purpur.IsRabid", this.isRabid); // Purpur - Configurable chance for wolves to spawn rabid
+         VariantUtils.writeVariant(output, this.getVariant());
+         this.addPersistentAngerSaveData(output);
+         this.getSoundVariant()
+@@ -243,6 +_,10 @@
+         super.readAdditionalSaveData(input);
+         VariantUtils.readVariant(input, Registries.WOLF_VARIANT).ifPresent(this::setVariant);
+         this.setCollarColor(input.read("CollarColor", DyeColor.LEGACY_ID_CODEC).orElse(DEFAULT_COLLAR_COLOR));
++        // Purpur start - Configurable chance for wolves to spawn rabid
++        this.isRabid = input.getBooleanOr("Purpur.IsRabid", false);
++        this.updatePathfinders(false);
++        // Purpur end - Configurable chance for wolves to spawn rabid
+         this.readPersistentAngerSaveData(this.level(), input);
+         input.read("sound_variant", ResourceKey.codec(Registries.WOLF_SOUND_VARIANT))
+             .flatMap(resourceKey -> this.registryAccess().lookupOrThrow(Registries.WOLF_SOUND_VARIANT).get((ResourceKey<WolfSoundVariant>)resourceKey))
+@@ -266,6 +_,10 @@
+         }
+ 
+         this.setSoundVariant(WolfSoundVariants.pickRandomSoundVariant(this.registryAccess(), level.getRandom()));
++        // Purpur start - Configurable chance for wolves to spawn rabid
++        this.isRabid = level.getLevel().purpurConfig.wolfNaturalRabid > 0.0D && random.nextDouble() <= level.getLevel().purpurConfig.wolfNaturalRabid;
++        this.updatePathfinders(false);
++        // Purpur end - Configurable chance for wolves to spawn rabid
+         return super.finalizeSpawn(level, difficulty, spawnReason, spawnGroupData);
+     }
+ 
+@@ -316,6 +_,11 @@
+     public void tick() {
+         super.tick();
+         if (this.isAlive()) {
++            // Purpur start - Configurable chance for wolves to spawn rabid
++            if (this.age % 300 == 0 && this.isRabid()) {
++                this.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.NAUSEA, 400));
++            }
++            // Purpur end - Configurable chance for wolves to spawn rabid
+             this.interestedAngleO = this.interestedAngle;
+             if (this.isInterested()) {
+                 this.interestedAngle = this.interestedAngle + (1.0F - this.interestedAngle) * 0.4F;
+@@ -517,13 +_,27 @@
+             itemInHand.consume(1, player);
+             this.tryToTame(player);
+             return InteractionResult.SUCCESS_SERVER;
++        // Purpur start - Configurable chance for wolves to spawn rabid
++        } else if (this.level().purpurConfig.wolfMilkCuresRabies && itemInHand.getItem() == Items.MILK_BUCKET && this.isRabid()) {
++            if (!player.isCreative()) {
++                player.setItemInHand(hand, new ItemStack(Items.BUCKET));
++            }
++            this.setRabid(false);
++            for (int i = 0; i < 10; ++i) {
++                ((ServerLevel) level()).sendParticlesSource(((ServerLevel) level()).players(), null, ParticleTypes.HAPPY_VILLAGER,
++                        false, true,
++                        getX() + random.nextFloat(), getY() + (random.nextFloat() * 1.5), getZ() + random.nextFloat(), 1,
++                        random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, random.nextGaussian() * 0.05D, 0);
++            }
++            return InteractionResult.SUCCESS_SERVER;
++        // Purpur end - Configurable chance for wolves to spawn rabid
+         }
+ 
+         return super.mobInteract(player, hand);
+     }
+ 
+     private void tryToTame(Player player) {
+-        if (this.random.nextInt(3) == 0 && !org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTameEvent(this, player).isCancelled()) { // CraftBukkit - added event call
++        if (((this.level().purpurConfig.alwaysTameInCreative && player.hasInfiniteMaterials()) || this.random.nextInt(3) == 0) && !org.bukkit.craftbukkit.event.CraftEventFactory.callEntityTameEvent(this, player).isCancelled()) { // CraftBukkit - added event call // Purpur - Config to always tame in Creative
+             this.tame(player);
+             this.navigation.stop();
+             this.setTarget(null);

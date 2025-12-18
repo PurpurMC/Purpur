@@ -1,0 +1,59 @@
+--- a/net/minecraft/world/entity/monster/Shulker.java
++++ b/net/minecraft/world/entity/monster/Shulker.java
+@@ -93,6 +_,21 @@
+         this.lookControl = new Shulker.ShulkerLookControl(this);
+     }
+ 
++    // Purpur start - Shulker change color with dye
++    @Override
++    protected net.minecraft.world.InteractionResult mobInteract(Player player, net.minecraft.world.InteractionHand hand) {
++        net.minecraft.world.item.ItemStack itemstack = player.getItemInHand(hand);
++        if (player.level().purpurConfig.shulkerChangeColorWithDye && itemstack.getItem() instanceof net.minecraft.world.item.DyeItem dye && dye.getDyeColor() != this.getColor()) {
++            this.setVariant(Optional.of(dye.getDyeColor()));
++            if (!player.getAbilities().instabuild) {
++                itemstack.shrink(1);
++            }
++            return net.minecraft.world.InteractionResult.SUCCESS;
++        }
++        return super.mobInteract(player, hand);
++    }
++    // Purpur end - Shulker change color with dye
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(1, new LookAtPlayerGoal(this, Player.class, 8.0F, 0.02F, true));
+@@ -454,11 +_,21 @@
+     private void hitByShulkerBullet() {
+         Vec3 vec3 = this.position();
+         AABB boundingBox = this.getBoundingBox();
+-        if (!this.isClosed() && this.teleportSomewhere()) {
+-            int size = this.level().getEntities(EntityType.SHULKER, boundingBox.inflate(8.0), Entity::isAlive).size();
+-            float f = (size - 1) / 5.0F;
+-            if (!(this.level().random.nextFloat() < f)) {
++        // Purpur start - Shulker spawn from bullet options
++        if ((!this.level().purpurConfig.shulkerSpawnFromBulletRequireOpenLid || !this.isClosed()) && this.teleportSomewhere()) {
++            float chance = this.level().purpurConfig.shulkerSpawnFromBulletBaseChance;
++            if (!this.level().purpurConfig.shulkerSpawnFromBulletNearbyEquation.isBlank()) {
++                int nearby = this.level().getEntities((net.minecraft.world.level.entity.EntityTypeTest) EntityType.SHULKER, boundingBox.inflate(this.level().purpurConfig.shulkerSpawnFromBulletNearbyRange), Entity::isAlive).size();
++                try {
++                    chance -= ((Number) scriptEngine.eval("let nearby = " + nearby + "; " + this.level().purpurConfig.shulkerSpawnFromBulletNearbyEquation)).floatValue();
++                } catch (javax.script.ScriptException e) {
++                    e.printStackTrace();
++                    chance -= (nearby - 1) / 5.0F;
++                }
++            }
++            if (this.level().random.nextFloat() <= chance) {
+                 Shulker shulker = EntityType.SHULKER.create(this.level(), EntitySpawnReason.BREEDING);
++                // Purpur end - Shulker spawn from bullet options
+                 if (shulker != null) {
+                     shulker.setVariant(this.getVariant());
+                     shulker.snapTo(vec3);
+@@ -565,7 +_,7 @@
+     }
+ 
+     public Optional<DyeColor> getVariant() {
+-        return Optional.ofNullable(this.getColor());
++        return Optional.ofNullable(this.level().purpurConfig.shulkerSpawnFromBulletRandomColor ? DyeColor.random(this.level().random) : this.getColor()); // Purpur - Shulker spawn from bullet options
+     }
+ 
+     public @Nullable DyeColor getColor() {

@@ -1,0 +1,99 @@
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -290,6 +_,7 @@
+     public joptsimple.OptionSet options;
+     public org.bukkit.command.ConsoleCommandSender console;
+     public static int currentTick; // Paper - improve tick loop
++    public static final long startTimeMillis = System.currentTimeMillis(); // Purpur - Add uptime command
+     public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
+     public int autosavePeriod;
+     // Paper - don't store the vanilla dispatcher
+@@ -306,6 +_,8 @@
+     public boolean isIteratingOverLevels = false; // Paper - Throw exception on world create while being ticked
+     private final Set<String> pluginsBlockingSleep = new java.util.HashSet<>(); // Paper - API to allow/disallow tick sleeping
+     public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
++    public boolean lagging = false; // Purpur - Lagging threshold
++    protected boolean upnp = false; // Purpur - UPnP Port Forwarding
+     // Paper start - improve tick loop
+     public final ca.spottedleaf.moonrise.common.time.TickData tickTimes1s  = new ca.spottedleaf.moonrise.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(1L));
+     public final ca.spottedleaf.moonrise.common.time.TickData tickTimes5s  = new ca.spottedleaf.moonrise.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(5L));
+@@ -375,6 +_,7 @@
+     public double[] computeTPS() {
+         final long interval = this.tickRateManager().nanosecondsPerTick();
+         return new double[] {
++            getTPS(this.tickTimes5s, interval), // Purpur - Add 5 second tps average in /tps
+             getTPS(this.tickTimes1m, interval),
+             getTPS(this.tickTimes5m, interval),
+             getTPS(this.tickTimes15m, interval)
+@@ -1016,6 +_,15 @@
+ 
+         LOGGER.info("Stopping server");
+         Commands.COMMAND_SENDING_POOL.shutdownNow(); // Paper - Perf: Async command map building; Shutdown and don't bother finishing
++        // Purpur start - UPnP Port Forwarding
++        if (upnp) {
++            if (dev.omega24.upnp4j.UPnP4J.close(this.getPort(), dev.omega24.upnp4j.util.Protocol.TCP)) {
++                LOGGER.info("[UPnP] Port {} closed", this.getPort());
++            } else {
++                LOGGER.error("[UPnP] Failed to close port {}", this.getPort());
++            }
++        }
++        // Purpur end - UPnP Port Forwarding
+         // CraftBukkit start
+         if (this.server != null) {
+             this.server.spark.disable(); // Paper - spark
+@@ -1114,6 +_,8 @@
+         this.safeShutdown(waitForShutdown, false);
+     }
+     public void safeShutdown(boolean waitForShutdown, boolean isRestarting) {
++        org.purpurmc.purpur.task.BossBarTask.stopAll(); // Purpur - Implement TPSBar
++        org.purpurmc.purpur.task.BeehiveTask.instance().unregister(); // Purpur - Give bee counts in beehives to Purpur clients
+         this.isRestarting = isRestarting;
+         this.hasLoggedStop = true; // Paper - Debugging
+         if (isDebugging()) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper - Debugging
+@@ -1291,6 +_,16 @@
+             }
+             // Paper end - Add onboarding message for initial server start
+ 
++            // Purpur start - config for startup commands
++            if (!Boolean.getBoolean("Purpur.IReallyDontWantStartupCommands") && !org.purpurmc.purpur.PurpurConfig.startupCommands.isEmpty()) {
++                LOGGER.info("Purpur: Running startup commands specified in purpur.yml.");
++                for (final String startupCommand : org.purpurmc.purpur.PurpurConfig.startupCommands) {
++                    LOGGER.info("Purpur: Running the following command: \"{}\"", startupCommand);
++                    ((net.minecraft.server.dedicated.DedicatedServer) this).handleConsoleInput(startupCommand, this.createCommandSourceStack());
++                }
++            }
++            // Purpur end - config for startup commands
++
+             while (this.running) {
+                 final long tickStart = System.nanoTime(); // Paper - improve tick loop
+                 long l; // Paper - improve tick loop - diff on change, expect this to be tick interval
+@@ -1304,8 +_,10 @@
+                     final long ticksBehind = Math.max(1L, this.tickSchedule.getPeriodsAhead(l, tickStart));
+                     final long catchup = (long)Math.max(
+                         1,
+-                        5 //ConfigHolder.getConfig().tickLoop.catchupTicks.getOrDefault(MoonriseConfig.TickLoop.DEFAULT_CATCHUP_TICKS).intValue()
++                        org.purpurmc.purpur.PurpurConfig.tpsCatchup ? 5 : 1 //ConfigHolder.getConfig().tickLoop.catchupTicks.getOrDefault(MoonriseConfig.TickLoop.DEFAULT_CATCHUP_TICKS).intValue() // Purpur - Configurable TPS Catchup
+                     );
++
++                    lagging = getTPS()[0] < org.purpurmc.purpur.PurpurConfig.laggingThreshold; // Purpur - Lagging threshold
+ 
+                     // adjust ticksBehind so that it is not greater-than catchup
+                     if (ticksBehind > catchup) {
+@@ -1787,7 +_,7 @@
+             long worldTime = level.getGameTime();
+             final ClientboundSetTimePacket worldPacket = new ClientboundSetTimePacket(worldTime, dayTime, doDaylight);
+             for (Player entityhuman : level.players()) {
+-                if (!(entityhuman instanceof ServerPlayer) || (tickCount + entityhuman.getId()) % 20 != 0) {
++                if (!(entityhuman instanceof ServerPlayer) || (!level.isForceTime() && (tickCount + entityhuman.getId()) % 20 != 0)) { // Purpur - Configurable daylight cycle
+                     continue;
+                 }
+                 ServerPlayer entityplayer = (ServerPlayer) entityhuman;
+@@ -1954,7 +_,7 @@
+ 
+     @DontObfuscate
+     public String getServerModName() {
+-        return io.papermc.paper.ServerBuildInfo.buildInfo().brandName(); // Paper
++        return org.purpurmc.purpur.PurpurConfig.serverModName; // Paper // Purpur - Configurable server mod name
+     }
+ 
+     public SystemReport fillSystemReport(SystemReport systemReport) {

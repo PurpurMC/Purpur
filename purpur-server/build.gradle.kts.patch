@@ -1,0 +1,156 @@
+--- a/paper-server/build.gradle.kts
++++ b/paper-server/build.gradle.kts
+@@ -2,6 +_,7 @@
+ import io.papermc.paperweight.attribute.DevBundleOutput
+ import io.papermc.paperweight.util.*
+ import java.time.Instant
++import kotlin.io.path.writeText
+ 
+ plugins {
+     `java-library`
+@@ -22,6 +_,18 @@
+     minecraftVersion = providers.gradleProperty("mcVersion")
+     gitFilePatches = false
+ 
++    // Purpur start - Rebrand
++    val purpur = forks.register("purpur") {
++        upstream.patchDir("paperServer") {
++            upstreamPath = "paper-server"
++            excludes = setOf("src/minecraft", "patches", "build.gradle.kts")
++            patchesDir = rootDirectory.dir("purpur-server/paper-patches")
++            outputDir = rootDirectory.dir("paper-server")
++        }
++    }
++    activeFork = purpur
++    // Purpur end - Rebrand
++
+     spigot {
+         enabled = false
+         buildDataRef = "42d18d4c4653ffc549778dbe223f6994a031d69e"
+@@ -104,7 +_,21 @@
+     }
+ }
+ 
+-val log4jPlugins = sourceSets.create("log4jPlugins")
++// Purpur start - Rebrand
++sourceSets {
++    main {
++        java { srcDir("../paper-server/src/main/java") }
++        resources { srcDir("../paper-server/src/main/resources") }
++    }
++    test {
++        java { srcDir("../paper-server/src/test/java") }
++        resources { srcDir("../paper-server/src/test/resources") }
++    }
++}
++val log4jPlugins = sourceSets.create("log4jPlugins") {
++    java { srcDir("../paper-server/src/log4jPlugins/java") }
++}
++// Purpur end - Rebrand
+ configurations.named(log4jPlugins.compileClasspathConfigurationName) {
+     extendsFrom(configurations.compileClasspath.get())
+ }
+@@ -127,7 +_,7 @@
+ }
+ 
+ dependencies {
+-    implementation(project(":paper-api"))
++    implementation(project(":purpur-api")) // Purpur
+     implementation("ca.spottedleaf:concurrentutil:0.0.7")
+     implementation("org.jline:jline-terminal-ffm:3.27.1") // use ffm on java 22+
+     implementation("org.jline:jline-terminal-jni:3.27.1") // fall back to jni on java 21
+@@ -153,6 +_,10 @@
+     implementation("org.ow2.asm:asm-commons:9.8")
+     implementation("org.spongepowered:configurate-yaml:4.2.0")
+ 
++    implementation("org.mozilla:rhino-runtime:1.7.14") // Purpur
++    implementation("org.mozilla:rhino-engine:1.7.14") // Purpur
++    implementation("dev.omega24:upnp4j:1.0") // Purpur
++
+     // Deps that were previously in the API but have now been moved here for backwards compat, eventually to be removed
+     runtimeOnly("commons-lang:commons-lang:2.6")
+     runtimeOnly("org.xerial:sqlite-jdbc:3.49.1.0")
+@@ -198,14 +_,14 @@
+         val gitBranch = git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD").get().trim()
+         attributes(
+             "Main-Class" to "org.bukkit.craftbukkit.Main",
+-            "Implementation-Title" to "Paper",
++            "Implementation-Title" to "Purpur", // Purpur
+             "Implementation-Version" to implementationVersion,
+             "Implementation-Vendor" to date,
+-            "Specification-Title" to "Paper",
++            "Specification-Title" to "Purpur", // Purpur
+             "Specification-Version" to project.version,
+-            "Specification-Vendor" to "Paper Team",
+-            "Brand-Id" to "papermc:paper",
+-            "Brand-Name" to "Paper",
++            "Specification-Vendor" to "Purpur Team", // Purpur
++            "Brand-Id" to "purpurmc:purpur", // Purpur
++            "Brand-Name" to "Purpur", // Purpur
+             "Build-Number" to (build ?: ""),
+             "Build-Time" to buildTime.toString(),
+             "Git-Branch" to gitBranch,
+@@ -264,7 +_,7 @@
+     jvmArgumentProviders.add(provider)
+ }
+ 
+-val generatedDir: java.nio.file.Path = layout.projectDirectory.dir("src/generated/java").asFile.toPath()
++val generatedDir: java.nio.file.Path = layout.projectDirectory.dir("../paper-server/src/generated/java").asFile.toPath() // Purpur
+ idea {
+     module {
+         generatedSourceDirs.add(generatedDir.toFile())
+@@ -356,7 +_,7 @@
+     mainClass.set(null as String?)
+ }
+ 
+-fill {
++/* fill { // Purpur - we don't use fill
+     project("paper")
+     versionFamily(paperweight.minecraftVersion.map { it.split(".", "-").takeWhile { part -> part.toIntOrNull() != null }.take(2).joinToString(".") })
+     version(paperweight.minecraftVersion)
+@@ -371,4 +_,44 @@
+             }
+         }
+     }
+-}
++} */ // Purpur - we don't use fill
++
++// tasks.register("rebuildMinecraftSourcesWithGit") {
++//     group = "temp"
++//
++//     val patchDir = project.rootDir.resolve("purpur-server/minecraft-patches/sources").convertToPath().cleanDir()
++//     val inputDir = this.project.rootDir.resolve("purpur-server/src/minecraft/java").convertToPath()
++//
++//     val git = Git(inputDir)
++//     git("stash", "push").executeSilently(silenceErr = true)
++//     git("checkout", "file").executeSilently(silenceErr = true)
++//
++//     rebuildWithGit(git, patchDir)
++// }
++//
++// private fun rebuildWithGit(
++//     git: Git,
++//     patchDir: java.nio.file.Path
++// ): Int {
++//     val files = git("diff-tree", "--name-only", "--no-commit-id", "-r", "HEAD").getText().split("\n")
++//     files.parallelStream().forEach { filename ->
++//         if (filename.isBlank()) return@forEach
++//         val patch = git(
++//             "format-patch",
++//             "--diff-algorithm=myers",
++//             "--full-index",
++//             "--no-signature",
++//             "--no-stat",
++//             "--no-numbered",
++//             "-1",
++//             "HEAD",
++//             "--stdout",
++//             filename
++//         ).getText()
++//         val patchFile = patchDir.resolve("$filename.patch")
++//         patchFile.createParentDirectories()
++//         patchFile.writeText(patch)
++//     }
++//
++//     return files.size
++// }

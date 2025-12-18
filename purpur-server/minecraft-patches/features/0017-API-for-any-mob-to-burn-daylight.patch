@@ -1,0 +1,279 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ben Kerllenevich <ben@omega24.dev>
+Date: Tue, 25 May 2021 16:31:09 -0400
+Subject: [PATCH] API for any mob to burn daylight
+
+Co-authored by: Encode42 <me@encode42.dev>
+
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index 468df93a0302f200c2bd5e9bc65feccdd8649bf3..663cd67250c516fa8e16fa55dd91c02131507fd0 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -544,6 +544,24 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+     }
+     // Purpur end - Add canSaveToDisk to Entity
+ 
++    // Purpur start - copied from Mob - API for any mob to burn daylight
++    public boolean isSunBurnTick() {
++        if (!this.level().isClientSide() && this.level().environmentAttributes().getValue(EnvironmentAttributes.MONSTERS_BURN, this.position())) {
++            float lightLevelDependentMagicValue = this.getLightLevelDependentMagicValue();
++            BlockPos blockPos = BlockPos.containing(this.getX(), this.getEyeY(), this.getZ());
++            boolean flag = this.isInWater() || this.isInPowderSnow || this.wasInPowderSnow;
++            if (lightLevelDependentMagicValue > 0.5F
++                && this.random.nextFloat() * 30.0F < (lightLevelDependentMagicValue - 0.4F) * 2.0F
++                && !flag
++                && this.level().canSeeSky(blockPos)) {
++                return true;
++            }
++        }
++
++        return false;
++    }
++    // Purpur end - copied from Mob - API for any mob to burn daylight
++
+     public Entity(EntityType<?> type, Level level) {
+         this.type = type;
+         this.level = level;
+diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
+index f991e7a6988e98ec64b6af3c6c56522b19d929d2..78e68335805270ff1f942fe28e0e833adb41fd85 100644
+--- a/net/minecraft/world/entity/LivingEntity.java
++++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -290,6 +290,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+     public boolean silentDeath = false; // Paper - mark entity as dying silently for cancellable death event
+     public net.kyori.adventure.util.TriState frictionState = net.kyori.adventure.util.TriState.NOT_SET; // Paper - Friction API
+     public int invulnerableDuration = LivingEntity.INVULNERABLE_DURATION; // Paper - configurable invulnerable duration
++    protected boolean shouldBurnInDay = false; public boolean shouldBurnInDay() { return this.shouldBurnInDay; } public void setShouldBurnInDay(boolean shouldBurnInDay) { this.shouldBurnInDay = shouldBurnInDay; } // Purpur - API for any mob to burn daylight
+     // CraftBukkit end
+ 
+     protected LivingEntity(EntityType<? extends LivingEntity> type, Level level) {
+@@ -793,6 +794,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+         this.getSleepingPos().ifPresent(blockPos -> output.store("sleeping_pos", BlockPos.CODEC, blockPos));
+         DataResult<Dynamic<?>> dataResult = this.brain.serializeStart(NbtOps.INSTANCE).map(tag -> new Dynamic<>(NbtOps.INSTANCE, tag));
+         dataResult.resultOrPartial(LOGGER::error).ifPresent(dynamic -> output.store("Brain", Codec.PASSTHROUGH, (Dynamic<?>)dynamic));
++        output.putBoolean("Purpur.ShouldBurnInDay", this.shouldBurnInDay); // Purpur - API for any mob to burn daylight
+         if (this.lastHurtByPlayer != null) {
+             this.lastHurtByPlayer.store(output, "last_hurt_by_player");
+             output.putInt("last_hurt_by_player_memory_time", this.lastHurtByPlayerMemoryTime);
+@@ -917,6 +919,7 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+             } // Paper - The sleeping pos will always also set the actual pos, so a desync suggests something is wrong
+         }, this::clearSleepingPos);
+         input.read("Brain", Codec.PASSTHROUGH).ifPresent(dynamic -> this.brain = this.makeBrain((Dynamic<?>)dynamic));
++        this.shouldBurnInDay = input.getBooleanOr("Purpur.ShouldBurnInDay", this.shouldBurnInDay); // Purpur - API for any mob to burn daylight
+         this.lastHurtByPlayer = EntityReference.read(input, "last_hurt_by_player");
+         this.lastHurtByPlayerMemoryTime = input.getIntOr("last_hurt_by_player_memory_time", 0);
+         this.lastHurtByMob = EntityReference.read(input, "last_hurt_by_mob");
+@@ -3850,6 +3853,37 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+         if (this.level() instanceof ServerLevel serverLevel && this.isSensitiveToWater() && this.isInWaterOrRain()) {
+             this.hurtServer(serverLevel, this.damageSources().drown(), 1.0F);
+         }
++
++        // Purpur start - copied from Mob - API for any mob to burn daylight
++        if (this.getType().is(EntityTypeTags.BURN_IN_DAYLIGHT) && this.isAlive()) {
++            boolean flag = this.shouldBurnInDay() && this.isSunBurnTick(); // Paper - shouldBurnInDay API // Purpur - use shouldBurnInDay() method to handle Phantoms properly - API for any mob to burn daylight
++            if (flag) {
++                EquipmentSlot equipmentSlot = this.sunProtectionSlot();
++                ItemStack itemBySlot = this.getItemBySlot(equipmentSlot);
++                if (!itemBySlot.isEmpty()) {
++                    if (itemBySlot.isDamageableItem()) {
++                        Item item = itemBySlot.getItem();
++                        itemBySlot.setDamageValue(itemBySlot.getDamageValue() + this.random.nextInt(2));
++                        if (itemBySlot.getDamageValue() >= itemBySlot.getMaxDamage()) {
++                            this.onEquippedItemBroken(item, equipmentSlot);
++                            this.setItemSlot(equipmentSlot, ItemStack.EMPTY);
++                        }
++                    }
++
++                    flag = false;
++                }
++
++                if (flag) {
++                    if (getRider() == null || !this.isControllable()) // Purpur - ignore mobs which are uncontrollable or without rider - API for any mob to burn daylight
++                        this.igniteForSeconds(8.0F);
++                }
++            }
++        }
++    }
++
++    protected EquipmentSlot sunProtectionSlot() {
++        return net.minecraft.world.entity.EquipmentSlot.HEAD;
++        // Purpur end - copied from Mob - API for any mob to burn daylight
+     }
+ 
+     protected void applyInput() {
+diff --git a/net/minecraft/world/entity/Mob.java b/net/minecraft/world/entity/Mob.java
+index c94a1bd594bcd3b2f7525f1541d2e55897954623..327982be3748e82a36c7a24ede989dacebfb04db 100644
+--- a/net/minecraft/world/entity/Mob.java
++++ b/net/minecraft/world/entity/Mob.java
+@@ -544,9 +544,9 @@ public abstract class Mob extends LivingEntity implements EquipmentUser, Leashab
+     @Override
+     public void aiStep() {
+         super.aiStep();
+-        if (this.getType().is(EntityTypeTags.BURN_IN_DAYLIGHT)) {
++        /*if (this.getType().is(EntityTypeTags.BURN_IN_DAYLIGHT)) { // Purpur start - implemented in LivingEntity - API for any mob to burn daylight
+             this.burnUndead();
+-        }
++        }*/ // Purpur end - implemented in LivingEntity - API for any mob to burn daylight
+ 
+         ProfilerFiller profilerFiller = Profiler.get();
+         profilerFiller.push("looting");
+@@ -601,19 +601,8 @@ public abstract class Mob extends LivingEntity implements EquipmentUser, Leashab
+     }
+ 
+     public boolean isSunBurnTick() {
+-        if (!this.level().isClientSide() && this.level().environmentAttributes().getValue(EnvironmentAttributes.MONSTERS_BURN, this.position())) {
+-            float lightLevelDependentMagicValue = this.getLightLevelDependentMagicValue();
+-            BlockPos blockPos = BlockPos.containing(this.getX(), this.getEyeY(), this.getZ());
+-            boolean flag = this.isInWaterOrRain() || this.isInPowderSnow || this.wasInPowderSnow;
+-            if (lightLevelDependentMagicValue > 0.5F
+-                && this.random.nextFloat() * 30.0F < (lightLevelDependentMagicValue - 0.4F) * 2.0F
+-                && !flag
+-                && this.level().canSeeSky(blockPos)) {
+-                return true;
+-            }
+-        }
+-
+-        return false;
++        // Purpur - implemented in Entity - API for any mob to burn daylight
++        return super.isSunBurnTick();
+     }
+ 
+     protected Vec3i getPickupReach() {
+diff --git a/net/minecraft/world/entity/monster/Phantom.java b/net/minecraft/world/entity/monster/Phantom.java
+index 2fa22088ac507eceb36f3c77f24a733076641d8f..ff944ad57d4e9e4a910cd63282e5e7594626365e 100644
+--- a/net/minecraft/world/entity/monster/Phantom.java
++++ b/net/minecraft/world/entity/monster/Phantom.java
+@@ -52,7 +52,7 @@ public class Phantom extends Mob implements Enemy {
+     Vec3 crystalPosition; // Purpur - Phantoms attracted to crystals and crystals shoot phantoms
+     // Paper start
+     public java.util.@Nullable UUID spawningEntity;
+-    public boolean shouldBurnInDay = true;
++    //public boolean shouldBurnInDay = true; // Purpur - API for any mob to burn daylight
+     // Paper end
+     private static final net.minecraft.world.item.crafting.Ingredient TORCH = net.minecraft.world.item.crafting.Ingredient.of(net.minecraft.world.item.Items.TORCH, net.minecraft.world.item.Items.SOUL_TORCH); // Purpur - Phantoms burn in light
+ 
+@@ -61,6 +61,7 @@ public class Phantom extends Mob implements Enemy {
+         this.xpReward = 5;
+         this.moveControl = new Phantom.PhantomMoveControl(this);
+         this.lookControl = new Phantom.PhantomLookControl(this);
++        this.setShouldBurnInDay(true); // Purpur - API for any mob to burn daylight
+     }
+ 
+     // Purpur start - Ridables
+@@ -297,7 +298,7 @@ public class Phantom extends Mob implements Enemy {
+         this.setPhantomSize(input.getIntOr("size", 0));
+         // Paper start
+         this.spawningEntity = input.read("Paper.SpawningEntity", net.minecraft.core.UUIDUtil.CODEC).orElse(null);
+-        this.shouldBurnInDay = input.getBooleanOr("Paper.ShouldBurnInDay", true);
++        //this.shouldBurnInDay = input.getBooleanOr("Paper.ShouldBurnInDay", true); // Purpur - implemented in LivingEntity - API for any mob to burn daylight
+         // Paper end
+     }
+ 
+@@ -308,7 +309,7 @@ public class Phantom extends Mob implements Enemy {
+         output.putInt("size", this.getPhantomSize());
+         // Paper start
+         output.storeNullable("Paper.SpawningEntity", net.minecraft.core.UUIDUtil.CODEC, this.spawningEntity);
+-        output.putBoolean("Paper.ShouldBurnInDay", this.shouldBurnInDay);
++        //output.putBoolean("Paper.ShouldBurnInDay", this.shouldBurnInDay); // Purpur - implemented in LivingEntity - API for any mob to burn daylight
+         // Paper end
+     }
+ 
+diff --git a/net/minecraft/world/entity/monster/skeleton/AbstractSkeleton.java b/net/minecraft/world/entity/monster/skeleton/AbstractSkeleton.java
+index 1ab860be69bcc1ab5cc07418c2d7e733afdc482b..60afd81d3bf671889fbff5d4a3fabb38a8e2d461 100644
+--- a/net/minecraft/world/entity/monster/skeleton/AbstractSkeleton.java
++++ b/net/minecraft/world/entity/monster/skeleton/AbstractSkeleton.java
+@@ -66,11 +66,12 @@ public abstract class AbstractSkeleton extends Monster implements RangedAttackMo
+             AbstractSkeleton.this.setAggressive(true);
+         }
+     };
+-    private boolean shouldBurnInDay = true; // Paper - shouldBurnInDay API
++    //private boolean shouldBurnInDay = true; // Paper - shouldBurnInDay API // Purpur - moved to LivingEntity; keep methods for ABI compatibility - API for any mob to burn daylight
+ 
+     protected AbstractSkeleton(EntityType<? extends AbstractSkeleton> type, Level level) {
+         super(type, level);
+         this.reassessWeaponGoal();
++        this.setShouldBurnInDay(true); // Purpur - API for any mob to burn daylight
+     }
+ 
+     @Override
+@@ -223,14 +224,14 @@ public abstract class AbstractSkeleton extends Monster implements RangedAttackMo
+     protected void readAdditionalSaveData(ValueInput input) {
+         super.readAdditionalSaveData(input);
+         this.reassessWeaponGoal();
+-        this.shouldBurnInDay = input.getBooleanOr("Paper.ShouldBurnInDay", true); // Paper - shouldBurnInDay API
++        //this.shouldBurnInDay = input.getBooleanOr("Paper.ShouldBurnInDay", true); // Paper - shouldBurnInDay API // Purpur - implemented in LivingEntity - API for any mob to burn daylight
+     }
+ 
+     // Paper start - shouldBurnInDay API
+     @Override
+     protected void addAdditionalSaveData(final net.minecraft.world.level.storage.ValueOutput output) {
+         super.addAdditionalSaveData(output);
+-        output.putBoolean("Paper.ShouldBurnInDay", this.shouldBurnInDay);
++        //output.putBoolean("Paper.ShouldBurnInDay", this.shouldBurnInDay); // Purpur - implemented in LivingEntity - API for any mob to burn daylight
+     }
+     // Paper end - shouldBurnInDay API
+ 
+diff --git a/net/minecraft/world/entity/monster/zombie/Husk.java b/net/minecraft/world/entity/monster/zombie/Husk.java
+index 928e2c95146bc3fc9b8c41c5b6c3970fc919bb15..31b91dbc3f3e1875fbe6750bb815514686d14f7f 100644
+--- a/net/minecraft/world/entity/monster/zombie/Husk.java
++++ b/net/minecraft/world/entity/monster/zombie/Husk.java
+@@ -27,6 +27,7 @@ import org.jspecify.annotations.Nullable;
+ public class Husk extends Zombie {
+     public Husk(EntityType<? extends Husk> type, Level level) {
+         super(type, level);
++        this.setShouldBurnInDay(false); // Purpur - API for any mob to burn daylight
+     }
+ 
+     // Purpur start - Ridables
+@@ -84,7 +85,7 @@ public class Husk extends Zombie {
+ 
+     @Override
+     public boolean isSunSensitive() {
+-        return false;
++        return this.shouldBurnInDay; // Purpur - moved to LivingEntity; keep methods for ABI compatibility - API for any mob to burn daylight
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/entity/monster/zombie/Zombie.java b/net/minecraft/world/entity/monster/zombie/Zombie.java
+index dfdf9ee98a25ec1f7a1f41326c98155131494d93..d32a831ba76f65c4719c2672ffaec81a861cc7e6 100644
+--- a/net/minecraft/world/entity/monster/zombie/Zombie.java
++++ b/net/minecraft/world/entity/monster/zombie/Zombie.java
+@@ -92,11 +92,12 @@ public class Zombie extends Monster {
+     private boolean canBreakDoors = false;
+     private int inWaterTime = 0;
+     public int conversionTime;
+-    private boolean shouldBurnInDay = true; // Paper - Add more Zombie API
++    //private boolean shouldBurnInDay = true; // Paper - Add more Zombie API // Purpur - implemented in LivingEntity - API for any mob to burn daylight
+ 
+     public Zombie(EntityType<? extends Zombie> type, Level level) {
+         super(type, level);
+         this.breakDoorGoal = new BreakDoorGoal(this, com.google.common.base.Predicates.in(level.paperConfig().entities.behavior.doorBreakingDifficulty.getOrDefault(type, level.paperConfig().entities.behavior.doorBreakingDifficulty.get(EntityType.ZOMBIE)))); // Paper - Configurable door breaking difficulty
++        this.setShouldBurnInDay(true); // Purpur - API for any mob to burn daylight
+     }
+ 
+     public Zombie(Level level) {
+@@ -347,6 +348,7 @@ public class Zombie extends Monster {
+         // CraftBukkit end
+     }
+ 
++    public boolean shouldBurnInDay() { return this.isSunSensitive(); } // Purpur - for ABI compatibility - API for any mob to burn daylight
+     public boolean isSunSensitive() {
+         return this.shouldBurnInDay; // Paper - Add more Zombie API
+     }
+@@ -486,7 +488,7 @@ public class Zombie extends Monster {
+         output.putBoolean("CanBreakDoors", this.canBreakDoors());
+         output.putInt("InWaterTime", this.isInWater() ? this.inWaterTime : -1);
+         output.putInt("DrownedConversionTime", this.isUnderWaterConverting() ? this.conversionTime : -1);
+-        output.putBoolean("Paper.ShouldBurnInDay", this.shouldBurnInDay); // Paper - Add more Zombie API
++        //output.putBoolean("Paper.ShouldBurnInDay", this.shouldBurnInDay); // Paper - Add more Zombie API // Purpur - implemented in LivingEntity - API for any mob to burn daylight
+     }
+ 
+     @Override
+@@ -501,7 +503,7 @@ public class Zombie extends Monster {
+         } else {
+             this.getEntityData().set(DATA_DROWNED_CONVERSION_ID, false);
+         }
+-        this.shouldBurnInDay = input.getBooleanOr("Paper.ShouldBurnInDay", true); // Paper - Add more Zombie API
++        //this.shouldBurnInDay = input.getBooleanOr("Paper.ShouldBurnInDay", true); // Paper - Add more Zombie API // Purpur - implemented in LivingEntity - API for any mob to burn daylight
+     }
+ 
+     @Override
