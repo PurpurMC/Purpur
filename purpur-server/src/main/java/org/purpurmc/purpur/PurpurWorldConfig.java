@@ -133,11 +133,6 @@ public class PurpurWorldConfig {
         armorstandPlaceWithArms = getBoolean("gameplay-mechanics.armorstand.place-with-arms-visible", armorstandPlaceWithArms);
     }
 
-    public boolean arrowMovementResetsDespawnCounter = true;
-    private void arrowSettings() {
-        arrowMovementResetsDespawnCounter = getBoolean("gameplay-mechanics.arrow.movement-resets-despawn-counter", arrowMovementResetsDespawnCounter);
-    }
-
     public boolean useBetterMending = false;
     public boolean alwaysTameInCreative = false;
     public boolean boatEjectPlayersOnLand = false;
