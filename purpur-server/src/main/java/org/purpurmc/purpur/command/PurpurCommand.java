@@ -36,7 +36,7 @@ public class PurpurCommand extends Command {
     public boolean execute(CommandSender sender, String commandLabel, String[] args) {
         if (!testPermission(sender)) return true;
 
-        if (args.length != 1) {
+        if (args.length != 1 || (!args[0].equalsIgnoreCase("reload") && !args[0].equalsIgnoreCase("version"))) {
             sender.sendMessage(ChatColor.RED + "Usage: " + usageMessage);
             return false;
         }
