@@ -37,7 +37,7 @@ public class PreBlockExplodeEvent extends BlockExplodeEvent implements Cancellab
 
     @Override
     public boolean isCancelled() {
-        return this.cancelled;
+        return this.cancelled; // minor update
     }
 
     @Override
