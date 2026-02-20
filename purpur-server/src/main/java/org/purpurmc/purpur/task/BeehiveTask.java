@@ -15,6 +15,10 @@ import org.purpurmc.purpur.network.ClientboundBeehivePayload;
 import org.purpurmc.purpur.network.ServerboundBeehivePayload;
 import org.purpurmc.purpur.util.MinecraftInternalPlugin;
 
+/**
+ * Handles beehive information requests from the client.
+ * Receives a position from the client and responds with the number of bees inside the hive.
+ */
 public class BeehiveTask implements PluginMessageListener {
 
     private static BeehiveTask instance;
@@ -28,40 +32,54 @@ public class BeehiveTask implements PluginMessageListener {
 
     private final PluginBase plugin = new MinecraftInternalPlugin();
 
-    private BeehiveTask() {
-    }
+    private BeehiveTask() {}
 
     public void register() {
-        Bukkit.getMessenger().registerOutgoingPluginChannel(this.plugin, ClientboundBeehivePayload.TYPE.id().toString());
-        Bukkit.getMessenger().registerIncomingPluginChannel(this.plugin, ServerboundBeehivePayload.TYPE.id().toString(), this);
+        final String outgoing = ClientboundBeehivePayload.TYPE.id().toString();
+        final String incoming = ServerboundBeehivePayload.TYPE.id().toString();
+
+        Bukkit.getMessenger().registerOutgoingPluginChannel(plugin, outgoing);
+        Bukkit.getMessenger().registerIncomingPluginChannel(plugin, incoming, this);
     }
 
     public void unregister() {
-        Bukkit.getMessenger().unregisterOutgoingPluginChannel(this.plugin, ClientboundBeehivePayload.TYPE.id().toString());
-        Bukkit.getMessenger().unregisterIncomingPluginChannel(this.plugin, ServerboundBeehivePayload.TYPE.id().toString());
+        final String outgoing = ClientboundBeehivePayload.TYPE.id().toString();
+        final String incoming = ServerboundBeehivePayload.TYPE.id().toString();
+
+        Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, outgoing);
+        Bukkit.getMessenger().unregisterIncomingPluginChannel(plugin, incoming);
     }
 
     @Override
-    public void onPluginMessageReceived(@NotNull String channel, @NotNull Player player, byte[] bytes) {
-        FriendlyByteBuf byteBuf = new FriendlyByteBuf(Unpooled.copiedBuffer(bytes));
-        ServerboundBeehivePayload payload = ServerboundBeehivePayload.STREAM_CODEC.decode(byteBuf);
+    public void onPluginMessageReceived(@NotNull String channel, @NotNull Player player, byte[] bytes
+    ) {
+        final FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.copiedBuffer(bytes));
+        final ServerboundBeehivePayload payload = ServerboundBeehivePayload.STREAM_CODEC.decode(buf);
 
-        ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
+        final ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
 
-        // targeted block info max range specified in client at net.minecraft.client.gui.hud.DebugHud#render
-        if (!payload.pos().getCenter().closerThan(serverPlayer.position(), 20)) return; // Targeted Block info max range is 20
-        if (serverPlayer.level().getChunkIfLoaded(payload.pos()) == null) return;
+        // Max range for targeted block info (client-side limit)
+        if (!payload.pos().getCenter().closerThan(serverPlayer.position(), 20)) {
+            return;
+        }
 
-        BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
+        if (serverPlayer.level().getChunkIfLoaded(payload.pos()) == null) {
+            return;
+        }
+
+        final BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());
         if (!(blockEntity instanceof BeehiveBlockEntity beehive)) {
             return;
         }
 
-        ClientboundBeehivePayload customPacketPayload = new ClientboundBeehivePayload(payload.pos(), beehive.getOccupantCount());
-        FriendlyByteBuf friendlyByteBuf = new FriendlyByteBuf(Unpooled.buffer());
-        ClientboundBeehivePayload.STREAM_CODEC.encode(friendlyByteBuf, customPacketPayload);
-        byte[] byteArray = new byte[friendlyByteBuf.readableBytes()];
-        friendlyByteBuf.readBytes(byteArray);
-        player.sendPluginMessage(this.plugin, customPacketPayload.type().id().toString(), byteArray);
+        final ClientboundBeehivePayload response = new ClientboundBeehivePayload(payload.pos(), beehive.getOccupantCount());
+
+        final FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
+        ClientboundBeehivePayload.STREAM_CODEC.encode(out, response);
+
+        final byte[] data = new byte[out.readableBytes()];
+        out.readBytes(data);
+
+        player.sendPluginMessage(plugin, response.type().id().toString(), data);
     }
 }
