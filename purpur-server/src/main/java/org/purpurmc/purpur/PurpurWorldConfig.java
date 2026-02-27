@@ -1034,6 +1034,16 @@ public class PurpurWorldConfig {
         chestOpenWithBlockOnTop = getBoolean("blocks.chest.open-with-solid-block-on-top", chestOpenWithBlockOnTop);
     }
 
+    public boolean enderChestOpenWithBlockOnTop = false;
+    private void enderChestSettings() {
+        enderChestOpenWithBlockOnTop = getBoolean("blocks.ender_chest.open-with-solid-block-on-top", enderChestOpenWithBlockOnTop);
+    }
+
+    public boolean shulkerBoxOpenWhenBlocked = false;
+    private void shulkerBoxSettings() {
+        shulkerBoxOpenWhenBlocked = getBoolean("blocks.shulker_box.open-when-blocked", shulkerBoxOpenWhenBlocked);
+    }
+
     public boolean composterBulkProcess = false;
     private void composterSettings() {
         composterBulkProcess = getBoolean("blocks.composter.sneak-to-bulk-process", composterBulkProcess);
