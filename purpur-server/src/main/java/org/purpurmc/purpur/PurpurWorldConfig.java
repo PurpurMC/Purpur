@@ -161,6 +161,13 @@ public class PurpurWorldConfig {
     public int mobLastHurtByPlayerTime = 100;
     public boolean milkClearsBeneficialEffects = true;
     public boolean disableOxidationProximityPenalty = false;
+    public boolean lightningTransformsBlocks = false;
+    public boolean lightningTurnsNearbySandIntoGlass = true;
+    public int lightningTurnsNearbySandIntoGlassMaxDepth = 3;
+    public int lightningTurnsNearbySandIntoGlassMaxIterations = 6;
+    public boolean lightningTurnsSandIntoGlass = true;
+    public boolean lightningTurnsWaterIntoStone = true;
+    public boolean lightningTurnsStoneIntoObsidian = true;
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
@@ -226,6 +233,13 @@ public class PurpurWorldConfig {
         mobLastHurtByPlayerTime = getInt("gameplay-mechanics.mob-last-hurt-by-player-time", mobLastHurtByPlayerTime);
         milkClearsBeneficialEffects = getBoolean("gameplay-mechanics.milk-clears-beneficial-effects", milkClearsBeneficialEffects);
         disableOxidationProximityPenalty = getBoolean("gameplay-mechanics.disable-oxidation-proximity-penalty", disableOxidationProximityPenalty);
+        lightningTransformsBlocks = getBoolean("gameplay-mechanics.lightning-transforms-blocks.enabled", lightningTransformsBlocks);
+        lightningTurnsNearbySandIntoGlass = getBoolean("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.enabled", lightningTurnsNearbySandIntoGlass);
+        lightningTurnsNearbySandIntoGlassMaxDepth = getInt("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.max-depth", lightningTurnsNearbySandIntoGlassMaxDepth);
+        lightningTurnsNearbySandIntoGlassMaxIterations = getInt("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.max-iteration", lightningTurnsNearbySandIntoGlassMaxIterations);
+        lightningTurnsSandIntoGlass = getBoolean("gameplay-mechanics.lightning-transforms-blocks.sand-into-glass", lightningTurnsSandIntoGlass);
+        lightningTurnsWaterIntoStone = getBoolean("gameplay-mechanics.lightning-transforms-blocks.water-into-stone", lightningTurnsWaterIntoStone);
+        lightningTurnsStoneIntoObsidian = getBoolean("gameplay-mechanics.lightning-transforms-blocks.stone-into-obsidian", lightningTurnsStoneIntoObsidian);
     }
 
     public int daytimeTicks = 12000;
