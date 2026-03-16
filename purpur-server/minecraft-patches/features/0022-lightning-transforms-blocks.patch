@@ -5,36 +5,36 @@ Subject: [PATCH] lightning transforms blocks
 
 
 diff --git a/net/minecraft/world/entity/LightningBolt.java b/net/minecraft/world/entity/LightningBolt.java
-index e81eabf901e755e1254fff98cdd1e609cf07aab8..d971384c64baf6954f92ac9d2c1c9f782b11a6e3 100644
+index e81eabf901e755e1254fff98cdd1e609cf07aab8..df7166e22bdda74c4e85359ab54d383c54e2a73f 100644
 --- a/net/minecraft/world/entity/LightningBolt.java
 +++ b/net/minecraft/world/entity/LightningBolt.java
-@@ -38,6 +38,10 @@ public class LightningBolt extends Entity {
+@@ -38,6 +38,9 @@ public class LightningBolt extends Entity {
      public boolean visualOnly;
      private @Nullable ServerPlayer cause;
      private final Set<Entity> hitEntities = Sets.newHashSet();
 +    // Purpur start - lightning transforms blocks
 +    public List<org.bukkit.craftbukkit.block.CraftBlockState> blocks;
-+    private BlockPos blockPos;
 +    // Purpur end - lightning transforms blocks
      private int blocksSetOnFire;
      public boolean isEffect; // Paper - Properly handle lightning effects api
  
-@@ -46,6 +50,10 @@ public class LightningBolt extends Entity {
+@@ -46,6 +49,7 @@ public class LightningBolt extends Entity {
          this.life = 2;
          this.seed = this.random.nextLong();
          this.flashes = this.random.nextInt(3) + 1;
-+        // Purpur start - lightning transforms blocks
-+        this.blocks = this.getTransformedBlocks();
-+        this.blockPos = this.getStrikePosition();
-+        // Purpur end - lightning transforms blocks
++        this.blocks = new java.util.ArrayList<>(); // Purpur - lightning transforms blocks
      }
  
      public void setVisualOnly(boolean visualOnly) {
-@@ -73,6 +81,65 @@ public class LightningBolt extends Entity {
+@@ -73,6 +77,67 @@ public class LightningBolt extends Entity {
          }
      }
  
 +    // Purpur start - lightning transforms blocks
++    public void initBlocks() {
++        this.blocks = this.getTransformedBlocks();
++    }
++
 +    private List<org.bukkit.craftbukkit.block.CraftBlockState> getTransformedBlocks() {
 +        if (!level().purpurConfig.lightningTransformsBlocks) return new java.util.ArrayList<>();
 +
@@ -51,21 +51,21 @@ index e81eabf901e755e1254fff98cdd1e609cf07aab8..d971384c64baf6954f92ac9d2c1c9f78
 +            pos = blockposition;
 +        }
 +
-+        if (level().purpurConfig.lightningTurnsSandIntoGlass && iblockdata2.is(net.minecraft.world.level.block.Blocks.SAND)) {
-+            level().setBlock(pos, net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState(), 2);
-+        } else if (level().purpurConfig.lightningTurnsStoneIntoObsidian && iblockdata2.is(net.minecraft.world.level.block.Blocks.STONE)) {
-+            level().setBlock(pos, net.minecraft.world.level.block.Blocks.OBSIDIAN.defaultBlockState(), 2);
-+        } else if (level().purpurConfig.lightningTurnsWaterIntoStone && iblockdata2.is(net.minecraft.world.level.block.Blocks.WATER)) {
-+            level().setBlock(pos, net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), 2);
-+        } else if (!level().purpurConfig.lightningTurnsNearbySandIntoGlass) {
++        BlockState targetState = level().purpurConfig.lightningBlockTransformMap.get(iblockdata2.getBlock());
++        if (targetState != null) {
++            level().setBlock(pos, targetState, 2);
++        }
++
++        if (!level().purpurConfig.lightningTransformsNearbyBlocks) {
 +            return new java.util.ArrayList<>();
 +        }
 +
++        java.util.Map<net.minecraft.world.level.block.Block, BlockState> transformMap = level().purpurConfig.lightningBlockTransformMap;
 +        org.bukkit.craftbukkit.util.BlockStateListPopulator blockList = new org.bukkit.craftbukkit.util.BlockStateListPopulator(level());
 +        BlockPos.breadthFirstTraversal(
 +                pos,
-+                level().purpurConfig.lightningTurnsNearbySandIntoGlassMaxDepth,
-+                level().purpurConfig.lightningTurnsNearbySandIntoGlassMaxIterations,
++                level().purpurConfig.lightningNearbyBlocksMaxDepth,
++                level().purpurConfig.lightningNearbyBlocksMaxIterations,
 +                (validPos, queueAdder) -> {
 +                    for (net.minecraft.core.Direction direction : net.minecraft.core.Direction.values()) {
 +                        queueAdder.accept(validPos.relative(direction));
@@ -75,19 +75,17 @@ index e81eabf901e755e1254fff98cdd1e609cf07aab8..d971384c64baf6954f92ac9d2c1c9f78
 +                    if (blockPos.equals(pos)) {
 +                        return BlockPos.TraversalNodeStatus.ACCEPT;
 +                    } else {
-+                        BlockState iblockdata3 = blockList.getBlockState(blockPos);
-+
-+                        if (!iblockdata3.is(net.minecraft.world.level.block.Blocks.SAND)) { // Purpur
++                        BlockState nearbyState = blockList.getBlockState(blockPos);
++                        BlockState nearbyTarget = transformMap.get(nearbyState.getBlock());
++                        if (nearbyTarget == null) {
 +                            return BlockPos.TraversalNodeStatus.SKIP;
 +                        } else {
-+                            blockList.setBlock(blockPos, net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState(), 3);
++                            blockList.setBlock(blockPos, nearbyTarget, 3);
 +                            return BlockPos.TraversalNodeStatus.ACCEPT;
 +                        }
 +                    }
 +                }
 +            );
-+
-+        this.blockPos = pos; // TODO find a way to not need this variable
 +
 +        return blockList.getSnapshotBlocks();
 +    }
@@ -96,16 +94,16 @@ index e81eabf901e755e1254fff98cdd1e609cf07aab8..d971384c64baf6954f92ac9d2c1c9f78
      @Override
      public void tick() {
          super.tick();
-@@ -107,6 +174,7 @@ public class LightningBolt extends Entity {
+@@ -107,6 +172,7 @@ public class LightningBolt extends Entity {
                  }
  
                  this.powerLightningRod();
-+                if (level().purpurConfig.lightningTransformsBlocks) net.minecraft.world.level.block.SpongeBlock.processBlocksBreadthFirstSearch(level(), this.blockPos, this.blocks, false); // Purpur - lightning transforms blocks
++                if (level().purpurConfig.lightningTransformsBlocks) net.minecraft.world.level.block.SpongeBlock.processBlocksBreadthFirstSearch(level(), this.getStrikePosition(), this.blocks, false); // Purpur - lightning transforms blocks
                  clearCopperOnLightningStrike(this.level(), this.getStrikePosition(), this); // Paper - Call EntityChangeBlockEvent
                  this.gameEvent(GameEvent.LIGHTNING_STRIKE);
              }
 diff --git a/net/minecraft/world/level/block/SpongeBlock.java b/net/minecraft/world/level/block/SpongeBlock.java
-index 83185c5341fe0033f542520bc1436a31eed27bf5..73d9f24586e960359be9fd8d941c3d2c7584de43 100644
+index 0ce317ad5f3f7a08914d04ace2259f7fdb6f906e..888dc057dfb7d619bc13d02dc1f769688d7743a9 100644
 --- a/net/minecraft/world/level/block/SpongeBlock.java
 +++ b/net/minecraft/world/level/block/SpongeBlock.java
 @@ -102,13 +102,20 @@ public class SpongeBlock extends Block {

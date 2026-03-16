@@ -16,6 +16,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Tilt;
 import org.apache.commons.lang3.BooleanUtils;
 import org.bukkit.ChatColor;
@@ -162,12 +163,10 @@ public class PurpurWorldConfig {
     public boolean milkClearsBeneficialEffects = true;
     public boolean disableOxidationProximityPenalty = false;
     public boolean lightningTransformsBlocks = false;
-    public boolean lightningTurnsNearbySandIntoGlass = true;
-    public int lightningTurnsNearbySandIntoGlassMaxDepth = 3;
-    public int lightningTurnsNearbySandIntoGlassMaxIterations = 6;
-    public boolean lightningTurnsSandIntoGlass = true;
-    public boolean lightningTurnsWaterIntoStone = true;
-    public boolean lightningTurnsStoneIntoObsidian = true;
+    public boolean lightningTransformsNearbyBlocks = true;
+    public int lightningNearbyBlocksMaxDepth = 3;
+    public int lightningNearbyBlocksMaxIterations = 6;
+    public Map<Block, BlockState> lightningBlockTransformMap = new HashMap<>();
     private void miscGameplayMechanicsSettings() {
         useBetterMending = getBoolean("gameplay-mechanics.use-better-mending", useBetterMending);
         alwaysTameInCreative = getBoolean("gameplay-mechanics.always-tame-in-creative", alwaysTameInCreative);
@@ -234,12 +233,21 @@ public class PurpurWorldConfig {
         milkClearsBeneficialEffects = getBoolean("gameplay-mechanics.milk-clears-beneficial-effects", milkClearsBeneficialEffects);
         disableOxidationProximityPenalty = getBoolean("gameplay-mechanics.disable-oxidation-proximity-penalty", disableOxidationProximityPenalty);
         lightningTransformsBlocks = getBoolean("gameplay-mechanics.lightning-transforms-blocks.enabled", lightningTransformsBlocks);
-        lightningTurnsNearbySandIntoGlass = getBoolean("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.enabled", lightningTurnsNearbySandIntoGlass);
-        lightningTurnsNearbySandIntoGlassMaxDepth = getInt("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.max-depth", lightningTurnsNearbySandIntoGlassMaxDepth);
-        lightningTurnsNearbySandIntoGlassMaxIterations = getInt("gameplay-mechanics.lightning-transforms-blocks.nearby-sand-into-glass.max-iteration", lightningTurnsNearbySandIntoGlassMaxIterations);
-        lightningTurnsSandIntoGlass = getBoolean("gameplay-mechanics.lightning-transforms-blocks.sand-into-glass", lightningTurnsSandIntoGlass);
-        lightningTurnsWaterIntoStone = getBoolean("gameplay-mechanics.lightning-transforms-blocks.water-into-stone", lightningTurnsWaterIntoStone);
-        lightningTurnsStoneIntoObsidian = getBoolean("gameplay-mechanics.lightning-transforms-blocks.stone-into-obsidian", lightningTurnsStoneIntoObsidian);
+        lightningTransformsNearbyBlocks = getBoolean("gameplay-mechanics.lightning-transforms-blocks.nearby-blocks.enabled", lightningTransformsNearbyBlocks);
+        lightningNearbyBlocksMaxDepth = getInt("gameplay-mechanics.lightning-transforms-blocks.nearby-blocks.max-depth", lightningNearbyBlocksMaxDepth);
+        lightningNearbyBlocksMaxIterations = getInt("gameplay-mechanics.lightning-transforms-blocks.nearby-blocks.max-iteration", lightningNearbyBlocksMaxIterations);
+        lightningBlockTransformMap.clear();
+        getMap("gameplay-mechanics.lightning-transforms-blocks.block-map", Map.of(
+            "minecraft:sand", "minecraft:glass",
+            "minecraft:stone", "minecraft:obsidian",
+            "minecraft:water", "minecraft:stone"
+        )).forEach((fromId, toId) -> {
+            Block from = BuiltInRegistries.BLOCK.getValue(Identifier.parse(fromId.toString()));
+            if (from == Blocks.AIR) { log(Level.WARNING, "Unknown block in `gameplay-mechanics.lightning-transforms-blocks.block-map`: " + fromId); return; }
+            Block to = BuiltInRegistries.BLOCK.getValue(Identifier.parse(toId.toString()));
+            if (to == Blocks.AIR) { log(Level.WARNING, "Unknown block in `gameplay-mechanics.lightning-transforms-blocks.block-map." + fromId + "`: " + toId); return; }
+            lightningBlockTransformMap.put(from, to.defaultBlockState());
+        });
     }
 
     public int daytimeTicks = 12000;
