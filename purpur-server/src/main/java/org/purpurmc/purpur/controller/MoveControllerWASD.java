@@ -69,7 +69,7 @@ public class MoveControllerWASD extends MoveControl {
 
         ((LookControllerWASD) entity.getLookControl()).setOffsets(yawOffset, 0);
 
-        if (lastClientInput.jump() && spacebarEvent(entity) && !entity.onSpacebar() && entity.onGround) {
+        if (lastClientInput.jump() && spacebarEvent(entity) && !entity.onSpacebar() && entity.onGround()) {
             entity.jumpFromGround();
         }
 

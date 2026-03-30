@@ -30,7 +30,7 @@ public class FlyingWithSpacebarMoveControllerWASD extends FlyingMoveControllerWA
 
         float speed = (float) entity.getAttributeValue(Attributes.MOVEMENT_SPEED);
 
-        if (entity.onGround) {
+        if (entity.onGround()) {
             speed *= groundSpeedModifier;
         }
 

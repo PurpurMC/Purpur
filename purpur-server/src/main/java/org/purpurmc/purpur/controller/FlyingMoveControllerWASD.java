@@ -53,8 +53,8 @@ public class FlyingMoveControllerWASD extends MoveControllerWASD {
         setSpeedModifier(entity.getAttributeValue(Attributes.MOVEMENT_SPEED));
         float speed = (float) getSpeedModifier();
 
-        if (entity.onGround) {
-            speed *= groundSpeedModifier; // TODO = fix this!
+        if (entity.onGround()) {
+            speed *= groundSpeedModifier;
         } else {
             speed *= flyingSpeedModifier;
         }
