@@ -106,11 +106,12 @@ public class PurpurStoredBee implements StoredEntity<Bee> {
 
     @Override
     public void update() {
-        handle.occupant.entityData().copyTagWithEntityId().put("BukkitValues", this.persistentDataContainer.toTagCompound());
-        if(customName == null) {
-            handle.occupant.entityData().copyTagWithEntityId().remove("CustomName");
+        CompoundTag tag = handle.occupant.entityData().getUnsafe();
+        tag.put("BukkitValues", this.persistentDataContainer.toTagCompound());
+        if (customName == null) {
+            tag.remove("CustomName");
         } else {
-            handle.occupant.entityData().copyTagWithEntityId().putString("CustomName", CraftChatMessage.toJSON(PaperAdventure.asVanilla(customName)));
+            tag.putString("CustomName", CraftChatMessage.toJSON(PaperAdventure.asVanilla(customName)));
         }
     }
 }
