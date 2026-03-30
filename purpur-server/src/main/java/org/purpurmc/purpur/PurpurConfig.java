@@ -62,7 +62,8 @@ public class PurpurConfig {
         config = new YamlConfiguration();
         try {
             config.load(CONFIG_FILE);
-        } catch (IOException ignore) {
+        } catch (IOException ex) {
+            Bukkit.getLogger().log(Level.SEVERE, "Could not load purpur.yml", ex);
         } catch (InvalidConfigurationException ex) {
             Bukkit.getLogger().log(Level.SEVERE, "Could not load purpur.yml, please correct your syntax errors", ex);
             throw Throwables.propagate(ex);
