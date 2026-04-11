@@ -1,14 +1,19 @@
 --- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-@@ -44,6 +_,7 @@
-     private long keepAliveChallenge;
+@@ -40,10 +_,11 @@
+     public final Connection connection; // Paper
+     private final boolean transferred;
+     //private long keepAliveTime; // Paper - improve keepalives
+-    //private boolean keepAlivePending; // Paper - improve keepalives
++    private boolean keepAlivePending; // Paper - improve keepalives // Purpur - Alternative Keepalive Handling
+     //private long keepAliveChallenge; // Paper - improve keepalives
      private long closedListenerTime;
      private boolean closed = false;
 +    private it.unimi.dsi.fastutil.longs.LongList keepAlives = new it.unimi.dsi.fastutil.longs.LongArrayList(); // Purpur - Alternative Keepalive Handling
-     private int latency;
+     private volatile int latency; // Paper - improve keepalives - make volatile
+     private final io.papermc.paper.util.KeepAlive keepAlive; // Paper - improve keepalives
      private volatile boolean suspendFlushingOnServerThread = false;
-     // CraftBukkit start
-@@ -53,6 +_,10 @@
+@@ -54,6 +_,10 @@
      public final java.util.Map<java.util.UUID, net.kyori.adventure.resource.ResourcePackCallback> packCallbacks = new java.util.concurrent.ConcurrentHashMap<>(); // Paper - adventure resource pack callbacks
      private static final long KEEPALIVE_LIMIT = Long.getLong("paper.playerconnection.keepalive", 30) * 1000; // Paper - provide property to set keepalive limit
      protected static final net.minecraft.resources.Identifier MINECRAFT_BRAND = net.minecraft.resources.Identifier.withDefaultNamespace("brand"); // Paper - Brand support
@@ -19,24 +24,26 @@
      // Paper start - retain certain values
      public @Nullable String playerBrand;
      public final java.util.Set<String> pluginMessagerChannels;
-@@ -100,6 +_,16 @@
- 
-     @Override
-     public void handleKeepAlive(final ServerboundKeepAlivePacket packet) {
+@@ -105,6 +_,18 @@
+         // Paper start - improve keepalives
+         long now = System.nanoTime();
+         io.papermc.paper.util.KeepAlive.PendingKeepAlive pending = this.keepAlive.pendingKeepAlives.peek();
 +        // Purpur start - Alternative Keepalive Handling
 +        if (org.purpurmc.purpur.PurpurConfig.useAlternateKeepAlive) {
 +            if (this.keepAlivePending && !keepAlives.isEmpty() && keepAlives.contains(packet.getId())) {
 +                int ping = (int) (Util.getMillis() - packet.getId());
-+                this.latency = (this.latency * 3 + ping) / 4;
++                int updatedLatency = (this.latency * 3 + ping) / 4;
++                this.latency = updatedLatency;
 +                this.keepAlivePending = false;
 +                keepAlives.clear(); // we got a valid response, lets roll with it and forget the rest
 +            }
++            return;
 +        } else
 +        // Purpur end - Alternative Keepalive Handling
-         if (this.keepAlivePending && packet.getId() == this.keepAliveChallenge) {
-             int time = (int)(Util.getMillis() - this.keepAliveTime);
-             this.latency = (this.latency * 3 + time) / 4;
-@@ -149,6 +_,12 @@
+         if (pending != null && pending.challengeId() == packet.getId()) {
+             this.keepAlive.pendingKeepAlives.remove(pending);
+ 
+@@ -179,6 +_,12 @@
                  return;
              }
  
@@ -49,24 +56,27 @@
              if (identifier.equals(MINECRAFT_BRAND)) {
                  this.playerBrand = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(data)).readUtf(256);
              }
-@@ -236,6 +_,20 @@
-         // Paper start - give clients a longer time to respond to pings as per pre 1.12.2 timings
-         // This should effectively place the keepalive handling back to "as it was" before 1.12.2
-         final long elapsedTime = now - this.keepAliveTime;
+@@ -264,6 +_,23 @@
+         Profiler.get().push("keepAlive");
+         long now = Util.getMillis();
+         // Paper start - improve keepalives
 +        // Purpur start - Alternative Keepalive Handling
 +        if (org.purpurmc.purpur.PurpurConfig.useAlternateKeepAlive) {
-+            if (elapsedTime >= 1000L) { // 1 second
-+                if (this.keepAlivePending && !this.processedDisconnect && keepAlives.size() * 1000L >= KEEPALIVE_LIMIT) {
-+                    this.disconnect(TIMEOUT_DISCONNECTION_MESSAGE, io.papermc.paper.connection.DisconnectionReason.TIMEOUT); // Paper - kick event cause
-+                } else if (this.checkIfClosed(now)) {
-+                    this.keepAlivePending = true;
-+                    this.keepAliveTime = now; // hijack this field for 1 second intervals
-+                    this.keepAlives.add(now); // currentTime is ID
-+                    this.send(new ClientboundKeepAlivePacket(now));
++            if (this.checkIfClosed(now) && !this.processedDisconnect) {
++                long currTime = System.nanoTime();
++                if ((currTime - this.keepAlive.lastKeepAliveTx) >= java.util.concurrent.TimeUnit.SECONDS.toNanos(1L)) { // 1 second
++                    this.keepAlive.lastKeepAliveTx = currTime;
++                    if (this.keepAlivePending && !this.processedDisconnect && keepAlives.size() * 1000L >= KEEPALIVE_LIMIT) {
++                        this.disconnect(TIMEOUT_DISCONNECTION_MESSAGE, io.papermc.paper.connection.DisconnectionReason.TIMEOUT);
++                    } else if (this.checkIfClosed(now)) {
++                        this.keepAlivePending = true;
++                        this.keepAlives.add(now); // currentTime is ID
++                        this.send(new ClientboundKeepAlivePacket(now));
++                    }
 +                }
 +            }
 +        } else
 +        // Purpur end - Alternative Keepalive Handling
-         if (!this.isSingleplayerOwner() && elapsedTime >= 15000L) { // use vanilla's 15000L between keep alive packets
-             if (this.keepAlivePending) {
-                 if (!this.processedDisconnect && elapsedTime >= KEEPALIVE_LIMIT) { // check keepalive limit, don't fire if already disconnected
+         if (this.checkIfClosed(now) && !this.processedDisconnect) {
+             long currTime = System.nanoTime();
+ 
