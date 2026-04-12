@@ -10,6 +10,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ai.behavior.AcquirePoi;
 import net.minecraft.world.entity.monster.Shulker;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
@@ -3338,8 +3339,8 @@ public class PurpurWorldConfig {
     public boolean villagerDisplayTradeItem = true;
     public int villagerSpawnIronGolemRadius = 0;
     public int villagerSpawnIronGolemLimit = 0;
-    public int villagerAcquirePoiSearchRadius = 48;
-    public int villagerNearestBedSensorSearchRadius = 48;
+    public int villagerAcquirePoiSearchRadius = AcquirePoi.SCAN_RANGE;
+    public int villagerNearestBedSensorSearchRadius = AcquirePoi.SCAN_RANGE;
     public Boolean villagerCanPickUpLoot = null;
     private void villagerSettings() {
         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);

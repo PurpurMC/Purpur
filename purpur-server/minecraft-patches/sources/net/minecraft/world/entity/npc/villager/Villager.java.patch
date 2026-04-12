@@ -1,16 +1,16 @@
 --- a/net/minecraft/world/entity/npc/villager/Villager.java
 +++ b/net/minecraft/world/entity/npc/villager/Villager.java
-@@ -179,6 +_,8 @@
+@@ -181,6 +_,8 @@
          MemoryModuleType.MEETING_POINT,
          (villager, poiType) -> poiType.is(PoiTypes.MEETING)
      );
 +    private boolean isLobotomized = false; public boolean isLobotomized() { return this.isLobotomized; } // Purpur - Lobotomize stuck villagers
 +    private int notLobotomizedCount = 0; // Purpur - Lobotomize stuck villagers
  
-     public Villager(EntityType<? extends Villager> type, Level level) {
+     public Villager(final EntityType<? extends Villager> type, final Level level) {
          this(type, level, VillagerType.PLAINS);
-@@ -197,6 +_,57 @@
-         this.setVillagerData(this.getVillagerData().withType(villagerType).withProfession(level.registryAccess(), VillagerProfession.NONE));
+@@ -199,6 +_,57 @@
+         this.setVillagerData(this.getVillagerData().withType(type).withProfession(level.registryAccess(), VillagerProfession.NONE));
      }
  
 +    // Purpur start - Allow leashing villagers
@@ -30,7 +30,7 @@
 +        }
 +        if (this.level().getGameTime() % interval == 0) {
 +            // offset Y for short blocks like dirt_path/farmland
-+            this.isLobotomized = !(shouldCheckForTradeLocked && this.getVillagerXp() == 0) && !canTravelFrom(BlockPos.containing(this.position().x, this.getBoundingBox().minY + 0.0625D, this.position().z));
++            this.isLobotomized = !(shouldCheckForTradeLocked && this.getVillagerXp() == 0) && !canTravelFrom(net.minecraft.core.BlockPos.containing(this.position().x, this.getBoundingBox().minY + 0.0625D, this.position().z));
 +
 +            if (this.isLobotomized) {
 +                this.notLobotomizedCount = 0;
@@ -41,11 +41,11 @@
 +        return this.isLobotomized;
 +    }
 +
-+    private boolean canTravelFrom(BlockPos pos) {
++    private boolean canTravelFrom(net.minecraft.core.BlockPos pos) {
 +        return canTravelTo(pos.east()) || canTravelTo(pos.west()) || canTravelTo(pos.north()) || canTravelTo(pos.south());
 +    }
 +
-+    private boolean canTravelTo(BlockPos pos) {
++    private boolean canTravelTo(net.minecraft.core.BlockPos pos) {
 +        net.minecraft.world.level.block.state.BlockState state = this.level().getBlockStateIfLoaded(pos);
 +        if (state == null) {
 +            // chunk not loaded
@@ -66,16 +66,16 @@
 +
      @Override
      public Brain<Villager> getBrain() {
-         return (Brain<Villager>)super.getBrain();
-@@ -293,11 +_,22 @@
+         return (Brain<Villager>) super.getBrain();
+@@ -268,11 +_,22 @@
          // Paper start - EAR 2
          this.customServerAiStep(level, false);
      }
 -    protected void customServerAiStep(ServerLevel level, final boolean inactive) {
-+    protected void customServerAiStep(ServerLevel level, boolean inactive) { // Purpur - Lobotomize stuck villagers - not final
++    protected void customServerAiStep(ServerLevel level, boolean inactive) { // Purpur - Lobotomize stuck villagers
          // Paper end - EAR 2
-         ProfilerFiller profilerFiller = Profiler.get();
-         profilerFiller.push("villagerBrain");
+         ProfilerFiller profiler = Profiler.get();
+         profiler.push("villagerBrain");
 -        if (!inactive) this.getBrain().tick(level, this); // Paper - EAR 2
 +        // Purpur start - Lobotomize stuck villagers
 +        if (this.level().purpurConfig.villagerLobotomizeEnabled) {
@@ -89,10 +89,10 @@
 +        }
 +        else if (this.isLobotomized && shouldRestock(level)) restock();
 +        // Purpur end - Lobotomize stuck villagers
-         profilerFiller.pop();
+         profiler.pop();
          if (this.assignProfessionWhenSpawned) {
              this.assignProfessionWhenSpawned = false;
-@@ -369,6 +_,7 @@
+@@ -344,6 +_,7 @@
                      return InteractionResult.CONSUME;
                  }
  
@@ -100,16 +100,16 @@
                  this.startTrading(player);
              }
  
-@@ -500,7 +_,7 @@
+@@ -485,7 +_,7 @@
  
      public void updateDemand() {
-         for (MerchantOffer merchantOffer : this.getOffers()) {
--            merchantOffer.updateDemand();
-+            merchantOffer.updateDemand(this.level().purpurConfig.villagerMinimumDemand); // Purpur - Configurable minimum demand for trades
+         for (MerchantOffer offer : this.getOffers()) {
+-            offer.updateDemand();
++            offer.updateDemand(this.level().purpurConfig.villagerMinimumDemand); // Purpur - Configurable minimum demand for trades
          }
      }
  
-@@ -692,7 +_,7 @@
+@@ -685,7 +_,7 @@
  
      @Override
      public boolean canBreed() {
@@ -118,24 +118,11 @@
      }
  
      private boolean hungry() {
-@@ -915,6 +_,7 @@
+@@ -891,6 +_,7 @@
      }
  
-     public void spawnGolemIfNeeded(ServerLevel level, long gameTime, int minVillagerAmount) {
+     public void spawnGolemIfNeeded(final ServerLevel level, final long timestamp, final int villagersNeededToAgree) {
 +        if (level.purpurConfig.villagerSpawnIronGolemRadius > 0 && level.getEntitiesOfClass(net.minecraft.world.entity.animal.golem.IronGolem.class, getBoundingBox().inflate(level.purpurConfig.villagerSpawnIronGolemRadius)).size() > level.purpurConfig.villagerSpawnIronGolemLimit) return; // Purpur - Implement configurable search radius for villagers to spawn iron golems
-         if (this.wantsToSpawnGolem(gameTime)) {
-             AABB aabb = this.getBoundingBox().inflate(10.0, 10.0, 10.0);
-             List<Villager> entitiesOfClass = level.getEntitiesOfClass(Villager.class, aabb);
-@@ -982,6 +_,12 @@
- 
-     @Override
-     public void startSleeping(BlockPos pos) {
-+        // Purpur start - Option for beds to explode on villager sleep
-+        if (level().purpurConfig.bedExplodeOnVillagerSleep && this.level().getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.BedBlock) {
-+            this.level().explode(null, (double) pos.getX() + 0.5D, (double) pos.getY() + 0.5D, (double) pos.getZ() + 0.5D, (float) this.level().purpurConfig.bedExplosionPower, this.level().purpurConfig.bedExplosionFire, this.level().purpurConfig.bedExplosionEffect);
-+            return;
-+        }
-+        // Purpur end - Option for beds to explode on villager sleep
-         super.startSleeping(pos);
-         this.brain.setMemory(MemoryModuleType.LAST_SLEPT, this.level().getGameTime());
-         this.brain.eraseMemory(MemoryModuleType.WALK_TARGET);
+         if (this.wantsToSpawnGolem(timestamp)) {
+             AABB villagerSearchBox = this.getBoundingBox().inflate(10.0, 10.0, 10.0);
+             List<Villager> nearbyVillagers = level.getEntitiesOfClass(Villager.class, villagerSearchBox);

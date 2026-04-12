@@ -22,20 +22,20 @@
 +    public boolean canDoUnsafeEnchants = false;
 +    // Purpur end - Anvil API
  
-     public AnvilMenu(int containerId, Inventory playerInventory) {
-         this(containerId, playerInventory, ContainerLevelAccess.NULL);
+     public AnvilMenu(final int containerId, final Inventory inventory) {
+         this(containerId, inventory, ContainerLevelAccess.NULL);
 @@ -76,12 +_,17 @@
  
      @Override
-     protected boolean mayPickup(Player player, boolean hasStack) {
--        return (player.hasInfiniteMaterials() || player.experienceLevel >= this.cost.get()) && this.cost.get() > AnvilMenu.DEFAULT_DENIED_COST && hasStack; // CraftBukkit - allow cost 0 like a free item
-+        return (player.hasInfiniteMaterials() || player.experienceLevel >= this.cost.get()) && (this.bypassCost || this.cost.get() > AnvilMenu.DEFAULT_DENIED_COST) && hasStack; // CraftBukkit - allow cost 0 like a free item // Purpur - Anvil API
+     protected boolean mayPickup(final Player player, final boolean hasItem) {
+-        return (player.hasInfiniteMaterials() || player.experienceLevel >= this.cost.get()) && this.cost.get() > AnvilMenu.DEFAULT_DENIED_COST && hasItem; // CraftBukkit - allow cost 0 like a free item
++        return (player.hasInfiniteMaterials() || player.experienceLevel >= this.cost.get()) && (this.bypassCost || this.cost.get() > AnvilMenu.DEFAULT_DENIED_COST) && hasItem; // CraftBukkit - allow cost 0 like a free item // Purpur - Anvil API
      }
  
      @Override
-     protected void onTake(Player player, ItemStack stack) {
+     protected void onTake(final Player player, final ItemStack carried) {
 +        // Purpur start - Anvil API
-+        ItemStack itemstack = this.activeQuickItem != null ? this.activeQuickItem : stack;
++        ItemStack itemstack = this.activeQuickItem != null ? this.activeQuickItem : carried;
 +        if (org.purpurmc.purpur.event.inventory.AnvilTakeResultEvent.getHandlerList().getRegisteredListeners().length > 0) new org.purpurmc.purpur.event.inventory.AnvilTakeResultEvent(player.getBukkitEntity(), getBukkitView(), org.bukkit.craftbukkit.inventory.CraftItemStack.asCraftMirror(itemstack)).callEvent();
 +        // Purpur end - Anvil API
          if (!player.hasInfiniteMaterials()) {
@@ -53,60 +53,60 @@
 +        if (org.purpurmc.purpur.event.inventory.AnvilUpdateResultEvent.getHandlerList().getRegisteredListeners().length > 0) new org.purpurmc.purpur.event.inventory.AnvilUpdateResultEvent(getBukkitView()).callEvent();
 +        // Purpur end - Anvil API
 +
-         ItemStack item = this.inputSlots.getItem(0);
+         ItemStack input = this.inputSlots.getItem(0);
          this.onlyRenaming = false;
          this.cost.set(1);
-         int i = 0;
-         long l = 0L;
-         int i1 = 0;
--        if (!item.isEmpty() && EnchantmentHelper.canStoreEnchantments(item)) {
-+        if (!item.isEmpty() && this.canDoUnsafeEnchants || EnchantmentHelper.canStoreEnchantments(item)) { // Purpur - Anvil API
-             ItemStack itemStack = item.copy();
-             ItemStack item1 = this.inputSlots.getItem(1);
-             ItemEnchantments.Mutable mutable = new ItemEnchantments.Mutable(EnchantmentHelper.getEnchantmentsForCrafting(itemStack));
+         int price = 0;
+         long tax = 0L;
+         int namingCost = 0;
+-        if (!input.isEmpty() && EnchantmentHelper.canStoreEnchantments(input)) {
++        if (!input.isEmpty() && this.canDoUnsafeEnchants || EnchantmentHelper.canStoreEnchantments(input)) { // Purpur - Anvil API
+             ItemStack result = input.copy();
+             ItemStack addition = this.inputSlots.getItem(1);
+             ItemEnchantments.Mutable enchantments = new ItemEnchantments.Mutable(EnchantmentHelper.getEnchantmentsForCrafting(result));
 @@ -198,23 +_,34 @@
-                         int intValue = entry.getIntValue();
-                         intValue = level == intValue ? intValue + 1 : Math.max(intValue, level);
-                         Enchantment enchantment = holder.value();
--                        boolean canEnchant = enchantment.canEnchant(item);
+                         int level = entry.getIntValue();
+                         level = current == level ? level + 1 : Math.max(level, current);
+                         Enchantment enchantment = enchantmentHolder.value();
+-                        boolean compatible = enchantment.canEnchant(input);
 +                        // Purpur start - Config to allow unsafe enchants
-+                        boolean canEnchant = this.canDoUnsafeEnchants || org.purpurmc.purpur.PurpurConfig.allowInapplicableEnchants || enchantment.canEnchant(item); // whether the enchantment can be applied on specific item type
++                        boolean compatible = this.canDoUnsafeEnchants || org.purpurmc.purpur.PurpurConfig.allowInapplicableEnchants || enchantment.canEnchant(input); // whether the enchantment can be applied on specific item type
 +                        boolean canEnchant1 = true; // whether two incompatible enchantments can be applied on a single item
 +                        // Purpur end - Config to allow unsafe enchants
-                         if (this.player.hasInfiniteMaterials() || item.is(Items.ENCHANTED_BOOK)) {
-                             canEnchant = true;
+                         if (this.player.hasInfiniteMaterials() || input.is(Items.ENCHANTED_BOOK)) {
+                             compatible = true;
                          }
  
 +                        java.util.Set<Holder<Enchantment>> removedEnchantments = new java.util.HashSet<>(); // Purpur - Config to allow unsafe enchants
-                         for (Holder<Enchantment> holder1 : mutable.keySet()) {
-                             if (!holder1.equals(holder) && !Enchantment.areCompatible(holder, holder1)) {
--                                canEnchant = false;
+                         for (Holder<Enchantment> other : enchantments.keySet()) {
+                             if (!other.equals(enchantmentHolder) && !Enchantment.areCompatible(enchantmentHolder, other)) {
+-                                compatible = false;
 +                                canEnchant1 = this.canDoUnsafeEnchants || org.purpurmc.purpur.PurpurConfig.allowIncompatibleEnchants; // Purpur - Anvil API // Purpur - canEnchant -> canEnchant1 - Config to allow unsafe enchants
 +                                // Purpur start - Config to allow unsafe enchants
 +                                if (!canEnchant1 && org.purpurmc.purpur.PurpurConfig.replaceIncompatibleEnchants) {
-+                                    removedEnchantments.add(holder1);
++                                    removedEnchantments.add(other);
 +                                    canEnchant1 = true;
 +                                }
 +                                // Purpur end - Config to allow unsafe enchants
-                                 i++;
+                                 price++;
                              }
                          }
-+                        mutable.removeIf(removedEnchantments::contains); // Purpur - Config to allow unsafe enchants
++                        enchantments.removeIf(removedEnchantments::contains); // Purpur - Config to allow unsafe enchants
  
--                        if (!canEnchant) {
-+                        if (!canEnchant || !canEnchant1) { // Purpur - Config to allow unsafe enchants
-                             flag1 = true;
+-                        if (!compatible) {
++                        if (!compatible || !canEnchant1) { // Purpur - Config to allow unsafe enchants
+                             isAnyEnchantmentNotCompatible = true;
                          } else {
-                             flag = true;
--                            if (intValue > enchantment.getMaxLevel() && !this.bypassEnchantmentLevelRestriction) { // Paper - bypass anvil level restrictions
-+                            if (!org.purpurmc.purpur.PurpurConfig.allowHigherEnchantsLevels && intValue > enchantment.getMaxLevel() && !this.bypassEnchantmentLevelRestriction) { // Paper - bypass anvil level restrictions // Purpur - Config to allow unsafe enchants
-                                 intValue = enchantment.getMaxLevel();
+                             isAnyEnchantmentCompatible = true;
+-                            if (level > enchantment.getMaxLevel() && !this.bypassEnchantmentLevelRestriction) { // Paper - bypass anvil level restrictions
++                            if (!org.purpurmc.purpur.PurpurConfig.allowHigherEnchantsLevels && level > enchantment.getMaxLevel() && !this.bypassEnchantmentLevelRestriction) { // Paper - bypass anvil level restrictions // Purpur - Config to allow unsafe enchants
+                                 level = enchantment.getMaxLevel();
                              }
  
 @@ -243,6 +_,54 @@
-                 if (!this.itemName.equals(item.getHoverName().getString())) {
-                     i1 = 1;
-                     i += i1;
+                 if (!this.itemName.equals(input.getHoverName().getString())) {
+                     namingCost = 1;
+                     price += namingCost;
 +                    // Purpur start - Allow anvil colors
 +                    if (this.player != null) {
 +                        org.bukkit.craftbukkit.entity.CraftHumanEntity player = this.player.getBukkitEntity();
@@ -151,13 +151,13 @@
 +                        if (removeItalics) {
 +                            component = component.decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC, false);
 +                        }
-+                        itemStack.set(DataComponents.CUSTOM_NAME, io.papermc.paper.adventure.PaperAdventure.asVanilla(component));
++                        result.set(DataComponents.CUSTOM_NAME, io.papermc.paper.adventure.PaperAdventure.asVanilla(component));
 +                    }
 +                    else
 +                    // Purpur end - Allow anvil colors
-                     itemStack.set(DataComponents.CUSTOM_NAME, Component.literal(this.itemName));
+                     result.set(DataComponents.CUSTOM_NAME, Component.literal(this.itemName));
                  }
-             } else if (item.has(DataComponents.CUSTOM_NAME)) {
+             } else if (input.has(DataComponents.CUSTOM_NAME)) {
 @@ -267,6 +_,12 @@
                  this.onlyRenaming = true;
              }
@@ -169,16 +169,16 @@
 +            // Purpur end - Anvil API
 +
              if (this.cost.get() >= this.maximumRepairCost && !this.player.hasInfiniteMaterials()) { // CraftBukkit
-                 itemStack = ItemStack.EMPTY;
+                 result = ItemStack.EMPTY;
              }
 @@ -287,6 +_,13 @@
  
-             org.bukkit.craftbukkit.event.CraftEventFactory.callPrepareAnvilEvent(this.getBukkitView(), itemStack); // CraftBukkit
+             org.bukkit.craftbukkit.event.CraftEventFactory.callPrepareAnvilEvent(this.getBukkitView(), result); // CraftBukkit
              this.broadcastChanges();
 +
 +            // Purpur start - Anvil API
-+            if ((this.canDoUnsafeEnchants || org.purpurmc.purpur.PurpurConfig.allowInapplicableEnchants || org.purpurmc.purpur.PurpurConfig.allowIncompatibleEnchants) && itemStack != ItemStack.EMPTY) { // Purpur - Config to allow unsafe enchants
-+                ((ServerPlayer) this.player).connection.send(new ClientboundContainerSetSlotPacket(this.containerId, this.incrementStateId(), 2, itemStack));
++            if ((this.canDoUnsafeEnchants || org.purpurmc.purpur.PurpurConfig.allowInapplicableEnchants || org.purpurmc.purpur.PurpurConfig.allowIncompatibleEnchants) && result != ItemStack.EMPTY) { // Purpur - Config to allow unsafe enchants
++                ((ServerPlayer) this.player).connection.send(new ClientboundContainerSetSlotPacket(this.containerId, this.incrementStateId(), 2, result));
 +                ((ServerPlayer) this.player).connection.send(new ClientboundContainerSetDataPacket(this.containerId, 0, this.cost.get()));
 +            }
 +            // Purpur end - Anvil API
@@ -188,9 +188,9 @@
 @@ -295,7 +_,7 @@
      }
  
-     public static int calculateIncreasedRepairCost(int oldRepairCost) {
--        return (int)Math.min(oldRepairCost * 2L + 1L, 2147483647L);
-+        return org.purpurmc.purpur.PurpurConfig.anvilCumulativeCost ? (int)Math.min(oldRepairCost * 2L + 1L, 2147483647L) : 0; // Purpur - Make anvil cumulative cost configurable
+     public static int calculateIncreasedRepairCost(final int baseCost) {
+-        return (int)Math.min(baseCost * 2L + 1L, 2147483647L);
++        return org.purpurmc.purpur.PurpurConfig.anvilCumulativeCost ? (int)Math.min(baseCost * 2L + 1L, 2147483647L) : 0; // Purpur - Make anvil cumulative cost configurable
      }
  
-     public boolean setItemName(String itemName) {
+     public boolean setItemName(final String name) {
