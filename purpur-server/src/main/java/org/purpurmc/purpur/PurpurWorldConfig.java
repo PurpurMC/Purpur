@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.logging.Level;
+import net.kyori.adventure.key.Key;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
@@ -20,6 +21,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Tilt;
 import org.apache.commons.lang3.BooleanUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -36,16 +38,26 @@ import static org.purpurmc.purpur.PurpurConfig.log;
 @SuppressWarnings("unused")
 public class PurpurWorldConfig {
 
+    private final String legacyWorldName;
     private final String worldName;
     private final World.Environment environment;
 
-    public PurpurWorldConfig(String worldName, World.Environment environment) {
-        this.worldName = worldName;
+    public PurpurWorldConfig(String legacyWorldName, World.Environment environment, Key worldKey) {
+        this.legacyWorldName = legacyWorldName;
+        this.worldName = worldKey.asString();
         this.environment = environment;
         init();
     }
 
     public void init() {
+        if (PurpurConfig.version < 48) {
+            ConfigurationSection section = PurpurConfig.config.getConfigurationSection("world-settings." + this.legacyWorldName);
+            if (section != null) {
+                PurpurConfig.config.set("world-settings." + this.legacyWorldName, null);
+                PurpurConfig.config.set("world-settings." + this.worldName, section);
+                Bukkit.getLogger().info("NOTE: Migrated Purpur world config %s -> %s".formatted(this.legacyWorldName, this.worldName));
+            }
+        }
         log("-------- World Settings For [" + worldName + "] --------");
         PurpurConfig.readConfig(PurpurWorldConfig.class, this);
     }
