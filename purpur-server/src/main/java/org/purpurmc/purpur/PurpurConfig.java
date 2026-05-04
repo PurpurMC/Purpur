@@ -329,6 +329,7 @@ public class PurpurConfig {
     public static int barrelRows = 3;
     public static boolean enderChestSixRows = false;
     public static boolean enderChestPermissionRows = false;
+    public static boolean enderChestPersistHiddenRows = true;
     public static boolean cryingObsidianValidForPortalFrame = false;
     public static int beeInsideBeeHive = 3;
     public static boolean anvilCumulativeCost = true;
@@ -373,6 +374,7 @@ public class PurpurConfig {
         enderChestSixRows = getBoolean("settings.blocks.ender_chest.six-rows", enderChestSixRows);
         org.bukkit.event.inventory.InventoryType.ENDER_CHEST.setDefaultSize(enderChestSixRows ? 54 : 27);
         enderChestPermissionRows = getBoolean("settings.blocks.ender_chest.use-permissions-for-rows", enderChestPermissionRows);
+        enderChestPersistHiddenRows = getBoolean("settings.blocks.ender_chest.persist-hidden-rows", enderChestPersistHiddenRows);
         cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
         beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
         anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
