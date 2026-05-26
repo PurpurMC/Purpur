@@ -1,0 +1,290 @@
+--- a/net/minecraft/server/level/ServerPlayer.java
++++ b/net/minecraft/server/level/ServerPlayer.java
+@@ -435,6 +_,9 @@
+     public boolean isRealPlayer; // Paper
+     public com.destroystokyo.paper.event.entity.@Nullable PlayerNaturallySpawnCreaturesEvent playerNaturallySpawnedEvent; // Paper - PlayerNaturallySpawnCreaturesEvent
+     public org.bukkit.event.player.PlayerQuitEvent.@Nullable QuitReason quitReason = null; // Paper - Add API for quit reason; there are a lot of changes to do if we change all methods leading to the event
++    private boolean tpsBar = false; // Purpur - Implement TPSBar
++    private boolean compassBar = false; // Purpur - Add compass command
++    private boolean ramBar = false; // Purpur - Implement rambar commands
+ 
+     // Paper start - rewrite chunk system
+     private ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.PlayerChunkLoaderData chunkLoader;
+@@ -508,6 +_,9 @@
+         this.respawnConfig = input.read("respawn", ServerPlayer.RespawnConfig.CODEC).orElse(null);
+         this.spawnExtraParticlesOnFall = input.getBooleanOr("spawn_extra_particles_on_fall", false);
+         this.raidOmenPosition = input.read("raid_omen_position", BlockPos.CODEC).orElse(null);
++        this.tpsBar = input.getBooleanOr("Purpur.TPSBar", false); // Purpur - Implement TPSBar
++        this.compassBar = input.getBooleanOr("Purpur.CompassBar", false); // Purpur - Add compass command
++        this.ramBar = input.getBooleanOr("Purpur.RamBar", false); // Purpur - Implement rambar command
+         // Paper start - Expand PlayerGameModeChangeEvent
+         this.loadGameTypes(input);
+     }
+@@ -549,6 +_,9 @@
+             output.store("ShoulderEntityRight", CompoundTag.CODEC, this.getShoulderEntityRight());
+         }
+         this.getBukkitEntity().setExtraData(output); // CraftBukkit
++        output.putBoolean("Purpur.TPSBar", this.tpsBar); // Purpur - Implement TPSBar
++        output.putBoolean("Purpur.CompassBar", this.compassBar); // Purpur - Add compass command
++        output.putBoolean("Purpur.RamBar", this.ramBar); // Purpur - Add rambar command
+     }
+ 
+     private void saveParentVehicle(final ValueOutput playerOutput) {
+@@ -1179,6 +_,7 @@
+             // Paper - moved up to sendClientboundPlayerCombatKillPacket()
+             sendClientboundPlayerCombatKillPacket(event.getShowDeathMessages(), deathScreenMessage); // Paper - Expand PlayerDeathEvent
+             Team team = this.getTeam();
++            if (org.purpurmc.purpur.PurpurConfig.deathMessageOnlyBroadcastToAffectedPlayer) this.sendSystemMessage(deathMessage); else // Purpur - Configurable broadcast settings
+             if (team == null || team.getDeathMessageVisibility() == Team.Visibility.ALWAYS) {
+                 this.server.getPlayerList().broadcastSystemMessage(deathMessage, false);
+             } else if (team.getDeathMessageVisibility() == Team.Visibility.HIDE_FOR_OTHER_TEAMS) {
+@@ -1288,6 +_,13 @@
+             return false;
+         }
+ 
++        // Purpur start - Add boat fall damage config
++        if (source.is(net.minecraft.tags.DamageTypeTags.IS_FALL)) {
++            if (getRootVehicle() instanceof net.minecraft.world.entity.vehicle.boat.Boat && !level().purpurConfig.boatsDoFallDamage) {
++                return false;
++            }
++        }
++        // Purpur end - Add boat fall damage config
+         Entity entity = source.getEntity();
+         if (!( // Paper - split the if statement. If below statement is false, hurtServer would not have been evaluated. Return false.
+             !(entity instanceof Player player && !this.canHarmPlayer(player))
+@@ -1529,7 +_,7 @@
+         }
+ 
+         if (newLevel.dimension() == lastDimension) {
+-            this.connection.internalTeleport(PositionMoveRotation.of(transition), transition.relatives()); // CraftBukkit  
++            this.connection.internalTeleport(PositionMoveRotation.of(transition), transition.relatives()); // CraftBukkit
+             this.connection.resetPosition();
+             transition.postTeleportTransition().onTransition(this);
+             return this;
+@@ -1552,6 +_,7 @@
+ 
+         profiler.pop();
+         profiler.push("placing");
++        this.portalPos = org.bukkit.craftbukkit.util.CraftLocation.toBlockPos(exit); // Purpur - Fix stuck in portals
+         this.setServerLevel(newLevel);
+         this.connection.internalTeleport(PositionMoveRotation.of(transition), transition.relatives()); // CraftBukkit - use internal teleport without event
+         this.connection.resetPosition();
+@@ -1664,7 +_,7 @@
+                         new AABB(bedCenter.x() - 8.0, bedCenter.y() - 5.0, bedCenter.z() - 8.0, bedCenter.x() + 8.0, bedCenter.y() + 5.0, bedCenter.z() + 8.0),
+                         monster -> monster.isPreventingPlayerRest(this.level(), this)
+                     );
+-                if (!monsters.isEmpty()) {
++                if (!this.level().purpurConfig.playerSleepNearMonsters && !monsters.isEmpty()) { // Purpur - Config to ignore nearby mobs when sleeping
+                     return Either.left(Player.BedSleepingProblem.NOT_SAFE);
+                 }
+             }
+@@ -1700,7 +_,17 @@
+                 CriteriaTriggers.SLEPT_IN_BED.trigger(this);
+             });
+             if (!this.level().canSleepThroughNights()) {
+-                this.sendOverlayMessage(Component.translatable("sleep.not_possible"));
++                // Purpur start - Customizable sleeping actionbar messages
++                Component clientMessage;
++                if (org.purpurmc.purpur.PurpurConfig.sleepNotPossible.isBlank()) {
++                    clientMessage = null;
++                } else if (!org.purpurmc.purpur.PurpurConfig.sleepNotPossible.equalsIgnoreCase("default")) {
++                    clientMessage = io.papermc.paper.adventure.PaperAdventure.asVanilla(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(org.purpurmc.purpur.PurpurConfig.sleepNotPossible));
++                } else {
++                    clientMessage = Component.translatable("sleep.not_possible");
++                } if (clientMessage != null) {
++                    this.sendOverlayMessage(clientMessage);
++                }// Purpur end - Customizable sleeping actionbar messages
+             }
+ 
+             this.level().updateSleepingPlayerList();
+@@ -1794,6 +_,7 @@
+ 
+     @Override
+     public void openTextEdit(final SignBlockEntity sign, final boolean isFrontText) {
++        if (level().purpurConfig.signAllowColors) this.connection.send(sign.getTranslatedUpdatePacket(textFilteringEnabled, isFrontText)); // Purpur - Signs allow color codes
+         this.connection.send(new ClientboundBlockUpdatePacket(this.level(), sign.getBlockPos()));
+         this.connection.send(new ClientboundOpenSignEditorPacket(sign.getBlockPos(), isFrontText));
+     }
+@@ -2138,6 +_,26 @@
+         this.lastSentExp = -1; // CraftBukkit - Added to reset
+     }
+ 
++    // Purpur start - Component related conveniences
++    public void sendActionBarMessage(@Nullable String message) {
++        if (message != null && !message.isEmpty()) {
++            sendActionBarMessage(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(message));
++        }
++    }
++
++    public void sendActionBarMessage(net.kyori.adventure.text.@Nullable Component message) {
++        if (message != null) {
++            sendActionBarMessage(io.papermc.paper.adventure.PaperAdventure.asVanilla(message));
++        }
++    }
++
++    public void sendActionBarMessage(@Nullable Component message) {
++        if (message != null) {
++            sendOverlayMessage(message);
++        }
++    }
++    // Purpur end - Component related conveniences
++
+     @Override
+     public void completeUsingItem() {
+         if (!this.useItem.isEmpty() && this.isUsingItem()) {
+@@ -2373,6 +_,20 @@
+         );
+     }
+ 
++    // Purpur start - Component related conveniences
++    public void sendMiniMessage(@Nullable String message) {
++        if (message != null && !message.isEmpty()) {
++            this.sendMessage(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(message));
++        }
++    }
++
++    public void sendMessage(net.kyori.adventure.text.@Nullable Component message) {
++        if (message != null) {
++            this.sendSystemMessage(io.papermc.paper.adventure.PaperAdventure.asVanilla(message));
++        }
++    }
++    // Purpur end - Component related conveniences
++
+     @Override
+     public void sendSystemMessage(final Component message) {
+         this.sendSystemMessage(message, false);
+@@ -2524,7 +_,67 @@
+ 
+     public void resetLastActionTime() {
+         this.lastActionTime = Util.getMillis();
+-    }
++        this.setAfk(false); // Purpur - AFK API
++    }
++
++    // Purpur start - AFK API
++    private boolean isAfk = false;
++
++    @Override
++    public void setAfk(boolean afk) {
++        if (this.isAfk == afk) {
++            return;
++        }
++
++        String msg = afk ? org.purpurmc.purpur.PurpurConfig.afkBroadcastAway : org.purpurmc.purpur.PurpurConfig.afkBroadcastBack;
++
++        org.purpurmc.purpur.event.PlayerAFKEvent event = new org.purpurmc.purpur.event.PlayerAFKEvent(this.getBukkitEntity(), afk, this.level().purpurConfig.idleTimeoutKick, msg, !org.bukkit.Bukkit.isPrimaryThread());
++        if (!event.callEvent() || event.shouldKick()) {
++            return;
++        }
++
++        this.isAfk = afk;
++
++        if (!afk) {
++            resetLastActionTime();
++        }
++
++        msg = event.getBroadcastMsg();
++        if (msg != null && !msg.isEmpty()) {
++            String playerName = this.getGameProfile().name();
++            if (org.purpurmc.purpur.PurpurConfig.afkBroadcastUseDisplayName) {
++                net.kyori.adventure.text.Component playerDisplayNameComponent = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(this.getBukkitEntity().getDisplayName());
++                playerName = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(playerDisplayNameComponent);
++            }
++            server.getPlayerList().broadcastMiniMessage(String.format(msg, playerName), false);
++        }
++
++        if (this.level().purpurConfig.idleTimeoutUpdateTabList) {
++            String scoreboardName = getScoreboardName();
++            String playerListName = net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().serialize(getBukkitEntity().playerListName());
++            String[] split = playerListName.split(scoreboardName);
++            String prefix = (split.length > 0 ? split[0] : "").replace(org.purpurmc.purpur.PurpurConfig.afkTabListPrefix, "");
++            String suffix = (split.length > 1 ? split[1] : "").replace(org.purpurmc.purpur.PurpurConfig.afkTabListSuffix, "");
++            if (afk) {
++                getBukkitEntity().setPlayerListName(org.purpurmc.purpur.PurpurConfig.afkTabListPrefix + prefix + scoreboardName + suffix + org.purpurmc.purpur.PurpurConfig.afkTabListSuffix, true);
++            } else {
++                getBukkitEntity().setPlayerListName(prefix + scoreboardName + suffix, true);
++            }
++        }
++
++        ((ServerLevel) this.level()).updateSleepingPlayerList();
++    }
++
++    @Override
++    public boolean isAfk() {
++        return this.isAfk;
++    }
++
++    @Override
++    public boolean canBeCollidedWith(Entity entity) {
++        return !this.isAfk() && super.canBeCollidedWith(entity);
++    }
++    // Purpur end - AFK API
+ 
+     public ServerStatsCounter getStats() {
+         return this.stats;
+@@ -3149,4 +_,65 @@
+         return (org.bukkit.craftbukkit.entity.CraftPlayer) super.getBukkitEntity();
+     }
+     // CraftBukkit end
++
++    // Purpur start - Add option to teleport to spawn if outside world border
++    public void teleport(org.bukkit.Location to) {
++        this.ejectPassengers();
++        this.stopRiding(true);
++
++        if (this.isSleeping()) {
++            this.stopSleepInBed(true, false);
++        }
++
++        if (this.containerMenu != this.inventoryMenu) {
++            this.closeContainer(org.bukkit.event.inventory.InventoryCloseEvent.Reason.TELEPORT);
++        }
++
++        ServerLevel toLevel = ((org.bukkit.craftbukkit.CraftWorld) to.getWorld()).getHandle();
++        if (this.level() == toLevel) {
++            this.connection.internalTeleport(to);
++        } else {
++            this.teleport(new TeleportTransition(
++                toLevel,
++                org.bukkit.craftbukkit.util.CraftLocation.toVec3(to),
++                Vec3.ZERO,
++                to.getYaw(),
++                to.getPitch(),
++                net.minecraft.world.entity.Relative.ALL,
++                TeleportTransition.DO_NOTHING,
++                org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.UNKNOWN
++            ));
++        }
++    }
++    // Purpur end - Add option to teleport to spawn if outside world border
++
++    // Purpur start - Implement TPSBar
++    public boolean tpsBar() {
++        return this.tpsBar;
++    }
++
++    public void tpsBar(boolean tpsBar) {
++        this.tpsBar = tpsBar;
++    }
++    // Purpur end - Implement TPSBar
++
++    // Purpur start - Add compass command
++    public boolean compassBar() {
++        return this.compassBar;
++    }
++
++    public void compassBar(boolean compassBar) {
++        this.compassBar = compassBar;
++    }
++    // Purpur end - Add compass command
++
++    // Purpur start - Add rambar command
++    public boolean ramBar() {
++        return this.ramBar;
++    }
++
++    public void ramBar(boolean ramBar) {
++        this.ramBar = ramBar;
++    }
++    // Purpur end - Add rambar command
+ }
