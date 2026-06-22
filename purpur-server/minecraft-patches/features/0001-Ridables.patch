@@ -18,7 +18,7 @@ index ec6dd9de7b82841b1403b1bb851392132be5275b..146c404ac0471ed7df6d3740859663aa
              public boolean isClientAuthoritative() {
                  return false;
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 80e694615ff8f81c8cbda9684ef96cce65f5abd7..f9cf876c5031e20b209c5de991982dbe08c0a58f 100644
+index 03930510d489fe0af20750ba20b639df845266be..b2b69fbf79f67ea75bad54178f59dd5dfa9d61d5 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
 @@ -1865,6 +1865,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -42,7 +42,7 @@ index 9a5be73c618c4c8572aad4ca2673def65658eeee..50a1fe6bd9f7e6cf79e48e1420fbe153
      @Override
      public @Nullable LevelChunk getChunkIfLoaded(int x, int z) {
 diff --git a/net/minecraft/server/level/ServerPlayer.java b/net/minecraft/server/level/ServerPlayer.java
-index 9529e56d83964589a1e55b64e666f66b4148c315..c7e81ed584a3da2521fad58049ee44c18947ca23 100644
+index 01438fdfcd047c4d0e9a9f0ebfd9e01434161dc5..3db9626ae55aae9c9fef22771f06ac37c8ad2890 100644
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
 @@ -775,6 +775,15 @@ public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patc
@@ -808,6 +808,24 @@ index 57127335a3c68fbf9ac3d64a8504c6e271a5d532..8296a5a5935a77b01f4d11b102f3159d
      @Override
      protected void addAdditionalSaveData(final ValueOutput output) {
          super.addAdditionalSaveData(output);
+diff --git a/net/minecraft/world/entity/animal/camel/CamelHusk.java b/net/minecraft/world/entity/animal/camel/CamelHusk.java
+index 9708a22cf72eb2f8e69a23fc4849f788fedffd83..d634818efe3e661d2edc1fabbe25f4f5c34b41ae 100644
+--- a/net/minecraft/world/entity/animal/camel/CamelHusk.java
++++ b/net/minecraft/world/entity/animal/camel/CamelHusk.java
+@@ -26,6 +26,13 @@ public class CamelHusk extends Camel {
+         super(type, level);
+     }
+ 
++    // Purpur start - Ridables
++    @Override
++    public boolean dismountsUnderwater() {
++        return level().purpurConfig.useDismountsUnderwaterTag ? super.dismountsUnderwater() : !level().purpurConfig.camelHuskRidableInWater;
++    }
++    // Purpur end - Ridables
++
+     @Override
+     public boolean removeWhenFarAway(final double distSqr) {
+         return true;
 diff --git a/net/minecraft/world/entity/animal/chicken/Chicken.java b/net/minecraft/world/entity/animal/chicken/Chicken.java
 index c646ab45fbfb4a5fd29b8ad4914cf115d2f674b5..b0191f605e6f5e7be78a44868bef1805fc2d005c 100644
 --- a/net/minecraft/world/entity/animal/chicken/Chicken.java
@@ -4111,10 +4129,61 @@ index c9091f9aed31ce23371539cb44695732b2ae4e9b..41cd8cef18309f1dcfdb5c45f6733bad
          profiler.pop();
          this.updateActivity();
 diff --git a/net/minecraft/world/entity/monster/breeze/Breeze.java b/net/minecraft/world/entity/monster/breeze/Breeze.java
-index eaa7eb69bdc819228bbab05b053844f1578294ba..dd1a4c7ee396572269aa3dfec12f6b01018a66c3 100644
+index eaa7eb69bdc819228bbab05b053844f1578294ba..76222d49e4f321d2d8f763cfeae3815ad40123d5 100644
 --- a/net/minecraft/world/entity/monster/breeze/Breeze.java
 +++ b/net/minecraft/world/entity/monster/breeze/Breeze.java
-@@ -234,6 +234,7 @@ public class Breeze extends Monster {
+@@ -79,6 +79,50 @@ public class Breeze extends Monster {
+         this.xpReward = 10;
+     }
+ 
++    // Purpur start - Ridables
++    @Override
++    public boolean isRidable() {
++        return level().purpurConfig.breezeRidable;
++    }
++
++    @Override
++    public boolean dismountsUnderwater() {
++        return level().purpurConfig.useDismountsUnderwaterTag ? super.dismountsUnderwater() : !level().purpurConfig.breezeRidableInWater;
++    }
++
++    @Override
++    public boolean isControllable() {
++        return level().purpurConfig.breezeControllable;
++    }
++
++    @Override
++    public boolean onSpacebar() {
++        if (getRider() != null && getRider().getBukkitEntity().hasPermission("allow.special.breeze")) {
++            shoot();
++        }
++        return false;
++    }
++
++    public boolean shoot() {
++        if (!(level() instanceof ServerLevel serverLevel)) return false;
++
++        org.bukkit.Location loc = ((org.bukkit.entity.LivingEntity) getBukkitEntity()).getEyeLocation();
++        org.bukkit.util.Vector target = loc.getDirection().normalize().multiply(100).add(loc.toVector());
++
++        net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.BreezeWindCharge windCharge = new net.minecraft.world.entity.projectile.hurtingprojectile.windcharge.BreezeWindCharge(this, serverLevel);
++        Projectile.spawnProjectileUsingShoot(windCharge, serverLevel, net.minecraft.world.item.ItemStack.EMPTY, target.getX() - getX(), target.getY() - getFiringYPosition(), target.getZ() - getZ(), 0.7F, 5 - serverLevel.getDifficulty().getId() * 4
++        );
++        this.playSound(SoundEvents.BREEZE_SHOOT, 1.5F, 1.0F);
++        return true;
++    }
++
++    @Override
++    protected void registerGoals() {
++        this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this));
++        this.targetSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this));
++    }
++    // Purpur end - Ridables
++
+     @Override
+     public Brain<Breeze> getBrain() {
+         return (Brain<Breeze>)super.getBrain();
+@@ -234,6 +278,7 @@ public class Breeze extends Monster {
      protected void customServerAiStep(final ServerLevel level) {
          ProfilerFiller profiler = Profiler.get();
          profiler.push("breezeBrain");
@@ -4704,6 +4773,34 @@ index faff25abf54e00f38b10bdb47e37ab2d100f32fb..6bb58edc4317e33da1d6053b1c66a9ac
      @Override
      protected void defineSynchedData(final SynchedEntityData.Builder entityData) {
          super.defineSynchedData(entityData);
+diff --git a/net/minecraft/world/entity/monster/skeleton/Parched.java b/net/minecraft/world/entity/monster/skeleton/Parched.java
+index 986caff5325830c6d3eb0f6927c3294ae8b9ebe0..87e281968803650755ed8987077d87f73eb048d4 100644
+--- a/net/minecraft/world/entity/monster/skeleton/Parched.java
++++ b/net/minecraft/world/entity/monster/skeleton/Parched.java
+@@ -19,6 +19,23 @@ public class Parched extends AbstractSkeleton {
+         super(type, level);
+     }
+ 
++    // Purpur start - Ridables
++    @Override
++    public boolean isRidable() {
++        return level().purpurConfig.parchedRidable;
++    }
++
++    @Override
++    public boolean dismountsUnderwater() {
++        return level().purpurConfig.useDismountsUnderwaterTag ? super.dismountsUnderwater() : !level().purpurConfig.parchedRidableInWater;
++    }
++
++    @Override
++    public boolean isControllable() {
++        return level().purpurConfig.parchedControllable;
++    }
++    // Purpur end - Ridables
++
+     @Override
+     protected AbstractArrow getArrow(final ItemStack projectile, final float power, final @Nullable ItemStack firingWeapon) {
+         AbstractArrow arrow = super.getArrow(projectile, power, firingWeapon);
 diff --git a/net/minecraft/world/entity/monster/skeleton/Skeleton.java b/net/minecraft/world/entity/monster/skeleton/Skeleton.java
 index d9cb4a5b989ce684bbaf4eee3f642d29d6bf9d45..d92db02786ce6989ca5d8a2d7647e4f60a66ce82 100644
 --- a/net/minecraft/world/entity/monster/skeleton/Skeleton.java

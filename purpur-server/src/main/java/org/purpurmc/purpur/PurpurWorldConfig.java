@@ -1457,6 +1457,23 @@ public class PurpurWorldConfig {
         boggedCanPickUpLoot = getBooleanOrDefault("mobs.bogged.can-pick-up-loot", boggedCanPickUpLoot);
     }
 
+    public boolean breezeRidable = false;
+    public boolean breezeRidableInWater = true;
+    public boolean breezeControllable = true;
+    public double breezeMaxHealth = 30.0D;
+    public double breezeScale = 1.0D;
+    public boolean breezeTakeDamageFromWater = false;
+    public boolean breezeAlwaysDropExp = false;
+    private void breezeSettings() {
+        breezeRidable = getBoolean("mobs.breeze.ridable", breezeRidable);
+        breezeRidableInWater = getBoolean("mobs.breeze.ridable-in-water", breezeRidableInWater);
+        breezeControllable = getBoolean("mobs.breeze.controllable", breezeControllable);
+        breezeMaxHealth = getDouble("mobs.breeze.attributes.max_health", breezeMaxHealth);
+        breezeScale = Mth.clamp(getDouble("mobs.breeze.attributes.scale", breezeScale), 0.0625D, 16.0D);
+        breezeTakeDamageFromWater = getBoolean("mobs.breeze.takes-damage-from-water", breezeTakeDamageFromWater);
+        breezeAlwaysDropExp = getBoolean("mobs.breeze.always-drop-exp", breezeAlwaysDropExp);
+    }
+
     public boolean camelRidableInWater = false;
     public double camelMaxHealthMin = 32.0D;
     public double camelMaxHealthMax = 32.0D;
@@ -1474,6 +1491,25 @@ public class PurpurWorldConfig {
         camelMovementSpeedMin = getDouble("mobs.camel.attributes.movement_speed.min", camelMovementSpeedMin);
         camelMovementSpeedMax = getDouble("mobs.camel.attributes.movement_speed.max", camelMovementSpeedMax);
         camelBreedingTicks = getInt("mobs.camel.breeding-delay-ticks", camelBreedingTicks);
+    }
+
+    public boolean camelHuskRidableInWater = false;
+    public double camelHuskMaxHealthMin = 32.0D;
+    public double camelHuskMaxHealthMax = 32.0D;
+    public double camelHuskJumpStrengthMin = 0.42D;
+    public double camelHuskJumpStrengthMax = 0.42D;
+    public double camelHuskMovementSpeedMin = 0.09D;
+    public double camelHuskMovementSpeedMax = 0.09D;
+    public boolean camelHuskAlwaysDropExp = false;
+    private void camelHuskSettings() {
+        camelHuskRidableInWater = getBoolean("mobs.camel_husk.ridable-in-water", camelHuskRidableInWater);
+        camelHuskMaxHealthMin = getDouble("mobs.camel_husk.attributes.max_health.min", camelHuskMaxHealthMin);
+        camelHuskMaxHealthMax = getDouble("mobs.camel_husk.attributes.max_health.max", camelHuskMaxHealthMax);
+        camelHuskJumpStrengthMin = getDouble("mobs.camel_husk.attributes.jump_strength.min", camelHuskJumpStrengthMin);
+        camelHuskJumpStrengthMax = getDouble("mobs.camel_husk.attributes.jump_strength.max", camelHuskJumpStrengthMax);
+        camelHuskMovementSpeedMin = getDouble("mobs.camel_husk.attributes.movement_speed.min", camelHuskMovementSpeedMin);
+        camelHuskMovementSpeedMax = getDouble("mobs.camel_husk.attributes.movement_speed.max", camelHuskMovementSpeedMax);
+        camelHuskAlwaysDropExp = getBoolean("mobs.camel_husk.always-drop-exp", camelHuskAlwaysDropExp);
     }
 
     public boolean catRidable = false;
@@ -2467,6 +2503,25 @@ public class PurpurWorldConfig {
         pandaBreedingTicks = getInt("mobs.panda.breeding-delay-ticks", pandaBreedingTicks);
         pandaTakeDamageFromWater = getBoolean("mobs.panda.takes-damage-from-water", pandaTakeDamageFromWater);
         pandaAlwaysDropExp = getBoolean("mobs.panda.always-drop-exp", pandaAlwaysDropExp);
+    }
+
+    public boolean parchedRidable = false;
+    public boolean parchedRidableInWater = true;
+    public boolean parchedControllable = true;
+    public double parchedMaxHealth = 16.0D;
+    public double parchedScale = 1.0D;
+    public boolean parchedTakeDamageFromWater = false;
+    public boolean parchedAlwaysDropExp = false;
+    public Boolean parchedCanPickUpLoot = null;
+    private void parchedSettings() {
+        parchedRidable = getBoolean("mobs.parched.ridable", parchedRidable);
+        parchedRidableInWater = getBoolean("mobs.parched.ridable-in-water", parchedRidableInWater);
+        parchedControllable = getBoolean("mobs.parched.controllable", parchedControllable);
+        parchedMaxHealth = getDouble("mobs.parched.attributes.max_health", parchedMaxHealth);
+        parchedScale = Mth.clamp(getDouble("mobs.parched.attributes.scale", parchedScale), 0.0625D, 16.0D);
+        parchedTakeDamageFromWater = getBoolean("mobs.parched.takes-damage-from-water", parchedTakeDamageFromWater);
+        parchedAlwaysDropExp = getBoolean("mobs.parched.always-drop-exp", parchedAlwaysDropExp);
+        parchedCanPickUpLoot = getBooleanOrDefault("mobs.parched.can-pick-up-loot", parchedCanPickUpLoot);
     }
 
     public boolean parrotRidable = false;
