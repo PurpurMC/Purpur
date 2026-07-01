@@ -6,10 +6,12 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.logging.Level;
+import net.kyori.adventure.key.Key;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ai.behavior.AcquirePoi;
 import net.minecraft.world.entity.monster.Shulker;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
@@ -18,6 +20,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.properties.Tilt;
 import org.apache.commons.lang3.BooleanUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
@@ -34,16 +37,26 @@ import static org.purpurmc.purpur.PurpurConfig.log;
 @SuppressWarnings("unused")
 public class PurpurWorldConfig {
 
+    private final String legacyWorldName;
     private final String worldName;
     private final World.Environment environment;
 
-    public PurpurWorldConfig(String worldName, World.Environment environment) {
-        this.worldName = worldName;
+    public PurpurWorldConfig(String legacyWorldName, World.Environment environment, Key worldKey) {
+        this.legacyWorldName = legacyWorldName;
+        this.worldName = worldKey.asString();
         this.environment = environment;
         init();
     }
 
     public void init() {
+        if (PurpurConfig.version < 48) {
+            ConfigurationSection section = PurpurConfig.config.getConfigurationSection("world-settings." + this.legacyWorldName);
+            if (section != null) {
+                PurpurConfig.config.set("world-settings." + this.legacyWorldName, null);
+                PurpurConfig.config.set("world-settings." + this.worldName, section);
+                Bukkit.getLogger().info("NOTE: Migrated Purpur world config %s -> %s".formatted(this.legacyWorldName, this.worldName));
+            }
+        }
         log("-------- World Settings For [" + worldName + "] --------");
         PurpurConfig.readConfig(PurpurWorldConfig.class, this);
     }
@@ -133,11 +146,6 @@ public class PurpurWorldConfig {
         armorstandPlaceWithArms = getBoolean("gameplay-mechanics.armorstand.place-with-arms-visible", armorstandPlaceWithArms);
     }
 
-    public boolean arrowMovementResetsDespawnCounter = true;
-    private void arrowSettings() {
-        arrowMovementResetsDespawnCounter = getBoolean("gameplay-mechanics.arrow.movement-resets-despawn-counter", arrowMovementResetsDespawnCounter);
-    }
-
     public boolean useBetterMending = false;
     public boolean alwaysTameInCreative = false;
     public boolean boatEjectPlayersOnLand = false;
@@ -189,7 +197,26 @@ public class PurpurWorldConfig {
             set("gameplay-mechanics.projectiles-bypass-mob-griefing", null);
             set("gameplay-mechanics.projectiles-mob-griefing-override", oldVal3 ? true : "default");
         }
-        entitiesPickUpLootMobGriefingOverride = getBooleanOrDefault("gameplay-mechanics.entities-pick-up-loot-mob-griefing-override", entitiesPickUpLootMobGriefingOverride);
+        if (PurpurConfig.version < 47) {
+            boolean oldVal = getBoolean("gameplay-mechanics.entities-pick-up-loot-mob-griefing-override", false);
+            set("gameplay-mechanics.entities-pick-up-loot-mob-griefing-override", null);
+            set("mobs.allay.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.bogged.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.drowned.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.fox.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.husk.can-pick-up-loot", oldVal ? true : "default");
+            // mobs.piglin.can-pick-up-loot replaces mobs.piglin.mob-griefing-override
+            set("mobs.piglin_brute.can-pick-up-loot", oldVal ? true : "default");
+            // mobs.pillager.can-pick-up-loot replaces mobs.pillager.mob-griefing-override
+            set("mobs.skeleton.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.stray.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.villager.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.vindicator.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.wither_skeleton.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.zombie.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.zombie_villager.can-pick-up-loot", oldVal ? true : "default");
+            set("mobs.zombified_piglin.can-pick-up-loot", oldVal ? true : "default");
+        }
         fireballsMobGriefingOverride = getBooleanOrDefault("gameplay-mechanics.fireballs-mob-griefing-override", fireballsMobGriefingOverride);
         projectilesMobGriefingOverride = getBooleanOrDefault("gameplay-mechanics.projectiles-mob-griefing-override", projectilesMobGriefingOverride);
         noteBlockIgnoreAbove = getBoolean("gameplay-mechanics.note-block-ignore-above", noteBlockIgnoreAbove);
@@ -262,7 +289,7 @@ public class PurpurWorldConfig {
     public List<Item> itemImmuneToFire = new ArrayList<>();
     public List<Item> itemImmuneToLightning = new ArrayList<>();
     public boolean dontRunWithScissors = false;
-    public ResourceLocation dontRunWithScissorsItemModelReference = ResourceLocation.parse("purpurmc:scissors");
+    public Identifier dontRunWithScissorsItemModelReference = Identifier.parse("purpurmc:scissors");
     public boolean ignoreScissorsInWater = false;
     public boolean ignoreScissorsInLava = false;
     public double scissorsRunningDamage = 1D;
@@ -283,7 +310,7 @@ public class PurpurWorldConfig {
                 BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToCactus.add(item));
                 return;
             }
-            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(key.toString()));
             if (item != Items.AIR) itemImmuneToCactus.add(item);
         });
         itemImmuneToExplosion.clear();
@@ -292,7 +319,7 @@ public class PurpurWorldConfig {
                 BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToExplosion.add(item));
                 return;
             }
-            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(key.toString()));
             if (item != Items.AIR) itemImmuneToExplosion.add(item);
         });
         itemImmuneToFire.clear();
@@ -301,7 +328,7 @@ public class PurpurWorldConfig {
                 BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToFire.add(item));
                 return;
             }
-            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(key.toString()));
             if (item != Items.AIR) itemImmuneToFire.add(item);
         });
         itemImmuneToLightning.clear();
@@ -310,11 +337,11 @@ public class PurpurWorldConfig {
                 BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).forEach((item) -> itemImmuneToLightning.add(item));
                 return;
             }
-            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(key.toString()));
             if (item != Items.AIR) itemImmuneToLightning.add(item);
         });
         dontRunWithScissors = getBoolean("gameplay-mechanics.item.shears.damage-if-sprinting", dontRunWithScissors);
-        dontRunWithScissorsItemModelReference = ResourceLocation.parse(getString("gameplay-mechanics.item.shears.damage-if-sprinting-item-model", "purpurmc:scissors"));
+        dontRunWithScissorsItemModelReference = Identifier.parse(getString("gameplay-mechanics.item.shears.damage-if-sprinting-item-model", "purpurmc:scissors"));
         ignoreScissorsInWater = getBoolean("gameplay-mechanics.item.shears.ignore-in-water", ignoreScissorsInWater);
         ignoreScissorsInLava = getBoolean("gameplay-mechanics.item.shears.ignore-in-lava", ignoreScissorsInLava);
         scissorsRunningDamage = getDouble("gameplay-mechanics.item.shears.sprinting-damage", scissorsRunningDamage);
@@ -382,7 +409,7 @@ public class PurpurWorldConfig {
         ConfigurationSection section = getConfigurationSection("gameplay-mechanics.minecart.controllable.block-speed");
         if (section != null) {
             for (String key : section.getKeys(false)) {
-                Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(key));
+                Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(key));
                 if (block != Blocks.AIR) {
                     minecartControllableBlockSpeeds.put(block, section.getDouble(key, minecartControllableBaseSpeed));
                 }
@@ -523,7 +550,7 @@ public class PurpurWorldConfig {
                 "minecraft:diamond_pickaxe",
                 "minecraft:netherite_pickaxe"
         )).forEach(key -> {
-            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(key.toString()));
+            Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(key.toString()));
             if (item != Items.AIR) silkTouchTools.add(item);
         });
     }
@@ -714,17 +741,17 @@ public class PurpurWorldConfig {
                 Map.entry("minecraft:bamboo_block", Map.of("into", "minecraft:stripped_bamboo_block", "drops", new HashMap<String, Double>()))
             )
         ).forEach((blockId, obj) -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId));
             if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.strippables`: " + blockId); return; }
             if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.strippables." + blockId + "`"); return; }
             String intoId = (String) map.get("into");
-            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            Block into = BuiltInRegistries.BLOCK.getValue(Identifier.parse(intoId));
             if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.strippables." + blockId + ".into`: " + intoId); return; }
             Object dropsObj = map.get("drops");
             if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.strippables." + blockId + ".drops`"); return; }
             Map<Item, Double> drops = new HashMap<>();
             dropsMap.forEach((itemId, chance) -> {
-                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId.toString()));
                 if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.strippables." + blockId + ".drops`: " + itemId); return; }
                 drops.put(item, (double) chance);
             });
@@ -792,17 +819,17 @@ public class PurpurWorldConfig {
                 Map.entry("minecraft:waxed_weathered_copper_lantern", Map.of("into", "minecraft:weathered_copper_lantern", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:waxed_oxidized_copper_lantern", Map.of("into", "minecraft:oxidized_copper_lantern", "drops", new HashMap<String, Double>())))
         ).forEach((blockId, obj) -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId));
             if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.waxables`: " + blockId); return; }
             if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.waxables." + blockId + "`"); return; }
             String intoId = (String) map.get("into");
-            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            Block into = BuiltInRegistries.BLOCK.getValue(Identifier.parse(intoId));
             if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.waxables." + blockId + ".into`: " + intoId); return; }
             Object dropsObj = map.get("drops");
             if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.waxables." + blockId + ".drops`"); return; }
             Map<Item, Double> drops = new HashMap<>();
             dropsMap.forEach((itemId, chance) -> {
-                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId.toString()));
                 if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.waxables." + blockId + ".drops`: " + itemId); return; }
                 drops.put(item, (double) chance);
             });
@@ -855,17 +882,17 @@ public class PurpurWorldConfig {
                 Map.entry("minecraft:weathered_copper_lantern", Map.of("into", "minecraft:exposed_copper_lantern", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:oxidized_copper_lantern", Map.of("into", "minecraft:weathered_copper_lantern", "drops", new HashMap<String, Double>())))
         ).forEach((blockId, obj) -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId));
             if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.weatherables`: " + blockId); return; }
             if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.weatherables." + blockId + "`"); return; }
             String intoId = (String) map.get("into");
-            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            Block into = BuiltInRegistries.BLOCK.getValue(Identifier.parse(intoId));
             if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.axe.weatherables." + blockId + ".into`: " + intoId); return; }
             Object dropsObj = map.get("drops");
             if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.axe.weatherables." + blockId + ".drops`"); return; }
             Map<Item, Double> drops = new HashMap<>();
             dropsMap.forEach((itemId, chance) -> {
-                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId.toString()));
                 if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.axe.weatherables." + blockId + ".drops`: " + itemId); return; }
                 drops.put(item, (double) chance);
             });
@@ -878,20 +905,20 @@ public class PurpurWorldConfig {
                 Map.entry("minecraft:coarse_dirt", Map.of("condition", "air_above", "into", "minecraft:dirt", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:rooted_dirt", Map.of("condition", "always", "into", "minecraft:dirt", "drops", Map.of("minecraft:hanging_roots", 1.0D))))
         ).forEach((blockId, obj) -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId));
             if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.hoe.tillables`: " + blockId); return; }
             if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.hoe.tillables." + blockId + "`"); return; }
             String conditionId = (String) map.get("condition");
             Tillable.Condition condition = Tillable.Condition.get(conditionId);
             if (condition == null) { PurpurConfig.log(Level.SEVERE, "Invalid condition for `tools.hoe.tillables." + blockId + ".condition`: " + conditionId); return; }
             String intoId = (String) map.get("into");
-            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            Block into = BuiltInRegistries.BLOCK.getValue(Identifier.parse(intoId));
             if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.hoe.tillables." + blockId + ".into`: " + intoId); return; }
             Object dropsObj = map.get("drops");
             if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.hoe.tillables." + blockId + ".drops`"); return; }
             Map<Item, Double> drops = new HashMap<>();
             dropsMap.forEach((itemId, chance) -> {
-                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId.toString()));
                 if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.hoe.tillables." + blockId + ".drops`: " + itemId); return; }
                 drops.put(item, (double) chance);
             });
@@ -905,17 +932,17 @@ public class PurpurWorldConfig {
                 Map.entry("minecraft:mycelium", Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>())),
                 Map.entry("minecraft:rooted_dirt", Map.of("into", "minecraft:dirt_path", "drops", new HashMap<String, Double>())))
         ).forEach((blockId, obj) -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(blockId));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId));
             if (block == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.shovel.flattenables`: " + blockId); return; }
             if (!(obj instanceof Map<?, ?> map)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.shovel.flattenables." + blockId + "`"); return; }
             String intoId = (String) map.get("into");
-            Block into = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(intoId));
+            Block into = BuiltInRegistries.BLOCK.getValue(Identifier.parse(intoId));
             if (into == Blocks.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid block for `tools.shovel.flattenables." + blockId + ".into`: " + intoId); return; }
             Object dropsObj = map.get("drops");
             if (!(dropsObj instanceof Map<?, ?> dropsMap)) { PurpurConfig.log(Level.SEVERE, "Invalid yaml for `tools.shovel.flattenables." + blockId + ".drops`"); return; }
             Map<Item, Double> drops = new HashMap<>();
             dropsMap.forEach((itemId, chance) -> {
-                Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId.toString()));
+                Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId.toString()));
                 if (item == Items.AIR) { PurpurConfig.log(Level.SEVERE, "Invalid item for `tools.shovel.flattenables." + blockId + ".drops`: " + itemId); return; }
                 drops.put(item, (double) chance);
             });
@@ -1040,7 +1067,7 @@ public class PurpurWorldConfig {
     public List<Block> doorRequiresRedstone = new ArrayList<>();
     private void doorSettings() {
         getList("blocks.door.requires-redstone", new ArrayList<String>()).forEach(key -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(key.toString()));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(key.toString()));
             if (!block.defaultBlockState().isAir()) {
                 doorRequiresRedstone.add(block);
             }
@@ -1274,12 +1301,14 @@ public class PurpurWorldConfig {
     public boolean allayControllable = true;
     public double allayMaxHealth = 20.0D;
     public double allayScale = 1.0D;
+    public Boolean allayCanPickUpLoot = null;
     private void allaySettings() {
         allayRidable = getBoolean("mobs.allay.ridable", allayRidable);
         allayRidableInWater = getBoolean("mobs.allay.ridable-in-water", allayRidableInWater);
         allayControllable = getBoolean("mobs.allay.controllable", allayControllable);
         allayMaxHealth = getDouble("mobs.allay.attributes.max_health", allayMaxHealth);
         allayScale = Mth.clamp(getDouble("mobs.allay.attributes.scale", allayScale), 0.0625D, 16.0D);
+        allayCanPickUpLoot = getBooleanOrDefault("mobs.allay.can-pick-up-loot", allayCanPickUpLoot);
     }
 
     public boolean armadilloRidable = false;
@@ -1418,12 +1447,31 @@ public class PurpurWorldConfig {
     public boolean boggedControllable = true;
     public double boggedMaxHealth = 16.0D;
     public double boggedScale = 1.0D;
+    public Boolean boggedCanPickUpLoot = null;
     private void boggedSettings() {
         boggedRidable = getBoolean("mobs.bogged.ridable", boggedRidable);
         boggedRidableInWater = getBoolean("mobs.bogged.ridable-in-water", boggedRidableInWater);
         boggedControllable = getBoolean("mobs.bogged.controllable", boggedControllable);
         boggedMaxHealth = getDouble("mobs.bogged.attributes.max_health", boggedMaxHealth);
         boggedScale = Mth.clamp(getDouble("mobs.bogged.attributes.scale", boggedScale), 0.0625D, 16.0D);
+        boggedCanPickUpLoot = getBooleanOrDefault("mobs.bogged.can-pick-up-loot", boggedCanPickUpLoot);
+    }
+
+    public boolean breezeRidable = false;
+    public boolean breezeRidableInWater = true;
+    public boolean breezeControllable = true;
+    public double breezeMaxHealth = 30.0D;
+    public double breezeScale = 1.0D;
+    public boolean breezeTakeDamageFromWater = false;
+    public boolean breezeAlwaysDropExp = false;
+    private void breezeSettings() {
+        breezeRidable = getBoolean("mobs.breeze.ridable", breezeRidable);
+        breezeRidableInWater = getBoolean("mobs.breeze.ridable-in-water", breezeRidableInWater);
+        breezeControllable = getBoolean("mobs.breeze.controllable", breezeControllable);
+        breezeMaxHealth = getDouble("mobs.breeze.attributes.max_health", breezeMaxHealth);
+        breezeScale = Mth.clamp(getDouble("mobs.breeze.attributes.scale", breezeScale), 0.0625D, 16.0D);
+        breezeTakeDamageFromWater = getBoolean("mobs.breeze.takes-damage-from-water", breezeTakeDamageFromWater);
+        breezeAlwaysDropExp = getBoolean("mobs.breeze.always-drop-exp", breezeAlwaysDropExp);
     }
 
     public boolean camelRidableInWater = false;
@@ -1443,6 +1491,25 @@ public class PurpurWorldConfig {
         camelMovementSpeedMin = getDouble("mobs.camel.attributes.movement_speed.min", camelMovementSpeedMin);
         camelMovementSpeedMax = getDouble("mobs.camel.attributes.movement_speed.max", camelMovementSpeedMax);
         camelBreedingTicks = getInt("mobs.camel.breeding-delay-ticks", camelBreedingTicks);
+    }
+
+    public boolean camelHuskRidableInWater = false;
+    public double camelHuskMaxHealthMin = 32.0D;
+    public double camelHuskMaxHealthMax = 32.0D;
+    public double camelHuskJumpStrengthMin = 0.42D;
+    public double camelHuskJumpStrengthMax = 0.42D;
+    public double camelHuskMovementSpeedMin = 0.09D;
+    public double camelHuskMovementSpeedMax = 0.09D;
+    public boolean camelHuskAlwaysDropExp = false;
+    private void camelHuskSettings() {
+        camelHuskRidableInWater = getBoolean("mobs.camel_husk.ridable-in-water", camelHuskRidableInWater);
+        camelHuskMaxHealthMin = getDouble("mobs.camel_husk.attributes.max_health.min", camelHuskMaxHealthMin);
+        camelHuskMaxHealthMax = getDouble("mobs.camel_husk.attributes.max_health.max", camelHuskMaxHealthMax);
+        camelHuskJumpStrengthMin = getDouble("mobs.camel_husk.attributes.jump_strength.min", camelHuskJumpStrengthMin);
+        camelHuskJumpStrengthMax = getDouble("mobs.camel_husk.attributes.jump_strength.max", camelHuskJumpStrengthMax);
+        camelHuskMovementSpeedMin = getDouble("mobs.camel_husk.attributes.movement_speed.min", camelHuskMovementSpeedMin);
+        camelHuskMovementSpeedMax = getDouble("mobs.camel_husk.attributes.movement_speed.max", camelHuskMovementSpeedMax);
+        camelHuskAlwaysDropExp = getBoolean("mobs.camel_husk.always-drop-exp", camelHuskAlwaysDropExp);
     }
 
     public boolean catRidable = false;
@@ -1560,6 +1627,7 @@ public class PurpurWorldConfig {
     public boolean copperGolemTakeDamageFromWater = false;
     public boolean copperGolemAlwaysDropExp = false;
     public boolean copperGolemCanOpenBarrel = false;
+    public boolean copperGolemCanOpenShulker = false;
     private void copperGolemSettings() {
         copperGolemRidable = getBoolean("mobs.copper_golem.ridable", copperGolemRidable);
         copperGolemRidableInWater = getBoolean("mobs.copper_golem.ridable-in-water", copperGolemRidableInWater);
@@ -1572,6 +1640,7 @@ public class PurpurWorldConfig {
         copperGolemTakeDamageFromWater = getBoolean("mobs.copper_golem.takes-damage-from-water", copperGolemTakeDamageFromWater);
         copperGolemAlwaysDropExp = getBoolean("mobs.copper_golem.always-drop-exp", copperGolemAlwaysDropExp);
         copperGolemCanOpenBarrel = getBoolean("mobs.copper_golem.can-open-barrel", copperGolemCanOpenBarrel);
+        copperGolemCanOpenShulker = getBoolean("mobs.copper_golem.can-open-shulker", copperGolemCanOpenShulker);
     }
 
     public boolean cowRidable = false;
@@ -1735,6 +1804,7 @@ public class PurpurWorldConfig {
     public boolean drownedTakeDamageFromWater = false;
     public boolean drownedBreakDoors = false;
     public boolean drownedAlwaysDropExp = false;
+    public Boolean drownedCanPickUpLoot = null;
     private void drownedSettings() {
         drownedRidable = getBoolean("mobs.drowned.ridable", drownedRidable);
         drownedRidableInWater = getBoolean("mobs.drowned.ridable-in-water", drownedRidableInWater);
@@ -1753,6 +1823,7 @@ public class PurpurWorldConfig {
         drownedTakeDamageFromWater = getBoolean("mobs.drowned.takes-damage-from-water", drownedTakeDamageFromWater);
         drownedBreakDoors = getBoolean("mobs.drowned.can-break-doors", drownedBreakDoors);
         drownedAlwaysDropExp = getBoolean("mobs.drowned.always-drop-exp", drownedAlwaysDropExp);
+        drownedCanPickUpLoot = getBooleanOrDefault("mobs.drowned.can-pick-up-loot", drownedCanPickUpLoot);
     }
 
     public boolean elderGuardianRidable = false;
@@ -1921,6 +1992,7 @@ public class PurpurWorldConfig {
     public Boolean foxMobGriefingOverride = null;
     public boolean foxTakeDamageFromWater = false;
     public boolean foxAlwaysDropExp = false;
+    public Boolean foxCanPickUpLoot = null;
     private void foxSettings() {
         foxRidable = getBoolean("mobs.fox.ridable", foxRidable);
         foxRidableInWater = getBoolean("mobs.fox.ridable-in-water", foxRidableInWater);
@@ -1942,6 +2014,7 @@ public class PurpurWorldConfig {
         foxMobGriefingOverride = getBooleanOrDefault("mobs.fox.mob-griefing-override", foxMobGriefingOverride);
         foxTakeDamageFromWater = getBoolean("mobs.fox.takes-damage-from-water", foxTakeDamageFromWater);
         foxAlwaysDropExp = getBoolean("mobs.fox.always-drop-exp", foxAlwaysDropExp);
+        foxCanPickUpLoot = getBooleanOrDefault("mobs.fox.can-pick-up-loot", foxCanPickUpLoot);
     }
 
     public boolean frogRidable = false;
@@ -2170,6 +2243,7 @@ public class PurpurWorldConfig {
     public boolean huskJockeyTryExistingChickens = true;
     public boolean huskTakeDamageFromWater = false;
     public boolean huskAlwaysDropExp = false;
+    public Boolean huskCanPickUpLoot = null;
     private void huskSettings() {
         huskRidable = getBoolean("mobs.husk.ridable", huskRidable);
         huskRidableInWater = getBoolean("mobs.husk.ridable-in-water", huskRidableInWater);
@@ -2187,6 +2261,7 @@ public class PurpurWorldConfig {
         huskJockeyTryExistingChickens = getBoolean("mobs.husk.jockey.try-existing-chickens", huskJockeyTryExistingChickens);
         huskTakeDamageFromWater = getBoolean("mobs.husk.takes-damage-from-water", huskTakeDamageFromWater);
         huskAlwaysDropExp = getBoolean("mobs.husk.always-drop-exp", huskAlwaysDropExp);
+        huskCanPickUpLoot = getBooleanOrDefault("mobs.husk.can-pick-up-loot", huskCanPickUpLoot);
     }
 
     public boolean illusionerRidable = false;
@@ -2363,6 +2438,23 @@ public class PurpurWorldConfig {
         muleAlwaysDropExp = getBoolean("mobs.mule.always-drop-exp", muleAlwaysDropExp);
     }
 
+    public double nautilusMaxHealth = 15.0D;
+    public double nautilusMovementSpeed = 1.0D;
+    public double nautilusAttackDamage = 3.0D;
+    public double nautilusKnockbackResistance = 0.3D;
+    public double nautilusScale = 1.0D;
+    public int nautilusBreedingTicks = 6000;
+    public boolean nautilusAlwaysDropExp = false;
+    private void nautilusSettings() {
+        nautilusMaxHealth = getDouble("mobs.nautilus.attributes.max_health", nautilusMaxHealth);
+        nautilusMovementSpeed = getDouble("mobs.nautilus.attributes.movement_speed", nautilusMovementSpeed);
+        nautilusAttackDamage = getDouble("mobs.nautilus.attributes.attack_damage", nautilusAttackDamage);
+        nautilusKnockbackResistance = getDouble("mobs.nautilus.attributes.knockback_resistance", nautilusKnockbackResistance);
+        nautilusScale = Mth.clamp(getDouble("mobs.nautilus.attributes.scale", nautilusScale), 0.0625D, 16.0D);
+        nautilusBreedingTicks = getInt("mobs.nautilus.breeding-delay-ticks", nautilusBreedingTicks);
+        nautilusAlwaysDropExp = getBoolean("mobs.nautilus.always-drop-exp", nautilusAlwaysDropExp);
+    }
+
     public boolean ocelotRidable = false;
     public boolean ocelotRidableInWater = true;
     public boolean ocelotControllable = true;
@@ -2411,6 +2503,25 @@ public class PurpurWorldConfig {
         pandaBreedingTicks = getInt("mobs.panda.breeding-delay-ticks", pandaBreedingTicks);
         pandaTakeDamageFromWater = getBoolean("mobs.panda.takes-damage-from-water", pandaTakeDamageFromWater);
         pandaAlwaysDropExp = getBoolean("mobs.panda.always-drop-exp", pandaAlwaysDropExp);
+    }
+
+    public boolean parchedRidable = false;
+    public boolean parchedRidableInWater = true;
+    public boolean parchedControllable = true;
+    public double parchedMaxHealth = 16.0D;
+    public double parchedScale = 1.0D;
+    public boolean parchedTakeDamageFromWater = false;
+    public boolean parchedAlwaysDropExp = false;
+    public Boolean parchedCanPickUpLoot = null;
+    private void parchedSettings() {
+        parchedRidable = getBoolean("mobs.parched.ridable", parchedRidable);
+        parchedRidableInWater = getBoolean("mobs.parched.ridable-in-water", parchedRidableInWater);
+        parchedControllable = getBoolean("mobs.parched.controllable", parchedControllable);
+        parchedMaxHealth = getDouble("mobs.parched.attributes.max_health", parchedMaxHealth);
+        parchedScale = Mth.clamp(getDouble("mobs.parched.attributes.scale", parchedScale), 0.0625D, 16.0D);
+        parchedTakeDamageFromWater = getBoolean("mobs.parched.takes-damage-from-water", parchedTakeDamageFromWater);
+        parchedAlwaysDropExp = getBoolean("mobs.parched.always-drop-exp", parchedAlwaysDropExp);
+        parchedCanPickUpLoot = getBooleanOrDefault("mobs.parched.can-pick-up-loot", parchedCanPickUpLoot);
     }
 
     public boolean parrotRidable = false;
@@ -2543,12 +2654,12 @@ public class PurpurWorldConfig {
     public boolean piglinControllable = true;
     public double piglinMaxHealth = 16.0D;
     public double piglinScale = 1.0D;
-    public Boolean piglinMobGriefingOverride = null;
     public boolean piglinTakeDamageFromWater = false;
     public int piglinPortalSpawnModifier = 2000;
     public boolean piglinAlwaysDropExp = false;
     public double piglinHeadVisibilityPercent = 0.5D;
     public boolean piglinIgnoresArmorWithGoldTrim = false;
+    public Boolean piglinCanPickUpLoot = null;
     private void piglinSettings() {
         piglinRidable = getBoolean("mobs.piglin.ridable", piglinRidable);
         piglinRidableInWater = getBoolean("mobs.piglin.ridable-in-water", piglinRidableInWater);
@@ -2565,12 +2676,17 @@ public class PurpurWorldConfig {
             set("mobs.piglin.bypass-mob-griefing", null);
             set("mobs.piglin.mob-griefing-override", oldVal ? true : "default");
         }
-        piglinMobGriefingOverride = getBooleanOrDefault("mobs.piglin.mob-griefing-override", piglinMobGriefingOverride);
         piglinTakeDamageFromWater = getBoolean("mobs.piglin.takes-damage-from-water", piglinTakeDamageFromWater);
         piglinPortalSpawnModifier = getInt("mobs.piglin.portal-spawn-modifier", piglinPortalSpawnModifier);
         piglinAlwaysDropExp = getBoolean("mobs.piglin.always-drop-exp", piglinAlwaysDropExp);
         piglinHeadVisibilityPercent = getDouble("mobs.piglin.head-visibility-percent", piglinHeadVisibilityPercent);
         piglinIgnoresArmorWithGoldTrim = getBoolean("mobs.piglin.ignores-armor-with-gold-trim", piglinIgnoresArmorWithGoldTrim);
+        if (PurpurConfig.version < 47) {
+            boolean oldVal = getBoolean("mobs.piglin.mob-griefing-override", false);
+            set("mobs.piglin.mob-griefing-override", null);
+            set("mobs.piglin.can-pick-up-loot", oldVal ? true : "default");
+        }
+        piglinCanPickUpLoot = getBooleanOrDefault("mobs.piglin.can-pick-up-loot", piglinCanPickUpLoot);
     }
 
     public boolean piglinBruteRidable = false;
@@ -2580,6 +2696,7 @@ public class PurpurWorldConfig {
     public double piglinBruteScale = 1.0D;
     public boolean piglinBruteTakeDamageFromWater = false;
     public boolean piglinBruteAlwaysDropExp = false;
+    public Boolean piglinBruteCanPickUpLoot = null;
     private void piglinBruteSettings() {
         piglinBruteRidable = getBoolean("mobs.piglin_brute.ridable", piglinBruteRidable);
         piglinBruteRidableInWater = getBoolean("mobs.piglin_brute.ridable-in-water", piglinBruteRidableInWater);
@@ -2593,6 +2710,7 @@ public class PurpurWorldConfig {
         piglinBruteScale = Mth.clamp(getDouble("mobs.piglin_brute.attributes.scale", piglinBruteScale), 0.0625D, 16.0D);
         piglinBruteTakeDamageFromWater = getBoolean("mobs.piglin_brute.takes-damage-from-water", piglinBruteTakeDamageFromWater);
         piglinBruteAlwaysDropExp = getBoolean("mobs.piglin_brute.always-drop-exp", piglinBruteAlwaysDropExp);
+        piglinBruteCanPickUpLoot = getBooleanOrDefault("mobs.piglin_brute.can-pick-up-loot", piglinBruteCanPickUpLoot);
     }
 
     public boolean pillagerRidable = false;
@@ -2600,9 +2718,9 @@ public class PurpurWorldConfig {
     public boolean pillagerControllable = true;
     public double pillagerMaxHealth = 24.0D;
     public double pillagerScale = 1.0D;
-    public Boolean pillagerMobGriefingOverride = null;
     public boolean pillagerTakeDamageFromWater = false;
     public boolean pillagerAlwaysDropExp = false;
+    public Boolean pillagerCanPickUpLoot = null;
     private void pillagerSettings() {
         pillagerRidable = getBoolean("mobs.pillager.ridable", pillagerRidable);
         pillagerRidableInWater = getBoolean("mobs.pillager.ridable-in-water", pillagerRidableInWater);
@@ -2619,9 +2737,14 @@ public class PurpurWorldConfig {
             set("mobs.pillager.bypass-mob-griefing", null);
             set("mobs.pillager.mob-griefing-override", oldVal ? true : "default");
         }
-        pillagerMobGriefingOverride = getBooleanOrDefault("mobs.pillager.mob-griefing-override", pillagerMobGriefingOverride);
         pillagerTakeDamageFromWater = getBoolean("mobs.pillager.takes-damage-from-water", pillagerTakeDamageFromWater);
         pillagerAlwaysDropExp = getBoolean("mobs.pillager.always-drop-exp", pillagerAlwaysDropExp);
+        if (PurpurConfig.version < 47) {
+            boolean oldVal = getBoolean("mobs.pillager.mob-griefing-override", false);
+            set("mobs.pillager.mob-griefing-override", null);
+            set("mobs.pillager.can-pick-up-loot", oldVal ? true : "default");
+        }
+        pillagerCanPickUpLoot = getBooleanOrDefault("mobs.pillager.can-pick-up-loot", pillagerCanPickUpLoot);
     }
 
     public boolean polarBearRidable = false;
@@ -2646,7 +2769,7 @@ public class PurpurWorldConfig {
         polarBearMaxHealth = getDouble("mobs.polar_bear.attributes.max_health", polarBearMaxHealth);
         polarBearScale = Mth.clamp(getDouble("mobs.polar_bear.attributes.scale", polarBearScale), 0.0625D, 16.0D);
         polarBearBreedableItemString = getString("mobs.polar_bear.breedable-item", polarBearBreedableItemString);
-        Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(polarBearBreedableItemString));
+        Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(polarBearBreedableItemString));
         if (item != Items.AIR) polarBearBreedableItem = item;
         polarBearBreedingTicks = getInt("mobs.polar_bear.breeding-delay-ticks", polarBearBreedingTicks);
         polarBearTakeDamageFromWater = getBoolean("mobs.polar_bear.takes-damage-from-water", polarBearTakeDamageFromWater);
@@ -2769,7 +2892,7 @@ public class PurpurWorldConfig {
             set("mobs.ravager.griefable-blocks", new ArrayList<>(set));
         }
         getList("mobs.ravager.griefable-blocks", defaultRavagerGriefableBlocks).forEach(key -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(key.toString()));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(key.toString()));
             if (!block.defaultBlockState().isAir()) {
                 ravagerGriefableBlocks.add(block);
             }
@@ -2907,6 +3030,7 @@ public class PurpurWorldConfig {
     public int skeletonFeedWitherRoses = 0;
     public String skeletonBowAccuracy = "14 - difficulty * 4";
     public Map<Integer, Float> skeletonBowAccuracyMap = new HashMap<>();
+    public Boolean skeletonCanPickUpLoot = null;
     private void skeletonSettings() {
         skeletonRidable = getBoolean("mobs.skeleton.ridable", skeletonRidable);
         skeletonRidableInWater = getBoolean("mobs.skeleton.ridable-in-water", skeletonRidableInWater);
@@ -2934,6 +3058,7 @@ public class PurpurWorldConfig {
             }
             skeletonBowAccuracyMap.put(i, divergence);
         }
+        skeletonCanPickUpLoot = getBooleanOrDefault("mobs.skeleton.can-pick-up-loot", skeletonCanPickUpLoot);
     }
 
     public boolean skeletonHorseRidable = false;
@@ -3104,6 +3229,7 @@ public class PurpurWorldConfig {
     public double strayScale = 1.0D;
     public boolean strayTakeDamageFromWater = false;
     public boolean strayAlwaysDropExp = false;
+    public Boolean strayCanPickUpLoot = null;
     private void straySettings() {
         strayRidable = getBoolean("mobs.stray.ridable", strayRidable);
         strayRidableInWater = getBoolean("mobs.stray.ridable-in-water", strayRidableInWater);
@@ -3117,6 +3243,7 @@ public class PurpurWorldConfig {
         strayScale = Mth.clamp(getDouble("mobs.stray.attributes.scale", strayScale), 0.0625D, 16.0D);
         strayTakeDamageFromWater = getBoolean("mobs.stray.takes-damage-from-water", strayTakeDamageFromWater);
         strayAlwaysDropExp = getBoolean("mobs.stray.always-drop-exp", strayAlwaysDropExp);
+        strayCanPickUpLoot = getBooleanOrDefault("mobs.stray.can-pick-up-loot", strayCanPickUpLoot);
     }
 
     public boolean striderRidable = false;
@@ -3143,6 +3270,19 @@ public class PurpurWorldConfig {
         striderGiveSaddleBack = getBoolean("mobs.strider.give-saddle-back", striderGiveSaddleBack);
         striderTakeDamageFromWater = getBoolean("mobs.strider.takes-damage-from-water", striderTakeDamageFromWater);
         striderAlwaysDropExp = getBoolean("mobs.strider.always-drop-exp", striderAlwaysDropExp);
+    }
+
+    public boolean sulfurCubeRidable = false;
+    public boolean sulfurCubeRidableInWater = true;
+    public boolean sulfurCubeControllable = true;
+    public boolean sulfurCubeTakeDamageFromWater = false;
+    public boolean sulfurCubeAlwaysDropExp = false;
+    private void sulfurCubeSettings() {
+        sulfurCubeRidable = getBoolean("mobs.sulfur_cube.ridable", sulfurCubeRidable);
+        sulfurCubeRidableInWater = getBoolean("mobs.sulfur_cube.ridable-in-water", sulfurCubeRidableInWater);
+        sulfurCubeControllable = getBoolean("mobs.sulfur_cube.controllable", sulfurCubeControllable);
+        sulfurCubeTakeDamageFromWater = getBoolean("mobs.sulfur_cube.takes-damage-from-water", sulfurCubeTakeDamageFromWater);
+        sulfurCubeAlwaysDropExp = getBoolean("mobs.sulfur_cube.always-drop-exp", sulfurCubeAlwaysDropExp);
     }
 
     public boolean tadpoleRidable = false;
@@ -3279,8 +3419,9 @@ public class PurpurWorldConfig {
     public boolean villagerDisplayTradeItem = true;
     public int villagerSpawnIronGolemRadius = 0;
     public int villagerSpawnIronGolemLimit = 0;
-    public int villagerAcquirePoiSearchRadius = 48;
-    public int villagerNearestBedSensorSearchRadius = 48;
+    public int villagerAcquirePoiSearchRadius = AcquirePoi.SCAN_RANGE;
+    public int villagerNearestBedSensorSearchRadius = AcquirePoi.SCAN_RANGE;
+    public Boolean villagerCanPickUpLoot = null;
     private void villagerSettings() {
         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
@@ -3326,6 +3467,7 @@ public class PurpurWorldConfig {
         villagerSpawnIronGolemLimit = getInt("mobs.villager.spawn-iron-golem.limit", villagerSpawnIronGolemLimit);
         villagerAcquirePoiSearchRadius = getInt("mobs.villager.search-radius.acquire-poi", villagerAcquirePoiSearchRadius);
         villagerNearestBedSensorSearchRadius = getInt("mobs.villager.search-radius.nearest-bed-sensor", villagerNearestBedSensorSearchRadius);
+        villagerCanPickUpLoot = getBooleanOrDefault("mobs.villager.can-pick-up-loot", villagerCanPickUpLoot);
     }
 
     public boolean vindicatorRidable = false;
@@ -3336,6 +3478,7 @@ public class PurpurWorldConfig {
     public double vindicatorJohnnySpawnChance = 0D;
     public boolean vindicatorTakeDamageFromWater = false;
     public boolean vindicatorAlwaysDropExp = false;
+    public Boolean vindicatorCanPickUpLoot = null;
     private void vindicatorSettings() {
         vindicatorRidable = getBoolean("mobs.vindicator.ridable", vindicatorRidable);
         vindicatorRidableInWater = getBoolean("mobs.vindicator.ridable-in-water", vindicatorRidableInWater);
@@ -3350,6 +3493,7 @@ public class PurpurWorldConfig {
         vindicatorJohnnySpawnChance = getDouble("mobs.vindicator.johnny.spawn-chance", vindicatorJohnnySpawnChance);
         vindicatorTakeDamageFromWater = getBoolean("mobs.vindicator.takes-damage-from-water", vindicatorTakeDamageFromWater);
         vindicatorAlwaysDropExp = getBoolean("mobs.vindicator.always-drop-exp", vindicatorAlwaysDropExp);
+        vindicatorCanPickUpLoot = getBooleanOrDefault("mobs.vindicator.can-pick-up-loot", vindicatorCanPickUpLoot);
     }
 
     public boolean wanderingTraderRidable = false;
@@ -3386,11 +3530,13 @@ public class PurpurWorldConfig {
     public boolean wardenRidableInWater = true;
     public boolean wardenControllable = true;
     public boolean wardenCanUseSonicBoom = true;
+    public boolean wardenCanRideVehicles = false;
     private void wardenSettings() {
         wardenRidable = getBoolean("mobs.warden.ridable", wardenRidable);
         wardenRidableInWater = getBoolean("mobs.warden.ridable-in-water", wardenRidableInWater);
         wardenControllable = getBoolean("mobs.warden.controllable", wardenControllable);
         wardenCanUseSonicBoom = getBoolean("mobs.warden.can-use-sonic-boom", wardenCanUseSonicBoom);
+        wardenCanRideVehicles = getBoolean("mobs.warden.can-ride-vehicles", enderDragonCanRideVehicles);
     }
 
     public boolean witchRidable = false;
@@ -3467,6 +3613,7 @@ public class PurpurWorldConfig {
     public double witherSkeletonScale = 1.0D;
     public boolean witherSkeletonTakeDamageFromWater = false;
     public boolean witherSkeletonAlwaysDropExp = false;
+    public Boolean witherSkeletonCanPickUpLoot = null;
     private void witherSkeletonSettings() {
         witherSkeletonRidable = getBoolean("mobs.wither_skeleton.ridable", witherSkeletonRidable);
         witherSkeletonRidableInWater = getBoolean("mobs.wither_skeleton.ridable-in-water", witherSkeletonRidableInWater);
@@ -3480,6 +3627,7 @@ public class PurpurWorldConfig {
         witherSkeletonScale = Mth.clamp(getDouble("mobs.wither_skeleton.attributes.scale", witherSkeletonScale), 0.0625D, 16.0D);
         witherSkeletonTakeDamageFromWater = getBoolean("mobs.wither_skeleton.takes-damage-from-water", witherSkeletonTakeDamageFromWater);
         witherSkeletonAlwaysDropExp = getBoolean("mobs.wither_skeleton.always-drop-exp", witherSkeletonAlwaysDropExp);
+        witherSkeletonCanPickUpLoot = getBooleanOrDefault("mobs.wither_skeleton.can-pick-up-loot", witherSkeletonCanPickUpLoot);
     }
 
     public boolean wolfRidable = false;
@@ -3552,6 +3700,7 @@ public class PurpurWorldConfig {
     public boolean zombieTakeDamageFromWater = false;
     public boolean zombieAlwaysDropExp = false;
     public double zombieHeadVisibilityPercent = 0.5D;
+    public Boolean zombieCanPickUpLoot = null;
     private void zombieSettings() {
         zombieRidable = getBoolean("mobs.zombie.ridable", zombieRidable);
         zombieRidableInWater = getBoolean("mobs.zombie.ridable-in-water", zombieRidableInWater);
@@ -3577,6 +3726,7 @@ public class PurpurWorldConfig {
         zombieTakeDamageFromWater = getBoolean("mobs.zombie.takes-damage-from-water", zombieTakeDamageFromWater);
         zombieAlwaysDropExp = getBoolean("mobs.zombie.always-drop-exp", zombieAlwaysDropExp);
         zombieHeadVisibilityPercent = getDouble("mobs.zombie.head-visibility-percent", zombieHeadVisibilityPercent);
+        zombieCanPickUpLoot = getBooleanOrDefault("mobs.zombie.can-pick-up-loot", zombieCanPickUpLoot);
     }
 
     public boolean zombieHorseRidable = false;
@@ -3612,6 +3762,21 @@ public class PurpurWorldConfig {
         zombieHorseAlwaysDropExp = getBoolean("mobs.zombie_horse.always-drop-exp", zombieHorseAlwaysDropExp);
     }
 
+    public double zombieNautilusMaxHealth = 15.0D;
+    public double zombieNautilusMovementSpeed = 1.1D;
+    public double zombieNautilusAttackDamage = 3.0D;
+    public double zombieNautilusKnockbackResistance = 0.3D;
+    public double zombieNautilusScale = 1.0D;
+    public boolean zombieNautilusAlwaysDropExp = false;
+    private void zombieNautilusSettings() {
+        zombieNautilusMaxHealth = getDouble("mobs.zombie_nautilus.attributes.max_health", zombieNautilusMaxHealth);
+        zombieNautilusMovementSpeed = getDouble("mobs.zombie_nautilus.attributes.movement_speed", zombieNautilusMovementSpeed);
+        zombieNautilusAttackDamage = getDouble("mobs.zombie_nautilus.attributes.attack_damage", zombieNautilusAttackDamage);
+        zombieNautilusKnockbackResistance = getDouble("mobs.zombie_nautilus.attributes.knockback_resistance", zombieNautilusKnockbackResistance);
+        zombieNautilusScale = Mth.clamp(getDouble("mobs.zombie_nautilus.attributes.scale", zombieNautilusScale), 0.0625D, 16.0D);
+        zombieNautilusAlwaysDropExp = getBoolean("mobs.zombie_nautilus.always-drop-exp", zombieNautilusAlwaysDropExp);
+    }
+
     public boolean zombieVillagerRidable = false;
     public boolean zombieVillagerRidableInWater = true;
     public boolean zombieVillagerControllable = true;
@@ -3626,6 +3791,7 @@ public class PurpurWorldConfig {
     public int zombieVillagerCuringTimeMax = 6000;
     public boolean zombieVillagerCureEnabled = true;
     public boolean zombieVillagerAlwaysDropExp = false;
+    public Boolean zombieVillagerCanPickUpLoot = null;
     private void zombieVillagerSettings() {
         zombieVillagerRidable = getBoolean("mobs.zombie_villager.ridable", zombieVillagerRidable);
         zombieVillagerRidableInWater = getBoolean("mobs.zombie_villager.ridable-in-water", zombieVillagerRidableInWater);
@@ -3646,6 +3812,7 @@ public class PurpurWorldConfig {
         zombieVillagerCuringTimeMax = getInt("mobs.zombie_villager.curing_time.max", zombieVillagerCuringTimeMax);
         zombieVillagerCureEnabled = getBoolean("mobs.zombie_villager.cure.enabled", zombieVillagerCureEnabled);
         zombieVillagerAlwaysDropExp = getBoolean("mobs.zombie_villager.always-drop-exp", zombieVillagerAlwaysDropExp);
+        zombieVillagerCanPickUpLoot = getBooleanOrDefault("mobs.zombie_villager.can-pick-up-loot", zombieVillagerCanPickUpLoot);
     }
 
     public boolean zombifiedPiglinRidable = false;
@@ -3660,6 +3827,7 @@ public class PurpurWorldConfig {
     public boolean zombifiedPiglinCountAsPlayerKillWhenAngry = false;
     public boolean zombifiedPiglinTakeDamageFromWater = false;
     public boolean zombifiedPiglinAlwaysDropExp = false;
+    public Boolean zombifiedPiglinCanPickUpLoot = null;
     private void zombifiedPiglinSettings() {
         zombifiedPiglinRidable = getBoolean("mobs.zombified_piglin.ridable", zombifiedPiglinRidable);
         zombifiedPiglinRidableInWater = getBoolean("mobs.zombified_piglin.ridable-in-water", zombifiedPiglinRidableInWater);
@@ -3681,6 +3849,7 @@ public class PurpurWorldConfig {
         zombifiedPiglinCountAsPlayerKillWhenAngry = getBoolean("mobs.zombified_piglin.count-as-player-kill-when-angry", zombifiedPiglinCountAsPlayerKillWhenAngry);
         zombifiedPiglinTakeDamageFromWater = getBoolean("mobs.zombified_piglin.takes-damage-from-water", zombifiedPiglinTakeDamageFromWater);
         zombifiedPiglinAlwaysDropExp = getBoolean("mobs.zombified_piglin.always-drop-exp", zombifiedPiglinAlwaysDropExp);
+        zombifiedPiglinCanPickUpLoot = getBooleanOrDefault("mobs.zombified_piglin.can-pick-up-loot", zombifiedPiglinCanPickUpLoot);
     }
 
     public float hungerStarvationDamage = 1.0F;
@@ -3703,7 +3872,7 @@ public class PurpurWorldConfig {
             add("minecraft:sea_lantern");
             add("minecraft:dark_prismarine");
         }}).forEach(key -> {
-            Block block = BuiltInRegistries.BLOCK.getValue(ResourceLocation.parse(key.toString()));
+            Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(key.toString()));
             if (!block.defaultBlockState().isAir()) {
                 conduitBlockList.add(block);
             }

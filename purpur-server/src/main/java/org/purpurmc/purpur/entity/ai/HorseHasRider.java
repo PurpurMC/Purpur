@@ -1,6 +1,6 @@
 package org.purpurmc.purpur.entity.ai;
 
-import net.minecraft.world.entity.animal.horse.AbstractHorse;
+import net.minecraft.world.entity.animal.equine.AbstractHorse;
 
 public class HorseHasRider extends HasRider {
     public final AbstractHorse horse;

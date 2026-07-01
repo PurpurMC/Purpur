@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -286,6 +_,7 @@
+@@ -319,6 +_,7 @@
      public joptsimple.OptionSet options;
      public org.bukkit.command.ConsoleCommandSender console;
      public static int currentTick; // Paper - improve tick loop
@@ -8,16 +8,16 @@
      public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
      public int autosavePeriod;
      // Paper - don't store the vanilla dispatcher
-@@ -302,6 +_,8 @@
+@@ -335,6 +_,8 @@
      public boolean isIteratingOverLevels = false; // Paper - Throw exception on world create while being ticked
      private final Set<String> pluginsBlockingSleep = new java.util.HashSet<>(); // Paper - API to allow/disallow tick sleeping
      public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
 +    public boolean lagging = false; // Purpur - Lagging threshold
 +    protected boolean upnp = false; // Purpur - UPnP Port Forwarding
      // Paper start - improve tick loop
-     public final ca.spottedleaf.moonrise.common.time.TickData tickTimes1s  = new ca.spottedleaf.moonrise.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(1L));
-     public final ca.spottedleaf.moonrise.common.time.TickData tickTimes5s  = new ca.spottedleaf.moonrise.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(5L));
-@@ -371,6 +_,7 @@
+     public final ca.spottedleaf.common.time.TickData tickTimes1s  = new ca.spottedleaf.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(1L));
+     public final ca.spottedleaf.common.time.TickData tickTimes5s  = new ca.spottedleaf.common.time.TickData(java.util.concurrent.TimeUnit.SECONDS.toNanos(5L));
+@@ -419,6 +_,7 @@
      public double[] computeTPS() {
          final long interval = this.tickRateManager().nanosecondsPerTick();
          return new double[] {
@@ -25,7 +25,7 @@
              getTPS(this.tickTimes1m, interval),
              getTPS(this.tickTimes5m, interval),
              getTPS(this.tickTimes15m, interval)
-@@ -1013,6 +_,15 @@
+@@ -1022,6 +_,15 @@
  
          LOGGER.info("Stopping server");
          Commands.COMMAND_SENDING_POOL.shutdownNow(); // Paper - Perf: Async command map building; Shutdown and don't bother finishing
@@ -41,18 +41,24 @@
          // CraftBukkit start
          if (this.server != null) {
              this.server.spark.disable(); // Paper - spark
-@@ -1111,6 +_,8 @@
-         this.safeShutdown(waitForShutdown, false);
+@@ -1117,6 +_,8 @@
+         this.halt(wait, false);
      }
-     public void safeShutdown(boolean waitForShutdown, boolean isRestarting) {
+     public void halt(final boolean wait, final boolean isRestarting) {
 +        org.purpurmc.purpur.task.BossBarTask.stopAll(); // Purpur - Implement TPSBar
 +        org.purpurmc.purpur.task.BeehiveTask.instance().unregister(); // Purpur - Give bee counts in beehives to Purpur clients
          this.isRestarting = isRestarting;
          this.hasLoggedStop = true; // Paper - Debugging
-         if (isDebugging()) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper - Debugging
-@@ -1288,6 +_,16 @@
+         if (this.isDebugging()) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper - Debugging
+@@ -1298,11 +_,21 @@
              }
              // Paper end - Add onboarding message for initial server start
+             // Paper start - Improve outdated version checking
+-            if (System.getProperty("paper.disableStartupVersionCheck") == null && io.papermc.paper.configuration.GlobalConfiguration.get().updateChecker.enabled) {
++            if (false && System.getProperty("paper.disableStartupVersionCheck") == null && io.papermc.paper.configuration.GlobalConfiguration.get().updateChecker.enabled) { // Purpur - disable paper startup check
+                 CompletableFuture.runAsync(com.destroystokyo.paper.PaperVersionFetcher::getUpdateStatusStartupMessage, io.papermc.paper.util.MCUtil.ASYNC_EXECUTOR);
+             }
+             // Paper end - Improve outdated version checking
  
 +            // Purpur start - config for startup commands
 +            if (!Boolean.getBoolean("Purpur.IReallyDontWantStartupCommands") && !org.purpurmc.purpur.PurpurConfig.startupCommands.isEmpty()) {
@@ -66,34 +72,26 @@
 +
              while (this.running) {
                  final long tickStart = System.nanoTime(); // Paper - improve tick loop
-                 long l; // Paper - improve tick loop - diff on change, expect this to be tick interval
-@@ -1301,8 +_,10 @@
-                     final long ticksBehind = Math.max(1L, this.tickSchedule.getPeriodsAhead(l, tickStart));
+                 long thisTickNanos; // Paper - improve tick loop - diff on change, expect this to be tick interval
+@@ -1316,9 +_,11 @@
+                     final long ticksBehind = Math.max(1L, this.tickSchedule.getPeriodsAhead(thisTickNanos, tickStart));
                      final long catchup = (long)Math.max(
                          1,
 -                        5 //ConfigHolder.getConfig().tickLoop.catchupTicks.getOrDefault(MoonriseConfig.TickLoop.DEFAULT_CATCHUP_TICKS).intValue()
 +                        org.purpurmc.purpur.PurpurConfig.tpsCatchup ? 5 : 1 //ConfigHolder.getConfig().tickLoop.catchupTicks.getOrDefault(MoonriseConfig.TickLoop.DEFAULT_CATCHUP_TICKS).intValue() // Purpur - Configurable TPS Catchup
                      );
-+
+ 
 +                    lagging = getTPS()[0] < org.purpurmc.purpur.PurpurConfig.laggingThreshold; // Purpur - Lagging threshold
- 
++
                      // adjust ticksBehind so that it is not greater-than catchup
-                     if (ticksBehind > catchup) {
-@@ -1773,7 +_,7 @@
-             long worldTime = level.getGameTime();
-             final ClientboundSetTimePacket worldPacket = new ClientboundSetTimePacket(worldTime, dayTime, doDaylight);
-             for (Player entityhuman : level.players()) {
--                if (!(entityhuman instanceof ServerPlayer) || (tickCount + entityhuman.getId()) % 20 != 0) {
-+                if (!(entityhuman instanceof ServerPlayer) || (!level.isForceTime() && (tickCount + entityhuman.getId()) % 20 != 0)) { // Purpur - Configurable daylight cycle
-                     continue;
-                 }
-                 ServerPlayer entityplayer = (ServerPlayer) entityhuman;
-@@ -1945,7 +_,7 @@
+                     if (ticksBehind - catchup > 0L) {
+                         final long difference = ticksBehind - catchup;
+@@ -1949,7 +_,7 @@
+     }
  
-     @DontObfuscate
      public String getServerModName() {
 -        return io.papermc.paper.ServerBuildInfo.buildInfo().brandName(); // Paper
 +        return org.purpurmc.purpur.PurpurConfig.serverModName; // Paper // Purpur - Configurable server mod name
      }
  
-     public SystemReport fillSystemReport(SystemReport systemReport) {
+     public ServerClockManager clockManager() {

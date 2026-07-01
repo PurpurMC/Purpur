@@ -5,6 +5,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
@@ -49,7 +50,7 @@ public class BeehiveTask implements PluginMessageListener {
         ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
 
         // targeted block info max range specified in client at net.minecraft.client.gui.hud.DebugHud#render
-        if (!payload.pos().getCenter().closerThan(serverPlayer.position(), 20)) return; // Targeted Block info max range is 20
+        if (!Vec3.atCenterOf(payload.pos()).closerThan(serverPlayer.position(), 20)) return; // Targeted Block info max range is 20
         if (serverPlayer.level().getChunkIfLoaded(payload.pos()) == null) return;
 
         BlockEntity blockEntity = serverPlayer.level().getBlockEntity(payload.pos());

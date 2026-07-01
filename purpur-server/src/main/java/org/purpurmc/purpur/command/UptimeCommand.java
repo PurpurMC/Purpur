@@ -7,6 +7,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.permissions.Permissions;
 import org.purpurmc.purpur.PurpurConfig;
 
 import java.util.concurrent.TimeUnit;
@@ -15,7 +16,7 @@ import java.util.function.Function;
 public class UptimeCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("uptime")
-                .requires((listener) -> listener.hasPermission(2, "bukkit.command.uptime"))
+                .requires((listener) -> listener.hasPermission(Permissions.COMMANDS_GAMEMASTER, "bukkit.command.uptime"))
                 .executes((context) -> execute(context.getSource()))
         );
     }

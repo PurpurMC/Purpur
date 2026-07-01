@@ -30,7 +30,7 @@ public class SpawnerItem extends BlockItem {
                 CompoundTag customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
                 Optional<String> mobTypeStringOptional = customData.getString("Purpur.mob_type");
                 if (mobTypeStringOptional.isPresent()) {
-                    EntityType.byString(mobTypeStringOptional.get()).ifPresent(type -> spawner.getSpawner().setEntityId(type, level, level.random, pos));
+                    EntityType.byString(mobTypeStringOptional.get()).ifPresent(type -> spawner.getSpawner().setEntityId(type, level, level.getRandom(), pos));
                 } else if (customData.contains("Purpur.SpawnData")) {
                     customData.getCompound("Purpur.SpawnData")
                         .flatMap(spawnerData -> spawnerData.read("SpawnData", net.minecraft.world.level.SpawnData.CODEC))

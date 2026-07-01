@@ -6,6 +6,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.permissions.Permissions;
 import org.purpurmc.purpur.PurpurConfig;
 
 import java.util.Collection;
@@ -14,10 +15,10 @@ import java.util.Collections;
 public class DemoCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("demo")
-                .requires((listener) -> listener.hasPermission(2, "bukkit.command.demo"))
+                .requires((listener) -> listener.hasPermission(Permissions.COMMANDS_GAMEMASTER, "bukkit.command.demo"))
                 .executes((context) -> execute(context.getSource(), Collections.singleton(context.getSource().getPlayerOrException())))
                 .then(Commands.argument("targets", EntityArgument.players())
-                        .requires(listener -> listener.hasPermission(2, "bukkit.command.demo.other"))
+                        .requires(listener -> listener.hasPermission(Permissions.COMMANDS_GAMEMASTER, "bukkit.command.demo.other"))
                         .executes((context) -> execute(context.getSource(), EntityArgument.getPlayers(context, "targets")))
                 )
         );

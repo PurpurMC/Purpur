@@ -1,29 +1,54 @@
 --- a/net/minecraft/world/entity/ai/behavior/TransportItemsBetweenContainers.java
 +++ b/net/minecraft/world/entity/ai/behavior/TransportItemsBetweenContainers.java
 @@ -287,7 +_,7 @@
-             LevelChunk chunkNow = level.getChunkSource().getChunkNow(chunkPos.x, chunkPos.z);
-             if (chunkNow != null) {
-                 for (BlockEntity blockEntity : chunkNow.getBlockEntities().values()) {
--                    if (blockEntity instanceof ChestBlockEntity chestBlockEntity) {
-+                    if (blockEntity instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity chestBlockEntity) { // Purpur - copper golem can place items in barrels option
-                         double d1 = chestBlockEntity.getBlockPos().distToCenterSqr(mob.position());
-                         if (d1 < d) {
-                             TransportItemsBetweenContainers.TransportItemTarget transportItemTarget1 = this.isTargetValidToPick(
-@@ -338,7 +_,7 @@
+             LevelChunk levelChunk = level.getChunkSource().getChunkNow(chunkPos.x(), chunkPos.z());
+             if (levelChunk != null) {
+                 for (BlockEntity potentialTarget : levelChunk.getBlockEntities().values()) {
+-                    if (potentialTarget instanceof ChestBlockEntity chestBlockEntity) {
++                    if (potentialTarget instanceof net.minecraft.world.level.block.entity.BaseContainerBlockEntity chestBlockEntity) { // Purpur - copper golem can place items in barrels or shulkers option
+                         double distance = chestBlockEntity.getBlockPos().distToCenterSqr(body.position());
+                         if (distance < closestDistance) {
+                             TransportItemsBetweenContainers.TransportItemTarget targetValidToPick = this.isTargetValidToPick(
+@@ -376,7 +_,11 @@
+     }
  
-     private boolean hasValidTarget(Level level, PathfinderMob mob) {
-         boolean flag = this.target != null && this.isWantedBlock(mob, this.target.state) && this.targetHasNotChanged(level, this.target);
--        if (flag && !this.isTargetBlocked(level, this.target)) {
-+        if (flag && (mob.level().purpurConfig.copperGolemCanOpenBarrel && this.target.state.is(net.minecraft.world.level.block.Blocks.BARREL) || !this.isTargetBlocked(level, this.target))) { // Purpur - copper golem can place items in barrels option
-             if (!this.state.equals(TransportItemsBetweenContainers.TransportItemState.TRAVELLING)) {
-                 return true;
+     private boolean isTargetBlocked(final Level level, final TransportItemsBetweenContainers.TransportItemTarget target) {
+-        return ChestBlock.isChestBlockedAt(level, target.pos);
++        // Purpur start - copper golem can place items in barrels or shulkers option
++        boolean isBarrelBlocked = !level.purpurConfig.copperGolemCanOpenBarrel && target.state.is(net.minecraft.world.level.block.Blocks.BARREL);
++        boolean isShulkerBlocked = !level.purpurConfig.copperGolemCanOpenShulker && target.blockEntity instanceof net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity shulkerBoxBlockEntity && !net.minecraft.world.level.block.ShulkerBoxBlock.canOpen(target.state, level, target.pos, shulkerBoxBlockEntity);
++        return target.state.is(net.minecraft.world.level.block.Blocks.BARREL) ? isBarrelBlocked : isShulkerBlocked || net.minecraft.world.level.block.ChestBlock.isChestBlockedAt(level, target.pos);
++        // Purpur end - copper golem can place items in barrels or shulkers option
+     }
+ 
+     private boolean targetHasNotChanged(final Level level, final TransportItemsBetweenContainers.TransportItemTarget target) {
+@@ -456,7 +_,7 @@
+     }
+ 
+     private boolean isWantedBlock(final PathfinderMob mob, final BlockState block) {
+-        return isPickingUpItems(mob) ? this.sourceBlockType.test(block) : this.destinationBlockType.test(block);
++        return isPickingUpItems(mob) ? this.sourceBlockType.test(block) : (mob.level().purpurConfig.copperGolemCanOpenBarrel && block.is(net.minecraft.world.level.block.Blocks.BARREL)) || (mob.level().purpurConfig.copperGolemCanOpenShulker && block.is(net.minecraft.tags.BlockTags.SHULKER_BOXES)) || this.destinationBlockType.test(block); // Purpur - copper golem can place items in barrels or shulkers option
+     }
+ 
+     private static double getInteractionRange(final PathfinderMob body) {
+@@ -508,6 +_,11 @@
+     }
+ 
+     private static boolean matchesLeavingItemsRequirement(final PathfinderMob body, final Container container) {
++        // Purpur start - copper golem can place items in barrels or shulkers option
++        if (body.level().purpurConfig.copperGolemCanOpenShulker && container instanceof net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity && body.getMainHandItem().is(net.minecraft.tags.ItemTags.SHULKER_BOXES)) {
++            return false;
++        }
++        // Purpur end - copper golem can place items in barrels or shulkers option
+         return container.isEmpty() || hasItemMatchingHandItem(body, container);
+     }
+ 
+@@ -545,7 +_,7 @@
+         int slot = 0;
+ 
+         for (ItemStack itemStack : container) {
+-            if (!itemStack.isEmpty()) {
++            if (!itemStack.isEmpty() && (!(container instanceof net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity) || !itemStack.is(net.minecraft.tags.ItemTags.SHULKER_BOXES))) { // Purpur - copper golem can place items in barrels or shulkers option
+                 int itemCount = Math.min(itemStack.getCount(), 16);
+                 return container.removeItem(slot, itemCount);
              }
-@@ -449,7 +_,7 @@
-     }
- 
-     private boolean isWantedBlock(PathfinderMob mob, BlockState state) {
--        return isPickingUpItems(mob) ? this.sourceBlockType.test(state) : this.destinationBlockType.test(state);
-+        return isPickingUpItems(mob) ? this.sourceBlockType.test(state) : (mob.level().purpurConfig.copperGolemCanOpenBarrel && state.is(net.minecraft.world.level.block.Blocks.BARREL)) || this.destinationBlockType.test(state); // Purpur - copper golem can place items in barrels option
-     }
- 
-     private static double getInteractionRange(PathfinderMob mob) {

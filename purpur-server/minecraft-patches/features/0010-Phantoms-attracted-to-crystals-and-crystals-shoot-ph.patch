@@ -5,10 +5,10 @@ Subject: [PATCH] Phantoms attracted to crystals and crystals shoot phantoms
 
 
 diff --git a/net/minecraft/world/entity/boss/enderdragon/EndCrystal.java b/net/minecraft/world/entity/boss/enderdragon/EndCrystal.java
-index 9503ec9d44a6c0811639b7d0cf504d32fefff58d..ab878a0f789fa0dc3713eedac1bbcebcfc1a7fa5 100644
+index f083705efb92a57dc770a1bdb7c3e8dd6d51c1d5..6704a3b50d23db92ed2fb9811712f19688d00ba7 100644
 --- a/net/minecraft/world/entity/boss/enderdragon/EndCrystal.java
 +++ b/net/minecraft/world/entity/boss/enderdragon/EndCrystal.java
-@@ -27,6 +27,12 @@ public class EndCrystal extends Entity {
+@@ -28,6 +28,12 @@ public class EndCrystal extends Entity {
      private static final boolean DEFAULT_SHOW_BOTTOM = true;
      public int time;
      public boolean generatedByDragonFight = false; // Paper - Fix invulnerable end crystals
@@ -19,9 +19,9 @@ index 9503ec9d44a6c0811639b7d0cf504d32fefff58d..ab878a0f789fa0dc3713eedac1bbcebc
 +    private int idleCooldown = 0;
 +    // Purpur end - Phantoms attracted to crystals and crystals shoot phantoms
  
-     public EndCrystal(EntityType<? extends EndCrystal> type, Level level) {
+     public EndCrystal(final EntityType<? extends EndCrystal> type, final Level level) {
          super(type, level);
-@@ -95,6 +101,49 @@ public class EndCrystal extends Entity {
+@@ -96,6 +102,49 @@ public class EndCrystal extends Entity {
          // Paper end - Fix invulnerable end crystals
          if (this.level().purpurConfig.endCrystalCramming > 0 && this.level().getEntitiesOfClass(EndCrystal.class, getBoundingBox()).size() > this.level().purpurConfig.endCrystalCramming) this.hurt(this.damageSources().cramming(), 6.0F); // Purpur - End Crystal Cramming
  
@@ -72,18 +72,18 @@ index 9503ec9d44a6c0811639b7d0cf504d32fefff58d..ab878a0f789fa0dc3713eedac1bbcebc
  
      @Override
 diff --git a/net/minecraft/world/entity/monster/Phantom.java b/net/minecraft/world/entity/monster/Phantom.java
-index f2af9bd8265d66711c7dcc8ef16893edfe8d918a..824b100154c82d8579833a4bebd7481934ba428a 100644
+index b42f67dff1ae0fd9b549f584e789285a15cb690c..d3c9948ee52c0f209481e273bc94b551519a7d71 100644
 --- a/net/minecraft/world/entity/monster/Phantom.java
 +++ b/net/minecraft/world/entity/monster/Phantom.java
-@@ -50,6 +50,7 @@ public class Phantom extends Mob implements Enemy {
-     @Nullable
-     public BlockPos anchorPoint;
-     Phantom.AttackPhase attackPhase = Phantom.AttackPhase.CIRCLE;
+@@ -49,6 +49,7 @@ public class Phantom extends Mob implements Enemy {
+     private Vec3 moveTargetPoint = Vec3.ZERO;
+     public @Nullable BlockPos anchorPoint;
+     private Phantom.AttackPhase attackPhase = Phantom.AttackPhase.CIRCLE;
 +    Vec3 crystalPosition; // Purpur - Phantoms attracted to crystals and crystals shoot phantoms
      // Paper start
-     @Nullable
-     public java.util.UUID spawningEntity;
-@@ -109,6 +110,25 @@ public class Phantom extends Mob implements Enemy {
+     public java.util.@Nullable UUID spawningEntity;
+     public boolean shouldBurnInDay = true;
+@@ -107,6 +108,25 @@ public class Phantom extends Mob implements Enemy {
      }
      // Purpur end - Ridables
  
@@ -109,7 +109,7 @@ index f2af9bd8265d66711c7dcc8ef16893edfe8d918a..824b100154c82d8579833a4bebd74819
      @Override
      public boolean isFlapping() {
          return (this.getUniqueFlapTickOffset() + this.tickCount) % TICKS_PER_FLAP == 0;
-@@ -122,9 +142,15 @@ public class Phantom extends Mob implements Enemy {
+@@ -120,9 +140,15 @@ public class Phantom extends Mob implements Enemy {
      @Override
      protected void registerGoals() {
          this.goalSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur - Ridables
@@ -118,8 +118,8 @@ index f2af9bd8265d66711c7dcc8ef16893edfe8d918a..824b100154c82d8579833a4bebd74819
 -        this.goalSelector.addGoal(3, new Phantom.PhantomCircleAroundAnchorGoal());
 +        // Purpur start - Phantoms attracted to crystals and crystals shoot phantoms
 +        if (level().purpurConfig.phantomOrbitCrystalRadius > 0) {
-+            this.goalSelector.addGoal(1, new PhantomFindCrystalGoal(this));
-+            this.goalSelector.addGoal(2, new PhantomOrbitCrystalGoal(this));
++            this.goalSelector.addGoal(1, new Phantom.PhantomFindCrystalGoal(this));
++            this.goalSelector.addGoal(2, new Phantom.PhantomOrbitCrystalGoal(this));
 +        }
 +        this.goalSelector.addGoal(3, new Phantom.PhantomAttackStrategyGoal());
 +        this.goalSelector.addGoal(4, new Phantom.PhantomSweepAttackGoal());
@@ -128,12 +128,12 @@ index f2af9bd8265d66711c7dcc8ef16893edfe8d918a..824b100154c82d8579833a4bebd74819
          this.targetSelector.addGoal(0, new org.purpurmc.purpur.entity.ai.HasRider(this)); // Purpur - Ridables
          this.targetSelector.addGoal(1, new Phantom.PhantomAttackPlayerTargetGoal());
      }
-@@ -511,6 +537,124 @@ public class Phantom extends Mob implements Enemy {
+@@ -494,6 +520,124 @@ public class Phantom extends Mob implements Enemy {
          }
      }
  
 +    // Purpur start - Phantoms attracted to crystals and crystals shoot phantoms
-+    class PhantomFindCrystalGoal extends Goal {
++    private class PhantomFindCrystalGoal extends Goal {
 +        private final Phantom phantom;
 +        private net.minecraft.world.entity.boss.enderdragon.EndCrystal crystal;
 +        private Comparator<net.minecraft.world.entity.boss.enderdragon.EndCrystal> comparator;
@@ -186,7 +186,7 @@ index f2af9bd8265d66711c7dcc8ef16893edfe8d918a..824b100154c82d8579833a4bebd74819
 +        }
 +    }
 +
-+    class PhantomOrbitCrystalGoal extends Goal {
++    private class PhantomOrbitCrystalGoal extends Goal {
 +        private final Phantom phantom;
 +        private float offset;
 +        private float radius;
@@ -243,13 +243,13 @@ index f2af9bd8265d66711c7dcc8ef16893edfe8d918a..824b100154c82d8579833a4bebd74819
 +        private void updateOffset() {
 +            this.offset += this.direction * 15.0F * 0.017453292F;
 +            phantom.moveTargetPoint = phantom.crystalPosition.add(
-+                    this.radius * Mth.cos(this.offset),
-+                    -4.0F + this.verticalChange,
-+                    this.radius * Mth.sin(this.offset));
++                this.radius * Mth.cos(this.offset),
++                -4.0F + this.verticalChange,
++                this.radius * Mth.sin(this.offset));
 +        }
 +    }
 +    // Purpur end - Phantoms attracted to crystals and crystals shoot phantoms
 +
-     class PhantomMoveControl extends org.purpurmc.purpur.controller.FlyingMoveControllerWASD { // Purpur - Ridables
+     private class PhantomMoveControl<T extends Mob> extends org.purpurmc.purpur.controller.FlyingMoveControllerWASD<T> { // Purpur - Ridables
          private float speed = 0.1F;
  
