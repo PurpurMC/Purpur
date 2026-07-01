@@ -606,11 +606,6 @@ public class PurpurConfig {
         registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDebugCommands);
     }
 
-    public static boolean requireSpectatorTeleportPermission = false;
-    private static void requireSpectatorTeleportPermission() {
-        requireSpectatorTeleportPermission = getBoolean("settings.require-spectator-teleport-permission", requireSpectatorTeleportPermission);
-    }
-
     public static List<String> startupCommands = new ArrayList<>();
     private static void startupCommands() {
         startupCommands.clear();
