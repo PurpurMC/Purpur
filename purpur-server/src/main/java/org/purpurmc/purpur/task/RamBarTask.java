@@ -1,8 +1,12 @@
 package org.purpurmc.purpur.task;
 
 import net.kyori.adventure.bossbar.BossBar;
+import io.papermc.paper.adventure.PaperAdventure;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.minecraft.server.level.ServerBossEvent;
+
+import java.util.UUID;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.entity.Player;
 import org.purpurmc.purpur.PurpurConfig;
@@ -27,21 +31,21 @@ public class RamBarTask extends BossBarTask {
     }
 
     @Override
-    BossBar createBossBar() {
-        return BossBar.bossBar(Component.text(""), 0.0F, instance().getBossBarColor(), PurpurConfig.commandRamBarProgressOverlay);
+    ServerBossEvent createBossBar(UUID id) {
+        return new ServerBossEvent(id, net.minecraft.network.chat.Component.empty(), toVanillaColor(instance().getBossBarColor()), toVanillaOverlay(PurpurConfig.commandRamBarProgressOverlay));
     }
 
     @Override
-    void updateBossBar(BossBar bossbar, Player player) {
-        bossbar.progress(getBossBarProgress());
-        bossbar.color(getBossBarColor());
-        bossbar.name(MiniMessage.miniMessage().deserialize(PurpurConfig.commandRamBarTitle,
+    void updateBossBar(ServerBossEvent bossbar, Player player) {
+        bossbar.setProgress(getBossBarProgress());
+        bossbar.setColor(toVanillaColor(getBossBarColor()));
+        bossbar.setName(PaperAdventure.asVanilla(MiniMessage.miniMessage().deserialize(PurpurConfig.commandRamBarTitle,
                 Placeholder.component("allocated", format(this.allocated)),
                 Placeholder.component("used", format(this.used)),
                 Placeholder.component("xmx", format(this.xmx)),
                 Placeholder.component("xms", format(this.xms)),
                 Placeholder.unparsed("percent", ((int) (this.percent * 100)) + "%")
-        ));
+        )));
     }
 
     @Override
