@@ -1,7 +1,10 @@
 package org.purpurmc.purpur.task;
 
 import net.kyori.adventure.bossbar.BossBar;
-import net.kyori.adventure.text.Component;
+import io.papermc.paper.adventure.PaperAdventure;
+import net.minecraft.server.level.ServerBossEvent;
+
+import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.item.Items;
 import org.bukkit.entity.Player;
@@ -44,16 +47,18 @@ public class CompassTask extends BossBarTask {
     }
 
     @Override
-    BossBar createBossBar() {
-        return BossBar.bossBar(Component.text(""), PurpurConfig.commandCompassBarProgressPercent, PurpurConfig.commandCompassBarProgressColor, PurpurConfig.commandCompassBarProgressOverlay);
+    ServerBossEvent createBossBar(UUID id) {
+        ServerBossEvent bossbar = new ServerBossEvent(id, net.minecraft.network.chat.Component.empty(), toVanillaColor(PurpurConfig.commandCompassBarProgressColor), toVanillaOverlay(PurpurConfig.commandCompassBarProgressOverlay));
+        bossbar.setProgress(PurpurConfig.commandCompassBarProgressPercent);
+        return bossbar;
     }
 
     @Override
-    void updateBossBar(BossBar bossbar, Player player) {
+    void updateBossBar(ServerBossEvent bossbar, Player player) {
         float yaw = player.getLocation().getYaw();
         int length = PurpurConfig.commandCompassBarTitle.length();
         int pos = (int) ((normalize(yaw) * (length / 720F)) + (length / 2F));
-        bossbar.name(Component.text(PurpurConfig.commandCompassBarTitle.substring(pos - 25, pos + 25)));
+        bossbar.setName(PaperAdventure.asVanilla(net.kyori.adventure.text.Component.text(PurpurConfig.commandCompassBarTitle.substring(pos - 25, pos + 25))));
     }
 
     private float normalize(float yaw) {
