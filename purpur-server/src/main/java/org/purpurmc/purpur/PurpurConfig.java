@@ -520,6 +520,11 @@ public class PurpurConfig {
         fixProjectileLootingTransfer = getBoolean("settings.fix-projectile-looting-transfer", fixProjectileLootingTransfer);
     }
 
+    public static boolean enableBooks = true;
+    private static void enableBooks() {
+        enableBooks = getBoolean("settings.enable-books", enableBooks);
+    }
+
     public static boolean clampAttributes = true;
     private static void clampAttributes() {
         clampAttributes = getBoolean("settings.clamp-attributes", clampAttributes);
