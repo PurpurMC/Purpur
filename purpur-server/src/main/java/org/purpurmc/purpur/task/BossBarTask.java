@@ -1,11 +1,15 @@
 package org.purpurmc.purpur.task;
 
 import net.kyori.adventure.bossbar.BossBar;
+import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.BossEvent;
 import org.bukkit.Bukkit;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -14,18 +18,18 @@ import java.util.UUID;
 import org.purpurmc.purpur.util.MinecraftInternalPlugin;
 
 public abstract class BossBarTask extends BukkitRunnable {
-    private final Map<UUID, BossBar> bossbars = new HashMap<>();
+    private final Map<UUID, ServerBossEvent> bossbars = new HashMap<>();
     private boolean started;
 
-    abstract BossBar createBossBar();
+    abstract ServerBossEvent createBossBar(UUID id);
 
-    abstract void updateBossBar(BossBar bossbar, Player player);
+    abstract void updateBossBar(ServerBossEvent bossbar, Player player);
 
     @Override
     public void run() {
-        Iterator<Map.Entry<UUID, BossBar>> iter = bossbars.entrySet().iterator();
+        Iterator<Map.Entry<UUID, ServerBossEvent>> iter = bossbars.entrySet().iterator();
         while (iter.hasNext()) {
-            Map.Entry<UUID, BossBar> entry = iter.next();
+            Map.Entry<UUID, ServerBossEvent> entry = iter.next();
             Player player = Bukkit.getPlayer(entry.getKey());
             if (player == null) {
                 iter.remove();
@@ -48,9 +52,9 @@ public abstract class BossBarTask extends BukkitRunnable {
     }
 
     public boolean removePlayer(Player player) {
-        BossBar bossbar = this.bossbars.remove(player.getUniqueId());
+        ServerBossEvent bossbar = this.bossbars.remove(player.getUniqueId());
         if (bossbar != null) {
-            player.hideBossBar(bossbar);
+            bossbar.removePlayer(((CraftPlayer) player).getHandle());
             return true;
         }
         return false;
@@ -58,10 +62,10 @@ public abstract class BossBarTask extends BukkitRunnable {
 
     public void addPlayer(Player player) {
         removePlayer(player);
-        BossBar bossbar = createBossBar();
+        ServerBossEvent bossbar = createBossBar(createId(player));
         this.bossbars.put(player.getUniqueId(), bossbar);
         this.updateBossBar(bossbar, player);
-        player.showBossBar(bossbar);
+        bossbar.addPlayer(((CraftPlayer) player).getHandle());
     }
 
     public boolean hasPlayer(UUID uuid) {
@@ -117,5 +121,31 @@ public abstract class BossBarTask extends BukkitRunnable {
         RamBarTask.instance().removePlayer(player);
         TPSBarTask.instance().removePlayer(player);
         CompassTask.instance().removePlayer(player);
+    }
+
+    protected static BossEvent.BossBarColor toVanillaColor(BossBar.Color color) {
+        return switch (color) {
+            case PINK -> BossEvent.BossBarColor.PINK;
+            case BLUE -> BossEvent.BossBarColor.BLUE;
+            case RED -> BossEvent.BossBarColor.RED;
+            case GREEN -> BossEvent.BossBarColor.GREEN;
+            case YELLOW -> BossEvent.BossBarColor.YELLOW;
+            case PURPLE -> BossEvent.BossBarColor.PURPLE;
+            case WHITE -> BossEvent.BossBarColor.WHITE;
+        };
+    }
+
+    protected static BossEvent.BossBarOverlay toVanillaOverlay(BossBar.Overlay overlay) {
+        return switch (overlay) {
+            case PROGRESS -> BossEvent.BossBarOverlay.PROGRESS;
+            case NOTCHED_6 -> BossEvent.BossBarOverlay.NOTCHED_6;
+            case NOTCHED_10 -> BossEvent.BossBarOverlay.NOTCHED_10;
+            case NOTCHED_12 -> BossEvent.BossBarOverlay.NOTCHED_12;
+            case NOTCHED_20 -> BossEvent.BossBarOverlay.NOTCHED_20;
+        };
+    }
+
+    private UUID createId(Player player) {
+        return UUID.nameUUIDFromBytes(("purpur:" + getClass().getSimpleName() + ":" + player.getUniqueId()).getBytes(StandardCharsets.UTF_8));
     }
 }
