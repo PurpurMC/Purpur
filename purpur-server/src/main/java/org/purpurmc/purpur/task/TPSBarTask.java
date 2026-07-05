@@ -1,8 +1,12 @@
 package org.purpurmc.purpur.task;
 
 import net.kyori.adventure.bossbar.BossBar;
+import io.papermc.paper.adventure.PaperAdventure;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.minecraft.server.level.ServerBossEvent;
+
+import java.util.UUID;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.purpurmc.purpur.PurpurConfig;
 import org.bukkit.Bukkit;
@@ -22,19 +26,19 @@ public class TPSBarTask extends BossBarTask {
     }
 
     @Override
-    BossBar createBossBar() {
-        return BossBar.bossBar(Component.text(""), 0.0F, instance().getBossBarColor(), PurpurConfig.commandTPSBarProgressOverlay);
+    ServerBossEvent createBossBar(UUID id) {
+        return new ServerBossEvent(id, net.minecraft.network.chat.Component.empty(), toVanillaColor(instance().getBossBarColor()), toVanillaOverlay(PurpurConfig.commandTPSBarProgressOverlay));
     }
 
     @Override
-    void updateBossBar(BossBar bossbar, Player player) {
-        bossbar.progress(getBossBarProgress());
-        bossbar.color(getBossBarColor());
-        bossbar.name(MiniMessage.miniMessage().deserialize(PurpurConfig.commandTPSBarTitle,
+    void updateBossBar(ServerBossEvent bossbar, Player player) {
+        bossbar.setProgress(getBossBarProgress());
+        bossbar.setColor(toVanillaColor(getBossBarColor()));
+        bossbar.setName(PaperAdventure.asVanilla(MiniMessage.miniMessage().deserialize(PurpurConfig.commandTPSBarTitle,
                 Placeholder.component("tps", getTPSColor()),
                 Placeholder.component("mspt", getMSPTColor()),
                 Placeholder.component("ping", getPingColor(player.getPing()))
-        ));
+        )));
     }
 
     @Override
