@@ -603,7 +603,7 @@ public class PurpurConfig {
 
     public static boolean registerMinecraftDisabledCommands = false;
     private static void registerMinecraftDisabledCommands() {
-        registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDebugCommands);
+        registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDisabledCommands);
     }
 
     public static List<String> startupCommands = new ArrayList<>();
