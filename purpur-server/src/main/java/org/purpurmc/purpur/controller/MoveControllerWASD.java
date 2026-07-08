@@ -8,15 +8,15 @@ import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.entity.player.Player;
 import org.purpurmc.purpur.event.entity.RidableSpacebarEvent;
 
-public class MoveControllerWASD extends MoveControl {
+public class MoveControllerWASD<T extends Mob> extends MoveControl<T> {
     protected final Mob entity;
     private final double speedModifier;
 
-    public MoveControllerWASD(Mob entity) {
+    public MoveControllerWASD(T entity) {
         this(entity, 1.0D);
     }
 
-    public MoveControllerWASD(Mob entity, double speedModifier) {
+    public MoveControllerWASD(T entity, double speedModifier) {
         super(entity);
         this.entity = entity;
         this.speedModifier = speedModifier;

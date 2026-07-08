@@ -15,7 +15,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.EntityDimensions;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -74,8 +74,8 @@ public class PurpurConfig {
         commands = new HashMap<>();
         commands.put("purpur", new PurpurCommand("purpur"));
 
-        version = getInt("config-version", 46);
-        set("config-version", 46);
+        version = getInt("config-version", 48);
+        set("config-version", 48);
 
         readConfig(PurpurConfig.class, null);
 
@@ -329,6 +329,7 @@ public class PurpurConfig {
     public static int barrelRows = 3;
     public static boolean enderChestSixRows = false;
     public static boolean enderChestPermissionRows = false;
+    public static boolean enderChestPersistHiddenRows = true;
     public static boolean cryingObsidianValidForPortalFrame = false;
     public static int beeInsideBeeHive = 3;
     public static boolean anvilCumulativeCost = true;
@@ -373,6 +374,7 @@ public class PurpurConfig {
         enderChestSixRows = getBoolean("settings.blocks.ender_chest.six-rows", enderChestSixRows);
         org.bukkit.event.inventory.InventoryType.ENDER_CHEST.setDefaultSize(enderChestSixRows ? 54 : 27);
         enderChestPermissionRows = getBoolean("settings.blocks.ender_chest.use-permissions-for-rows", enderChestPermissionRows);
+        enderChestPersistHiddenRows = getBoolean("settings.blocks.ender_chest.persist-hidden-rows", enderChestPersistHiddenRows);
         cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
         beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
         anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
@@ -465,7 +467,7 @@ public class PurpurConfig {
     public static boolean endermanShortHeight = false;
     private static void entitySettings() {
         endermanShortHeight = getBoolean("settings.entity.enderman.short-height", endermanShortHeight);
-        if (endermanShortHeight) EntityType.ENDERMAN.dimensions = EntityDimensions.scalable(0.6F, 1.9F);
+        if (endermanShortHeight) EntityTypes.ENDERMAN.dimensions = EntityDimensions.scalable(0.6F, 1.9F);
     }
 
     public static boolean allowWaterPlacementInTheEnd = true;
@@ -601,7 +603,7 @@ public class PurpurConfig {
 
     public static boolean registerMinecraftDisabledCommands = false;
     private static void registerMinecraftDisabledCommands() {
-        registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDebugCommands);
+        registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDisabledCommands);
     }
 
     public static List<String> startupCommands = new ArrayList<>();

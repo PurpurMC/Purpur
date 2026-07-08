@@ -1,9 +1,10 @@
 package org.purpurmc.purpur.command;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import org.purpurmc.purpur.PurpurConfig;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -37,13 +38,13 @@ public class PurpurCommand extends Command {
         if (!testPermission(sender)) return true;
 
         if (args.length != 1) {
-            sender.sendMessage(ChatColor.RED + "Usage: " + usageMessage);
+            sender.sendMessage(Component.text("Usage: " + usageMessage, NamedTextColor.RED));
             return false;
         }
 
         if (args[0].equalsIgnoreCase("reload")) {
-            Command.broadcastCommandMessage(sender, ChatColor.RED + "Please note that this command is not supported and may cause issues.");
-            Command.broadcastCommandMessage(sender, ChatColor.RED + "If you encounter any issues please use the /stop command to restart your server.");
+            Command.broadcastCommandMessage(sender, Component.text("Please note that this command is not supported and may cause issues", NamedTextColor.RED));
+            Command.broadcastCommandMessage(sender, Component.text("If you encounter any issues please use the /stop command to restart your server.", NamedTextColor.RED));
 
             MinecraftServer console = MinecraftServer.getServer();
             PurpurConfig.init((File) console.options.valueOf("purpur-settings"));
@@ -53,12 +54,15 @@ public class PurpurCommand extends Command {
             }
             console.server.reloadCount++;
 
-            Command.broadcastCommandMessage(sender, ChatColor.GREEN + "Purpur config reload complete.");
+            Command.broadcastCommandMessage(sender, Component.text("Purpur config reload complete.", NamedTextColor.GREEN));
         } else if (args[0].equalsIgnoreCase("version")) {
             Command verCmd = org.bukkit.Bukkit.getServer().getCommandMap().getCommand("version");
             if (verCmd != null) {
                 return verCmd.execute(sender, commandLabel, new String[0]);
             }
+        } else {
+            sender.sendMessage(Component.text("Usage: " + usageMessage, NamedTextColor.RED));
+            return false;
         }
 
         return true;
