@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.Phantom;
@@ -28,7 +29,7 @@ public class PhantomFlames extends LlamaSpit {
     }
 
     public PhantomFlames(Level world, Phantom phantom) {
-        this(EntityType.LLAMA_SPIT, world);
+        this(EntityTypes.LLAMA_SPIT, world);
         setOwner(phantom.getRider() != null ? phantom.getRider() : phantom);
         this.phantom = phantom;
         this.setPos(
