@@ -38,7 +38,7 @@ index 81f1d4faebc38aa07a2c76c2c163584c8e5b624c..9bc487ebec9660682592ec99cda190d0
              Predicate<ItemStack> supportedProjectiles = ((ProjectileWeaponItem)heldWeapon.getItem()).getSupportedHeldProjectiles();
              ItemStack heldProjectile = ProjectileWeaponItem.getHeldProjectile(this, supportedProjectiles);
 diff --git a/net/minecraft/world/entity/player/Player.java b/net/minecraft/world/entity/player/Player.java
-index 79f0bbfcf8ccdcbee99042d15adb5eb2338da124..03d66b77329b5da0673908ef30cc33a40c8c5ae4 100644
+index 79f0bbfcf8ccdcbee99042d15adb5eb2338da124..5d0245cb05f23d32d037daf5ea8ed333bf5ec8a5 100644
 --- a/net/minecraft/world/entity/player/Player.java
 +++ b/net/minecraft/world/entity/player/Player.java
 @@ -2119,6 +2119,12 @@ public abstract class Player extends Avatar implements ContainerUser {
@@ -54,44 +54,66 @@ index 79f0bbfcf8ccdcbee99042d15adb5eb2338da124..03d66b77329b5da0673908ef30cc33a4
          if (!(heldWeapon.getItem() instanceof ProjectileWeaponItem)) {
              return ItemStack.EMPTY;
          }
-@@ -2134,6 +2140,37 @@ public abstract class Player extends Avatar implements ContainerUser {
+@@ -2131,9 +2137,17 @@ public abstract class Player extends Avatar implements ContainerUser {
+         }
+ 
+         supportedProjectiles = ((ProjectileWeaponItem)heldWeapon.getItem()).getAllSupportedProjectiles().and(item -> this.tryReadyArrow(heldWeapon, item, anyEventCancelled)); // Paper - PlayerReadyArrowEvent
++        // Purpur start - config for turning bundles into functional quivers
++        ItemStack bundleProjectiles = getProjectileFromBundle(heldWeapon, supportedProjectiles, useBundleItemStack);
++        if (!bundleProjectiles.isEmpty()) return bundleProjectiles;
++        // Purpur end - config for turning bundles into functional quivers
  
          for (int i = 0; i < this.inventory.getContainerSize(); i++) {
              ItemStack itemStack = this.inventory.getItem(i);
 +            // Purpur start - config for turning bundles into functional quivers
-+            if ((this.level().purpurConfig.bowUseBundleAsQuiver || this.level().purpurConfig.crossbowUseBundleAsQuiver) && !this.abilities.instabuild && itemStack.getItem() instanceof net.minecraft.world.item.BundleItem) {
-+                net.minecraft.world.item.component.BundleContents bundleContents = itemStack.get(net.minecraft.core.component.DataComponents.BUNDLE_CONTENTS);
-+                if (bundleContents == null || bundleContents.isEmpty()) {
-+                    continue;
-+                }
-+
-+                Optional<ItemStack> first = bundleContents.itemCopyStream().filter(supportedProjectiles).findFirst();
-+
-+                if (first.isEmpty()) {
-+                    continue;
-+                }
-+
-+                ItemStack firstItemStack = first.get();
-+                if (useBundleItemStack) {
-+                    net.minecraft.world.item.component.BundleContents.Mutable mutable = new net.minecraft.world.item.component.BundleContents.Mutable(bundleContents);
-+                    ItemStack removedItemStack = mutable.removeOne(firstItemStack);
-+                    if (removedItemStack == null) {
-+                        continue;
-+                    }
-+
-+                    removedItemStack.shrink(1);
-+                    if (removedItemStack.getCount() != 0) {
-+                        mutable.tryInsert(removedItemStack);
-+                    }
-+                    itemStack.set(net.minecraft.core.component.DataComponents.BUNDLE_CONTENTS, mutable.toImmutable());
-+                }
-+                firstItemStack.setCount(1);
-+                return firstItemStack;
-+            }
++            bundleProjectiles = itemStack.getItem() instanceof net.minecraft.world.item.BundleItem ? getProjectileFromBundle(itemStack, supportedProjectiles, useBundleItemStack) : ItemStack.EMPTY;
++            if (!bundleProjectiles.isEmpty()) return bundleProjectiles;
 +            // Purpur end - config for turning bundles into functional quivers
              if (supportedProjectiles.test(itemStack)) {
                  return itemStack;
              }
+@@ -2143,6 +2157,41 @@ public abstract class Player extends Avatar implements ContainerUser {
+         return this.hasInfiniteMaterials() ? new ItemStack(Items.ARROW) : ItemStack.EMPTY;
+     }
+ 
++    // Purpur start - config for turning bundles into functional quivers
++    private ItemStack getProjectileFromBundle(ItemStack itemStack, Predicate<ItemStack> supportedProjectiles, boolean useBundleItemStack) {
++        if ((this.level().purpurConfig.bowUseBundleAsQuiver || this.level().purpurConfig.crossbowUseBundleAsQuiver) && !this.abilities.instabuild) {
++            net.minecraft.world.item.component.BundleContents bundleContents = itemStack.get(net.minecraft.core.component.DataComponents.BUNDLE_CONTENTS);
++            if (bundleContents == null || bundleContents.isEmpty()) {
++                return ItemStack.EMPTY;
++            }
++
++            Optional<ItemStack> first = bundleContents.itemCopyStream().filter(supportedProjectiles).findFirst();
++
++            if (first.isEmpty()) {
++                return ItemStack.EMPTY;
++            }
++
++            ItemStack firstItemStack = first.get();
++            if (useBundleItemStack) {
++                net.minecraft.world.item.component.BundleContents.Mutable mutable = new net.minecraft.world.item.component.BundleContents.Mutable(bundleContents);
++                ItemStack removedItemStack = mutable.removeOne(firstItemStack);
++                if (removedItemStack == null) {
++                    return ItemStack.EMPTY;
++                }
++
++                removedItemStack.shrink(1);
++                if (removedItemStack.getCount() != 0) {
++                    mutable.tryInsert(removedItemStack);
++                }
++                itemStack.set(net.minecraft.core.component.DataComponents.BUNDLE_CONTENTS, mutable.toImmutable());
++            }
++            firstItemStack.setCount(1);
++            return firstItemStack;
++        }
++        return ItemStack.EMPTY;
++    }
++    // Purpur end - config for turning bundles into functional quivers
++
+     @Override
+     public Vec3 getRopeHoldPosition(final float partialTickTime) {
+         double xOff = 0.22 * (this.getMainArm() == HumanoidArm.RIGHT ? -1.0 : 1.0);
 diff --git a/net/minecraft/world/item/BowItem.java b/net/minecraft/world/item/BowItem.java
 index b8ec51d5f50c15f2cd74733f762b4ddc71b573cb..cbd095207119d766b6c78e14cb4f439cd9897641 100644
 --- a/net/minecraft/world/item/BowItem.java
