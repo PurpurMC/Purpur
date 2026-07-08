@@ -15,7 +15,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.EntityDimensions;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -467,7 +467,7 @@ public class PurpurConfig {
     public static boolean endermanShortHeight = false;
     private static void entitySettings() {
         endermanShortHeight = getBoolean("settings.entity.enderman.short-height", endermanShortHeight);
-        if (endermanShortHeight) EntityType.ENDERMAN.dimensions = EntityDimensions.scalable(0.6F, 1.9F);
+        if (endermanShortHeight) EntityTypes.ENDERMAN.dimensions = EntityDimensions.scalable(0.6F, 1.9F);
     }
 
     public static boolean allowWaterPlacementInTheEnd = true;
@@ -603,7 +603,7 @@ public class PurpurConfig {
 
     public static boolean registerMinecraftDisabledCommands = false;
     private static void registerMinecraftDisabledCommands() {
-        registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDebugCommands);
+        registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDisabledCommands);
     }
 
     public static List<String> startupCommands = new ArrayList<>();

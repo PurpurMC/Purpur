@@ -584,6 +584,7 @@ public class PurpurWorldConfig {
     public double throwablePotionProjectileOffset = 1.0D;
     public double tridentProjectileOffset = 1.0D;
     public double snowballProjectileOffset = 1.0D;
+    public double windChargeProjectileOffset = 1.0D;
     private void projectileOffsetSettings() {
         bowProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.bow", bowProjectileOffset);
         crossbowProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.crossbow", crossbowProjectileOffset);
@@ -592,6 +593,7 @@ public class PurpurWorldConfig {
         throwablePotionProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.throwable-potion", throwablePotionProjectileOffset);
         tridentProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.trident", tridentProjectileOffset);
         snowballProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.snowball", snowballProjectileOffset);
+        windChargeProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.wind-charge", windChargeProjectileOffset);
     }
 
     public int snowballDamage = -1;
@@ -1479,6 +1481,23 @@ public class PurpurWorldConfig {
         boggedCanPickUpLoot = getBooleanOrDefault("mobs.bogged.can-pick-up-loot", boggedCanPickUpLoot);
     }
 
+    public boolean breezeRidable = false;
+    public boolean breezeRidableInWater = true;
+    public boolean breezeControllable = true;
+    public double breezeMaxHealth = 30.0D;
+    public double breezeScale = 1.0D;
+    public boolean breezeTakeDamageFromWater = false;
+    public boolean breezeAlwaysDropExp = false;
+    private void breezeSettings() {
+        breezeRidable = getBoolean("mobs.breeze.ridable", breezeRidable);
+        breezeRidableInWater = getBoolean("mobs.breeze.ridable-in-water", breezeRidableInWater);
+        breezeControllable = getBoolean("mobs.breeze.controllable", breezeControllable);
+        breezeMaxHealth = getDouble("mobs.breeze.attributes.max_health", breezeMaxHealth);
+        breezeScale = Mth.clamp(getDouble("mobs.breeze.attributes.scale", breezeScale), 0.0625D, 16.0D);
+        breezeTakeDamageFromWater = getBoolean("mobs.breeze.takes-damage-from-water", breezeTakeDamageFromWater);
+        breezeAlwaysDropExp = getBoolean("mobs.breeze.always-drop-exp", breezeAlwaysDropExp);
+    }
+
     public boolean camelRidableInWater = false;
     public double camelMaxHealthMin = 32.0D;
     public double camelMaxHealthMax = 32.0D;
@@ -1496,6 +1515,25 @@ public class PurpurWorldConfig {
         camelMovementSpeedMin = getDouble("mobs.camel.attributes.movement_speed.min", camelMovementSpeedMin);
         camelMovementSpeedMax = getDouble("mobs.camel.attributes.movement_speed.max", camelMovementSpeedMax);
         camelBreedingTicks = getInt("mobs.camel.breeding-delay-ticks", camelBreedingTicks);
+    }
+
+    public boolean camelHuskRidableInWater = false;
+    public double camelHuskMaxHealthMin = 32.0D;
+    public double camelHuskMaxHealthMax = 32.0D;
+    public double camelHuskJumpStrengthMin = 0.42D;
+    public double camelHuskJumpStrengthMax = 0.42D;
+    public double camelHuskMovementSpeedMin = 0.09D;
+    public double camelHuskMovementSpeedMax = 0.09D;
+    public boolean camelHuskAlwaysDropExp = false;
+    private void camelHuskSettings() {
+        camelHuskRidableInWater = getBoolean("mobs.camel_husk.ridable-in-water", camelHuskRidableInWater);
+        camelHuskMaxHealthMin = getDouble("mobs.camel_husk.attributes.max_health.min", camelHuskMaxHealthMin);
+        camelHuskMaxHealthMax = getDouble("mobs.camel_husk.attributes.max_health.max", camelHuskMaxHealthMax);
+        camelHuskJumpStrengthMin = getDouble("mobs.camel_husk.attributes.jump_strength.min", camelHuskJumpStrengthMin);
+        camelHuskJumpStrengthMax = getDouble("mobs.camel_husk.attributes.jump_strength.max", camelHuskJumpStrengthMax);
+        camelHuskMovementSpeedMin = getDouble("mobs.camel_husk.attributes.movement_speed.min", camelHuskMovementSpeedMin);
+        camelHuskMovementSpeedMax = getDouble("mobs.camel_husk.attributes.movement_speed.max", camelHuskMovementSpeedMax);
+        camelHuskAlwaysDropExp = getBoolean("mobs.camel_husk.always-drop-exp", camelHuskAlwaysDropExp);
     }
 
     public boolean catRidable = false;
@@ -2491,6 +2529,25 @@ public class PurpurWorldConfig {
         pandaAlwaysDropExp = getBoolean("mobs.panda.always-drop-exp", pandaAlwaysDropExp);
     }
 
+    public boolean parchedRidable = false;
+    public boolean parchedRidableInWater = true;
+    public boolean parchedControllable = true;
+    public double parchedMaxHealth = 16.0D;
+    public double parchedScale = 1.0D;
+    public boolean parchedTakeDamageFromWater = false;
+    public boolean parchedAlwaysDropExp = false;
+    public Boolean parchedCanPickUpLoot = null;
+    private void parchedSettings() {
+        parchedRidable = getBoolean("mobs.parched.ridable", parchedRidable);
+        parchedRidableInWater = getBoolean("mobs.parched.ridable-in-water", parchedRidableInWater);
+        parchedControllable = getBoolean("mobs.parched.controllable", parchedControllable);
+        parchedMaxHealth = getDouble("mobs.parched.attributes.max_health", parchedMaxHealth);
+        parchedScale = Mth.clamp(getDouble("mobs.parched.attributes.scale", parchedScale), 0.0625D, 16.0D);
+        parchedTakeDamageFromWater = getBoolean("mobs.parched.takes-damage-from-water", parchedTakeDamageFromWater);
+        parchedAlwaysDropExp = getBoolean("mobs.parched.always-drop-exp", parchedAlwaysDropExp);
+        parchedCanPickUpLoot = getBooleanOrDefault("mobs.parched.can-pick-up-loot", parchedCanPickUpLoot);
+    }
+
     public boolean parrotRidable = false;
     public boolean parrotRidableInWater = true;
     public boolean parrotControllable = true;
@@ -3239,6 +3296,19 @@ public class PurpurWorldConfig {
         striderAlwaysDropExp = getBoolean("mobs.strider.always-drop-exp", striderAlwaysDropExp);
     }
 
+    public boolean sulfurCubeRidable = false;
+    public boolean sulfurCubeRidableInWater = true;
+    public boolean sulfurCubeControllable = true;
+    public boolean sulfurCubeTakeDamageFromWater = false;
+    public boolean sulfurCubeAlwaysDropExp = false;
+    private void sulfurCubeSettings() {
+        sulfurCubeRidable = getBoolean("mobs.sulfur_cube.ridable", sulfurCubeRidable);
+        sulfurCubeRidableInWater = getBoolean("mobs.sulfur_cube.ridable-in-water", sulfurCubeRidableInWater);
+        sulfurCubeControllable = getBoolean("mobs.sulfur_cube.controllable", sulfurCubeControllable);
+        sulfurCubeTakeDamageFromWater = getBoolean("mobs.sulfur_cube.takes-damage-from-water", sulfurCubeTakeDamageFromWater);
+        sulfurCubeAlwaysDropExp = getBoolean("mobs.sulfur_cube.always-drop-exp", sulfurCubeAlwaysDropExp);
+    }
+
     public boolean tadpoleRidable = false;
     public boolean tadpoleRidableInWater = true;
     public boolean tadpoleControllable = true;
@@ -3484,11 +3554,13 @@ public class PurpurWorldConfig {
     public boolean wardenRidableInWater = true;
     public boolean wardenControllable = true;
     public boolean wardenCanUseSonicBoom = true;
+    public boolean wardenCanRideVehicles = false;
     private void wardenSettings() {
         wardenRidable = getBoolean("mobs.warden.ridable", wardenRidable);
         wardenRidableInWater = getBoolean("mobs.warden.ridable-in-water", wardenRidableInWater);
         wardenControllable = getBoolean("mobs.warden.controllable", wardenControllable);
         wardenCanUseSonicBoom = getBoolean("mobs.warden.can-use-sonic-boom", wardenCanUseSonicBoom);
+        wardenCanRideVehicles = getBoolean("mobs.warden.can-ride-vehicles", enderDragonCanRideVehicles);
     }
 
     public boolean witchRidable = false;

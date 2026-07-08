@@ -6,25 +6,25 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.entity.player.Player;
 
-public class FlyingMoveControllerWASD extends MoveControllerWASD {
+public class FlyingMoveControllerWASD<T extends Mob> extends MoveControllerWASD<T> {
     protected final float groundSpeedModifier;
     protected final float flyingSpeedModifier;
     protected int tooHighCooldown = 0;
     protected boolean setNoGravityFlag;
 
-    public FlyingMoveControllerWASD(Mob entity) {
+    public FlyingMoveControllerWASD(T entity) {
         this(entity, 1.0F);
     }
 
-    public FlyingMoveControllerWASD(Mob entity, float groundSpeedModifier) {
+    public FlyingMoveControllerWASD(T entity, float groundSpeedModifier) {
         this(entity, groundSpeedModifier, 1.0F, true);
     }
 
-    public FlyingMoveControllerWASD(Mob entity, float groundSpeedModifier, float flyingSpeedModifier) {
+    public FlyingMoveControllerWASD(T entity, float groundSpeedModifier, float flyingSpeedModifier) {
         this(entity, groundSpeedModifier, flyingSpeedModifier, true);
     }
 
-    public FlyingMoveControllerWASD(Mob entity, float groundSpeedModifier, float flyingSpeedModifier, boolean setNoGravityFlag) {
+    public FlyingMoveControllerWASD(T entity, float groundSpeedModifier, float flyingSpeedModifier, boolean setNoGravityFlag) {
         super(entity);
         this.groundSpeedModifier = groundSpeedModifier;
         this.flyingSpeedModifier = flyingSpeedModifier;

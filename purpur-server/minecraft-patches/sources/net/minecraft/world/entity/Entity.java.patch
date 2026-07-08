@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -168,6 +_,7 @@
+@@ -165,6 +_,7 @@
      SlotProvider,
      DebugValueSource,
      TypedInstance<EntityType<?>>, ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity { // Paper - rewrite chunk system // Paper - optimise entity tracker
@@ -14,14 +14,14 @@
      public double zOld;
 +    public float maxUpStep; // Purpur - Add option to set armorstand step height
      public boolean noPhysics;
--    public final RandomSource random = SHARED_RANDOM; // Paper - Share random for entities to make them more random
-+    public final RandomSource random; // Paper - Share random for entities to make them more random // Add toggle for RNG manipulation
+-    protected final RandomSource random = SHARED_RANDOM; // Paper - Share random for entities to make them more random
++    public final RandomSource random; // Paper - Share random for entities to make them more random // Purpur - Add toggle for RNG manipulation
      public int tickCount;
      private int remainingFireTicks;
      private final EntityFluidInteraction fluidInteraction = new EntityFluidInteraction(Set.of(FluidTags.WATER, FluidTags.LAVA));
-@@ -330,8 +_,8 @@
+@@ -331,8 +_,8 @@
      public @Nullable PortalProcessor portalProcess;
-     public int portalCooldown;
+     private int portalCooldown;
      private boolean invulnerable;
 -    protected UUID uuid = Mth.createInsecureUUID(this.random);
 -    protected String stringUUID = this.uuid.toString();
@@ -38,7 +38,7 @@
      // Paper start - EAR 2
      public final boolean defaultActivationState;
      public long activatedTick = Integer.MIN_VALUE;
-@@ -549,10 +_,22 @@
+@@ -549,11 +_,23 @@
      }
      // Paper end - optimise entity tracker
  
@@ -51,6 +51,7 @@
      public Entity(final EntityType<?> type, final Level level) {
          this.type = type;
          this.level = level;
+         this.id = level.getNextEntityId();
          this.dimensions = type.getDimensions();
 +        this.maxAirTicks = level == null || this.getDefaultMaxAirSupply() != Entity.TOTAL_AIR_SUPPLY ? this.getDefaultMaxAirSupply() : this.level.purpurConfig.drowningAirTicks; // Purpur - Drowning Settings
 +        // Purpur start - Add toggle for RNG manipulation
@@ -61,15 +62,15 @@
          this.position = Vec3.ZERO;
          this.blockPosition = BlockPos.ZERO;
          this.chunkPosition = ChunkPos.ZERO;
-@@ -950,6 +_,7 @@
+@@ -955,6 +_,7 @@
              && this.level.paperConfig().environment.netherCeilingVoidDamageHeight.test(v -> this.getY() >= v)
              && (!(this instanceof Player player) || !player.getAbilities().invulnerable))) {
              // Paper end - Configurable nether ceiling damage
-+            if (this.level.purpurConfig.teleportOnNetherCeilingDamage && this.level.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER && this instanceof ServerPlayer player) player.teleport(org.bukkit.craftbukkit.util.CraftLocation.toBukkit(this.level.levelData.getRespawnData().pos(), this.level)); else // Purpur - Add option to teleport to spawn on nether ceiling damage
++            if (this.level.purpurConfig.teleportOnNetherCeilingDamage && this.level.getWorld().getEnvironment() == org.bukkit.World.Environment.NETHER && this instanceof ServerPlayer player) player.teleport(org.bukkit.craftbukkit.util.CraftLocation.toBukkit(this.level.getLevelData().getRespawnData().pos(), this.level)); else // Purpur - Add option to teleport to spawn on nether ceiling damage
              this.onBelowWorld();
          }
      }
-@@ -2005,7 +_,7 @@
+@@ -2092,7 +_,7 @@
      }
  
      public boolean fireImmune() {
@@ -78,7 +79,7 @@
      }
  
      public boolean causeFallDamage(final double fallDistance, final float damageModifier, final DamageSource damageSource) {
-@@ -2591,7 +_,7 @@
+@@ -2682,7 +_,7 @@
                  output.putBoolean("Bukkit.invisible", this.persistentInvisibility);
              }
              // SPIGOT-6907: re-implement LivingEntity#setMaximumAir()
@@ -87,7 +88,7 @@
                  output.putInt("Bukkit.MaxAirSupply", this.getMaxAirSupply());
              }
              output.putInt("Spigot.ticksLived", this.totalEntityAge); // Paper
-@@ -2678,6 +_,11 @@
+@@ -2768,6 +_,11 @@
                  output.putBoolean("Paper.FreezeLock", true);
              }
              // Paper end
@@ -96,28 +97,28 @@
 +                output.putBoolean("Purpur.FireImmune", immuneToFire);
 +            }
 +            // Purpur end - Fire immune API
-         } catch (Throwable var7) {
-             CrashReport report = CrashReport.forThrowable(var7, "Saving entity NBT");
+         } catch (Throwable t) {
+             CrashReport report = CrashReport.forThrowable(t, "Saving entity NBT");
              CrashReportCategory category = report.addCategory("Entity being saved");
-@@ -2800,6 +_,9 @@
+@@ -2891,6 +_,9 @@
              }
              freezeLocked = input.getBooleanOr("Paper.FreezeLock", false);
              // Paper end
 +
 +            immuneToFire = input.read("Purpur.FireImmune", com.mojang.serialization.Codec.BOOL).orElse(null); // Purpur - Fire immune API
 +
-         } catch (Throwable var7) {
-             CrashReport report = CrashReport.forThrowable(var7, "Loading entity NBT");
+         } catch (Throwable t) {
+             CrashReport report = CrashReport.forThrowable(t, "Loading entity NBT");
              CrashReportCategory category = report.addCategory("Entity being loaded");
-@@ -3068,6 +_,7 @@
-             if (this.isAlive() && this instanceof Leashable leashablex) {
-                 if (leashablex.getLeashHolder() == player) {
+@@ -3156,6 +_,7 @@
+             if (this.isAlive() && this instanceof Leashable leashable) {
+                 if (leashable.getLeashHolder() == player) {
                      if (!this.level().isClientSide()) {
 +                        if (hand == InteractionHand.OFF_HAND && (level().purpurConfig.villagerCanBeLeashed || level().purpurConfig.wanderingTraderCanBeLeashed) && this instanceof net.minecraft.world.entity.npc.villager.AbstractVillager) return InteractionResult.CONSUME; // Purpur - Allow leashing villagers
                          // Paper start - EntityUnleashEvent
                          if (!org.bukkit.craftbukkit.event.CraftEventFactory.handlePlayerUnleashEntityEvent(
-                             leashablex, player, hand, !player.hasInfiniteMaterials(), true
-@@ -3498,15 +_,18 @@
+                             leashable, player, hand, !player.hasInfiniteMaterials(), true
+@@ -3563,15 +_,18 @@
          return Vec3.directionFromRotation(this.getRotationVector());
      }
  
@@ -137,7 +138,7 @@
              }
          }
      }
-@@ -4236,7 +_,7 @@
+@@ -4311,7 +_,7 @@
      }
  
      public boolean canUsePortal(final boolean ignorePassenger) {
@@ -146,7 +147,7 @@
      }
  
      public boolean canTeleport(final Level from, final Level to) {
-@@ -4786,6 +_,12 @@
+@@ -4863,6 +_,12 @@
          return Mth.lerp(partial, this.yRotO, this.yRot);
      }
  
@@ -159,7 +160,7 @@
      public boolean touchingUnloadedChunk() {
          AABB box = this.getBoundingBox().inflate(1.0);
          int x0 = Mth.floor(box.minX);
-@@ -5089,7 +_,7 @@
+@@ -5166,7 +_,7 @@
      }
  
      public float maxUpStep() {
