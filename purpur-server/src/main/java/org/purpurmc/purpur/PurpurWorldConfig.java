@@ -303,8 +303,10 @@ public class PurpurWorldConfig {
     public boolean snowballExtinguishesFire = false;
     public boolean snowballExtinguishesCandles = false;
     public boolean snowballExtinguishesCampfires = false;
-    public boolean bowUseBundleAsQuiver = false;
-    public boolean crossbowUseBundleAsQuiver = false;
+    public boolean bowUseBundleItemAsQuiver = false;
+    public boolean bowUseBundleComponentAsQuiver = false;
+    public boolean crossbowUseBundleItemAsQuiver = false;
+    public boolean crossbowUseBundleComponentAsQuiver = false;
     private void itemSettings() {
         itemImmuneToCactus.clear();
         getList("gameplay-mechanics.item.immune.cactus", new ArrayList<>()).forEach(key -> {
@@ -357,8 +359,10 @@ public class PurpurWorldConfig {
         snowballExtinguishesFire = getBoolean("gameplay-mechanics.item.snowball.extinguish.fire", snowballExtinguishesFire);
         snowballExtinguishesCandles = getBoolean("gameplay-mechanics.item.snowball.extinguish.candles", snowballExtinguishesCandles);
         snowballExtinguishesCampfires = getBoolean("gameplay-mechanics.item.snowball.extinguish.campfires", snowballExtinguishesCampfires);
-        bowUseBundleAsQuiver = getBoolean("gameplay-mechanics.item.bow.use-bundle-as-quiver", bowUseBundleAsQuiver);
-        crossbowUseBundleAsQuiver = getBoolean("gameplay-mechanics.item.crossbow.use-bundle-as-quiver", crossbowUseBundleAsQuiver);
+        bowUseBundleItemAsQuiver = getBoolean("gameplay-mechanics.item.bow.use-bundle-as-quiver.item", bowUseBundleItemAsQuiver);
+        bowUseBundleComponentAsQuiver = getBoolean("gameplay-mechanics.item.bow.use-bundle-as-quiver.component", bowUseBundleComponentAsQuiver);
+        crossbowUseBundleItemAsQuiver = getBoolean("gameplay-mechanics.item.crossbow.use-bundle-as-quiver.item", crossbowUseBundleItemAsQuiver);
+        crossbowUseBundleComponentAsQuiver = getBoolean("gameplay-mechanics.item.crossbow.use-bundle-as-quiver.component", crossbowUseBundleComponentAsQuiver);
     }
 
     public double minecartMaxSpeed = 0.4D;
