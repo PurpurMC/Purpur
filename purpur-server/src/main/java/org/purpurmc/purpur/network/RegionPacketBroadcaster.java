@@ -1,6 +1,5 @@
 package org.purpurmc.purpur.network;
 
-import io.papermc.paper.threadedregions.scheduler.RegionScheduler;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -8,17 +7,16 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import org.bukkit.Location;
-import org.bukkit.plugin.Plugin;
 
 public final class RegionPacketBroadcaster {
-    private final Plugin plugin;
-    private final RegionScheduler regionScheduler;
+    private static final RegionPacketBroadcaster INSTANCE = new RegionPacketBroadcaster();
     private final AtomicReference<Consumer<PacketBroadcastContext>> lookControllerInterceptor = new AtomicReference<>();
 
-    public RegionPacketBroadcaster(final Plugin plugin, final RegionScheduler regionScheduler) {
-        this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.regionScheduler = Objects.requireNonNull(regionScheduler, "regionScheduler");
+    private RegionPacketBroadcaster() {
+    }
+
+    public static RegionPacketBroadcaster instance() {
+        return INSTANCE;
     }
 
     public void setLookControllerInterceptor(final Consumer<PacketBroadcastContext> interceptor) {
@@ -36,8 +34,7 @@ public final class RegionPacketBroadcaster {
             return;
         }
 
-        final Location location = entity.getBukkitEntity().getLocation();
-        this.regionScheduler.execute(this.plugin, location, () -> this.broadcastInRegion(entity, packet));
+        entity.getBukkitEntity().taskScheduler.scheduleOrExecute(scheduledEntity -> this.broadcastInRegion(scheduledEntity, packet));
     }
 
     private void broadcastInRegion(final Entity entity, final Packet<?> packet) {
