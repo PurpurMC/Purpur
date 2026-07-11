@@ -2,11 +2,11 @@ package org.purpurmc.purpur.controller;
 
 
 import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.control.LookControl;
 import net.minecraft.world.entity.player.Player;
+import org.purpurmc.purpur.network.RegionPacketBroadcaster;
 
 public class LookControllerWASD extends LookControl {
     protected final Mob entity;
@@ -50,7 +50,7 @@ public class LookControllerWASD extends LookControl {
             (byte) Mth.floor(entity.getXRot() * 256.0F / 360.0F),
             entity.onGround
         );
-        ((ServerLevel) entity.level()).getChunkSource().sendToTrackingPlayers(entity, entityPacket);
+        RegionPacketBroadcaster.instance().broadcastPacket(entity, entityPacket);
     }
 
     public void setOffsets(float yaw, float pitch) {
