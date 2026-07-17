@@ -49,29 +49,38 @@ public class DolphinSpit extends LlamaSpit {
 
         this.preHitTargetOrDeflectSelf(hitResult);
 
-        double x = this.getX() + mot.x;
-        double y = this.getY() + mot.y;
-        double z = this.getZ() + mot.z;
+        final double posX = this.getX();
+        final double posY = this.getY();
+        final double posZ = this.getZ();
+
+        double x = posX + mot.x;
+        double y = posY + mot.y;
+        double z = posZ + mot.z;
 
         this.updateRotation();
 
         Vec3 motDouble = mot.scale(2.0);
+        final double motX = motDouble.x();
+        final double motY = motDouble.y();
+        final double motZ = motDouble.z();
+        final ServerLevel serverLevel = (ServerLevel) this.level();
         for (int i = 0; i < 5; i++) {
-            ((ServerLevel) level()).sendParticlesSource(null, ParticleTypes.BUBBLE,
-                    true, false,
-                    getX() + random.nextFloat() / 2 - 0.25F,
-                    getY() + random.nextFloat() / 2 - 0.25F,
-                    getZ() + random.nextFloat() / 2 - 0.25F,
-                    0, motDouble.x(), motDouble.y(), motDouble.z(), 0.1D);
+            serverLevel.sendParticlesSource(null, ParticleTypes.BUBBLE,
+                true, false,
+                posX + random.nextFloat() / 2 - 0.25F,
+                posY + random.nextFloat() / 2 - 0.25F,
+                posZ + random.nextFloat() / 2 - 0.25F,
+                0, motX, motY, motZ, 0.1D);
         }
 
         if (++ticksLived > 20) {
             this.discard(EntityRemoveEvent.Cause.DISCARD);
         } else {
-            this.setDeltaMovement(mot.scale(0.99D));
+            Vec3 newMot = mot.scale(0.99D);
             if (!this.isNoGravity()) {
-                this.setDeltaMovement(this.getDeltaMovement().add(0.0D, -0.06D, 0.0D));
+                newMot = newMot.add(0.0D, -0.06D, 0.0D);
             }
+            this.setDeltaMovement(newMot);
 
             this.setPos(x, y, z);
         }
