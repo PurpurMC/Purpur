@@ -3899,4 +3899,9 @@ public class PurpurWorldConfig {
         shearsCanDefuseTntChance = (float) getDouble("gameplay-mechanics.item.shears.defuse-tnt-chance", 0.00D);
         shearsCanDefuseTnt = shearsCanDefuseTntChance > 0.00F;
     }
+
+    public boolean leavesInstantDecay = false;
+    private void leavesSettings() {
+        leavesInstantDecay = getBoolean("blocks.leaves.instant-decay", leavesInstantDecay);
+    }
 }
