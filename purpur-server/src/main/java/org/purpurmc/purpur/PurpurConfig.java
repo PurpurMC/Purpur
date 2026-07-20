@@ -608,7 +608,7 @@ public class PurpurConfig {
 
     public static boolean requirePermissionSpectatorTeleportToPlayers = false;
     private static void requirePermissionSpectatorTeleportToPlayers() {
-        requirePermissionSpectatorTeleportToPlayers = getBoolean("settings.require-spectator-teleport-permission", requireSpectatorTeleportPermission);
+        requirePermissionSpectatorTeleportToPlayers = getBoolean("settings.require-permission-spectator-teleport-to-players", requireSpectatorTeleportPermission);
     }
 
     public static List<String> startupCommands = new ArrayList<>();
