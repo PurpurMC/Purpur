@@ -562,6 +562,7 @@ public class PurpurWorldConfig {
     public double throwablePotionProjectileOffset = 1.0D;
     public double tridentProjectileOffset = 1.0D;
     public double snowballProjectileOffset = 1.0D;
+    public double windChargeProjectileOffset = 1.0D;
     private void projectileOffsetSettings() {
         bowProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.bow", bowProjectileOffset);
         crossbowProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.crossbow", crossbowProjectileOffset);
@@ -570,6 +571,7 @@ public class PurpurWorldConfig {
         throwablePotionProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.throwable-potion", throwablePotionProjectileOffset);
         tridentProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.trident", tridentProjectileOffset);
         snowballProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.snowball", snowballProjectileOffset);
+        windChargeProjectileOffset = getDouble("gameplay-mechanics.projectile-offset.wind-charge", windChargeProjectileOffset);
     }
 
     public int snowballDamage = -1;
@@ -3896,5 +3898,10 @@ public class PurpurWorldConfig {
     private void shearsCanDefuseTntSettings() {
         shearsCanDefuseTntChance = (float) getDouble("gameplay-mechanics.item.shears.defuse-tnt-chance", 0.00D);
         shearsCanDefuseTnt = shearsCanDefuseTntChance > 0.00F;
+    }
+
+    public boolean leavesInstantDecay = false;
+    private void leavesSettings() {
+        leavesInstantDecay = getBoolean("blocks.leaves.instant-decay", leavesInstantDecay);
     }
 }
