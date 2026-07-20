@@ -606,9 +606,9 @@ public class PurpurConfig {
         registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDisabledCommands);
     }
 
-    public static boolean requireSpectatorTeleportPermission = false;
-    private static void requireSpectatorTeleportPermission() {
-        requireSpectatorTeleportPermission = getBoolean("settings.require-spectator-teleport-permission", requireSpectatorTeleportPermission);
+    public static boolean requirePermissionSpectatorTeleportToPlayers = false;
+    private static void requirePermissionSpectatorTeleportToPlayers() {
+        requirePermissionSpectatorTeleportToPlayers = getBoolean("settings.require-spectator-teleport-permission", requireSpectatorTeleportPermission);
     }
 
     public static List<String> startupCommands = new ArrayList<>();
