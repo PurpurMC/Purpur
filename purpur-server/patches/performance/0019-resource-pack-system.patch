@@ -1,0 +1,120 @@
+From: VoltPur Resource Pack
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] Resource Pack System - نظام إدارة حزم الموارد المدمج
+---
+============================================================
+المشكلة:
+  - إعداد resource pack في server.properties محدود
+  - ما فيش طريقة تفرض resource pack على لاعبين معينين
+
+الحل:
+  - نظام resource pack مدمج مع خيارات متقدمة
+  - Auto-host للـ pack (HTTP server مدمج)
+  - Force/Prompt/Silent modes
+============================================================
+
+---
+diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
+index stu901..vwx234 100644
+--- a/src/main/java/org/bukkit/craftbukkit/Main.java
++++ b/src/main/java/org/bukkit/craftbukkit/Main.java
+@@ -1,5 +_,60 @@
+ package org.bukkit.craftbukkit;
+ 
++// VoltPur start - Resource Pack System
++import java.nio.file.*;
++import java.security.MessageDigest;
++import java.util.HexFormat;
++import com.sun.net.httpserver.HttpServer;
++import com.sun.net.httpserver.HttpExchange;
++
++/**
++ * نظام إدارة حزم الموارد المدمج
++ * =============================
++ * - يشغل HTTP server صغير لخدمة resource pack
++ * - يولد SHA-1 hash تلقائياً
++ * - يدعم Force و Prompt و Silent modes
++ * 
++ * الإعدادات:
++ *   -Dvoltpur.resource-pack.path=resourcepack.zip
++ *   -Dvoltpur.resource-pack.mode=force|prompt|silent
++ *   -Dvoltpur.resource-pack.port=8080
++ */
++class ResourcePackManager {
++    private static final Logger LOGGER = LogUtils.getLogger();
++    private static HttpServer server;
++    private static byte[] packHash;
++    private static String packUrl;
++    private static Path packPath;
++    
++    public static void init() {
++        String packFile = System.getProperty("voltpur.resource-pack.path", "resourcepack.zip");
++        packPath = Path.of(packFile);
++        
++        if (!Files.exists(packPath)) {
++            LOGGER.info("[ResourcePack] ℹ️ No resource pack found at: {}", packPath.toAbsolutePath());
++            LOGGER.info("[ResourcePack] ℹ️ Place your resourcepack.zip in the server directory");
++            return;
++        }
++        
++        try {
++            // حساب SHA-1 hash
++            MessageDigest md = MessageDigest.getInstance("SHA-1");
++            byte[] fileBytes = Files.readAllBytes(packPath);
++            packHash = md.digest(fileBytes);
++            String hashHex = HexFormat.of().formatHex(packHash);
++            
++            // تشغيل HTTP server
++            int port = Integer.parseInt(System.getProperty("voltpur.resource-pack.port", "8080"));
++            server = HttpServer.create(new java.net.InetSocketAddress(port), 0);
++            server.createContext("/pack.zip", (HttpExchange exchange) -> {
++                byte[] response = Files.readAllBytes(packPath);
++                exchange.getResponseHeaders().add("Content-Type", "application/zip");
++                exchange.sendResponseHeaders(200, response.length);
++                exchange.getResponseBody().write(response);
++                exchange.getResponseBody().close();
++            });
++            server.setExecutor(java.util.concurrent.Executors.newSingleThreadExecutor());
++            server.start();
++            
++            // الحصول على URL
++            String localIP = java.net.InetAddress.getLocalHost().getHostAddress();
++            packUrl = "http://" + localIP + ":" + port + "/pack.zip";
++            
++            long sizeMB = Files.size(packPath) / (1024 * 1024);
++            String mode = System.getProperty("voltpur.resource-pack.mode", "prompt");
++            
++            LOGGER.info("[ResourcePack] ✅ Server started at http://0.0.0.0:{}", port);
++            LOGGER.info("[ResourcePack] 📦 Pack: {} ({}MB)", packFile, sizeMB);
++            LOGGER.info("[ResourcePack] 🔗 URL: {}", packUrl);
++            LOGGER.info("[ResourcePack] 🔐 Hash: {}", hashHex);
++            LOGGER.info("[ResourcePack] 🎯 Mode: {}", mode);
++            
++        } catch (Exception e) {
++            LOGGER.error("[ResourcePack] ❌ Failed: {}", e.getMessage());
++        }
++    }
++    
++    public static String getPackUrl() { return packUrl; }
++    public static byte[] getPackHash() { return packHash; }
++    
++    public static void stop() {
++        if (server != null) server.stop(1);
++    }
++}
++// VoltPur end - Resource Pack System
++
+ public class Main {
+     public static void main(String[] args) {
+         // ...
+@@ -38,6 +_,10 @@
+         AutoUpdater.checkForUpdates();
+         // VoltPur end
+         
++        // VoltPur start - Resource Pack
++        ResourcePackManager.init();
++        // VoltPur end
++        
+         // VoltPur end
+     }
+ }

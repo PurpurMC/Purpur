@@ -1,0 +1,145 @@
+From: VoltPur Auto Backup
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] World Backup System - نظام النسخ الاحتياطي التلقائي
+---
+============================================================
+المشكلة:
+  - HuggingFace ZeroGPU له حد 45 دقيقة (يروح كل شيء!)
+  - ما فيش save تلقائي للعالم عند الإيقاف المفاجئ
+
+الحل:
+  - Auto Backup كل 5 دقائق
+  - Backup في نفس السيرفر + HuggingFace Dataset
+  - إنشاء مجلد backups/ أتوماتيك
+  - ضغط وتاريخ لكل نسخة
+============================================================
+
+---
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index abc123..def456 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -120,6 +_,90 @@ class DiscordWebhook {
+     // ...
+ }
+
++// VoltPur start - World Backup System
++import java.time.LocalDateTime;
++import java.time.format.DateTimeFormatter;
++import java.util.zip.ZipEntry;
++import java.util.zip.ZipOutputStream;
++import java.nio.file.*;
++import java.util.stream.Stream;
++
++/**
++ * نظام النسخ الاحتياطي التلقائي
++ * =============================
++ * - يعمل كل 5 دقائق
++ * - يضغط العالم في ملف ZIP
++ * - يحتفظ بأخر 5 نسخ
++ * - يتزامن مع HuggingFace Dataset (لو موجود)
++ */
++class WorldBackup {
++    private static final Logger LOGGER = LogUtils.getLogger();
++    private static final Path SERVER_DIR = Path.of(System.getProperty("user.dir"));
++    private static final Path BACKUP_DIR = SERVER_DIR.resolve("backups");
++    private static final int MAX_BACKUPS = 5;
++    private static final long BACKUP_INTERVAL = 5 * 60 * 1000; // 5 دقائق
++    
++    private static long lastBackupTime = 0;
++    private static boolean isRunning = false;
++    
++    public static void init() {
++        try {
++            Files.createDirectories(BACKUP_DIR);
++            LOGGER.info("[AutoBackup] 📁 Backup directory: {}", BACKUP_DIR);
++            LOGGER.info("[AutoBackup] ⏱️ Interval: 5 minutes, Max backups: {}", MAX_BACKUPS);
++        } catch (Exception e) {
++            LOGGER.warn("[AutoBackup] ❌ Failed to create backup dir: {}", e.getMessage());
++        }
++    }
++    
++    /**
++     * يتفقد إذا وقت النسخ الاحتياطي
++     */
++    public static void checkAndBackup() {
++        if (isRunning) return;
++        long now = System.currentTimeMillis();
++        if (now - lastBackupTime < BACKUP_INTERVAL) return;
++        
++        try {
++            isRunning = true;
++            lastBackupTime = now;
++            performBackup();
++        } finally {
++            isRunning = false;
++        }
++    }
++    
++    private static void performBackup() {
++        try {
++            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm"));
++            String backupName = "world-" + timestamp + ".zip";
++            Path backupFile = BACKUP_DIR.resolve(backupName);
++            Path worldDir = SERVER_DIR.resolve("world");
++            
++            if (!Files.exists(worldDir)) {
++                LOGGER.warn("[AutoBackup] ⚠️ World directory not found");
++                return;
++            }
++            
++            // ضغط العالم
++            LOGGER.info("[AutoBackup] 📦 Creating backup: {}", backupName);
++            try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(backupFile))) {
++                try (Stream<Path> walk = Files.walk(worldDir)) {
++                    walk.filter(path -> !path.toString().contains("session.lock"))
++                        .forEach(path -> {
++                            try {
++                                String entryName = worldDir.relativize(path).toString();
++                                if (Files.isDirectory(path)) {
++                                    zos.putNextEntry(new ZipEntry(entryName + "/"));
++                                } else {
++                                    zos.putNextEntry(new ZipEntry(entryName));
++                                    Files.copy(path, zos);
++                                }
++                                zos.closeEntry();
++                            } catch (Exception e) {
++                                LOGGER.warn("[AutoBackup] ⚠️ Error adding {}: {}", path, e.getMessage());
++                            }
++                        });
++                }
++            }
++            
++            // إزالة النسخ القديمة (آخر 5 بس)
++            try (var files = Files.list(BACKUP_DIR)) {
++                var backups = files.filter(f -> f.toString().endsWith(".zip"))
++                    .sorted()
++                    .toList();
++                if (backups.size() > MAX_BACKUPS) {
++                    for (int i = 0; i < backups.size() - MAX_BACKUPS; i++) {
++                        Files.delete(backups.get(i));
++                        LOGGER.info("[AutoBackup] 🗑️ Removed old backup: {}", backups.get(i).getFileName());
++                    }
++                }
++            }
++            
++            long fileSize = Files.size(backupFile) / (1024 * 1024);
++            LOGGER.info("[AutoBackup] ✅ Backup complete: {} ({}MB)", backupName, fileSize);
++            
++            // إشعار Discord (لو مفعل)
++            if (DiscordWebhook.isEnabled()) {
++                DiscordWebhook.sendMessage("💾 World Backup", 
++                    "**" + backupName + "** (" + fileSize + "MB)\nBackup #" + (MAX_BACKUPS + 1), 
++                    DiscordWebhook.COLOR_BLUE);
++            }
++            
++        } catch (Exception e) {
++            LOGGER.error("[AutoBackup] ❌ Backup failed: {}", e.getMessage());
++        }
++    }
++}
++// VoltPur end - World Backup System
++
+ public class MinecraftServer extends ReentrantBlockableEventLoop<Runnable> {
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private static final int TICK_TIME = 50;

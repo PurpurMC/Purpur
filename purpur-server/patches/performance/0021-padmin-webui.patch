@@ -1,0 +1,232 @@
+From: VoltPur PAdmin WebUI
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] /padmin Web UI command
+
+Adds /padmin command that starts an HTTP web interface for
+managing per-world plugin isolation settings.
+
+diff --git a/src/main/java/io/papermc/paper/plugin/PAdminCommand.java b/src/main/java/io/papermc/paper/plugin/PAdminCommand.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/PAdminCommand.java
+@@ -0,0 +1,320 @@
++package io.papermc.paper.plugin;
++
++import com.sun.net.httpserver.HttpServer;
++import com.sun.net.httpserver.HttpExchange;
++import org.bukkit.Bukkit;
++import org.bukkit.World;
++import org.bukkit.command.Command;
++import org.bukkit.command.CommandSender;
++import org.bukkit.entity.Player;
++import org.bukkit.plugin.Plugin;
++
++import java.io.*;
++import java.net.InetSocketAddress;
++import java.net.URLDecoder;
++import java.nio.charset.StandardCharsets;
++import java.util.*;
++import java.util.concurrent.Executors;
++import java.util.stream.Collectors;
++
++public class PAdminCommand extends Command {
++
++    private static final int PORT = 25567;
++    private static HttpServer server;
++    private static boolean serverRunning = false;
++
++    public PAdminCommand() {
++        super("padmin");
++        setDescription("Open per-world plugin isolation web UI");
++        setUsage("/padmin");
++        setPermission("voltpur.admin.padmin");
++    }
++
++    @Override
++    public boolean execute(CommandSender sender, String label, String[] args) {
++        if (!(sender instanceof Player player)) {
++            sender.sendMessage("§cOnly players can use this command!");
++            return true;
++        }
++        if (!player.hasPermission("voltpur.admin.padmin")) {
++            player.sendMessage("§cNo permission!");
++            return true;
++        }
++        startWebServer();
++        String ip = "localhost";
++        try { ip = java.net.InetAddress.getLocalHost().getHostAddress(); } catch (Exception e) {}
++        player.sendMessage("§aWeb UI started!");
++        player.sendMessage("§7http://" + ip + ":" + PORT);
++        return true;
++    }
++
++    public static void startWebServer() {
++        if (serverRunning) return;
++        try {
++            server = HttpServer.create(new InetSocketAddress(PORT), 0);
++            server.createContext("/", PAdminCommand::handleMain);
++            server.createContext("/api/status", PAdminCommand::handleStatus);
++            server.createContext("/api/save", PAdminCommand::handleSave);
++            server.createContext("/api/reload", PAdminCommand::handleReload);
++            server.setExecutor(Executors.newSingleThreadExecutor());
++            server.start();
++            serverRunning = true;
++            Bukkit.getLogger().info("[VoltPur] /padmin Web UI at http://localhost:" + PORT);
++        } catch (Exception e) {
++            Bukkit.getLogger().warning("[VoltPur] PAdmin failed: " + e.getMessage());
++        }
++    }
++
++    private static void handleMain(HttpExchange exchange) throws IOException {
++        String html = generateHtml();
++        byte[] resp = html.getBytes(StandardCharsets.UTF_8);
++        exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
++        exchange.sendResponseHeaders(200, resp.length);
++        exchange.getResponseBody().write(resp);
++        exchange.getResponseBody().close();
++    }
++
++    private static void handleStatus(HttpExchange exchange) throws IOException {
++        WorldPluginManager wpm = WorldPluginManager.getInstance();
++        StringBuilder json = new StringBuilder("{\"enabled\":" + (wpm != null && wpm.isEnabled()) + ",\"worlds\":[");
++        if (wpm != null) {
++            List<World> worlds = Bukkit.getWorlds();
++            for (int i = 0; i < worlds.size(); i++) {
++                World w = worlds.get(i);
++                json.append("{\"name\":\"").append(w.getName()).append("\",\"environment\":\"").append(w.getEnvironment().name());
++                json.append("\",\"players\":").append(w.getPlayers().size());
++                json.append(",\"mode\":\"").append(wpm.getWorldMode(w.getName()));
++                json.append("\",\"plugins\":[");
++                List<String> plugins = wpm.getWorldPlugins(w.getName());
++                for (int j = 0; j < plugins.size(); j++) {
++                    if (j > 0) json.append(",");
++                    json.append("\"").append(plugins.get(j)).append("\"");
++                }
++                json.append("]}");
++                if (i < worlds.size() - 1) json.append(",");
++            }
++        }
++        json.append("],\"plugins\":[");
++        Plugin[] plugins = Bukkit.getPluginManager().getPlugins();
++        for (int i = 0; i < plugins.length; i++) {
++            if (i > 0) json.append(",");
++            json.append("\"").append(plugins[i].getName()).append("\"");
++        }
++        json.append("]}");
++        byte[] resp = json.toString().getBytes(StandardCharsets.UTF_8);
++        exchange.getResponseHeaders().set("Content-Type", "application/json");
++        exchange.sendResponseHeaders(200, resp.length);
++        exchange.getResponseBody().write(resp);
++        exchange.getResponseBody().close();
++    }
++
++    private static void handleSave(HttpExchange exchange) throws IOException {
++        if (!"POST".equals(exchange.getRequestMethod())) { exchange.sendResponseHeaders(405, -1); return; }
++        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
++        try {
++            Map<String, String> params = new HashMap<>();
++            for (String pair : body.split("&")) {
++                String[] kv = pair.split("=", 2);
++                if (kv.length == 2) params.put(URLDecoder.decode(kv[0]), URLDecoder.decode(kv[1]));
++            }
++            String worldName = params.get("world");
++            String mode = params.get("mode");
++            String pluginsStr = params.get("plugins");
++            WorldPluginManager wpm = WorldPluginManager.getInstance();
++            if (wpm != null && worldName != null && mode != null) {
++                List<String> plugins = pluginsStr != null && !pluginsStr.isEmpty()
++                    ? Arrays.asList(pluginsStr.split(",")) : new ArrayList<>();
++                wpm.updateWorldConfig(worldName, mode, plugins);
++                sendJson(exchange, 200, "{\"success\":true,\"message\":\"Saved " + worldName + "\"}");
++                return;
++            }
++            sendJson(exchange, 400, "{\"success\":false,\"message\":\"Invalid data\"}");
++        } catch (Exception e) {
++            sendJson(exchange, 500, "{\"success\":false,\"message\":\"" + e.getMessage() + "\"}");
++        }
++    }
++
++    private static void handleReload(HttpExchange exchange) throws IOException {
++        WorldPluginManager wpm = WorldPluginManager.getInstance();
++        if (wpm != null) wpm.reload();
++        sendJson(exchange, 200, "{\"success\":true,\"message\":\"Reloaded\"}");
++    }
++
++    private static void sendJson(HttpExchange exchange, int code, String json) throws IOException {
++        byte[] resp = json.getBytes(StandardCharsets.UTF_8);
++        exchange.getResponseHeaders().set("Content-Type", "application/json");
++        exchange.sendResponseHeaders(code, resp.length);
++        exchange.getResponseBody().write(resp);
++        exchange.getResponseBody().close();
++    }
++
++    private static String generateHtml() {
++        return "<!DOCTYPE html><html lang='ar' dir='rtl'><head><meta charset='UTF-8'>"
++            + "<title>VoltPur PAdmin</title>"
++            + "<style>"
++            + "*{margin:0;padding:0;box-sizing:border-box}"
++            + "body{font-family:Tahoma,sans-serif;background:#0f0f1a;color:#e0e0e0;}"
++            + ".header{background:#1a1a2e;padding:15px 20px;border-bottom:2px solid #9b59b6;display:flex;justify-content:space-between}"
++            + ".header h1{color:#9b59b6;font-size:20px}"
++            + ".container{max-width:1000px;margin:20px auto;padding:0 15px}"
++            + ".world-card{background:#1a1a2e;border-radius:8px;padding:15px;margin-bottom:10px;border:1px solid #2a2a4e}"
++            + ".world-name{font-size:18px;font-weight:700;color:#fff}"
++            + "select{background:#2a2a4e;color:#e0e0e0;border:1px solid #3a3a5e;border-radius:5px;padding:5px 10px;margin:3px}"
++            + ".plugin-tag{display:inline-block;background:#2a2a4e;border:1px solid #3a3a5e;border-radius:4px;padding:2px 8px;margin:2px;font-size:13px}"
++            + ".plugin-tag .rm{color:#e74c3c;cursor:pointer;font-weight:700;margin-right:4px}"
++            + "button{background:#9b59b6;color:#fff;border:none;border-radius:5px;padding:5px 15px;cursor:pointer;margin:3px}"
++            + "button:hover{background:#8e44ad}"
++            + ".btn-green{background:#27ae60}.btn-orange{background:#e67e22}.btn-blue{background:#3498db}"
++            + ".toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#27ae60;color:#fff;padding:10px 20px;border-radius:8px;z-index:9999}"
++            + ".toast.err{background:#e74c3c}.loading{text-align:center;padding:30px;color:#888}"
++            + "</style></head><body>"
++            + "<div class='header'><h1>⚡ VoltPur PAdmin</h1>"
++            + "<span id='status'>جاري التحميل...</span></div>"
++            + "<div class='container'>"
++            + "<div style='margin-bottom:15px'>"
++            + "<button class='btn-green' onclick='saveAll()'>💾 حفظ الكل</button>"
++            + "<button class='btn-orange' onclick='reloadCfg()'>🔄 إعادة تحميل</button>"
++            + "<button class='btn-blue' onclick='refresh()'>🔃 تحديث</button>"
++            + "</div><div id='worldsList'><div class='loading'>⏳ جاري التحميل...</div></div></div>"
++            + "<script>"
++            + "let allPlugins=[];"
++            + "async function api(url,opts={}){try{const r=await fetch(url,opts);return await r.json()}catch(e){showToast('خطأ: '+e.message,1);return null}}"
++            + "async function refresh(){const d=await api('/api/status');if(!d)return;"
++            + "allPlugins=d.plugins||[];"
++            + "document.getElementById('status').innerHTML='🟢 '+d.enabled+' 🌍 '+(d.worlds||[]).length+' عوالم 📦 '+allPlugins.length+' بلاجن';"
++            + "let html='';for(const w of d.worlds||[]){"
++            + "html+='<div class=\"world-card\" id=\"w-'+w.name+'\">'"
++            + "<div class='world-name'>"+w.name+" ("+w.players+" لاعب)</div>'"
++            + "<select id='mode-"+w.name+"' onchange='mark(\""+w.name+"\")'>"
++            + "<option value='WHITELIST' "+(w.mode==='WHITELIST'?'selected':'')+">✅ Whitelist</option>"
++            + "<option value='BLACKLIST' "+(w.mode==='BLACKLIST'?'selected':'')+">🚫 Blacklist</option>"
++            + "<option value='INHERIT' "+(w.mode==='INHERIT'?'selected':'')+">🔁 Inherit</option>"
++            + "<option value='ALL' "+(w.mode==='ALL'?'selected':'')+">🌐 All</option></select>"
++            + "<button onclick='saveWorld(\""+w.name+"\")'>💾 حفظ</button>"
++            + "<div id='tags-"+w.name+"'>"+(w.plugins||[]).map(p=>'<span class=\"plugin-tag\"><span class=\"rm\" onclick=\"rmPlugin(\"'+w.name+'\",\"'+p+'\")\">×</span>'+p+'</span>').join('')+"</div>"
++            + "<select id='add-"+w.name+"'><option value=''>+ إضافة</option>"
++            + allPlugins.filter(p=>!(w.plugins||[]).includes(p)).map(p=>'<option value=\"'+p+'\">'+p+'</option>').join('')+"</select>"
++            + "<button onclick='addPlugin(\""+w.name+"\")'>+</button>"
++            + "</div>'}document.getElementById('worldsList').innerHTML=html;}"
++            + "function mark(n){document.getElementById('w-'+n).style.borderColor='#f39c12'}"
++            + "function addPlugin(n){const s=document.getElementById('add-'+n);const p=s.value;if(!p)return;"
++            + "document.getElementById('tags-'+n).innerHTML+='<span class=\"plugin-tag\"><span class=\"rm\" onclick=\"rmPlugin(\\''+n+'\\',\\''+p+'\\')\">×</span>'+p+'</span>';"
++            + "s.querySelector('option[value=\"'+p+'\"]').remove();mark(n)}"
++            + "function rmPlugin(n,p){const t=document.getElementById('tags-'+n);t.querySelectorAll('.plugin-tag').forEach(t=>{if(t.textContent.includes(p))t.remove()});mark(n)}"
++            + "async function saveWorld(n){const m=document.getElementById('mode-'+n).value;const t=document.getElementById('tags-'+n);const p=[];"
++            + "t.querySelectorAll('.plugin-tag').forEach(t=>{const txt=t.textContent.replace('×','').trim();if(txt)p.push(txt)});"
++            + "const fd=new URLSearchParams();fd.append('world',n);fd.append('mode',m);fd.append('plugins',p.join(','));"
++            + "const r=await api('/api/save',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:fd});"
++            + "if(r&&r.success){showToast('✅ تم الحفظ');document.getElementById('w-'+n).style.borderColor='#2a2a4e'}else showToast('❌ فشل',1)}"
++            + "async function saveAll(){const d=await api('/api/status');if(!d||!d.worlds)return;for(const w of d.worlds)await saveWorld(w.name);showToast('✅ حفظ الكل')}"
++            + "async function reloadCfg(){const r=await api('/api/reload',{method:'POST'});if(r&&r.success){showToast('🔄 تم إعادة التحميل');refresh()}else showToast('❌ فشل',1)}"
++            + "function showToast(m,e){const t=document.createElement('div');t.className='toast'+(e?' err':'');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3000)}"
++            + "refresh();"
++            + "</script></body></html>";
++    }
++
++    public static void stop() {
++        if (server != null) { server.stop(1); serverRunning = false; }
++    }
++}

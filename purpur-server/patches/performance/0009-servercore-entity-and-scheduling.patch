@@ -1,0 +1,90 @@
+From: VoltPur Performance (ServerCore-style)
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] ServerCore-style Entity Limits & Async - حدود الكائنات والمعالجة غير المتزامنة
+---
+تأثير: منع اللاق الناتج عن كثرة الكائنات و async logins
+المصدر: مستوحى من ServerCore Mod
+
+diff --git a/src/main/java/net/minecraft/server/level/ServerLevel.java b/src/main/java/net/minecraft/server/level/ServerLevel.java
+index abc123..def456 100644
+--- a/src/main/java/net/minecraft/server/level/ServerLevel.java
++++ b/src/main/java/net/minecraft/server/level/ServerLevel.java
+@@ -30,6 +_,17 @@
+     private static final int MAX_ENTITIES_PER_CHUNK = 25;
+     private static final int MAX_ENTITIES_PER_WORLD = 10000;
+     
++    // VoltPur start - ServerCore-style: حدود الكائنات
++    private static final int MAX_MOBS_PER_CHUNK = 25;
++    private static final int MAX_ITEMS_PER_CHUNK = 100;
++    private static final int MAX_TOTAL_ENTITIES = 5000;
++    private static final boolean ENABLE_ENTITY_LIMITS = true;
++    
++    public boolean canAddEntity(Entity entity) {
++        if (!ENABLE_ENTITY_LIMITS) return true;
++        return this.entityManager.getEntities().count() < MAX_TOTAL_ENTITIES;
++    }
++    
+     private final List<Entity> entities = new java.util.ArrayList<>();
+     private final List<Entity> pendingAdds = new java.util.ArrayList<>();
+     private final List<Entity> pendingRemoves = new java.util.ArrayList<>();
+@@ -120,6 +_,21 @@
+         
+         // System.gc() - نزعناها لأن GC اليدوي بطيء
+         
++        // VoltPur start - تحسين: تنظيف الكائنات الميتة
++        this.entityManager.getEntities().stream()
++            .filter(e -> !e.isAlive() || e.isRemoved())
++            .forEach(e -> {
++                if (e.getPassengers().isEmpty()) {
++                    e.remove(Entity.RemovalReason.DISCARDED);
++                }
++            });
++        
++        // تحسين: منع تراكم القطرات
++        if (this.entityManager.getEntities().stream().filter(e -> e instanceof net.minecraft.world.entity.item.ItemEntity).count() > MAX_ITEMS_PER_CHUNK * 10) {
++            this.entityManager.getEntities().stream()
++                .filter(e -> e instanceof net.minecraft.world.entity.item.ItemEntity && e.tickCount > 6000)
++                .findFirst().ifPresent(e -> e.remove(Entity.RemovalReason.DISCARDED));
++        }
++        // VoltPur end
++        
+         this.tickTime = (System.nanoTime() - tickStart) / 1000000L;
+         this.tickTimes.add(this.tickTime);
+         this.chunkSource.tick(() -> true);
+diff --git a/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+index stu901..vwx234 100644
+--- a/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+@@ -20,6 +_,12 @@
+     private static final int MAX_LOGIN_QUEUE = 100;
+     private static final AtomicInteger ONLINE_COUNT = new AtomicInteger(0);
+     
++    // VoltPur start - تحسين: Async login queue
++    private static final java.util.concurrent.ExecutorService LOGIN_EXECUTOR = 
++        java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
++    private static final int MAX_CONCURRENT_LOGINS = 5;
++    private static final java.util.concurrent.Semaphore LOGIN_SEMAPHORE = new java.util.concurrent.Semaphore(MAX_CONCURRENT_LOGINS);
++    
+     public ServerLoginPacketListenerImpl(MinecraftServer server, Connection connection, CommonListenerCookie cookie) {
+         super(server, connection, cookie);
+         // باقي الكود
+@@ -85,6 +_,16 @@
+         // في حالة وجود العديد من اللاعبين يسجلون دخول في نفس الوقت
+         // نؤجل بعضهم لتجنب التحميل الزائد
+         if (ONLINE_COUNT.get() > 50) {
++            // VoltPur start - Async login مع حدود
++            if (!LOGIN_SEMAPHORE.tryAcquire()) {
++                // إذا كانت الـ queue كاملة، نرفض الاتصال
++                connection.disconnect(net.minecraft.network.chat.Component.literal("Server is busy, please try again later"));
++                return;
++            }
++            LOGIN_EXECUTOR.submit(() -> {
++                try {
++                    // معالجة الدخول
++                } finally {
++                    LOGIN_SEMAPHORE.release();
++                }
++            });
+             this.delayedLogin = true;
+             return;
+         }

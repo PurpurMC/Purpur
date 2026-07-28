@@ -1,0 +1,163 @@
+From: VoltPur Discord Webhook
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] Discord Webhook System - نظام إشعارات ديسكورد مدمج
+---
+============================================================
+المشكلة:
+  - عاوز تشوف أحداث السيرفر على Discord من غير plugin
+  - Plugins Webhook (DiscordSRV) تقيلة وتستهلك موارد
+
+الحل:
+  - Webhook مدمج في الكود (خفيف، سريع، بدون Plugin)
+  - يرسل: Join/Leave, Death, Achievement, Server Start/Stop
+============================================================
+
+---
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index def456..ghi789 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -50,6 +_,120 @@
+     public static void printStatus() { ... }
+ }
+
++// VoltPur start - Discord Webhook System
++import java.net.URI;
++import java.net.http.HttpClient;
++import java.net.http.HttpRequest;
++import java.net.http.HttpResponse;
++import java.time.Instant;
++
++/**
++ * Webhook مدمج للـ Discord
++ * ==========================
++ * يرسل إشعارات من السيرفر إلى قناة Discord مباشرة.
++ * 
++ * الإعدادات:
++ *   -Dvoltpur.discord.webhook=https://discord.com/api/webhooks/...
++ *   -Dvoltpur.discord.username=VoltPur
++ *   -Dvoltpur.discord.avatar=https://...
++ */
++class DiscordWebhook {
++    private static final Logger LOGGER = LogUtils.getLogger();
++    private static final String WEBHOOK_URL = System.getProperty("voltpur.discord.webhook", "");
++    private static final String BOT_NAME = System.getProperty("voltpur.discord.username", "🎮 VoltPur");
++    private static final HttpClient client = HttpClient.newHttpClient();
++    private static boolean enabled = !WEBHOOK_URL.isEmpty();
++    
++    public static boolean isEnabled() { return enabled; }
++    
++    /**
++     * يرسل رسالة عادية
++     */
++    public static void sendMessage(String title, String description, int color) {
++        if (!enabled) return;
++        try {
++            String json = String.format("""
++                {
++                  "username": "%s",
++                  "embeds": [{
++                    "title": "%s",
++                    "description": "%s",
++                    "color": %d,
++                    "timestamp": "%s"
++                  }]
++                }
++                """, BOT_NAME, escape(title), escape(description), color, Instant.now().toString());
++            
++            HttpRequest request = HttpRequest.newBuilder()
++                .uri(URI.create(WEBHOOK_URL))
++                .header("Content-Type", "application/json")
++                .POST(HttpRequest.BodyPublishers.ofString(json))
++                .build();
++            
++            client.sendAsync(request, HttpResponse.BodyHandlers.discarding());
++        } catch (Exception e) {
++            LOGGER.warn("[DiscordWebhook] ❌ Failed: {}", e.getMessage());
++        }
++    }
++    
++    /**
++     * الألوان المتاحة
++     */
++    public static final int COLOR_GREEN = 0x00FF00;
++    public static final int COLOR_RED = 0xFF0000;
++    public static final int COLOR_BLUE = 0x0000FF;
++    public static final int COLOR_YELLOW = 0xFFFF00;
++    public static final int COLOR_PURPLE = 0x9B59B6;
++    
++    // أحداث السيرفر
++    public static void onPlayerJoin(String playerName) {
++        sendMessage("🟢 Player Joined", "**" + escape(playerName) + "** joined the server!", COLOR_GREEN);
++    }
++    
++    public static void onPlayerLeave(String playerName) {
++        sendMessage("🔴 Player Left", "**" + escape(playerName) + "** left the server.", COLOR_RED);
++    }
++    
++    public static void onPlayerDeath(String playerName, String deathMessage) {
++        sendMessage("💀 Player Death", "**" + escape(playerName) + "**: " + escape(deathMessage), COLOR_YELLOW);
++    }
++    
++    public static void onServerStart() {
++        sendMessage("✅ Server Started", "VoltPur is now **online**!\nPlayers can join now.", COLOR_GREEN);
++    }
++    
++    public static void onServerStop() {
++        sendMessage("🛑 Server Stopped", "VoltPur is now **offline**.", COLOR_RED);
++    }
++    
++    public static void onServerCrash(String error) {
++        sendMessage("🚨 Server Crashed!", "**Error:** ```" + escape(error) + "```", COLOR_RED);
++    }
++    
++    public static void onPlayerAchievement(String playerName, String achievement) {
++        sendMessage("🏆 Achievement", "**" + escape(playerName) + "** got **" + escape(achievement) + "**!", COLOR_PURPLE);
++    }
++    
++    private static String escape(String text) {
++        if (text == null) return "";
++        return text.replace("\\", "\\\\").replace("\"", "\\\"")
++                   .replace("\n", "\\n").replace("\r", "\\r");
++    }
++}
++// VoltPur end - Discord Webhook
++
+ public class MinecraftServer extends ReentrantBlockableEventLoop<Runnable> {
+     private static final Logger LOGGER = LogUtils.getLogger();
+
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index stu901..vwx234 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -1,5 +_,15 @@
+ package net.minecraft.server.players;
+ 
++// VoltPur start - إرسال إشعارات Discord عند Join/Leave
+ public class PlayerList {
++    @Override
++    public void placeNewPlayer(LoginListener loginListener, ServerPlayer player) {
++        // الكود الأصلي...
++        // VoltPur - إرسال إشعار Discord
++        if (DiscordWebhook.isEnabled()) {
++            DiscordWebhook.onPlayerJoin(player.getScoreboardName());
++        }
++        // ...
++    }
+ }
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
+index stu901..vwx234 100644
+--- a/src/main/java/org/bukkit/craftbukkit/Main.java
++++ b/src/main/java/org/bukkit/craftbukkit/Main.java
+@@ -30,6 +_,10 @@
+         System.out.println("[VoltPur] 🛡️ Anti-Exploit System v1.0 loaded!");
+         System.out.println("[VoltPur] 🛡️ Protection: PacketLimit, SpeedCheck, FlyCheck, CrashPrevention");
+         
++        // VoltPur start - Discord Webhook
++        System.out.println("[VoltPur] 🔗 Discord Webhook: " + (DiscordWebhook.isEnabled() ? "§aCONNECTED" : "§7DISABLED"));
++        // VoltPur end
++        
+         // VoltPur end
+     }
+ }

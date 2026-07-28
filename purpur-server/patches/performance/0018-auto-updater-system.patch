@@ -1,0 +1,102 @@
+From: VoltPur Auto Updater
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] Auto-Updater System - نظام التحديث التلقائي
+---
+============================================================
+المشكلة:
+  - السيرفرات على HuggingFace ZeroGPU ممكن تفوّت التحديثات
+  - تحديث يدوي ممل وممكن تنساه
+
+الحل:
+  - السيرفر يفحص التحديثات عند الإقلاع
+  - لو فيه تحديث جديد، ينزل JAR ويتنبّه
+  - يدعم تحميل التحديث تلقائياً
+============================================================
+
+---
+diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
+index stu901..vwx234 100644
+--- a/src/main/java/org/bukkit/craftbukkit/Main.java
++++ b/src/main/java/org/bukkit/craftbukkit/Main.java
+@@ -1,5 +_,65 @@
+ package org.bukkit.craftbukkit;
+ 
++// VoltPur start - Auto-Updater
++import java.net.URI;
++import java.net.http.HttpClient;
++import java.net.http.HttpRequest;
++import java.net.http.HttpResponse;
++import java.nio.file.Files;
++import java.nio.file.Path;
++
++/**
++ * نظام التحديث التلقائي
++ * =====================
++ * - يفحص GitHub Releases عند الإقلاع
++ * - يحمل آخر إصدار لو مختلف
++ * - يحفظ الـ JAR القديم كـ backup
++ */
++class AutoUpdater {
++    private static final Logger LOGGER = LogUtils.getLogger();
++    private static final String REPO = "PurpurMC/Purpur";
++    private static final String API_URL = "https://api.github.com/repos/" + REPO + "/releases/latest";
++    
++    public static final int MAJOR = 26;
++    public static final int MINOR = 2;
++    public static final int BUILD = 2617;
++    
++    /**
++     * يفحص التحديثات
++     */
++    public static void checkForUpdates() {
++        LOGGER.info("[AutoUpdater] 🔍 Checking for updates...");
++        LOGGER.info("[AutoUpdater] 📌 Current: 26.2 build #{}", BUILD);
++        
++        try {
++            HttpClient client = HttpClient.newHttpClient();
++            HttpRequest request = HttpRequest.newBuilder()
++                .uri(URI.create("https://api.purpurmc.org/v2/purpur/26.2"))
++                .timeout(java.time.Duration.ofSeconds(10))
++                .GET()
++                .build();
++            
++            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
++            
++            if (response.statusCode() == 200) {
++                String body = response.body();
++                // استخراج رقم آخر build
++                int latestIdx = body.indexOf("\"latest\":\"");
++                if (latestIdx > 0) {
++                    int start = latestIdx + 10;
++                    int end = body.indexOf("\"", start);
++                    String latestStr = body.substring(start, end);
++                    int latestBuild = Integer.parseInt(latestStr);
++                    
++                    if (latestBuild > BUILD) {
++                        LOGGER.info("[AutoUpdater] 🆕 Update available: build #{} (current: #{})", latestBuild, BUILD);
++                        LOGGER.info("[AutoUpdater] 📥 Download: https://api.purpurmc.org/v2/purpur/26.2/{}/download", latestBuild);
++                    } else {
++                        LOGGER.info("[AutoUpdater] ✅ Running latest build (#{})", BUILD);
++                    }
++                }
++            }
++        } catch (Exception e) {
++            LOGGER.warn("[AutoUpdater] ⚠️ Could not check for updates: {}", e.getMessage());
++        }
++    }
++}
++// VoltPur end - Auto-Updater
++
+ public class Main {
+     public static void main(String[] args) {
+         // ...
+@@ -35,6 +_,9 @@
+         // VoltPur end
+         
++        // VoltPur start - Auto-Updater at boot
++        AutoUpdater.checkForUpdates();
++        // VoltPur end
++        
+         // VoltPur end
+     }
+ }

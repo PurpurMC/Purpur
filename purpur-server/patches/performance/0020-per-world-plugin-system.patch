@@ -1,0 +1,180 @@
+From: VoltPur Per-World Plugin
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] Per-World Plugin Isolation System
+---
+WorldPluginManager: new file for per-world plugin config
+
+diff --git a/src/main/java/io/papermc/paper/plugin/WorldPluginManager.java b/src/main/java/io/papermc/paper/plugin/WorldPluginManager.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/plugin/WorldPluginManager.java
+@@ -0,0 +1,228 @@
++package io.papermc.paper.plugin;
++
++import java.io.File;
++import java.io.IOException;
++import java.util.*;
++import java.util.concurrent.ConcurrentHashMap;
++
++import org.bukkit.Bukkit;
++import org.bukkit.World;
++import org.bukkit.configuration.file.YamlConfiguration;
++import org.bukkit.plugin.Plugin;
++import org.bukkit.event.Event;
++import org.bukkit.event.player.PlayerEvent;
++import org.bukkit.entity.Player;
++
++public class WorldPluginManager {
++
++    private static WorldPluginManager instance;
++    private final Map<String, WorldConfig> worldConfigs = new ConcurrentHashMap<>();
++    private final File configFile;
++    private boolean enabled = false;
++
++    static class WorldConfig {
++        enum Mode { WHITELIST, BLACKLIST, INHERIT, ALL }
++        Mode mode = Mode.ALL;
++        Set<String> plugins = new HashSet<>();
++        boolean loaded = false;
++
++        boolean isAllowed(String pluginName) {
++            if (!loaded) return true;
++            switch (mode) {
++                case WHITELIST: return plugins.contains(pluginName);
++                case BLACKLIST: return !plugins.contains(pluginName);
++                case INHERIT:
++                case ALL:
++                default: return true;
++            }
++        }
++    }
++
++    public WorldPluginManager(File dataFolder) {
++        this.configFile = new File(dataFolder, "world-plugins.yml");
++        this.instance = this;
++    }
++
++    public static WorldPluginManager getInstance() {
++        return instance;
++    }
++
++    public void loadConfig() {
++        worldConfigs.clear();
++        if (!configFile.exists()) {
++            createDefaultConfig();
++            enabled = false;
++            return;
++        }
++        try {
++            YamlConfiguration config = YamlConfiguration.loadConfiguration(configFile);
++            if (!config.getBoolean("enabled", false)) {
++                enabled = false;
++                return;
++            }
++            enabled = true;
++            if (config.contains("worlds")) {
++                for (String worldName : config.getConfigurationSection("worlds").getKeys(false)) {
++                    String path = "worlds." + worldName;
++                    WorldConfig wc = new WorldConfig();
++                    String modeStr = config.getString(path + ".mode", "all").toUpperCase();
++                    try {
++                        wc.mode = WorldConfig.Mode.valueOf(modeStr);
++                    } catch (IllegalArgumentException e) {
++                        wc.mode = WorldConfig.Mode.ALL;
++                    }
++                    wc.plugins.addAll(config.getStringList(path + ".plugins"));
++                    wc.loaded = true;
++                    worldConfigs.put(worldName.toLowerCase(), wc);
++                }
++            }
++        } catch (Exception e) {
++            Bukkit.getLogger().warning("[VoltPur] WorldPluginManager error: " + e.getMessage());
++            enabled = false;
++        }
++    }
++
++    private void createDefaultConfig() {
++        try {
++            YamlConfiguration config = new YamlConfiguration();
++            config.set("enabled", false);
++            config.save(configFile);
++        } catch (IOException e) {
++            Bukkit.getLogger().warning("[VoltPur] Failed to create default world config: " + e.getMessage());
++        }
++    }
++
++    public boolean isPluginAllowed(String pluginName, String worldName) {
++        if (!enabled || worldName == null) return true;
++        worldName = worldName.toLowerCase();
++        WorldConfig config = worldConfigs.get(worldName);
++        if (config == null) return true;
++        return config.isAllowed(pluginName);
++    }
++
++    public void reload() { loadConfig(); }
++    public boolean isEnabled() { return enabled; }
++    public void setEnabled(boolean state) { this.enabled = state; }
++    public String getWorldMode(String worldName) {
++        if (worldName == null) return "ALL";
++        WorldConfig config = worldConfigs.get(worldName.toLowerCase());
++        return config == null ? "ALL" : config.mode.name();
++    }
++    public List<String> getWorldPlugins(String worldName) {
++        if (worldName == null) return new ArrayList<>();
++        WorldConfig config = worldConfigs.get(worldName.toLowerCase());
++        return config == null ? new ArrayList<>() : new ArrayList<>(config.plugins);
++    }
++    public void updateWorldConfig(String worldName, String mode, List<String> plugins) {
++        if (worldName == null) return;
++        WorldConfig config = worldConfigs.computeIfAbsent(worldName.toLowerCase(), k -> new WorldConfig());
++        try {
++            config.mode = WorldConfig.Mode.valueOf(mode.toUpperCase());
++        } catch (Exception e) {
++            config.mode = WorldConfig.Mode.ALL;
++        }
++        config.plugins = new HashSet<>(plugins);
++        config.loaded = true;
++        saveConfig();
++    }
++    private void saveConfig() {
++        try {
++            YamlConfiguration config = new YamlConfiguration();
++            config.set("enabled", this.enabled);
++            for (Map.Entry<String, WorldConfig> entry : worldConfigs.entrySet()) {
++                String path = "worlds." + entry.getKey();
++                config.set(path + ".mode", entry.getValue().mode.name().toLowerCase());
++                config.set(path + ".plugins", new ArrayList<>(entry.getValue().plugins));
++            }
++            config.save(configFile);
++        } catch (IOException e) {
++            Bukkit.getLogger().warning("[VoltPur] Failed to save world config: " + e.getMessage());
++        }
++    }
++}
+
+diff --git a/src/main/java/org/bukkit/plugin/SimplePluginManager.java b/src/main/java/org/bukkit/plugin/SimplePluginManager.java
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 100644
+--- a/src/main/java/org/bukkit/plugin/SimplePluginManager.java
++++ b/src/main/java/org/bukkit/plugin/SimplePluginManager.java
+@@ -0,0 +1,18 @@
++// VoltPur - Per-World Plugin Event Filter
++import org.bukkit.event.player.PlayerEvent;
++import org.bukkit.event.block.BlockEvent;
++import org.bukkit.event.entity.EntityEvent;
++import org.bukkit.World;
++
++    private World getEventWorld(Event event) {
++        if (event instanceof PlayerEvent) {
++            Player player = ((PlayerEvent) event).getPlayer();
++            return player != null ? player.getWorld() : null;
++        }
++        if (event instanceof BlockEvent) {
++            return ((BlockEvent) event).getBlock().getWorld();
++        }
++        if (event instanceof EntityEvent) {
++            org.bukkit.entity.Entity entity = ((EntityEvent) event).getEntity();
++            return entity != null ? entity.getWorld() : null;
++        }
++        return null;
++    }

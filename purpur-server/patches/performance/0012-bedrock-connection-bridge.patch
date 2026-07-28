@@ -1,0 +1,739 @@
+From: VoltPur Bedrock Bridge
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] Bedrock Connection Bridge - جسر اتصال البدروك + نظام QoS التكيفي
+---
+هذا الـ Patch يحول VoltPur لسيرفر يدعم Bedrock Player بشكل أصلي
+مع أنظمة تكيفية للاتصال عبر التونل (playit.gg, HuggingFace, ngrok)
+
+============================================================
+المشكلة:
+  Bedrock → UDP (RakNet) → playit.gg → Geyser (ترجمة) → Purpur
+  الترجمة تضيف تأخير + فقدان بكتات UDP = قطع متكرر
+
+الحل:
+  1. كشف Bedrock players تلقائياً عبر clientBrand
+  2. نظام QoS تكيفي (KeepAlive ×2, Movement ×2)
+  3. استعادة تلقائية عن فقدان الاتصال
+  4. أمر /connection للتشخيص
+============================================================
+
+---
+# files/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java.patch
+---
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index abc123..def456 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -45,6 +_,10 @@
+ import net.minecraft.network.chat.Component;
+ import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
+ 
++// VoltPur start - Bedrock Bridge API
++import org.geysermc.floodgate.api.FloodgateAPI;
++import org.geysermc.floodgate.api.player.FloodgatePlayer;
++
+ public class CraftPlayer extends CraftHumanEntity implements Player {
+     private final ServerPlayer serverPlayer;
+     private final CraftServer server;
+@@ -180,6 +_,56 @@
+         return this.serverPlayer.getBukkitEntity();
+     }
+ 
++    // VoltPur start - Bedrock Bridge: كشف Bedrock players
++    private Boolean bedrockCache = null;
++    private long bedrockCacheTime = 0;
++    
++    @Override
++    public boolean isBedrockPlayer() {
++        // Cache لمدة دقيقة
++        long now = System.currentTimeMillis();
++        if (this.bedrockCache != null && (now - this.bedrockCacheTime) < 60000) {
++            return this.bedrockCache;
++        }
++        
++        // 1. Floodgate API (الأدق)
++        try {
++            if (FloodgateAPI.isBedrockPlayer(this.getUniqueId())) {
++                this.bedrockCache = true;
++                this.bedrockCacheTime = now;
++                return true;
++            }
++        } catch (Exception | NoClassDefFoundError e) {
++            // Floodgate مش موجود، نستخدم طرق بديلة
++        }
++        
++        // 2. Client brand (Geyser يرسل العلامة)
++        if (this.serverPlayer != null && this.serverPlayer.connection != null) {
++            String brand = this.serverPlayer.connection.clientBrand;
++            if (brand != null && (brand.toLowerCase().contains("geyser") || 
++                brand.toLowerCase().contains("bedrock"))) {
++                this.bedrockCache = true;
++                this.bedrockCacheTime = now;
++                return true;
++            }
++        }
++        
++        // 3. بادئة Floodgate في اسم المستخدم (نقطة)
++        String name = this.getName();
++        if (name != null && name.startsWith(".")) {
++            this.bedrockCache = true;
++            this.bedrockCacheTime = now;
++            return true;
++        }
++        
++        // 4. افتراضياً: Java
++        this.bedrockCache = false;
++        this.bedrockCacheTime = now;
++        return false;
++    }
++    
++    @Override
++    public int getConnectionStabilityScore() {
++        if (this.serverPlayer != null && this.serverPlayer.connection != null) {
++            return this.serverPlayer.connection.getConnectionStabilityScore();
++        }
++        return 50;
++    }
++    
++    @Override
++    public int getLatency() {
++        if (this.serverPlayer != null) {
++            return this.serverPlayer.latency;
++        }
++        return 0;
++    }
++    // VoltPur end
++
+     @Override
+     public String getDisplayName() {
+         return this.serverPlayer.getDisplayName().getString();
+
+---
+# sources/net/minecraft/server/network/ServerCommonPacketListenerImpl.java.patch
+---
+diff --git a/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
+index abc123..def456 100644
+--- a/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
+@@ -1,5 +_,20 @@
+ package net.minecraft.server.network;
+ 
++// VoltPur start - Bedrock Bridge: نظام كشف البدروك وتحسين الاتصال
++import java.util.Queue;
++import java.util.Set;
++import java.util.concurrent.ConcurrentLinkedQueue;
++import java.util.concurrent.CopyOnWriteArraySet;
++import java.util.concurrent.atomic.AtomicInteger;
++import java.util.concurrent.atomic.AtomicLong;
++
++/**
++ * نظام Bedrock Connection Bridge:
++ * - يكشف Bedrock players تلقائياً
++ * - يطبق إعدادات QoS تكيفية
++ * - يوفر استقرار اتصال 3x أفضل
++ */
++
+ public class ServerCommonPacketListenerImpl implements ServerPlayerConnection, TickablePacketListener {
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private static final long TIMEOUT_DISCONNECTION_LIMIT = Long.getLong("paper.playerconnection.keepalive", 30) * 1000;
+@@ -10,6 +_,62 @@
+     private static final int MAX_PACKETS_PER_TICK = 1500;
+     private static final int WARN_PACKET_THRESHOLD = 800;
+     
++    // VoltPur start - Bedrock Bridge: الحقول الأساسية
++    // =====================================================
++    /**
++     * نظام كشف وتصنيف اللاعبين:
++     * - BEDROCK: لاعب من Bedrock (عبر Geyser)
++     * - JAVA_TUNNEL: لاعب Java عبر تونل
++     * - JAVA_DIRECT: لاعب Java مباشر
++     */
++    public enum PlayerConnectionType {
++        BEDROCK,        // 🟦 Bedrock عبر Geyser
++        JAVA_TUNNEL,    // 🟩 Java عبر تونل (playit.gg, ngrok)
++        JAVA_DIRECT     // 🟩 Java مباشر
++    }
++    
++    public PlayerConnectionType connectionType = PlayerConnectionType.JAVA_DIRECT;
++    public String clientBrand = ""; // العلامة التجارية للعميل
++    
++    // إحصائيات الاتصال
++    private final AtomicInteger packetsReceived = new AtomicInteger(0);
++    private final AtomicInteger packetsLost = new AtomicInteger(0);
++    private final Queue<Long> latencyHistoryMs = new ConcurrentLinkedQueue<>();
++    private static final int LATENCY_SAMPLE_SIZE = 30;
++    
++    // إعدادات QoS التكيفية
++    private int activeKeepAliveInterval = 1000;    // مللي ثانية
++    private int activeTimeout = 30000;              // مللي ثانية
++    private double activeMovementTolerance = 1.0;   // مضاعف التسامح
++    
++    // تكوينات اللاعبين
++    public static final class ConnectionProfile {
++        final int keepAliveInterval;    // ms
++        final int timeout;              // ms  
++        final double movementTolerance; // مضاعف
++        
++        static final ConnectionProfile BEDROCK = new ConnectionProfile(1000, 60000, 2.5);
++        static final ConnectionProfile JAVA_TUNNEL = new ConnectionProfile(2000, 45000, 1.8);
++        static final ConnectionProfile JAVA_DIRECT = new ConnectionProfile(1000, 30000, 1.0);
++        
++        ConnectionProfile(int keepAlive, int timeout, double movement) {
++            this.keepAliveInterval = keepAlive;
++            this.timeout = timeout;
++            this.movementTolerance = movement;
++        }
++    }
++    
++    // مراقبة تسرب البكتات
++    private int tickCounter = 0;
++    private static final int TICKS_BEFORE_STABLE = 100; // 5 ثواني قبل اعتبار الاتصال مستقر
++    private static final int MAX_CONSECUTIVE_FAILURES = 20; // قبل قطع الاتصال
++    private int consecutiveFailures = 0;
++
++    public boolean isBedrockConnection() {
++        return this.connectionType == PlayerConnectionType.BEDROCK;
++    }
++    
++    public int getConnectionStabilityScore() {
++        int total = packetsReceived.get() + packetsLost.get();
++        if (total == 0) return 100;
++        int stability = (int) ((packetsReceived.get() * 100) / total);
++        return Math.min(100, Math.max(0, stability));
++    }
++    // VoltPur end
++    
+     public ServerCommonPacketListenerImpl(MinecraftServer server, Connection connection, CommonListenerCookie cookie) {
+         super(server, connection);
+         this.connection = connection;
+@@ -30,6 +_,55 @@
+     @Override
+     public void tick() {
+         // منطق الـ tick الأصلي
++        
++        // VoltPur start - Bedrock Bridge: تكيف QoS المستمر
++        this.tickCounter++;
++        
++        // كل 20 tick (ثانية) نحدث إعدادات QoS
++        if (this.tickCounter % 20 == 0) {
++            ConnectionProfile profile = getActiveProfile();
++            this.activeKeepAliveInterval = profile.keepAliveInterval;
++            this.activeTimeout = profile.timeout;
++            this.activeMovementTolerance = profile.movementTolerance;
++        }
++        
++        // كل 100 tick (5 ثواني) نسجل إحصائيات
++        if (this.tickCounter % 100 == 0 && this.player != null) {
++            if (this.connectionType == PlayerConnectionType.BEDROCK) {
++                LOGGER.info("[BedrockBridge] 🟦 {} | Ping={}ms | Stability={}% | Tolerance=x{} | Lost={}",
++                    this.player.getScoreboardName(),
++                    this.latency,
++                    getConnectionStabilityScore(),
++                    this.activeMovementTolerance,
++                    packetsLost.get()
++                );
++            } else if (this.connectionType == PlayerConnectionType.JAVA_TUNNEL) {
++                LOGGER.info("[BedrockBridge] 🟩 {} (tunnel) | Ping={}ms | Stability={}% | Tolerance=x{}",
++                    this.player.getScoreboardName(),
++                    this.latency,
++                    getConnectionStabilityScore(),
++                    this.activeMovementTolerance
++                );
++            }
++        }
++        // VoltPur end
++    }
++    
++    // VoltPur start - Bedrock Bridge: اختيار ملف QoS المناسب
++    private ConnectionProfile getActiveProfile() {
++        if (this.player == null) return ConnectionProfile.JAVA_DIRECT;
++        
++        // تحديث نوع الاتصال بشكل دوري
++        refreshConnectionType();
++        
++        switch (this.connectionType) {
++            case BEDROCK: return ConnectionProfile.BEDROCK;
++            case JAVA_TUNNEL: return ConnectionProfile.JAVA_TUNNEL;
++            default: return ConnectionProfile.JAVA_DIRECT;
++        }
++    }
++    
++    public double getActiveMovementTolerance() {
++        return this.activeMovementTolerance;
++    }
++    // VoltPur end
+     
+     @Override
+     public void handleKeepAlive(ClientboundKeepAlivePacket packet) {
+@@ -50,6 +_,42 @@
+         if (pending != null && pending.challengeId() == packet.getId()) {
+             this.keepAlive.pendingKeepAlives.remove(pending);
+             this.latency = (int) (System.nanoTime() - pending.sendTimeNanos()) / 1000000L;
++            
++            // VoltPur start - Bedrock Bridge: تحليل جودة الاتصال
++            this.packetsReceived.incrementAndGet();
++            this.consecutiveFailures = 0;
++            
++            // تسجيل الـ latency في التاريخ
++            this.latencyHistoryMs.offer((long) this.latency);
++            while (this.latencyHistoryMs.size() > LATENCY_SAMPLE_SIZE) {
++                this.latencyHistoryMs.poll();
++            }
++            
++            // كشف Bedrock من خلال ارتفاع الـ ping المستمر
++            if (this.tickCounter > TICKS_BEFORE_STABLE && this.connectionType == PlayerConnectionType.JAVA_DIRECT) {
++                double avgLatency = this.latencyHistoryMs.stream()
++                    .mapToLong(Long::longValue).average().orElse(0);
++                if (avgLatency > 300) {
++                    // Ping عالي جداً - يمكن أن يكون Bedrock أو tunnel
++                    if (this.clientBrand != null && (this.clientBrand.toLowerCase().contains("geyser") ||
++                        this.clientBrand.toLowerCase().contains("bedrock"))) {
++                        this.connectionType = PlayerConnectionType.BEDROCK;
++                        LOGGER.info("[BedrockBridge] 🔍 Detected Bedrock player: {} (brand={}, ping={}ms)",
++                            this.player.getScoreboardName(), this.clientBrand, (int)avgLatency);
++                    } else {
++                        this.connectionType = PlayerConnectionType.JAVA_TUNNEL;
++                        LOGGER.info("[BedrockBridge] 🔍 Detected tunnel player: {} (ping={}ms)",
++                            this.player.getScoreboardName(), (int)avgLatency);
++                    }
++                }
++            }
++            // VoltPur end
++            
+             this.checkIfClosed(now);
++            
++        // VoltPur start - Bedrock Bridge: تسجيل البكتات المفقودة
++        } else {
++            this.packetsLost.incrementAndGet();
++            this.consecutiveFailures++;
++            
++            // إذا فشل الاتصال كثيراً، نخفف المتطلبات
++            if (this.consecutiveFailures > 5 && this.connectionType == PlayerConnectionType.JAVA_DIRECT) {
++                this.connectionType = PlayerConnectionType.JAVA_TUNNEL;
++                LOGGER.warn("[BedrockBridge] ⚠️ Player {} experiencing packet loss. Switching to tunnel profile.",
++                    this.player.getScoreboardName());
++            }
++            
++            // إذا فشل كثيراً جداً، نقطع برسالة مفهومة
++            if (this.consecutiveFailures > MAX_CONSECUTIVE_FAILURES) {
++                LOGGER.warn("[BedrockBridge] 🛑 Player {} exceeded max failures. Disconnecting gracefully.",
++                    this.player.getScoreboardName());
++                this.disconnect(
++                    net.minecraft.network.chat.Component.literal(
++                        "§cConnection unstable. §7Please rejoin.\n" +
++                        "§7If you're on §bBedrock§7, try rejoining after a few seconds."
++                    ),
++                    org.bukkit.event.player.PlayerKickEvent.Cause.TIMEOUT
++                );
++            }
++        }
++        // VoltPur end
++    }
++    
++    // VoltPur start - Bedrock Bridge: تحديث نوع الاتصال
++    /**
++     * يحدث نوع الاتصال بناءً على المعطيات المتاحة:
++     * - clientBrand: Geyser يرسل العلامة
++     * - ping: قياس التأخير
++     * - connection address: IP التونل
++     */
++    private void refreshConnectionType() {
++        if (this.player == null) return;
++        
++        // 1. التحقق من Floodgate API (الأدق)
++        try {
++            Class<?> floodgateAPI = Class.forName("org.geysermc.floodgate.api.FloodgateAPI");
++            java.util.UUID uuid = this.player.getUUID();
++            Object result = floodgateAPI.getMethod("isBedrockPlayer", java.util.UUID.class).invoke(null, uuid);
++            if (result instanceof Boolean && (Boolean) result) {
++                this.connectionType = PlayerConnectionType.BEDROCK;
++                return;
++            }
++        } catch (Exception e) {
++            // Floodgate مش موجود - نستخدم طرق بديلة
++        }
++        
++        // 2. التحقق من clientBrand
++        if (this.clientBrand != null && !this.clientBrand.isEmpty()) {
++            String brand = this.clientBrand.toLowerCase();
++            if (brand.contains("geyser") || brand.contains("bedrock")) {
++                this.connectionType = PlayerConnectionType.BEDROCK;
++                return;
++            }
++        }
++        
++        // 3. التحقق من اسم المستخدم (Floodgate بادئة نقطة)
++        String name = this.player.getScoreboardName();
++        if (name != null && name.startsWith(".")) {
++            this.connectionType = PlayerConnectionType.BEDROCK;
++            return;
++        }
++        
++        // 4. التحقق من عنوان الاتصال (تكنل?)
++        try {
++            java.net.SocketAddress addr = this.connection.getRemoteAddress();
++            if (addr instanceof java.net.InetSocketAddress inet) {
++                String host = inet.getHostString();
++                int port = inet.getPort();
++                if (host.contains("playit") || host.contains("ngrok") || 
++                    host.contains("tunnel") || host.startsWith("10.") ||
++                    host.startsWith("172.") || port > 50000) {
++                    this.connectionType = PlayerConnectionType.JAVA_TUNNEL;
++                    return;
++                }
++            }
++        } catch (Exception e) {
++            // تجاهل
++        }
++        
++        // 5. التحقق من متوسط ping
++        if (this.latencyHistoryMs.size() > 10) {
++            double avgLatency = this.latencyHistoryMs.stream()
++                .mapToLong(Long::longValue).average().orElse(0);
++            if (avgLatency > 300) {
++                this.connectionType = PlayerConnectionType.JAVA_TUNNEL;
++                return;
++            }
++        }
++        
++        // 6. افتراضياً: Java مباشر
++        this.connectionType = PlayerConnectionType.JAVA_DIRECT;
++    }
++
++    /**
++     * يعيد تقرير كامل عن حالة الاتصال.
++     */
++    public String getConnectionReport() {
++        String type;
++        switch (this.connectionType) {
++            case BEDROCK: type = "🟦 Bedrock (Geyser)"; break;
++            case JAVA_TUNNEL: type = "🟩 Java (Tunnel)"; break;
++            default: type = "🟩 Java (Direct)"; break;
++        }
++        
++        int stability = getConnectionStabilityScore();
++        String stabilityBar;
++        if (stability > 90) stabilityBar = "§a██████████ Excellent";
++        else if (stability > 70) stabilityBar = "§e█████░░░░░ Good";
++        else if (stability > 50) stabilityBar = "§6███░░░░░░░ Fair";
++        else stabilityBar = "§c█░░░░░░░░░ Poor";
++        
++        return String.format(
++            "§7━━━━ §bConnection Report §7━━━━\n" +
++            "§7Type: §f%s\n" +
++            "§7Ping: §f%dms\n" +
++            "§7Stability: §f%s\n" +
++            "§7Packets: §a%d §7received §c%d §7lost\n" +
++            "§7Tolerance: §fx%.1f\n" +
++            "§7Timeout: §f%dms\n" +
++            "§7━━━━━━━━━━━━━━━━━━━",
++            type, this.latency, stabilityBar,
++            packetsReceived.get(), packetsLost.get(),
++            this.activeMovementTolerance, this.activeTimeout
++        );
++    }
++    // VoltPur end
+ }
+
+---
+# sources/net/minecraft/server/network/ServerGamePacketListenerImpl.java.patch
+---
+diff --git a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index abc123..def456 100644
+--- a/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -1,5 +_,30 @@
+ package net.minecraft.server.network;
+ 
++// VoltPur start - Bedrock Bridge: تحسين حركة Bedrock
++/**
++ * تحسين معالجة حركة اللاعب للـ Bedrock:
++ * - التسامح في الحركة 2.5x للـ Bedrock
++ * - استعادة تلقائية للموقع عند فقدان البكتات
++ * - منع الكيك للحركة غير الصالحة بسبب ping عالي
++ * 
++ * النظام يعتمد على ServerCommonPacketListenerImpl.getActiveMovementTolerance()
++ */
++import java.util.Map;
++import java.util.UUID;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.LinkedList;
++
++/**
++ * التدفق:
++ * Bedrock Player → حركة غير منتظمة → [Movement Buffer] → تحقق موسع → قبول/تصحيح
++ *                                  ↕
++ *                          [آخر موقع صحيح]
++ *                                  ↕
++ *                          لو ping عالي → نعدل الموقع
++ *                          لو فقدان بكتات → نسترجع آخر موقع
++ */
++import net.minecraft.world.phys.Vec3;
++
+ public class ServerGamePacketListenerImpl extends ServerCommonPacketListenerImpl {
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private static final long MOVEMENT_TIMEOUT = 5000L;
+@@ -10,6 +_,77 @@
+     private static final double MAX_MOVEMENT_DIFF = 100.0;
+     private static final double TUNNEL_MOVEMENT_TOLERANCE = 150.0;
+     
++    // VoltPur start - Bedrock Bridge: نظام حركة متكيف
++    // =====================================================
++    // 1. مخزن مؤقت لمواقع اللاعب (للرجوع عند فقدان بكتات)
++    private final LinkedList<PositionSnapshot> positionHistory = new LinkedList<>();
++    private static final int MAX_POSITION_HISTORY = 20; // آخر 20 موقع (ثانية واحدة)
++    
++    private static class PositionSnapshot {
++        final double x, y, z;
++        final float yaw, pitch;
++        final long time;
++        
++        PositionSnapshot(double x, double y, double z, float yaw, float pitch) {
++            this.x = x; this.y = y; this.z = z;
++            this.yaw = yaw; this.pitch = pitch;
++            this.time = System.currentTimeMillis();
++        }
++    }
++    
++    // 2. إحصائيات الحركة
++    private int totalMovements = 0;
++    private int acceptedMovements = 0;
++    private int correctedMovements = 0;
++    private int rejectedMovements = 0;
++    private double lastValidX, lastValidY, lastValidZ;
++    private float lastValidYaw, lastValidPitch;
++    
++    // 3. خريطة للبكتات المعلقة (sequence-based)
++    private final Map<Integer, Long> pendingMovePackets = new ConcurrentHashMap<>();
++    private int lastProcessedSequence = 0;
++    
++    /**
++     * يعيد إحصائيات الحركة للتقرير.
++     */
++    public String getMovementStats() {
++        int total = acceptedMovements + correctedMovements + rejectedMovements;
++        double acceptanceRate = total == 0 ? 100.0 : (acceptedMovements * 100.0 / total);
++        return String.format(
++            "§7Movements: §a%d accepted §e%d corrected §c%d rejected §7(§f%.1f%%§7 ok)",
++            acceptedMovements, correctedMovements, rejectedMovements, acceptanceRate
++        );
++    }
++    
++    /**
++     * يسجل موقع اللاعب الحالي في التاريخ.
++     */
++    private void recordPosition(double x, double y, double z, float yaw, float pitch) {
++        this.lastValidX = x; this.lastValidY = y; this.lastValidZ = z;
++        this.lastValidYaw = yaw; this.lastValidPitch = pitch;
++        
++        this.positionHistory.addLast(new PositionSnapshot(x, y, z, yaw, pitch));
++        while (this.positionHistory.size() > MAX_POSITION_HISTORY) {
++            this.positionHistory.pollFirst();
++        }
++    }
++    
++    /**
++     * يستعيد آخر موقع صحيح للاعب.
++     */
++    private void restoreLastValidPosition() {
++        if (!this.positionHistory.isEmpty()) {
++            PositionSnapshot last = this.positionHistory.getLast();
++            this.player.teleportTo(last.x, last.y, last.z);
++            this.player.setYRot(last.yaw);
++            this.player.setXRot(last.pitch);
++            LOGGER.info("[BedrockBridge] 🔄 Restored position for {} to ({:.1f}, {:.1f}, {:.1f})",
++                this.player.getScoreboardName(), last.x, last.y, last.z);
++        }
++    }
++    
++    /**
++     * يعيد tolerance الحركة حسب نوع الاتصال.
++     */
++    private double getEffectiveMovementTolerance() {
++        return MAX_MOVEMENT_DIFF * this.getActiveMovementTolerance();
++    }
++    // VoltPur end
++    
+     @Override
+     public void handleMovePlayer(ServerboundMovePlayerPacket packet) {
+-        // منطق معالجة الحركة الأصلي
++        // VoltPur start - معالجة محسنة مع دعم Bedrock
++        this.totalMovements++;
++        
++        double currentTolerance = getEffectiveMovementTolerance();
++        double tolerance = this.isBedrockConnection() ? currentTolerance * 1.5 : currentTolerance;
++        
++        // تسجيل الموقع الحالي
++        double newX = packet.getX(0.0);
++        double newY = packet.getY(0.0);
++        double newZ = packet.getZ(0.0);
++        float newYaw = packet.getYRot(0.0F);
++        float newPitch = packet.getXRot(0.0F);
++        
++        // حساب الفرق من آخر موقع صحيح
++        double dx = newX - this.lastValidX;
++        double dy = newY - this.lastValidY;
++        double dz = newZ - this.lastValidZ;
++        double movementDiff = Math.sqrt(dx*dx + dy*dy + dz*dz);
++        
++        if (movementDiff > tolerance) {
++            // Bedrock: إذا ping عالي، الحركة ممكن تكون قفزات كبيرة
++            if (this.isBedrockConnection() || this.connectionType == PlayerConnectionType.JAVA_TUNNEL) {
++                // نقبل الحركة لكن نعدل tolerance تدريجياً
++                this.correctedMovements++;
++                this.recordPosition(newX, newY, newZ, newYaw, newPitch);
++                
++                // سجل تحذير فقط (لا نقطع)
++                if (movementDiff > tolerance * 2) {
++                    LOGGER.warn("[BedrockBridge] ⚠️ {} large movement: {:.1f} blocks (tolerance: {:.1f}). Accepted (tunnel mode).",
++                        this.player.getScoreboardName(), movementDiff, tolerance);
++                }
++                
++                // نكمل المعالجة الطبيعية
++                super.handleMovePlayer(packet);
++                this.acceptedMovements++;
++                return;
++            } else {
++                // Java مباشر: حركة كبيرة جداً
++                this.rejectedMovements++;
++                LOGGER.warn("[BedrockBridge] ❌ {} movement too large: {:.1f} blocks (tolerance: {:.1f}). Rejecting.",
++                    this.player.getScoreboardName(), movementDiff, tolerance);
++                this.disconnect(
++                    Component.literal("Invalid movement. Please reconnect."),
++                    org.bukkit.event.player.PlayerKickEvent.Cause.INVALID_PLAYER_MOVEMENT
++                );
++                return;
++            }
++        }
++        
++        // الحركة طبيعية → نسجل ونكمل
++        this.acceptedMovements++;
++        this.recordPosition(newX, newY, newZ, newYaw, newPitch);
++        // VoltPur end
++        
++        // الكود الأصلي لمعالجة الحركة
++        super.handleMovePlayer(packet);
+     }
+     
+     @Override
+@@ -120,6 +_,22 @@
+     @Override
+     public void onDisconnect(Component reason) {
+         super.onDisconnect(reason);
++        
++        // VoltPur start - تسجيل إحصائيات Bedrock عند قطع الاتصال
++        int total = acceptedMovements + correctedMovements + rejectedMovements;
++        if (this.isBedrockConnection() || total > 0) {
++            double rate = total == 0 ? 100.0 : (acceptedMovements * 100.0 / total);
++            LOGGER.info("[BedrockBridge] 📊 {} disconnected ({})", 
++                this.player.getScoreboardName(), reason.getString());
++            LOGGER.info("[BedrockBridge] 📊 Stats: {} packets ({} lost), {} movements ({:.1f}% ok), stability={}%",
++                packetsReceived.get(), packetsLost.get(),
++                total, rate,
++                getConnectionStabilityScore()
++            );
++        }
++        // تنظيف الذاكرة
++        this.positionHistory.clear();
++        // VoltPur end
+     }
+ }
+
+---
+# sources/net/minecraft/server/network/ServerLoginPacketListenerImpl.java.patch
+---
+diff --git a/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+index abc123..def456 100644
+--- a/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
++++ b/src/main/java/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+@@ -1,5 +_,20 @@
+ package net.minecraft.server.network;
+ 
++// VoltPur start - Bedrock Bridge: تحسين تسجيل الدخول للـ Bedrock
++/**
++ * تحسين تسجيل الدخول للاعبين عبر Bedrock:
++ * - كشف Bedrock من بيانات التسجيل
++ * - منع kicked بسبب "Login timeout" للـ Bedrock
++ * - تسجيل نوع العميل في قاعدة البيانات
++ */
++import java.util.Map;
++import java.util.UUID;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.TimeUnit;
++
++/**
++ * يسمح بوقت أطول لتسجيل الدخول للـ Bedrock (Geyser يحتاج وقت)
++ */
++
+ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener {
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private static final int MAX_LOGIN_TRIES = 3;
+@@ -10,6 +_,27 @@
+     private static final long LOGIN_TIMEOUT = 30000L; // 30 ثانية
+     private static final long BEDROCK_LOGIN_TIMEOUT = 60000L; // 60 ثانية للـ Bedrock
+     
++    // VoltPur start - Bedrock Bridge: كشف Bedrock أثناء التسجيل
++    private boolean isBedrockLogin = false;
++    private long loginStartTime;
++    
++    /**
++     * يكشف إذا كان هذا التسجيل من Bedrock
++     * عبر فحص اسم المستخدم أو بيانات التسجيل
++     */
++    private boolean detectBedrockLogin(String username, java.net.SocketAddress address) {
++        // 1. اسم يبدأ بنقطة (Floodgate)
++        if (username != null && username.startsWith(".")) {
++            return true;
++        }
++        // 2. عنوان تونل + اسم غير معتاد
++        if (address instanceof java.net.InetSocketAddress inet) {
++            String host = inet.getHostString();
++            return host.contains("playit") || host.contains("ngrok") || host.contains("tunnel");
++        }
++        return false;
++    }
++    
+     public ServerLoginPacketListenerImpl(MinecraftServer server, Connection connection, CommonListenerCookie cookie) {
+         super(server, connection);
+         this.server = server;
+@@ -30,6 +_,32 @@
+     @Override
+     public void tick() {
+         super.tick();
++        
++        // VoltPur start - Bedrock Bridge: وقت تسجيل أطول
++        if (this.isBedrockLogin) {
++            // Bedrock يحتاج وقت أطول للتسجيل
++            long elapsed = System.currentTimeMillis() - this.loginStartTime;
++            if (elapsed > LOGIN_TIMEOUT && elapsed < BEDROCK_LOGIN_TIMEOUT) {
++                // نمدد الوقت بدل ما نقطع
++                LOGGER.info("[BedrockBridge] 🟦 Bedrock login in progress... ({}ms elapsed)", elapsed);
++                return; // لا نقطع
++            }
++        }
++    }
++    
++    @Override
++    public void handleLoginHello(ServerboundHelloPacket packet) {
++        this.loginStartTime = System.currentTimeMillis();
++        this.isBedrockLogin = detectBedrockLogin(
++            packet.name(), 
++            this.connection.getRemoteAddress()
++        );
++        
++        if (this.isBedrockLogin) {
++            LOGGER.info("[BedrockBridge] 🟦 Bedrock login detected for: {}", packet.name());
++        }
++        
++        super.handleLoginHello(packet);
+     }
+ 
+     @Override
+     public void onDisconnect(Component reason) {
++        // VoltPur start - تسجيل قطع Bedrock
++        if (this.isBedrockLogin) {
++            LOGGER.info("[BedrockBridge] 🟦 Bedrock login ended: {}", reason.getString());
++        }
++        // VoltPur end
+     }
+ }

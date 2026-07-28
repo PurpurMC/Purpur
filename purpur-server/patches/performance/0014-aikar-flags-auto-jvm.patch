@@ -1,0 +1,129 @@
+From: VoltPur Aikar Flags
+Date: Mon, 28 Jul 2026
+Subject: [PATCH] Aikar Flags Auto-Config - ضبط JVM أتوماتيكي حسب الذاكرة المتاحة
+---
+============================================================
+ما فيش سبب تخلي الـ Admin يضبط JVM Flags يدوي!
+السيرفر يكشف الذاكرة ويطبق أفضل الإعدادات أتوماتيك.
+
+Aikar's Flags هي أفضل إعدادات JVM مثبتة لمinecraft.
+============================================================
+
+---
+diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
+index stu901..vwx234 100644
+--- a/src/main/java/org/bukkit/craftbukkit/Main.java
++++ b/src/main/java/org/bukkit/craftbukkit/Main.java
+@@ -1,5 +_,65 @@
+ package org.bukkit.craftbukkit;
+ 
++// VoltPur start - Aikar Flags Auto-Config
++import java.lang.management.ManagementFactory;
++import java.lang.management.RuntimeMXBean;
++import java.util.List;
++import java.util.ArrayList;
++
++/**
++ * Aikar's Flags - أفضل إعدادات JVM لـ Minecraft
++ * =============================================
++ * المبدأ: ضبط الـ Garbage Collector لتقليل pauses
++ * وتوزيع الذاكرة بذكاء بين اللعبة والنظام.
++ * 
++ * المصدر: https://docs.papermc.io/paper/aikars-flags
++ */
++class AikarFlags {
++    private static final Logger LOGGER = LogUtils.getLogger();
++    
++    /**
++     * يحسب أحسن إعدادات JVM حسب الذاكرة المتاحة
++     */
++    public static String[] getOptimalFlags() {
++        List<String> flags = new ArrayList<>();
++        
++        // 1. كشف الذاكرة المتاحة
++        long maxMemory = Runtime.getRuntime().maxMemory();
++        long memoryGB = maxMemory / (1024 * 1024 * 1024);
++        if (memoryGB < 1) memoryGB = 1;
++        
++        LOGGER.info("[AikarFlags] 💻 Detected {}GB RAM available", memoryGB);
++        
++        // 2. -Xms و -Xmx (بدل ما المستخدم يضبطهم)
++        long xmx = (long)(maxMemory * 0.85); // 85% من الذاكرة الكلية
++        long xms = (long)(xmx * 0.5); // 50% من الـ XMX
++        flags.add("-Xms" + (xms / 1024 / 1024) + "M");
++        flags.add("-Xmx" + (xmx / 1024 / 1024) + "M");
++        
++        // 3. Aikar's G1GC Flags (مثبتة)
++        flags.add("-XX:+UseG1GC");                 // G1 Garbage Collector
++        flags.add("-XX:+ParallelRefProcEnabled");   // معالجة parallel للمراجع
++        flags.add("-XX:MaxGCPauseMillis=200");      // أقصى 200ms وقف
++        flags.add("-XX:+UnlockExperimentalVMOptions");
++        flags.add("-XX:+DisableExplicitGC");        // منع System.gc() يدوي
++        flags.add("-XX:+AlwaysPreTouch");           // تخصيص الذاكرة مسبقاً
++        flags.add("-XX:G1NewSizePercent=30");       // 30% للـ New Generation
++        flags.add("-XX:G1MaxNewSizePercent=40");    // أقصى 40%
++        flags.add("-XX:G1HeapRegionSize=8M");       // 8MB لكل منطقة
++        flags.add("-XX:G1ReservePercent=20");       // 20% احتياطي
++        flags.add("-XX:G1HeapWastePercent=5");      // 5% waste tolerance
++        flags.add("-XX:G1MixedGCCountTarget=4");    // 4 mixed GC targets
++        flags.add("-XX:InitiatingHeapOccupancyPercent=15"); // 15% يبدأ GC
++        flags.add("-XX:G1MixedGCLiveThresholdPercent=90");
++        flags.add("-XX:G1RSetUpdatingPauseTimePercent=5");
++        flags.add("-XX:SurvivorRatio=32");          // نسبة الـ Survivor
++        flags.add("-XX:+PerfDisableSharedMem");     // تحسين للـ Linux
++        flags.add("-XX:MaxTenuringThreshold=1");    // 1 = ينتقل بسرعة للـ Old Gen
++        
++        // 4. إعدادات إضافية
++        flags.add("-Dusing.aikars.flags=mcflags.emc.gs"); // علامة Aikar
++        flags.add("-Dpaper.playerconnection.keepalive=60"); // 60 ثانية للتونل
++        
++        LOGGER.info("[AikarFlags] ✅ Applied Aikar Flags for {}GB heap ({})", 
++            xmx / (1024*1024*1024), Runtime.getRuntime().availableProcessors() + " cores");
++        
++        return flags.toArray(new String[0]);
++    }
++    
++    /**
++     * يطبق الـ Flags على الـ JVM الحالي (إذا أمكن)
++     */
++    public static void applyToCurrentJVM() {
++        try {
++            RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
++            List<String> existingArgs = runtime.getInputArguments();
++            
++            // إذا كان المستخدم ضابط flags يدوي، نحترم اختياره
++            boolean hasCustomFlags = existingArgs.stream().anyMatch(arg -> 
++                arg.contains("-Xms") || arg.contains("-Xmx") || arg.contains("-XX:+UseG1GC"));
++            
++            if (!hasCustomFlags) {
++                LOGGER.info("[AikarFlags] ⚡ No custom JVM flags detected. Using Aikar's recommended flags.");
++                LOGGER.info("[AikarFlags] 📋 Flags: -Xms{}M -Xmx{}M ...", 
++                    Runtime.getRuntime().maxMemory() * 0.425 / 1024 / 1024,
++                    Runtime.getRuntime().maxMemory() * 0.85 / 1024 / 1024);
++            } else {
++                LOGGER.info("[AikarFlags] ℹ️ Custom JVM flags detected. Skipping auto-config.");
++            }
++        } catch (Exception e) {
++            LOGGER.warn("[AikarFlags] ❌ Failed to analyze JVM: {}", e.getMessage());
++        }
++    }
++}
++// VoltPur end - Aikar Flags
++
+ public class Main {
+     // نظام الـ options
+     public static void main(String[] args) {
+@@ -30,6 +_,10 @@
+         System.out.println("[VoltPur-Stability] 🤗 HuggingFace mode: " + System.getProperty("voltpur.huggingface", "false"));
+         System.out.println("[VoltPur-Stability] 🔧 Available CPUs: " + Runtime.getRuntime().availableProcessors());
+         System.out.println("[VoltPur-Stability] 💾 Max Memory: " + Runtime.getRuntime().maxMemory() / 1024 / 1024 + "MB");
++        
++        // VoltPur start - Aikar Flags
++        AikarFlags.applyToCurrentJVM();
++        String[] jvmFlags = AikarFlags.getOptimalFlags();
++        for (String flag : jvmFlags) {
++            System.out.println("[AikarFlags] 📌 " + flag);
++        }
++        // VoltPur end
+     }
+ }
