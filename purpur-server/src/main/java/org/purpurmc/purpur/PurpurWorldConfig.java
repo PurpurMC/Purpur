@@ -1319,6 +1319,8 @@ public class PurpurWorldConfig {
     public double armadilloMaxHealth = 12.0D;
     public double armadilloScale = 1.0D;
     public int armadilloBreedingTicks = 6000;
+    public double armadilloBreedingChance = 0.0D;
+    public int armadilloBreedingMaxBabies = 1;
     private void armadilloSettings() {
         armadilloRidable = getBoolean("mobs.armadillo.ridable", armadilloRidable);
         armadilloRidableInWater = getBoolean("mobs.armadillo.ridable-in-water", armadilloRidableInWater);
@@ -1326,6 +1328,8 @@ public class PurpurWorldConfig {
         armadilloMaxHealth = getDouble("mobs.armadillo.attributes.max_health", armadilloMaxHealth);
         armadilloScale = Mth.clamp(getDouble("mobs.armadillo.attributes.scale", armadilloScale), 0.0625D, 16.0D);
         armadilloBreedingTicks = getInt("mobs.armadillo.breeding-delay-ticks", armadilloBreedingTicks);
+        armadilloBreedingChance = getDouble("mobs.armadillo.breeding.chance", armadilloBreedingChance);
+        armadilloBreedingMaxBabies = getInt("mobs.armadillo.breeding.max-babies", armadilloBreedingMaxBabies);
     }
 
     public boolean axolotlRidable = false;
@@ -1335,6 +1339,8 @@ public class PurpurWorldConfig {
     public int axolotlBreedingTicks = 6000;
     public boolean axolotlTakeDamageFromWater = false;
     public boolean axolotlAlwaysDropExp = false;
+    public double axolotlBreedingChance = 0.0D;
+    public int axolotlBreedingMaxBabies = 1;
     private void axolotlSettings() {
         axolotlRidable = getBoolean("mobs.axolotl.ridable", axolotlRidable);
         axolotlControllable = getBoolean("mobs.axolotl.controllable", axolotlControllable);
@@ -1343,6 +1349,8 @@ public class PurpurWorldConfig {
         axolotlBreedingTicks = getInt("mobs.axolotl.breeding-delay-ticks", axolotlBreedingTicks);
         axolotlTakeDamageFromWater = getBoolean("mobs.axolotl.takes-damage-from-water", axolotlTakeDamageFromWater);
         axolotlAlwaysDropExp = getBoolean("mobs.axolotl.always-drop-exp", axolotlAlwaysDropExp);
+        axolotlBreedingChance = getDouble("mobs.axolotl.breeding.chance", axolotlBreedingChance);
+        axolotlBreedingMaxBabies = getInt("mobs.axolotl.breeding.max-babies", axolotlBreedingMaxBabies);
     }
 
     public boolean batRidable = false;
@@ -1396,6 +1404,8 @@ public class PurpurWorldConfig {
     public boolean beeCanWorkInRain = false;
     public boolean beeAlwaysDropExp = false;
     public boolean beeDiesAfterSting = true;
+    public double beeBreedingChance = 0.0D;
+    public int beeBreedingMaxBabies = 1;
     private void beeSettings() {
         beeRidable = getBoolean("mobs.bee.ridable", beeRidable);
         beeRidableInWater = getBoolean("mobs.bee.ridable-in-water", beeRidableInWater);
@@ -1418,6 +1428,8 @@ public class PurpurWorldConfig {
         beeCanInstantlyStartDrowning = getBoolean("mobs.bee.can-instantly-start-drowning", beeCanInstantlyStartDrowning);
         beeAlwaysDropExp = getBoolean("mobs.bee.always-drop-exp", beeAlwaysDropExp);
         beeDiesAfterSting = getBoolean("mobs.bee.dies-after-sting", beeDiesAfterSting);
+        beeBreedingChance = getDouble("mobs.bee.breeding.chance", beeBreedingChance);
+        beeBreedingMaxBabies = getInt("mobs.bee.breeding.max-babies", beeBreedingMaxBabies);
     }
 
     public boolean blazeRidable = false;
@@ -1484,6 +1496,8 @@ public class PurpurWorldConfig {
     public double camelMovementSpeedMin = 0.09D;
     public double camelMovementSpeedMax = 0.09D;
     public int camelBreedingTicks = 6000;
+    public double camelBreedingChance = 0.0D;
+    public int camelBreedingMaxBabies = 1;
     private void camelSettings() {
         camelRidableInWater = getBoolean("mobs.camel.ridable-in-water", camelRidableInWater);
         camelMaxHealthMin = getDouble("mobs.camel.attributes.max_health.min", camelMaxHealthMin);
@@ -1493,6 +1507,8 @@ public class PurpurWorldConfig {
         camelMovementSpeedMin = getDouble("mobs.camel.attributes.movement_speed.min", camelMovementSpeedMin);
         camelMovementSpeedMax = getDouble("mobs.camel.attributes.movement_speed.max", camelMovementSpeedMax);
         camelBreedingTicks = getInt("mobs.camel.breeding-delay-ticks", camelBreedingTicks);
+        camelBreedingChance = getDouble("mobs.camel.breeding.chance", camelBreedingChance);
+        camelBreedingMaxBabies = getInt("mobs.camel.breeding.max-babies", camelBreedingMaxBabies);
     }
 
     public boolean camelHuskRidableInWater = false;
@@ -1526,6 +1542,8 @@ public class PurpurWorldConfig {
     public DyeColor catDefaultCollarColor = DyeColor.RED;
     public boolean catTakeDamageFromWater = false;
     public boolean catAlwaysDropExp = false;
+    public double catBreedingChance = 0.0D;
+    public int catBreedingMaxBabies = 1;
     private void catSettings() {
         catRidable = getBoolean("mobs.cat.ridable", catRidable);
         catRidableInWater = getBoolean("mobs.cat.ridable-in-water", catRidableInWater);
@@ -1548,6 +1566,8 @@ public class PurpurWorldConfig {
         }
         catTakeDamageFromWater = getBoolean("mobs.cat.takes-damage-from-water", catTakeDamageFromWater);
         catAlwaysDropExp = getBoolean("mobs.cat.always-drop-exp", catAlwaysDropExp);
+        catBreedingChance = getDouble("mobs.cat.breeding.chance", catBreedingChance);
+        catBreedingMaxBabies = getInt("mobs.cat.breeding.max-babies", catBreedingMaxBabies);
     }
 
     public boolean caveSpiderRidable = false;
@@ -1581,6 +1601,8 @@ public class PurpurWorldConfig {
     public int chickenBreedingTicks = 6000;
     public boolean chickenTakeDamageFromWater = false;
     public boolean chickenAlwaysDropExp = false;
+    public double chickenBreedingChance = 0.0D;
+    public int chickenBreedingMaxBabies = 1;
     private void chickenSettings() {
         chickenRidable = getBoolean("mobs.chicken.ridable", chickenRidable);
         chickenRidableInWater = getBoolean("mobs.chicken.ridable-in-water", chickenRidableInWater);
@@ -1596,6 +1618,8 @@ public class PurpurWorldConfig {
         chickenBreedingTicks = getInt("mobs.chicken.breeding-delay-ticks", chickenBreedingTicks);
         chickenTakeDamageFromWater = getBoolean("mobs.chicken.takes-damage-from-water", chickenTakeDamageFromWater);
         chickenAlwaysDropExp = getBoolean("mobs.chicken.always-drop-exp", chickenAlwaysDropExp);
+        chickenBreedingChance = getDouble("mobs.chicken.breeding.chance", chickenBreedingChance);
+        chickenBreedingMaxBabies = getInt("mobs.chicken.breeding.max-babies", chickenBreedingMaxBabies);
     }
 
     public boolean codRidable = false;
@@ -1656,6 +1680,8 @@ public class PurpurWorldConfig {
     public double cowNaturallyAggressiveToPlayersChance = 0.0D;
     public double cowNaturallyAggressiveToPlayersDamage = 2.0D;
     public boolean cowAlwaysDropExp = false;
+    public double cowBreedingChance = 0.0D;
+    public int cowBreedingMaxBabies = 1;
     private void cowSettings() {
         if (PurpurConfig.version < 22) {
             double oldValue = getDouble("mobs.cow.naturally-aggressive-to-players-chance", cowNaturallyAggressiveToPlayersChance);
@@ -1678,6 +1704,8 @@ public class PurpurWorldConfig {
         cowNaturallyAggressiveToPlayersChance = getDouble("mobs.cow.naturally-aggressive-to-players.chance", cowNaturallyAggressiveToPlayersChance);
         cowNaturallyAggressiveToPlayersDamage = getDouble("mobs.cow.naturally-aggressive-to-players.damage", cowNaturallyAggressiveToPlayersDamage);
         cowAlwaysDropExp = getBoolean("mobs.cow.always-drop-exp", cowAlwaysDropExp);
+        cowBreedingChance = getDouble("mobs.cow.breeding.chance", cowBreedingChance);
+        cowBreedingMaxBabies = getInt("mobs.cow.breeding.max-babies", cowBreedingMaxBabies);
     }
 
     public boolean creakingRidable = false;
@@ -1774,6 +1802,8 @@ public class PurpurWorldConfig {
     public int donkeyBreedingTicks = 6000;
     public boolean donkeyTakeDamageFromWater = false;
     public boolean donkeyAlwaysDropExp = false;
+    public double donkeyBreedingChance = 0.0D;
+    public int donkeyBreedingMaxBabies = 1;
     private void donkeySettings() {
         donkeyRidableInWater = getBoolean("mobs.donkey.ridable-in-water", donkeyRidableInWater);
         if (PurpurConfig.version < 10) {
@@ -1792,6 +1822,8 @@ public class PurpurWorldConfig {
         donkeyBreedingTicks = getInt("mobs.donkey.breeding-delay-ticks", donkeyBreedingTicks);
         donkeyTakeDamageFromWater = getBoolean("mobs.donkey.takes-damage-from-water", donkeyTakeDamageFromWater);
         donkeyAlwaysDropExp = getBoolean("mobs.donkey.always-drop-exp", donkeyAlwaysDropExp);
+        donkeyBreedingChance = getDouble("mobs.donkey.breeding.chance", donkeyBreedingChance);
+        donkeyBreedingMaxBabies = getInt("mobs.donkey.breeding.max-babies", donkeyBreedingMaxBabies);
     }
 
     public boolean drownedRidable = false;
@@ -1995,6 +2027,8 @@ public class PurpurWorldConfig {
     public boolean foxTakeDamageFromWater = false;
     public boolean foxAlwaysDropExp = false;
     public Boolean foxCanPickUpLoot = null;
+    public double foxBreedingChance = 0.0D;
+    public int foxBreedingMaxBabies = 1;
     private void foxSettings() {
         foxRidable = getBoolean("mobs.fox.ridable", foxRidable);
         foxRidableInWater = getBoolean("mobs.fox.ridable-in-water", foxRidableInWater);
@@ -2017,6 +2051,8 @@ public class PurpurWorldConfig {
         foxTakeDamageFromWater = getBoolean("mobs.fox.takes-damage-from-water", foxTakeDamageFromWater);
         foxAlwaysDropExp = getBoolean("mobs.fox.always-drop-exp", foxAlwaysDropExp);
         foxCanPickUpLoot = getBooleanOrDefault("mobs.fox.can-pick-up-loot", foxCanPickUpLoot);
+        foxBreedingChance = getDouble("mobs.fox.breeding.chance", foxBreedingChance);
+        foxBreedingMaxBabies = getInt("mobs.fox.breeding.max-babies", foxBreedingMaxBabies);
     }
 
     public boolean frogRidable = false;
@@ -2119,6 +2155,8 @@ public class PurpurWorldConfig {
     public int goatBreedingTicks = 6000;
     public boolean goatTakeDamageFromWater = false;
     public boolean goatAlwaysDropExp = false;
+    public double goatBreedingChance = 0.0D;
+    public int goatBreedingMaxBabies = 1;
     private void goatSettings() {
         goatRidable = getBoolean("mobs.goat.ridable", goatRidable);
         goatRidableInWater = getBoolean("mobs.goat.ridable-in-water", goatRidableInWater);
@@ -2128,6 +2166,8 @@ public class PurpurWorldConfig {
         goatBreedingTicks = getInt("mobs.goat.breeding-delay-ticks", goatBreedingTicks);
         goatTakeDamageFromWater = getBoolean("mobs.goat.takes-damage-from-water", goatTakeDamageFromWater);
         goatAlwaysDropExp = getBoolean("mobs.goat.always-drop-exp", goatAlwaysDropExp);
+        goatBreedingChance = getDouble("mobs.goat.breeding.chance", goatBreedingChance);
+        goatBreedingMaxBabies = getInt("mobs.goat.breeding.max-babies", goatBreedingMaxBabies);
     }
 
     public boolean guardianRidable = false;
@@ -2188,6 +2228,8 @@ public class PurpurWorldConfig {
     public int hoglinBreedingTicks = 6000;
     public boolean hoglinTakeDamageFromWater = false;
     public boolean hoglinAlwaysDropExp = false;
+    public double hoglinBreedingChance = 0.0D;
+    public int hoglinBreedingMaxBabies = 1;
     private void hoglinSettings() {
         hoglinRidable = getBoolean("mobs.hoglin.ridable", hoglinRidable);
         hoglinRidableInWater = getBoolean("mobs.hoglin.ridable-in-water", hoglinRidableInWater);
@@ -2202,6 +2244,8 @@ public class PurpurWorldConfig {
         hoglinBreedingTicks = getInt("mobs.hoglin.breeding-delay-ticks", hoglinBreedingTicks);
         hoglinTakeDamageFromWater = getBoolean("mobs.hoglin.takes-damage-from-water", hoglinTakeDamageFromWater);
         hoglinAlwaysDropExp = getBoolean("mobs.hoglin.always-drop-exp", hoglinAlwaysDropExp);
+        hoglinBreedingChance = getDouble("mobs.hoglin.breeding.chance", hoglinBreedingChance);
+        hoglinBreedingMaxBabies = getInt("mobs.hoglin.breeding.max-babies", hoglinBreedingMaxBabies);
     }
 
     public boolean horseRidableInWater = false;
@@ -2214,6 +2258,8 @@ public class PurpurWorldConfig {
     public int horseBreedingTicks = 6000;
     public boolean horseTakeDamageFromWater = false;
     public boolean horseAlwaysDropExp = false;
+    public double horseBreedingChance = 0.0D;
+    public int horseBreedingMaxBabies = 1;
     private void horseSettings() {
         horseRidableInWater = getBoolean("mobs.horse.ridable-in-water", horseRidableInWater);
         if (PurpurConfig.version < 10) {
@@ -2232,6 +2278,8 @@ public class PurpurWorldConfig {
         horseBreedingTicks = getInt("mobs.horse.breeding-delay-ticks", horseBreedingTicks);
         horseTakeDamageFromWater = getBoolean("mobs.horse.takes-damage-from-water", horseTakeDamageFromWater);
         horseAlwaysDropExp = getBoolean("mobs.horse.always-drop-exp", horseAlwaysDropExp);
+        horseBreedingChance = getDouble("mobs.horse.breeding.chance", horseBreedingChance);
+        horseBreedingMaxBabies = getInt("mobs.horse.breeding.max-babies", horseBreedingMaxBabies);
     }
 
     public boolean huskRidable = false;
@@ -2337,6 +2385,8 @@ public class PurpurWorldConfig {
     public boolean llamaTakeDamageFromWater = false;
     public boolean llamaJoinCaravans = true;
     public boolean llamaAlwaysDropExp = false;
+    public double llamaBreedingChance = 0.0D;
+    public int llamaBreedingMaxBabies = 1;
     private void llamaSettings() {
         llamaRidable = getBoolean("mobs.llama.ridable", llamaRidable);
         llamaRidableInWater = getBoolean("mobs.llama.ridable-in-water", llamaRidableInWater);
@@ -2358,6 +2408,8 @@ public class PurpurWorldConfig {
         llamaTakeDamageFromWater = getBoolean("mobs.llama.takes-damage-from-water", llamaTakeDamageFromWater);
         llamaJoinCaravans = getBoolean("mobs.llama.join-caravans", llamaJoinCaravans);
         llamaAlwaysDropExp = getBoolean("mobs.llama.always-drop-exp", llamaAlwaysDropExp);
+        llamaBreedingChance = getDouble("mobs.llama.breeding.chance", llamaBreedingChance);
+        llamaBreedingMaxBabies = getInt("mobs.llama.breeding.max-babies", llamaBreedingMaxBabies);
     }
 
     public boolean magmaCubeRidable = false;
@@ -2394,6 +2446,8 @@ public class PurpurWorldConfig {
     public int mooshroomBreedingTicks = 6000;
     public boolean mooshroomTakeDamageFromWater = false;
     public boolean mooshroomAlwaysDropExp = false;
+    public double mooshroomBreedingChance = 0.0D;
+    public int mooshroomBreedingMaxBabies = 1;
     private void mooshroomSettings() {
         mooshroomRidable = getBoolean("mobs.mooshroom.ridable", mooshroomRidable);
         mooshroomRidableInWater = getBoolean("mobs.mooshroom.ridable-in-water", mooshroomRidableInWater);
@@ -2408,6 +2462,8 @@ public class PurpurWorldConfig {
         mooshroomBreedingTicks = getInt("mobs.mooshroom.breeding-delay-ticks", mooshroomBreedingTicks);
         mooshroomTakeDamageFromWater = getBoolean("mobs.mooshroom.takes-damage-from-water", mooshroomTakeDamageFromWater);
         mooshroomAlwaysDropExp = getBoolean("mobs.mooshroom.always-drop-exp", mooshroomAlwaysDropExp);
+        mooshroomBreedingChance = getDouble("mobs.mooshroom.breeding.chance", mooshroomBreedingChance);
+        mooshroomBreedingMaxBabies = getInt("mobs.mooshroom.breeding.max-babies", mooshroomBreedingMaxBabies);
     }
 
     public boolean muleRidableInWater = false;
@@ -2447,6 +2503,8 @@ public class PurpurWorldConfig {
     public double nautilusScale = 1.0D;
     public int nautilusBreedingTicks = 6000;
     public boolean nautilusAlwaysDropExp = false;
+    public double nautilusBreedingChance = 0.0D;
+    public int nautilusBreedingMaxBabies = 1;
     private void nautilusSettings() {
         nautilusMaxHealth = getDouble("mobs.nautilus.attributes.max_health", nautilusMaxHealth);
         nautilusMovementSpeed = getDouble("mobs.nautilus.attributes.movement_speed", nautilusMovementSpeed);
@@ -2455,6 +2513,8 @@ public class PurpurWorldConfig {
         nautilusScale = Mth.clamp(getDouble("mobs.nautilus.attributes.scale", nautilusScale), 0.0625D, 16.0D);
         nautilusBreedingTicks = getInt("mobs.nautilus.breeding-delay-ticks", nautilusBreedingTicks);
         nautilusAlwaysDropExp = getBoolean("mobs.nautilus.always-drop-exp", nautilusAlwaysDropExp);
+        nautilusBreedingChance = getDouble("mobs.nautilus.breeding.chance", nautilusBreedingChance);
+        nautilusBreedingMaxBabies = getInt("mobs.nautilus.breeding.max-babies", nautilusBreedingMaxBabies);
     }
 
     public boolean ocelotRidable = false;
@@ -2466,6 +2526,8 @@ public class PurpurWorldConfig {
     public boolean ocelotTakeDamageFromWater = false;
     public boolean ocelotAlwaysDropExp = false;
     public boolean ocelotSpawnUnderSeaLevel = false;
+    public double ocelotBreedingChance = 0.0D;
+    public int ocelotBreedingMaxBabies = 1;
     private void ocelotSettings() {
         ocelotRidable = getBoolean("mobs.ocelot.ridable", ocelotRidable);
         ocelotRidableInWater = getBoolean("mobs.ocelot.ridable-in-water", ocelotRidableInWater);
@@ -2481,6 +2543,8 @@ public class PurpurWorldConfig {
         ocelotTakeDamageFromWater = getBoolean("mobs.ocelot.takes-damage-from-water", ocelotTakeDamageFromWater);
         ocelotAlwaysDropExp = getBoolean("mobs.ocelot.always-drop-exp", ocelotAlwaysDropExp);
         ocelotSpawnUnderSeaLevel = getBoolean("mobs.ocelot.spawn-below-sea-level", ocelotSpawnUnderSeaLevel);
+        ocelotBreedingChance = getDouble("mobs.ocelot.breeding.chance", ocelotBreedingChance);
+        ocelotBreedingMaxBabies = getInt("mobs.ocelot.breeding.max-babies", ocelotBreedingMaxBabies);
     }
 
     public boolean pandaRidable = false;
@@ -2491,6 +2555,8 @@ public class PurpurWorldConfig {
     public int pandaBreedingTicks = 6000;
     public boolean pandaTakeDamageFromWater = false;
     public boolean pandaAlwaysDropExp = false;
+    public double pandaBreedingChance = 0.0D;
+    public int pandaBreedingMaxBabies = 1;
     private void pandaSettings() {
         pandaRidable = getBoolean("mobs.panda.ridable", pandaRidable);
         pandaRidableInWater = getBoolean("mobs.panda.ridable-in-water", pandaRidableInWater);
@@ -2505,6 +2571,8 @@ public class PurpurWorldConfig {
         pandaBreedingTicks = getInt("mobs.panda.breeding-delay-ticks", pandaBreedingTicks);
         pandaTakeDamageFromWater = getBoolean("mobs.panda.takes-damage-from-water", pandaTakeDamageFromWater);
         pandaAlwaysDropExp = getBoolean("mobs.panda.always-drop-exp", pandaAlwaysDropExp);
+        pandaBreedingChance = getDouble("mobs.panda.breeding.chance", pandaBreedingChance);
+        pandaBreedingMaxBabies = getInt("mobs.panda.breeding.max-babies", pandaBreedingMaxBabies);
     }
 
     public boolean parchedRidable = false;
@@ -2634,6 +2702,8 @@ public class PurpurWorldConfig {
     public int pigBreedingTicks = 6000;
     public boolean pigTakeDamageFromWater = false;
     public boolean pigAlwaysDropExp = false;
+    public double pigBreedingChance = 0.0D;
+    public int pigBreedingMaxBabies = 1;
     private void pigSettings() {
         pigRidable = getBoolean("mobs.pig.ridable", pigRidable);
         pigRidableInWater = getBoolean("mobs.pig.ridable-in-water", pigRidableInWater);
@@ -2649,6 +2719,8 @@ public class PurpurWorldConfig {
         pigBreedingTicks = getInt("mobs.pig.breeding-delay-ticks", pigBreedingTicks);
         pigTakeDamageFromWater = getBoolean("mobs.pig.takes-damage-from-water", pigTakeDamageFromWater);
         pigAlwaysDropExp = getBoolean("mobs.pig.always-drop-exp", pigAlwaysDropExp);
+        pigBreedingChance = getDouble("mobs.pig.breeding.chance", pigBreedingChance);
+        pigBreedingMaxBabies = getInt("mobs.pig.breeding.max-babies", pigBreedingMaxBabies);
     }
 
     public boolean piglinRidable = false;
@@ -2809,6 +2881,8 @@ public class PurpurWorldConfig {
     public Boolean rabbitMobGriefingOverride = null;
     public boolean rabbitTakeDamageFromWater = false;
     public boolean rabbitAlwaysDropExp = false;
+    public double rabbitBreedingChance = 0.0D;
+    public int rabbitBreedingMaxBabies = 1;
     private void rabbitSettings() {
         rabbitRidable = getBoolean("mobs.rabbit.ridable", rabbitRidable);
         rabbitRidableInWater = getBoolean("mobs.rabbit.ridable-in-water", rabbitRidableInWater);
@@ -2831,6 +2905,8 @@ public class PurpurWorldConfig {
         rabbitMobGriefingOverride = getBooleanOrDefault("mobs.rabbit.mob-griefing-override", rabbitMobGriefingOverride);
         rabbitTakeDamageFromWater = getBoolean("mobs.rabbit.takes-damage-from-water", rabbitTakeDamageFromWater);
         rabbitAlwaysDropExp = getBoolean("mobs.rabbit.always-drop-exp", rabbitAlwaysDropExp);
+        rabbitBreedingChance = getDouble("mobs.rabbit.breeding.chance", rabbitBreedingChance);
+        rabbitBreedingMaxBabies = getInt("mobs.rabbit.breeding.max-babies", rabbitBreedingMaxBabies);
     }
 
     public boolean ravagerRidable = false;
@@ -2932,6 +3008,8 @@ public class PurpurWorldConfig {
     public Boolean sheepMobGriefingOverride = null;
     public boolean sheepTakeDamageFromWater = false;
     public boolean sheepAlwaysDropExp = false;
+    public double sheepBreedingChance = 0.0D;
+    public int sheepBreedingMaxBabies = 1;
     private void sheepSettings() {
         sheepRidable = getBoolean("mobs.sheep.ridable", sheepRidable);
         sheepRidableInWater = getBoolean("mobs.sheep.ridable-in-water", sheepRidableInWater);
@@ -2952,6 +3030,8 @@ public class PurpurWorldConfig {
         sheepMobGriefingOverride = getBooleanOrDefault("mobs.sheep.mob-griefing-override", sheepMobGriefingOverride);
         sheepTakeDamageFromWater = getBoolean("mobs.sheep.takes-damage-from-water", sheepTakeDamageFromWater);
         sheepAlwaysDropExp = getBoolean("mobs.sheep.always-drop-exp", sheepAlwaysDropExp);
+        sheepBreedingChance = getDouble("mobs.sheep.breeding.chance", sheepBreedingChance);
+        sheepBreedingMaxBabies = getInt("mobs.sheep.breeding.max-babies", sheepBreedingMaxBabies);
     }
 
     public boolean shulkerRidable = false;
@@ -3257,6 +3337,8 @@ public class PurpurWorldConfig {
     public boolean striderGiveSaddleBack = false;
     public boolean striderTakeDamageFromWater = true;
     public boolean striderAlwaysDropExp = false;
+    public double striderBreedingChance = 0.0D;
+    public int striderBreedingMaxBabies = 1;
     private void striderSettings() {
         striderRidable = getBoolean("mobs.strider.ridable", striderRidable);
         striderRidableInWater = getBoolean("mobs.strider.ridable-in-water", striderRidableInWater);
@@ -3272,6 +3354,8 @@ public class PurpurWorldConfig {
         striderGiveSaddleBack = getBoolean("mobs.strider.give-saddle-back", striderGiveSaddleBack);
         striderTakeDamageFromWater = getBoolean("mobs.strider.takes-damage-from-water", striderTakeDamageFromWater);
         striderAlwaysDropExp = getBoolean("mobs.strider.always-drop-exp", striderAlwaysDropExp);
+        striderBreedingChance = getDouble("mobs.strider.breeding.chance", striderBreedingChance);
+        striderBreedingMaxBabies = getInt("mobs.strider.breeding.max-babies", striderBreedingMaxBabies);
     }
 
     public boolean sulfurCubeRidable = false;
@@ -3308,6 +3392,8 @@ public class PurpurWorldConfig {
     public int traderLlamaBreedingTicks = 6000;
     public boolean traderLlamaTakeDamageFromWater = false;
     public boolean traderLlamaAlwaysDropExp = false;
+    public double traderLlamaBreedingChance = 0.0D;
+    public int traderLlamaBreedingMaxBabies = 1;
     private void traderLlamaSettings() {
         traderLlamaRidable = getBoolean("mobs.trader_llama.ridable", traderLlamaRidable);
         traderLlamaRidableInWater = getBoolean("mobs.trader_llama.ridable-in-water", traderLlamaRidableInWater);
@@ -3328,6 +3414,8 @@ public class PurpurWorldConfig {
         traderLlamaBreedingTicks = getInt("mobs.trader_llama.breeding-delay-ticks", traderLlamaBreedingTicks);
         traderLlamaTakeDamageFromWater = getBoolean("mobs.trader_llama.takes-damage-from-water", traderLlamaTakeDamageFromWater);
         traderLlamaAlwaysDropExp = getBoolean("mobs.trader_llama.always-drop-exp", traderLlamaAlwaysDropExp);
+        traderLlamaBreedingChance = getDouble("mobs.trader_llama.breeding.chance", traderLlamaBreedingChance);
+        traderLlamaBreedingMaxBabies = getInt("mobs.trader_llama.breeding.max-babies", traderLlamaBreedingMaxBabies);
     }
 
     public boolean tropicalFishRidable = false;
@@ -3424,6 +3512,8 @@ public class PurpurWorldConfig {
     public int villagerAcquirePoiSearchRadius = AcquirePoi.SCAN_RANGE;
     public int villagerNearestBedSensorSearchRadius = AcquirePoi.SCAN_RANGE;
     public Boolean villagerCanPickUpLoot = null;
+    public double villagerBreedingChance = 0.0D;
+    public int villagerBreedingMaxBabies = 1;
     private void villagerSettings() {
         villagerRidable = getBoolean("mobs.villager.ridable", villagerRidable);
         villagerRidableInWater = getBoolean("mobs.villager.ridable-in-water", villagerRidableInWater);
@@ -3470,6 +3560,8 @@ public class PurpurWorldConfig {
         villagerAcquirePoiSearchRadius = getInt("mobs.villager.search-radius.acquire-poi", villagerAcquirePoiSearchRadius);
         villagerNearestBedSensorSearchRadius = getInt("mobs.villager.search-radius.nearest-bed-sensor", villagerNearestBedSensorSearchRadius);
         villagerCanPickUpLoot = getBooleanOrDefault("mobs.villager.can-pick-up-loot", villagerCanPickUpLoot);
+        villagerBreedingChance = getDouble("mobs.villager.breeding.chance", villagerBreedingChance);
+        villagerBreedingMaxBabies = getInt("mobs.villager.breeding.max-babies", villagerBreedingMaxBabies);
     }
 
     public boolean vindicatorRidable = false;
@@ -3643,6 +3735,8 @@ public class PurpurWorldConfig {
     public int wolfBreedingTicks = 6000;
     public boolean wolfTakeDamageFromWater = false;
     public boolean wolfAlwaysDropExp = false;
+    public double wolfBreedingChance = 0.0D;
+    public int wolfBreedingMaxBabies = 1;
     private void wolfSettings() {
         wolfRidable = getBoolean("mobs.wolf.ridable", wolfRidable);
         wolfRidableInWater = getBoolean("mobs.wolf.ridable-in-water", wolfRidableInWater);
@@ -3664,6 +3758,8 @@ public class PurpurWorldConfig {
         wolfBreedingTicks = getInt("mobs.wolf.breeding-delay-ticks", wolfBreedingTicks);
         wolfTakeDamageFromWater = getBoolean("mobs.wolf.takes-damage-from-water", wolfTakeDamageFromWater);
         wolfAlwaysDropExp = getBoolean("mobs.wolf.always-drop-exp", wolfAlwaysDropExp);
+        wolfBreedingChance = getDouble("mobs.wolf.breeding.chance", wolfBreedingChance);
+        wolfBreedingMaxBabies = getInt("mobs.wolf.breeding.max-babies", wolfBreedingMaxBabies);
     }
 
     public boolean zoglinRidable = false;
