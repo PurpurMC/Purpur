@@ -1328,7 +1328,12 @@ public class PurpurWorldConfig {
         armadilloControllable = getBoolean("mobs.armadillo.controllable", armadilloControllable);
         armadilloMaxHealth = getDouble("mobs.armadillo.attributes.max_health", armadilloMaxHealth);
         armadilloScale = Mth.clamp(getDouble("mobs.armadillo.attributes.scale", armadilloScale), 0.0625D, 16.0D);
-        armadilloBreedingTicks = getInt("mobs.armadillo.breeding-delay-ticks", armadilloBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.armadillo.breeding-delay-ticks", armadilloBreedingTicks);
+            set("mobs.armadillo.breeding-delay-ticks", null);
+            set("mobs.armadillo.breeding.cooldown-in-ticks", oldValue);
+        }
+        armadilloBreedingTicks = getInt("mobs.armadillo.breeding.cooldown-in-ticks", armadilloBreedingTicks);
         armadilloBreedingChance = getDouble("mobs.armadillo.breeding.offspring.chance", armadilloBreedingChance);
         armadilloBreedingMinOffspring = getInt("mobs.armadillo.breeding.offspring.min", armadilloBreedingMinOffspring);
         armadilloBreedingMaxOffspring = getInt("mobs.armadillo.breeding.offspring.max", armadilloBreedingMaxOffspring);
@@ -1349,7 +1354,12 @@ public class PurpurWorldConfig {
         axolotlControllable = getBoolean("mobs.axolotl.controllable", axolotlControllable);
         axolotlMaxHealth = getDouble("mobs.axolotl.attributes.max_health", axolotlMaxHealth);
         axolotlScale = Mth.clamp(getDouble("mobs.axolotl.attributes.scale", axolotlScale), 0.0625D, 16.0D);
-        axolotlBreedingTicks = getInt("mobs.axolotl.breeding-delay-ticks", axolotlBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.axolotl.breeding-delay-ticks", axolotlBreedingTicks);
+            set("mobs.axolotl.breeding-delay-ticks", null);
+            set("mobs.axolotl.breeding.cooldown-in-ticks", oldValue);
+        }
+        axolotlBreedingTicks = getInt("mobs.axolotl.breeding.cooldown-in-ticks", axolotlBreedingTicks);
         axolotlTakeDamageFromWater = getBoolean("mobs.axolotl.takes-damage-from-water", axolotlTakeDamageFromWater);
         axolotlAlwaysDropExp = getBoolean("mobs.axolotl.always-drop-exp", axolotlAlwaysDropExp);
         axolotlBreedingChance = getDouble("mobs.axolotl.breeding.offspring.chance", axolotlBreedingChance);
@@ -1423,7 +1433,12 @@ public class PurpurWorldConfig {
         }
         beeMaxHealth = getDouble("mobs.bee.attributes.max_health", beeMaxHealth);
         beeScale = Mth.clamp(getDouble("mobs.bee.attributes.scale", beeScale), 0.0625D, 16.0D);
-        beeBreedingTicks = getInt("mobs.bee.breeding-delay-ticks", beeBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.bee.breeding-delay-ticks", beeBreedingTicks);
+            set("mobs.bee.breeding-delay-ticks", null);
+            set("mobs.bee.breeding.cooldown-in-ticks", oldValue);
+        }
+        beeBreedingTicks = getInt("mobs.bee.breeding.cooldown-in-ticks", beeBreedingTicks);
         if (PurpurConfig.version < 40) {
             set("mobs.bee.takes-damage-from-water", false);
         }
@@ -1513,7 +1528,12 @@ public class PurpurWorldConfig {
         camelJumpStrengthMax = getDouble("mobs.camel.attributes.jump_strength.max", camelJumpStrengthMax);
         camelMovementSpeedMin = getDouble("mobs.camel.attributes.movement_speed.min", camelMovementSpeedMin);
         camelMovementSpeedMax = getDouble("mobs.camel.attributes.movement_speed.max", camelMovementSpeedMax);
-        camelBreedingTicks = getInt("mobs.camel.breeding-delay-ticks", camelBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.camel.breeding-delay-ticks", camelBreedingTicks);
+            set("mobs.camel.breeding-delay-ticks", null);
+            set("mobs.camel.breeding.cooldown-in-ticks", oldValue);
+        }
+        camelBreedingTicks = getInt("mobs.camel.breeding.cooldown-in-ticks", camelBreedingTicks);
         camelBreedingChance = getDouble("mobs.camel.breeding.offspring.chance", camelBreedingChance);
         camelBreedingMinOffspring = getInt("mobs.camel.breeding.offspring.min", camelBreedingMinOffspring);
         camelBreedingMaxOffspring = getInt("mobs.camel.breeding.offspring.max", camelBreedingMaxOffspring);
@@ -1567,7 +1587,12 @@ public class PurpurWorldConfig {
         catSpawnDelay = getInt("mobs.cat.spawn-delay", catSpawnDelay);
         catSpawnSwampHutScanRange = getInt("mobs.cat.scan-range-for-other-cats.swamp-hut", catSpawnSwampHutScanRange);
         catSpawnVillageScanRange = getInt("mobs.cat.scan-range-for-other-cats.village", catSpawnVillageScanRange);
-        catBreedingTicks = getInt("mobs.cat.breeding-delay-ticks", catBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.cat.breeding-delay-ticks", catBreedingTicks);
+            set("mobs.cat.breeding-delay-ticks", null);
+            set("mobs.cat.breeding.cooldown-in-ticks", oldValue);
+        }
+        catBreedingTicks = getInt("mobs.cat.breeding.cooldown-in-ticks", catBreedingTicks);
         try {
             catDefaultCollarColor = DyeColor.valueOf(getString("mobs.cat.default-collar-color", catDefaultCollarColor.name()));
         } catch (IllegalArgumentException ignore) {
@@ -1626,7 +1651,12 @@ public class PurpurWorldConfig {
         chickenMaxHealth = getDouble("mobs.chicken.attributes.max_health", chickenMaxHealth);
         chickenScale = Mth.clamp(getDouble("mobs.chicken.attributes.scale", chickenScale), 0.0625D, 16.0D);
         chickenRetaliate = getBoolean("mobs.chicken.retaliate", chickenRetaliate);
-        chickenBreedingTicks = getInt("mobs.chicken.breeding-delay-ticks", chickenBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.chicken.breeding-delay-ticks", chickenBreedingTicks);
+            set("mobs.chicken.breeding-delay-ticks", null);
+            set("mobs.chicken.breeding.cooldown-in-ticks", oldValue);
+        }
+        chickenBreedingTicks = getInt("mobs.chicken.breeding.cooldown-in-ticks", chickenBreedingTicks);
         chickenTakeDamageFromWater = getBoolean("mobs.chicken.takes-damage-from-water", chickenTakeDamageFromWater);
         chickenAlwaysDropExp = getBoolean("mobs.chicken.always-drop-exp", chickenAlwaysDropExp);
         chickenBreedingChance = getDouble("mobs.chicken.breeding.offspring.chance", chickenBreedingChance);
@@ -1712,7 +1742,12 @@ public class PurpurWorldConfig {
         cowMaxHealth = getDouble("mobs.cow.attributes.max_health", cowMaxHealth);
         cowScale = Mth.clamp(getDouble("mobs.cow.attributes.scale", cowScale), 0.0625D, 16.0D);
         cowFeedMushrooms = getInt("mobs.cow.feed-mushrooms-for-mooshroom", cowFeedMushrooms);
-        cowBreedingTicks = getInt("mobs.cow.breeding-delay-ticks", cowBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.cow.breeding-delay-ticks", cowBreedingTicks);
+            set("mobs.cow.breeding-delay-ticks", null);
+            set("mobs.cow.breeding.cooldown-in-ticks", oldValue);
+        }
+        cowBreedingTicks = getInt("mobs.cow.breeding.cooldown-in-ticks", cowBreedingTicks);
         cowTakeDamageFromWater = getBoolean("mobs.cow.takes-damage-from-water", cowTakeDamageFromWater);
         cowNaturallyAggressiveToPlayersChance = getDouble("mobs.cow.naturally-aggressive-to-players.chance", cowNaturallyAggressiveToPlayersChance);
         cowNaturallyAggressiveToPlayersDamage = getDouble("mobs.cow.naturally-aggressive-to-players.damage", cowNaturallyAggressiveToPlayersDamage);
@@ -1834,7 +1869,12 @@ public class PurpurWorldConfig {
         donkeyJumpStrengthMax = getDouble("mobs.donkey.attributes.jump_strength.max", donkeyJumpStrengthMax);
         donkeyMovementSpeedMin = getDouble("mobs.donkey.attributes.movement_speed.min", donkeyMovementSpeedMin);
         donkeyMovementSpeedMax = getDouble("mobs.donkey.attributes.movement_speed.max", donkeyMovementSpeedMax);
-        donkeyBreedingTicks = getInt("mobs.donkey.breeding-delay-ticks", donkeyBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.donkey.breeding-delay-ticks", donkeyBreedingTicks);
+            set("mobs.donkey.breeding-delay-ticks", null);
+            set("mobs.donkey.breeding.cooldown-in-ticks", oldValue);
+        }
+        donkeyBreedingTicks = getInt("mobs.donkey.breeding.cooldown-in-ticks", donkeyBreedingTicks);
         donkeyTakeDamageFromWater = getBoolean("mobs.donkey.takes-damage-from-water", donkeyTakeDamageFromWater);
         donkeyAlwaysDropExp = getBoolean("mobs.donkey.always-drop-exp", donkeyAlwaysDropExp);
         donkeyBreedingChance = getDouble("mobs.donkey.breeding.offspring.chance", donkeyBreedingChance);
@@ -2058,7 +2098,12 @@ public class PurpurWorldConfig {
         foxMaxHealth = getDouble("mobs.fox.attributes.max_health", foxMaxHealth);
         foxScale = Mth.clamp(getDouble("mobs.fox.attributes.scale", foxScale), 0.0625D, 16.0D);
         foxTypeChangesWithTulips = getBoolean("mobs.fox.tulips-change-type", foxTypeChangesWithTulips);
-        foxBreedingTicks = getInt("mobs.fox.breeding-delay-ticks", foxBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.fox.breeding-delay-ticks", foxBreedingTicks);
+            set("mobs.fox.breeding-delay-ticks", null);
+            set("mobs.fox.breeding.cooldown-in-ticks", oldValue);
+        }
+        foxBreedingTicks = getInt("mobs.fox.breeding.cooldown-in-ticks", foxBreedingTicks);
         if (PurpurConfig.version < 43) {
             boolean oldVal = getBoolean("mobs.fox.bypass-mob-griefing", false);
             set("mobs.fox.bypass-mob-griefing", null);
@@ -2083,7 +2128,12 @@ public class PurpurWorldConfig {
         frogRidableInWater = getBoolean("mobs.frog.ridable-in-water", frogRidableInWater);
         frogControllable = getBoolean("mobs.frog.controllable", frogControllable);
         frogRidableJumpHeight = (float) getDouble("mobs.frog.ridable-jump-height", frogRidableJumpHeight);
-        frogBreedingTicks = getInt("mobs.frog.breeding-delay-ticks", frogBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.frog.breeding-delay-ticks", frogBreedingTicks);
+            set("mobs.frog.breeding-delay-ticks", null);
+            set("mobs.frog.breeding.cooldown-in-ticks", oldValue);
+        }
+        frogBreedingTicks = getInt("mobs.frog.breeding.cooldown-in-ticks", frogBreedingTicks);
     }
 
     public boolean ghastRidable = false;
@@ -2182,7 +2232,12 @@ public class PurpurWorldConfig {
         goatControllable = getBoolean("mobs.goat.controllable", goatControllable);
         goatMaxHealth = getDouble("mobs.goat.attributes.max_health", goatMaxHealth);
         goatScale = Mth.clamp(getDouble("mobs.goat.attributes.scale", goatScale), 0.0625D, 16.0D);
-        goatBreedingTicks = getInt("mobs.goat.breeding-delay-ticks", goatBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.goat.breeding-delay-ticks", goatBreedingTicks);
+            set("mobs.goat.breeding-delay-ticks", null);
+            set("mobs.goat.breeding.cooldown-in-ticks", oldValue);
+        }
+        goatBreedingTicks = getInt("mobs.goat.breeding.cooldown-in-ticks", goatBreedingTicks);
         goatTakeDamageFromWater = getBoolean("mobs.goat.takes-damage-from-water", goatTakeDamageFromWater);
         goatAlwaysDropExp = getBoolean("mobs.goat.always-drop-exp", goatAlwaysDropExp);
         goatBreedingChance = getDouble("mobs.goat.breeding.offspring.chance", goatBreedingChance);
@@ -2262,7 +2317,12 @@ public class PurpurWorldConfig {
         }
         hoglinMaxHealth = getDouble("mobs.hoglin.attributes.max_health", hoglinMaxHealth);
         hoglinScale = Mth.clamp(getDouble("mobs.hoglin.attributes.scale", hoglinScale), 0.0625D, 16.0D);
-        hoglinBreedingTicks = getInt("mobs.hoglin.breeding-delay-ticks", hoglinBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.hoglin.breeding-delay-ticks", hoglinBreedingTicks);
+            set("mobs.hoglin.breeding-delay-ticks", null);
+            set("mobs.hoglin.breeding.cooldown-in-ticks", oldValue);
+        }
+        hoglinBreedingTicks = getInt("mobs.hoglin.breeding.cooldown-in-ticks", hoglinBreedingTicks);
         hoglinTakeDamageFromWater = getBoolean("mobs.hoglin.takes-damage-from-water", hoglinTakeDamageFromWater);
         hoglinAlwaysDropExp = getBoolean("mobs.hoglin.always-drop-exp", hoglinAlwaysDropExp);
         hoglinBreedingChance = getDouble("mobs.hoglin.breeding.offspring.chance", hoglinBreedingChance);
@@ -2298,7 +2358,12 @@ public class PurpurWorldConfig {
         horseJumpStrengthMax = getDouble("mobs.horse.attributes.jump_strength.max", horseJumpStrengthMax);
         horseMovementSpeedMin = getDouble("mobs.horse.attributes.movement_speed.min", horseMovementSpeedMin);
         horseMovementSpeedMax = getDouble("mobs.horse.attributes.movement_speed.max", horseMovementSpeedMax);
-        horseBreedingTicks = getInt("mobs.horse.breeding-delay-ticks", horseBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.horse.breeding-delay-ticks", horseBreedingTicks);
+            set("mobs.horse.breeding-delay-ticks", null);
+            set("mobs.horse.breeding.cooldown-in-ticks", oldValue);
+        }
+        horseBreedingTicks = getInt("mobs.horse.breeding.cooldown-in-ticks", horseBreedingTicks);
         horseTakeDamageFromWater = getBoolean("mobs.horse.takes-damage-from-water", horseTakeDamageFromWater);
         horseAlwaysDropExp = getBoolean("mobs.horse.always-drop-exp", horseAlwaysDropExp);
         horseBreedingChance = getDouble("mobs.horse.breeding.offspring.chance", horseBreedingChance);
@@ -2429,7 +2494,12 @@ public class PurpurWorldConfig {
         llamaJumpStrengthMax = getDouble("mobs.llama.attributes.jump_strength.max", llamaJumpStrengthMax);
         llamaMovementSpeedMin = getDouble("mobs.llama.attributes.movement_speed.min", llamaMovementSpeedMin);
         llamaMovementSpeedMax = getDouble("mobs.llama.attributes.movement_speed.max", llamaMovementSpeedMax);
-        llamaBreedingTicks = getInt("mobs.llama.breeding-delay-ticks", llamaBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.llama.breeding-delay-ticks", llamaBreedingTicks);
+            set("mobs.llama.breeding-delay-ticks", null);
+            set("mobs.llama.breeding.cooldown-in-ticks", oldValue);
+        }
+        llamaBreedingTicks = getInt("mobs.llama.breeding.cooldown-in-ticks", llamaBreedingTicks);
         llamaTakeDamageFromWater = getBoolean("mobs.llama.takes-damage-from-water", llamaTakeDamageFromWater);
         llamaJoinCaravans = getBoolean("mobs.llama.join-caravans", llamaJoinCaravans);
         llamaAlwaysDropExp = getBoolean("mobs.llama.always-drop-exp", llamaAlwaysDropExp);
@@ -2486,7 +2556,12 @@ public class PurpurWorldConfig {
         }
         mooshroomMaxHealth = getDouble("mobs.mooshroom.attributes.max_health", mooshroomMaxHealth);
         mooshroomScale = Mth.clamp(getDouble("mobs.mooshroom.attributes.scale", mooshroomScale), 0.0625D, 16.0D);
-        mooshroomBreedingTicks = getInt("mobs.mooshroom.breeding-delay-ticks", mooshroomBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.mooshroom.breeding-delay-ticks", mooshroomBreedingTicks);
+            set("mobs.mooshroom.breeding-delay-ticks", null);
+            set("mobs.mooshroom.breeding.cooldown-in-ticks", oldValue);
+        }
+        mooshroomBreedingTicks = getInt("mobs.mooshroom.breeding.cooldown-in-ticks", mooshroomBreedingTicks);
         mooshroomTakeDamageFromWater = getBoolean("mobs.mooshroom.takes-damage-from-water", mooshroomTakeDamageFromWater);
         mooshroomAlwaysDropExp = getBoolean("mobs.mooshroom.always-drop-exp", mooshroomAlwaysDropExp);
         mooshroomBreedingChance = getDouble("mobs.mooshroom.breeding.offspring.chance", mooshroomBreedingChance);
@@ -2519,7 +2594,12 @@ public class PurpurWorldConfig {
         muleJumpStrengthMax = getDouble("mobs.mule.attributes.jump_strength.max", muleJumpStrengthMax);
         muleMovementSpeedMin = getDouble("mobs.mule.attributes.movement_speed.min", muleMovementSpeedMin);
         muleMovementSpeedMax = getDouble("mobs.mule.attributes.movement_speed.max", muleMovementSpeedMax);
-        muleBreedingTicks = getInt("mobs.mule.breeding-delay-ticks", muleBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.mule.breeding-delay-ticks", muleBreedingTicks);
+            set("mobs.mule.breeding-delay-ticks", null);
+            set("mobs.mule.breeding.cooldown-in-ticks", oldValue);
+        }
+        muleBreedingTicks = getInt("mobs.mule.breeding.cooldown-in-ticks", muleBreedingTicks);
         muleTakeDamageFromWater = getBoolean("mobs.mule.takes-damage-from-water", muleTakeDamageFromWater);
         muleAlwaysDropExp = getBoolean("mobs.mule.always-drop-exp", muleAlwaysDropExp);
     }
@@ -2540,7 +2620,12 @@ public class PurpurWorldConfig {
         nautilusAttackDamage = getDouble("mobs.nautilus.attributes.attack_damage", nautilusAttackDamage);
         nautilusKnockbackResistance = getDouble("mobs.nautilus.attributes.knockback_resistance", nautilusKnockbackResistance);
         nautilusScale = Mth.clamp(getDouble("mobs.nautilus.attributes.scale", nautilusScale), 0.0625D, 16.0D);
-        nautilusBreedingTicks = getInt("mobs.nautilus.breeding-delay-ticks", nautilusBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.nautilus.breeding-delay-ticks", nautilusBreedingTicks);
+            set("mobs.nautilus.breeding-delay-ticks", null);
+            set("mobs.nautilus.breeding.cooldown-in-ticks", oldValue);
+        }
+        nautilusBreedingTicks = getInt("mobs.nautilus.breeding.cooldown-in-ticks", nautilusBreedingTicks);
         nautilusAlwaysDropExp = getBoolean("mobs.nautilus.always-drop-exp", nautilusAlwaysDropExp);
         nautilusBreedingChance = getDouble("mobs.nautilus.breeding.offspring.chance", nautilusBreedingChance);
         nautilusBreedingMinOffspring = getInt("mobs.nautilus.breeding.offspring.min", nautilusBreedingMinOffspring);
@@ -2570,7 +2655,12 @@ public class PurpurWorldConfig {
         }
         ocelotMaxHealth = getDouble("mobs.ocelot.attributes.max_health", ocelotMaxHealth);
         ocelotScale = Mth.clamp(getDouble("mobs.ocelot.attributes.scale", ocelotScale), 0.0625D, 16.0D);
-        ocelotBreedingTicks = getInt("mobs.ocelot.breeding-delay-ticks", ocelotBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.ocelot.breeding-delay-ticks", ocelotBreedingTicks);
+            set("mobs.ocelot.breeding-delay-ticks", null);
+            set("mobs.ocelot.breeding.cooldown-in-ticks", oldValue);
+        }
+        ocelotBreedingTicks = getInt("mobs.ocelot.breeding.cooldown-in-ticks", ocelotBreedingTicks);
         ocelotTakeDamageFromWater = getBoolean("mobs.ocelot.takes-damage-from-water", ocelotTakeDamageFromWater);
         ocelotAlwaysDropExp = getBoolean("mobs.ocelot.always-drop-exp", ocelotAlwaysDropExp);
         ocelotSpawnUnderSeaLevel = getBoolean("mobs.ocelot.spawn-below-sea-level", ocelotSpawnUnderSeaLevel);
@@ -2601,7 +2691,12 @@ public class PurpurWorldConfig {
         }
         pandaMaxHealth = getDouble("mobs.panda.attributes.max_health", pandaMaxHealth);
         pandaScale = Mth.clamp(getDouble("mobs.panda.attributes.scale", pandaScale), 0.0625D, 16.0D);
-        pandaBreedingTicks = getInt("mobs.panda.breeding-delay-ticks", pandaBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.panda.breeding-delay-ticks", pandaBreedingTicks);
+            set("mobs.panda.breeding-delay-ticks", null);
+            set("mobs.panda.breeding.cooldown-in-ticks", oldValue);
+        }
+        pandaBreedingTicks = getInt("mobs.panda.breeding.cooldown-in-ticks", pandaBreedingTicks);
         pandaTakeDamageFromWater = getBoolean("mobs.panda.takes-damage-from-water", pandaTakeDamageFromWater);
         pandaAlwaysDropExp = getBoolean("mobs.panda.always-drop-exp", pandaAlwaysDropExp);
         pandaBreedingChance = getDouble("mobs.panda.breeding.offspring.chance", pandaBreedingChance);
@@ -2751,7 +2846,12 @@ public class PurpurWorldConfig {
         pigMaxHealth = getDouble("mobs.pig.attributes.max_health", pigMaxHealth);
         pigScale = Mth.clamp(getDouble("mobs.pig.attributes.scale", pigScale), 0.0625D, 16.0D);
         pigGiveSaddleBack = getBoolean("mobs.pig.give-saddle-back", pigGiveSaddleBack);
-        pigBreedingTicks = getInt("mobs.pig.breeding-delay-ticks", pigBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.pig.breeding-delay-ticks", pigBreedingTicks);
+            set("mobs.pig.breeding-delay-ticks", null);
+            set("mobs.pig.breeding.cooldown-in-ticks", oldValue);
+        }
+        snifferBreedingTicks = getInt("mobs.pig.breeding.cooldown-in-ticks", pigBreedingTicks);
         pigTakeDamageFromWater = getBoolean("mobs.pig.takes-damage-from-water", pigTakeDamageFromWater);
         pigAlwaysDropExp = getBoolean("mobs.pig.always-drop-exp", pigAlwaysDropExp);
         pigBreedingChance = getDouble("mobs.pig.breeding.offspring.chance", pigBreedingChance);
@@ -2881,7 +2981,12 @@ public class PurpurWorldConfig {
         polarBearBreedableItemString = getString("mobs.polar_bear.breedable-item", polarBearBreedableItemString);
         Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(polarBearBreedableItemString));
         if (item != Items.AIR) polarBearBreedableItem = item;
-        polarBearBreedingTicks = getInt("mobs.polar_bear.breeding-delay-ticks", polarBearBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.polar_bear.breeding-delay-ticks", polarBearBreedingTicks);
+            set("mobs.polar_bear.breeding-delay-ticks", null);
+            set("mobs.polar_bear.breeding.cooldown-in-ticks", oldValue);
+        }
+        polarBearBreedingTicks = getInt("mobs.polar_bear.breeding.cooldown-in-ticks", polarBearBreedingTicks);
         polarBearTakeDamageFromWater = getBoolean("mobs.polar_bear.takes-damage-from-water", polarBearTakeDamageFromWater);
         polarBearAlwaysDropExp = getBoolean("mobs.polar_bear.always-drop-exp", polarBearAlwaysDropExp);
     }
@@ -2933,7 +3038,12 @@ public class PurpurWorldConfig {
         rabbitScale = Mth.clamp(getDouble("mobs.rabbit.attributes.scale", rabbitScale), 0.0625D, 16.0D);
         rabbitNaturalToast = getDouble("mobs.rabbit.spawn-toast-chance", rabbitNaturalToast);
         rabbitNaturalKiller = getDouble("mobs.rabbit.spawn-killer-rabbit-chance", rabbitNaturalKiller);
-        rabbitBreedingTicks = getInt("mobs.rabbit.breeding-delay-ticks", rabbitBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.rabbit.breeding-delay-ticks", rabbitBreedingTicks);
+            set("mobs.rabbit.breeding-delay-ticks", null);
+            set("mobs.rabbit.breeding.cooldown-in-ticks", oldValue);
+        }
+        rabbitBreedingTicks = getInt("mobs.rabbit.breeding.cooldown-in-ticks", rabbitBreedingTicks);
         if (PurpurConfig.version < 43) {
             boolean oldVal = getBoolean("mobs.rabbit.bypass-mob-griefing", false);
             set("mobs.rabbit.bypass-mob-griefing", null);
@@ -3060,7 +3170,12 @@ public class PurpurWorldConfig {
         }
         sheepMaxHealth = getDouble("mobs.sheep.attributes.max_health", sheepMaxHealth);
         sheepScale = Mth.clamp(getDouble("mobs.sheep.attributes.scale", sheepScale), 0.0625D, 16.0D);
-        sheepBreedingTicks = getInt("mobs.sheep.breeding-delay-ticks", sheepBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.sheep.breeding-delay-ticks", sheepBreedingTicks);
+            set("mobs.sheep.breeding-delay-ticks", null);
+            set("mobs.sheep.breeding.cooldown-in-ticks", oldValue);
+        }
+        sheepBreedingTicks = getInt("mobs.sheep.breeding.cooldown-in-ticks", sheepBreedingTicks);
         if (PurpurConfig.version < 43) {
             boolean oldVal = getBoolean("mobs.sheep.bypass-mob-griefing", false);
             set("mobs.sheep.bypass-mob-griefing", null);
@@ -3293,7 +3408,12 @@ public class PurpurWorldConfig {
         snifferControllable = getBoolean("mobs.sniffer.controllable", snifferControllable);
         snifferMaxHealth = getDouble("mobs.sniffer.attributes.max_health", snifferMaxHealth);
         snifferScale = Mth.clamp(getDouble("mobs.sniffer.attributes.scale", snifferScale), 0.0625D, 16.0D);
-        snifferBreedingTicks = getInt("mobs.sniffer.breeding-delay-ticks", snifferBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.sniffer.breeding-delay-ticks", snifferBreedingTicks);
+            set("mobs.sniffer.breeding-delay-ticks", null);
+            set("mobs.sniffer.breeding.cooldown-in-ticks", oldValue);
+        }
+        snifferBreedingTicks = getInt("mobs.sniffer.breeding.cooldown-in-ticks", snifferBreedingTicks);
     }
 
     public boolean squidRidable = false;
@@ -3391,7 +3511,12 @@ public class PurpurWorldConfig {
         }
         striderMaxHealth = getDouble("mobs.strider.attributes.max_health", striderMaxHealth);
         striderScale = Mth.clamp(getDouble("mobs.strider.attributes.scale", striderScale), 0.0625D, 16.0D);
-        striderBreedingTicks = getInt("mobs.strider.breeding-delay-ticks", striderBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.strider.breeding-delay-ticks", striderBreedingTicks);
+            set("mobs.strider.breeding-delay-ticks", null);
+            set("mobs.strider.breeding.cooldown-in-ticks", oldValue);
+        }
+        striderBreedingTicks = getInt("mobs.strider.breeding.cooldown-in-ticks", striderBreedingTicks);
         striderGiveSaddleBack = getBoolean("mobs.strider.give-saddle-back", striderGiveSaddleBack);
         striderTakeDamageFromWater = getBoolean("mobs.strider.takes-damage-from-water", striderTakeDamageFromWater);
         striderAlwaysDropExp = getBoolean("mobs.strider.always-drop-exp", striderAlwaysDropExp);
@@ -3454,7 +3579,12 @@ public class PurpurWorldConfig {
         traderLlamaJumpStrengthMax = getDouble("mobs.trader_llama.attributes.jump_strength.max", traderLlamaJumpStrengthMax);
         traderLlamaMovementSpeedMin = getDouble("mobs.trader_llama.attributes.movement_speed.min", traderLlamaMovementSpeedMin);
         traderLlamaMovementSpeedMax = getDouble("mobs.trader_llama.attributes.movement_speed.max", traderLlamaMovementSpeedMax);
-        traderLlamaBreedingTicks = getInt("mobs.trader_llama.breeding-delay-ticks", traderLlamaBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.trader_llama.breeding-delay-ticks", traderLlamaBreedingTicks);
+            set("mobs.trader_llama.breeding-delay-ticks", null);
+            set("mobs.trader_llama.breeding.cooldown-in-ticks", oldValue);
+        }
+        traderLlamaBreedingTicks = getInt("mobs.trader_llama.breeding.cooldown-in-ticks", traderLlamaBreedingTicks);
         traderLlamaTakeDamageFromWater = getBoolean("mobs.trader_llama.takes-damage-from-water", traderLlamaTakeDamageFromWater);
         traderLlamaAlwaysDropExp = getBoolean("mobs.trader_llama.always-drop-exp", traderLlamaAlwaysDropExp);
         traderLlamaBreedingChance = getDouble("mobs.trader_llama.breeding.offspring.chance", traderLlamaBreedingChance);
@@ -3501,7 +3631,12 @@ public class PurpurWorldConfig {
         }
         turtleMaxHealth = getDouble("mobs.turtle.attributes.max_health", turtleMaxHealth);
         turtleScale = Mth.clamp(getDouble("mobs.turtle.attributes.scale", turtleScale), 0.0625D, 16.0D);
-        turtleBreedingTicks = getInt("mobs.turtle.breeding-delay-ticks", turtleBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.turtle.breeding-delay-ticks", turtleBreedingTicks);
+            set("mobs.turtle.breeding-delay-ticks", null);
+            set("mobs.turtle.breeding.cooldown-in-ticks", oldValue);
+        }
+        turtleBreedingTicks = getInt("mobs.turtle.breeding.cooldown-in-ticks", turtleBreedingTicks);
         turtleTakeDamageFromWater = getBoolean("mobs.turtle.takes-damage-from-water", turtleTakeDamageFromWater);
         turtleAlwaysDropExp = getBoolean("mobs.turtle.always-drop-exp", turtleAlwaysDropExp);
     }
@@ -3574,7 +3709,12 @@ public class PurpurWorldConfig {
         villagerTemptRange = getDouble("mobs.villager.attributes.tempt_range", villagerTemptRange);
         villagerCanBeLeashed = getBoolean("mobs.villager.can-be-leashed", villagerCanBeLeashed);
         villagerCanBreed = getBoolean("mobs.villager.can-breed", villagerCanBreed);
-        villagerBreedingTicks = getInt("mobs.villager.breeding-delay-ticks", villagerBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.villager.breeding-delay-ticks", villagerBreedingTicks);
+            set("mobs.villager.breeding-delay-ticks", null);
+            set("mobs.villager.breeding.cooldown-in-ticks", oldValue);
+        }
+        villagerBreedingTicks = getInt("mobs.villager.breeding.cooldown-in-ticks", villagerBreedingTicks);
         villagerClericsFarmWarts = getBoolean("mobs.villager.clerics-farm-warts", villagerClericsFarmWarts);
         villagerClericFarmersThrowWarts = getBoolean("mobs.villager.cleric-wart-farmers-throw-warts-at-villagers", villagerClericFarmersThrowWarts);
         if (PurpurConfig.version < 43) {
@@ -3802,7 +3942,12 @@ public class PurpurWorldConfig {
         }
         wolfMilkCuresRabies = getBoolean("mobs.wolf.milk-cures-rabid-wolves", wolfMilkCuresRabies);
         wolfNaturalRabid = getDouble("mobs.wolf.spawn-rabid-chance", wolfNaturalRabid);
-        wolfBreedingTicks = getInt("mobs.wolf.breeding-delay-ticks", wolfBreedingTicks);
+        if (PurpurConfig.version < 49) {
+            int oldValue = getInt("mobs.wolf.breeding-delay-ticks", wolfBreedingTicks);
+            set("mobs.wolf.breeding-delay-ticks", null);
+            set("mobs.wolf.breeding.cooldown-in-ticks", oldValue);
+        }
+        wolfBreedingTicks = getInt("mobs.wolf.breeding.cooldown-in-ticks", wolfBreedingTicks);
         wolfTakeDamageFromWater = getBoolean("mobs.wolf.takes-damage-from-water", wolfTakeDamageFromWater);
         wolfAlwaysDropExp = getBoolean("mobs.wolf.always-drop-exp", wolfAlwaysDropExp);
         wolfBreedingChance = getDouble("mobs.wolf.breeding.offspring.chance", wolfBreedingChance);
