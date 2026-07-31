@@ -5,72 +5,74 @@ Subject: [PATCH] Breedable mobs can have multiple babies
 
 
 diff --git a/net/minecraft/world/entity/Mob.java b/net/minecraft/world/entity/Mob.java
-index 963eb0e38011e37f8a3f20751bcf47c184623ed7..29bf2092bcc04e93d247bb8f07d54c0339fa69ba 100644
+index 963eb0e38011e37f8a3f20751bcf47c184623ed7..44e8da8b46661721acb52d44dba926f69b021e44 100644
 --- a/net/minecraft/world/entity/Mob.java
 +++ b/net/minecraft/world/entity/Mob.java
 @@ -155,6 +155,7 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
      private int homeRadius = -1;
      public boolean aware = true; // CraftBukkit
      public int ticksSinceLastInteraction; // Purpur - Entity lifespan
-+    protected boolean willHaveAnotherBaby() { return false; } protected int getBreedingMaxBabies() { return -1; } // Purpur - Breedable mobs can have multiple babies
++    protected boolean willHaveAnotherBaby() { return false; } protected int getBreedingMinOffspring() { return 1; } protected int getBreedingMaxOffspring() { return 1; } // Purpur - Breedable mobs can have multiple babies
  
      protected Mob(final EntityType<? extends Mob> type, final Level level) {
          super(type, level);
 diff --git a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
-index 9aefa11fcc336c5c98c63301b7f9a51b397bdc71..5c697a4be46325f03c63e76da10ca51386f2d0f9 100644
+index 9aefa11fcc336c5c98c63301b7f9a51b397bdc71..350cfa051d0a12d596efd041ff36ad89270b75cf 100644
 --- a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
 +++ b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
-@@ -107,6 +107,12 @@ public class VillagerMakeLove extends Behavior<Villager> {
+@@ -107,6 +107,13 @@ public class VillagerMakeLove extends Behavior<Villager> {
      }
  
      private Optional<Villager> breed(final ServerLevel level, final Villager source, final Villager target) {
 +        // Purpur start - Breedable mobs can have multiple babies
-+        return this.breed(level, source, target, 1);
++        return this.breed(level, source, target, 0);
 +    }
 +
 +    private Optional<Villager> breed(final ServerLevel level, final Villager source, final Villager target, int currentBabyCount) {
++        if ((currentBabyCount >= source.getBreedingMinOffspring()) && (!source.willHaveAnotherBaby() || currentBabyCount >= source.getBreedingMaxOffspring())) return Optional.empty();
 +        // Purpur end - Breedable mobs can have multiple babies
          Villager child = source.getBreedOffspring(level, target);
          if (child == null) {
              return Optional.empty();
-@@ -126,6 +132,7 @@ public class VillagerMakeLove extends Behavior<Villager> {
+@@ -126,6 +133,7 @@ public class VillagerMakeLove extends Behavior<Villager> {
          level.addFreshEntityWithPassengers(child, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.BREEDING);
          // CraftBukkit end - call EntityBreedEvent
          level.broadcastEntityEvent(child, EntityEvent.LOVE_HEARTS);
-+        if (source.willHaveAnotherBaby() && currentBabyCount < source.getBreedingMaxBabies()) this.breed(level, source, target, currentBabyCount + 1); // Purpur - Breedable mobs can have multiple babies
++        this.breed(level, source, target, currentBabyCount + 1); // Purpur - Breedable mobs can have multiple babies
          return Optional.of(child);
      }
  
 diff --git a/net/minecraft/world/entity/animal/Animal.java b/net/minecraft/world/entity/animal/Animal.java
-index 066bec0f5ed154dea08287ff6d4653a4623f956a..c2a025d5b75323c6af02147bca58ebe8c7d3f172 100644
+index 066bec0f5ed154dea08287ff6d4653a4623f956a..2f406344234508907e6bc6632b2bc70d24b4b6e3 100644
 --- a/net/minecraft/world/entity/animal/Animal.java
 +++ b/net/minecraft/world/entity/animal/Animal.java
-@@ -226,6 +226,12 @@ public abstract class Animal extends AgeableMob {
+@@ -226,6 +226,13 @@ public abstract class Animal extends AgeableMob {
      }
  
      public void spawnChildFromBreeding(final ServerLevel level, final Animal partner) {
 +        // Purpur start - Breedable mobs can have multiple babies
-+        this.spawnChildFromBreeding(level, partner, 1);
++        this.spawnChildFromBreeding(level, partner, 0);
 +    }
 +
 +    public void spawnChildFromBreeding(final ServerLevel level, final Animal partner, int currentBabyCount) {
++        if ((currentBabyCount >= getBreedingMinOffspring()) && (!willHaveAnotherBaby() || currentBabyCount >= getBreedingMaxOffspring())) return;
 +        // Purpur end - Breedable mobs can have multiple babies
          AgeableMob offspring = this.getBreedOffspring(level, partner);
          if (offspring != null) {
              //offspring.setBaby(true); // Purpur - Add adjustable breeding cooldown to config - moved down
-@@ -254,6 +260,7 @@ public abstract class Animal extends AgeableMob {
+@@ -254,6 +261,7 @@ public abstract class Animal extends AgeableMob {
              this.finalizeSpawnChildFromBreeding(level, partner, offspring, experience);
              level.addFreshEntityWithPassengers(offspring, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.BREEDING);
              // CraftBukkit end - Call EntityBreedEvent
-+            if (willHaveAnotherBaby() && currentBabyCount < getBreedingMaxBabies()) this.spawnChildFromBreeding(level, partner, currentBabyCount + 1); // Purpur - Breedable mobs can have multiple babies
++            this.spawnChildFromBreeding(level, partner, currentBabyCount + 1); // Purpur - Breedable mobs can have multiple babies
          }
      }
  
 diff --git a/net/minecraft/world/entity/animal/armadillo/Armadillo.java b/net/minecraft/world/entity/animal/armadillo/Armadillo.java
-index 7ff07fafcdb5d34a69f28d2c9c184bb8fc7656c2..99ec08b5c8ec5602c269405c51b406f831389bc9 100644
+index 7ff07fafcdb5d34a69f28d2c9c184bb8fc7656c2..d4f9430a9b2e960781628f32e3f746fea04d510d 100644
 --- a/net/minecraft/world/entity/animal/armadillo/Armadillo.java
 +++ b/net/minecraft/world/entity/animal/armadillo/Armadillo.java
-@@ -125,6 +125,18 @@ public class Armadillo extends Animal {
+@@ -125,6 +125,23 @@ public class Armadillo extends Animal {
      }
      // Purpur end - Make entity breeding times configurable
  
@@ -81,8 +83,13 @@ index 7ff07fafcdb5d34a69f28d2c9c184bb8fc7656c2..99ec08b5c8ec5602c269405c51b406f8
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.armadilloBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.armadilloBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.armadilloBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -90,10 +97,10 @@ index 7ff07fafcdb5d34a69f28d2c9c184bb8fc7656c2..99ec08b5c8ec5602c269405c51b406f8
      protected void defineSynchedData(final SynchedEntityData.Builder entityData) {
          super.defineSynchedData(entityData);
 diff --git a/net/minecraft/world/entity/animal/axolotl/Axolotl.java b/net/minecraft/world/entity/animal/axolotl/Axolotl.java
-index 57b34d61c972123a2871da5abba851fbe656ff75..3996246ba929bffdbb0c81ba46b248c6ded728f3 100644
+index 57b34d61c972123a2871da5abba851fbe656ff75..adf937ea7225a546c3f41c37a70a4274041abe80 100644
 --- a/net/minecraft/world/entity/animal/axolotl/Axolotl.java
 +++ b/net/minecraft/world/entity/animal/axolotl/Axolotl.java
-@@ -168,6 +168,18 @@ public class Axolotl extends Animal implements Bucketable {
+@@ -168,6 +168,23 @@ public class Axolotl extends Animal implements Bucketable {
      }
      // Purpur end - Mobs always drop experience
  
@@ -104,8 +111,13 @@ index 57b34d61c972123a2871da5abba851fbe656ff75..3996246ba929bffdbb0c81ba46b248c6
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.axolotlBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.axolotlBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.axolotlBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -113,10 +125,10 @@ index 57b34d61c972123a2871da5abba851fbe656ff75..3996246ba929bffdbb0c81ba46b248c6
      public float getWalkTargetValue(final BlockPos pos, final LevelReader level) {
          return 0.0F;
 diff --git a/net/minecraft/world/entity/animal/bee/Bee.java b/net/minecraft/world/entity/animal/bee/Bee.java
-index f4483f893c301e338595cc2e79e9fe9915b7bedd..120651dcd4bdb87cc4b99525a11b7c89df7c36d9 100644
+index f4483f893c301e338595cc2e79e9fe9915b7bedd..e309f7a975602a56b3c3202c163652bebb46cc9d 100644
 --- a/net/minecraft/world/entity/animal/bee/Bee.java
 +++ b/net/minecraft/world/entity/animal/bee/Bee.java
-@@ -223,6 +223,18 @@ public class Bee extends Animal implements NeutralMob {
+@@ -223,6 +223,23 @@ public class Bee extends Animal implements NeutralMob {
      }
      // Purpur end - Ridables
  
@@ -127,8 +139,13 @@ index f4483f893c301e338595cc2e79e9fe9915b7bedd..120651dcd4bdb87cc4b99525a11b7c89
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.beeBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.beeBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.beeBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -136,10 +153,10 @@ index f4483f893c301e338595cc2e79e9fe9915b7bedd..120651dcd4bdb87cc4b99525a11b7c89
      protected void defineSynchedData(final SynchedEntityData.Builder entityData) {
          super.defineSynchedData(entityData);
 diff --git a/net/minecraft/world/entity/animal/camel/Camel.java b/net/minecraft/world/entity/animal/camel/Camel.java
-index a683afa61a69a9ea2d372dc7a00dc76f9fabd0d4..5113b05e408a62a104e004d577ddc1cbb388af8c 100644
+index a683afa61a69a9ea2d372dc7a00dc76f9fabd0d4..98ec32699e9322714620f563842dabc0c2bc1e52 100644
 --- a/net/minecraft/world/entity/animal/camel/Camel.java
 +++ b/net/minecraft/world/entity/animal/camel/Camel.java
-@@ -114,6 +114,18 @@ public class Camel extends AbstractHorse {
+@@ -114,6 +114,23 @@ public class Camel extends AbstractHorse {
      }
      // Purpur end - Make entity breeding times configurable
  
@@ -150,8 +167,13 @@ index a683afa61a69a9ea2d372dc7a00dc76f9fabd0d4..5113b05e408a62a104e004d577ddc1cb
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.camelBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.camelBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.camelBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -159,10 +181,10 @@ index a683afa61a69a9ea2d372dc7a00dc76f9fabd0d4..5113b05e408a62a104e004d577ddc1cb
      protected void addAdditionalSaveData(final ValueOutput output) {
          super.addAdditionalSaveData(output);
 diff --git a/net/minecraft/world/entity/animal/chicken/Chicken.java b/net/minecraft/world/entity/animal/chicken/Chicken.java
-index 31dda8f31967e1e02c2a9e32cc0586afa9c416e1..743450c937ba635a1af7f9d90fb3c388b587e76f 100644
+index 31dda8f31967e1e02c2a9e32cc0586afa9c416e1..051be366707f34d4ec58e42e8717c97f308c0ac9 100644
 --- a/net/minecraft/world/entity/animal/chicken/Chicken.java
 +++ b/net/minecraft/world/entity/animal/chicken/Chicken.java
-@@ -132,6 +132,18 @@ public class Chicken extends Animal {
+@@ -132,6 +132,23 @@ public class Chicken extends Animal {
      }
      // Purpur end - Mobs always drop experience
  
@@ -173,8 +195,13 @@ index 31dda8f31967e1e02c2a9e32cc0586afa9c416e1..743450c937ba635a1af7f9d90fb3c388
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.chickenBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.chickenBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.chickenBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -182,10 +209,10 @@ index 31dda8f31967e1e02c2a9e32cc0586afa9c416e1..743450c937ba635a1af7f9d90fb3c388
      protected void registerGoals() {
          this.goalSelector.addGoal(0, new FloatGoal(this));
 diff --git a/net/minecraft/world/entity/animal/cow/Cow.java b/net/minecraft/world/entity/animal/cow/Cow.java
-index b084e914bc473aa739be988a03b98085d0a795a7..33282daa17cfd46bc35a98b5a10d4e34da61efca 100644
+index b084e914bc473aa739be988a03b98085d0a795a7..80555a3d19dec7b793e1f5536c496a7372d1cdd1 100644
 --- a/net/minecraft/world/entity/animal/cow/Cow.java
 +++ b/net/minecraft/world/entity/animal/cow/Cow.java
-@@ -91,6 +91,18 @@ public class Cow extends AbstractCow {
+@@ -91,6 +91,23 @@ public class Cow extends AbstractCow {
      }
      // Purpur end - Mobs always drop experience
  
@@ -196,8 +223,13 @@ index b084e914bc473aa739be988a03b98085d0a795a7..33282daa17cfd46bc35a98b5a10d4e34
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.cowBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.cowBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.cowBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -205,10 +237,10 @@ index b084e914bc473aa739be988a03b98085d0a795a7..33282daa17cfd46bc35a98b5a10d4e34
      protected void registerGoals() {
          super.registerGoals();
 diff --git a/net/minecraft/world/entity/animal/cow/MushroomCow.java b/net/minecraft/world/entity/animal/cow/MushroomCow.java
-index b95e6f21b1cfaeae1ca4340c7fe0d6cb2a0804c7..2ebe2610713b8cf3a5e3021c678a56253830fd6f 100644
+index b95e6f21b1cfaeae1ca4340c7fe0d6cb2a0804c7..cfc66658b496185c729ebf6bc16f6c38aee9aca8 100644
 --- a/net/minecraft/world/entity/animal/cow/MushroomCow.java
 +++ b/net/minecraft/world/entity/animal/cow/MushroomCow.java
-@@ -114,6 +114,18 @@ public class MushroomCow extends AbstractCow implements Shearable {
+@@ -114,6 +114,23 @@ public class MushroomCow extends AbstractCow implements Shearable {
      }
      // Purpur end - Mobs always drop experience
  
@@ -219,8 +251,13 @@ index b95e6f21b1cfaeae1ca4340c7fe0d6cb2a0804c7..2ebe2610713b8cf3a5e3021c678a5625
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.mooshroomBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.mooshroomBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.mooshroomBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -228,10 +265,10 @@ index b95e6f21b1cfaeae1ca4340c7fe0d6cb2a0804c7..2ebe2610713b8cf3a5e3021c678a5625
      public float getWalkTargetValue(final BlockPos pos, final LevelReader level) {
          return level.getBlockState(pos.below()).is(Blocks.MYCELIUM) ? 10.0F : level.getPathfindingCostFromLightLevels(pos);
 diff --git a/net/minecraft/world/entity/animal/equine/Donkey.java b/net/minecraft/world/entity/animal/equine/Donkey.java
-index 13998bb4fa18e2ed14070b4eadc003f845faa462..9dbbbd6a3f97d308fa7503fd98d9d17aa055d238 100644
+index 13998bb4fa18e2ed14070b4eadc003f845faa462..02c111dc3f7b9d10a288965bd72ea8a0668f1596 100644
 --- a/net/minecraft/world/entity/animal/equine/Donkey.java
 +++ b/net/minecraft/world/entity/animal/equine/Donkey.java
-@@ -62,6 +62,18 @@ public class Donkey extends AbstractChestedHorse {
+@@ -62,6 +62,23 @@ public class Donkey extends AbstractChestedHorse {
      }
      // Purpur end - Mobs always drop experience
  
@@ -242,8 +279,13 @@ index 13998bb4fa18e2ed14070b4eadc003f845faa462..9dbbbd6a3f97d308fa7503fd98d9d17a
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.donkeyBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.donkeyBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.donkeyBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -251,10 +293,10 @@ index 13998bb4fa18e2ed14070b4eadc003f845faa462..9dbbbd6a3f97d308fa7503fd98d9d17a
      public SoundEvent getAmbientSound() {
          return SoundEvents.DONKEY_AMBIENT;
 diff --git a/net/minecraft/world/entity/animal/equine/Horse.java b/net/minecraft/world/entity/animal/equine/Horse.java
-index 3350900b8b5824048d5d25ff216c86274b195ebc..6074ffcc9f91ad4564339dc2ab7c12e2e3460c3b 100644
+index 3350900b8b5824048d5d25ff216c86274b195ebc..55f604a9afbfbd732624d0e49a7e253339952a02 100644
 --- a/net/minecraft/world/entity/animal/equine/Horse.java
 +++ b/net/minecraft/world/entity/animal/equine/Horse.java
-@@ -94,6 +94,18 @@ public class Horse extends AbstractHorse {
+@@ -94,6 +94,23 @@ public class Horse extends AbstractHorse {
      }
      // Purpur end - Mobs always drop experience
  
@@ -265,8 +307,13 @@ index 3350900b8b5824048d5d25ff216c86274b195ebc..6074ffcc9f91ad4564339dc2ab7c12e2
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.horseBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.horseBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.horseBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -274,10 +321,10 @@ index 3350900b8b5824048d5d25ff216c86274b195ebc..6074ffcc9f91ad4564339dc2ab7c12e2
      protected void randomizeAttributes(final RandomSource random) {
          this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(generateMaxHealth(random::nextInt));
 diff --git a/net/minecraft/world/entity/animal/equine/Llama.java b/net/minecraft/world/entity/animal/equine/Llama.java
-index 2e29ad25c1ca442de5e5b0dc6108682f943a2aa3..945c120b8fcbcfb9069314fa0a60b0f8b8b23e54 100644
+index 2e29ad25c1ca442de5e5b0dc6108682f943a2aa3..591209f54549a7ca03e669b7d7fa69bd5bf7cbc9 100644
 --- a/net/minecraft/world/entity/animal/equine/Llama.java
 +++ b/net/minecraft/world/entity/animal/equine/Llama.java
-@@ -173,6 +173,18 @@ public class Llama extends AbstractChestedHorse implements RangedAttackMob {
+@@ -173,6 +173,23 @@ public class Llama extends AbstractChestedHorse implements RangedAttackMob {
      }
      // Purpur end - Mobs always drop experience
  
@@ -288,8 +335,13 @@ index 2e29ad25c1ca442de5e5b0dc6108682f943a2aa3..945c120b8fcbcfb9069314fa0a60b0f8
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.llamaBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.llamaBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.llamaBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -297,10 +349,10 @@ index 2e29ad25c1ca442de5e5b0dc6108682f943a2aa3..945c120b8fcbcfb9069314fa0a60b0f8
          return false;
      }
 diff --git a/net/minecraft/world/entity/animal/equine/TraderLlama.java b/net/minecraft/world/entity/animal/equine/TraderLlama.java
-index 492d19954258ce6a18b01aaa486c6e53f0377db5..5f573a0dac99a21cd6a312d0ee0563ac4ceeb20a 100644
+index 492d19954258ce6a18b01aaa486c6e53f0377db5..aa38cbb34cd534a31091c4c4d6518d45040e22a4 100644
 --- a/net/minecraft/world/entity/animal/equine/TraderLlama.java
 +++ b/net/minecraft/world/entity/animal/equine/TraderLlama.java
-@@ -92,6 +92,18 @@ public class TraderLlama extends Llama {
+@@ -92,6 +92,23 @@ public class TraderLlama extends Llama {
      }
      // Purpur end - Mobs always drop experience
  
@@ -311,8 +363,13 @@ index 492d19954258ce6a18b01aaa486c6e53f0377db5..5f573a0dac99a21cd6a312d0ee0563ac
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.traderLlamaBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.traderLlamaBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.traderLlamaBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -320,10 +377,10 @@ index 492d19954258ce6a18b01aaa486c6e53f0377db5..5f573a0dac99a21cd6a312d0ee0563ac
      public boolean isTraderLlama() {
          return true;
 diff --git a/net/minecraft/world/entity/animal/feline/Cat.java b/net/minecraft/world/entity/animal/feline/Cat.java
-index ad93261cdbe93487ea2168ae3bd3f937cee0eb53..3d19ed9a15ff22f0cbb00013c54961c998cf6cb9 100644
+index ad93261cdbe93487ea2168ae3bd3f937cee0eb53..2f3d07eea73f7a855a77b4bc6c1e92730e670c4d 100644
 --- a/net/minecraft/world/entity/animal/feline/Cat.java
 +++ b/net/minecraft/world/entity/animal/feline/Cat.java
-@@ -156,6 +156,18 @@ public class Cat extends TamableAnimal {
+@@ -156,6 +156,23 @@ public class Cat extends TamableAnimal {
      }
      // Purpur end - Mobs always drop experience
  
@@ -334,8 +391,13 @@ index ad93261cdbe93487ea2168ae3bd3f937cee0eb53..3d19ed9a15ff22f0cbb00013c54961c9
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.catBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.catBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.catBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -343,10 +405,10 @@ index ad93261cdbe93487ea2168ae3bd3f937cee0eb53..3d19ed9a15ff22f0cbb00013c54961c9
      protected void registerGoals() {
          this.temptGoal = new Cat.CatTemptGoal(this, 0.6, i -> i.is(ItemTags.CAT_FOOD), true);
 diff --git a/net/minecraft/world/entity/animal/feline/Ocelot.java b/net/minecraft/world/entity/animal/feline/Ocelot.java
-index c56715a81f3a65b370d85574a1b57f60284df55e..8804bda07d43d0f1e6fe48fb6596a7785149a684 100644
+index c56715a81f3a65b370d85574a1b57f60284df55e..bb0acc51697cb12c3fe60d89a7fef00056b87a93 100644
 --- a/net/minecraft/world/entity/animal/feline/Ocelot.java
 +++ b/net/minecraft/world/entity/animal/feline/Ocelot.java
-@@ -119,6 +119,18 @@ public class Ocelot extends Animal {
+@@ -119,6 +119,23 @@ public class Ocelot extends Animal {
      }
      // Purpur end - Mobs always drop experience
  
@@ -357,8 +419,13 @@ index c56715a81f3a65b370d85574a1b57f60284df55e..8804bda07d43d0f1e6fe48fb6596a778
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.ocelotBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.ocelotBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.ocelotBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -366,10 +433,10 @@ index c56715a81f3a65b370d85574a1b57f60284df55e..8804bda07d43d0f1e6fe48fb6596a778
          return this.entityData.get(DATA_TRUSTING);
      }
 diff --git a/net/minecraft/world/entity/animal/fox/Fox.java b/net/minecraft/world/entity/animal/fox/Fox.java
-index db20e27227430809704b2d6148d0ffa13c7094fe..9599ef76f61458be97bd7037eb94d0615d8ab951 100644
+index db20e27227430809704b2d6148d0ffa13c7094fe..326441e732eca4841f6f3d53333fdb678770760a 100644
 --- a/net/minecraft/world/entity/animal/fox/Fox.java
 +++ b/net/minecraft/world/entity/animal/fox/Fox.java
-@@ -228,6 +228,18 @@ public class Fox extends Animal {
+@@ -228,6 +228,23 @@ public class Fox extends Animal {
      }
      // Purpur end - Mobs always drop experience
  
@@ -380,8 +447,13 @@ index db20e27227430809704b2d6148d0ffa13c7094fe..9599ef76f61458be97bd7037eb94d061
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.foxBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.foxBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.foxBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -389,10 +461,10 @@ index db20e27227430809704b2d6148d0ffa13c7094fe..9599ef76f61458be97bd7037eb94d061
      protected void defineSynchedData(final SynchedEntityData.Builder entityData) {
          super.defineSynchedData(entityData);
 diff --git a/net/minecraft/world/entity/animal/goat/Goat.java b/net/minecraft/world/entity/animal/goat/Goat.java
-index 363a6f9e8d13312f93562cf3a2b1668bc53adc66..dabc50d521ebfdad94d8472a31d42885b9f81181 100644
+index 363a6f9e8d13312f93562cf3a2b1668bc53adc66..36b5b826e617072161dc07478d407b12463d12f2 100644
 --- a/net/minecraft/world/entity/animal/goat/Goat.java
 +++ b/net/minecraft/world/entity/animal/goat/Goat.java
-@@ -144,6 +144,18 @@ public class Goat extends Animal {
+@@ -144,6 +144,23 @@ public class Goat extends Animal {
      }
      // Purpur end - Mobs always drop experience
  
@@ -403,8 +475,13 @@ index 363a6f9e8d13312f93562cf3a2b1668bc53adc66..dabc50d521ebfdad94d8472a31d42885
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.goatBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.goatBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.goatBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -412,10 +489,10 @@ index 363a6f9e8d13312f93562cf3a2b1668bc53adc66..dabc50d521ebfdad94d8472a31d42885
      protected Brain<Goat> makeBrain(final Brain.Packed packedBrain) {
          return BRAIN_PROVIDER.makeBrain(this, packedBrain);
 diff --git a/net/minecraft/world/entity/animal/nautilus/Nautilus.java b/net/minecraft/world/entity/animal/nautilus/Nautilus.java
-index 1584f5a505ecf91897ed9105acf12add21510c0d..00b01e16398fa16dfe602a50fafca0a53d0456ac 100644
+index 1584f5a505ecf91897ed9105acf12add21510c0d..a0c281237355b675997fc0f4445ff2bd103cc649 100644
 --- a/net/minecraft/world/entity/animal/nautilus/Nautilus.java
 +++ b/net/minecraft/world/entity/animal/nautilus/Nautilus.java
-@@ -62,6 +62,18 @@ public class Nautilus extends AbstractNautilus {
+@@ -62,6 +62,23 @@ public class Nautilus extends AbstractNautilus {
      }
      // Purpur end - Mobs always drop experience
  
@@ -426,8 +503,13 @@ index 1584f5a505ecf91897ed9105acf12add21510c0d..00b01e16398fa16dfe602a50fafca0a5
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.nautilusBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.nautilusBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.nautilusBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -435,10 +517,10 @@ index 1584f5a505ecf91897ed9105acf12add21510c0d..00b01e16398fa16dfe602a50fafca0a5
      protected Brain<Nautilus> makeBrain(final Brain.Packed packedBrain) {
          return BRAIN_PROVIDER.makeBrain(this, packedBrain);
 diff --git a/net/minecraft/world/entity/animal/panda/Panda.java b/net/minecraft/world/entity/animal/panda/Panda.java
-index b1f680ffb815d57e717c59b0c44a2e0b27f5a94e..93bdf90a95f884d0bda282c0eaa08def8c665b1a 100644
+index b1f680ffb815d57e717c59b0c44a2e0b27f5a94e..c84d6d8ebaa046c45b30d0bd1c22e053fb2af8ab 100644
 --- a/net/minecraft/world/entity/animal/panda/Panda.java
 +++ b/net/minecraft/world/entity/animal/panda/Panda.java
-@@ -168,6 +168,18 @@ public class Panda extends Animal {
+@@ -168,6 +168,23 @@ public class Panda extends Animal {
      }
      // Purpur end - Mobs always drop experience
  
@@ -449,8 +531,13 @@ index b1f680ffb815d57e717c59b0c44a2e0b27f5a94e..93bdf90a95f884d0bda282c0eaa08def
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.pandaBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.pandaBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.pandaBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -458,10 +545,10 @@ index b1f680ffb815d57e717c59b0c44a2e0b27f5a94e..93bdf90a95f884d0bda282c0eaa08def
      protected boolean canDispenserEquipIntoSlot(final EquipmentSlot slot) {
          return slot == EquipmentSlot.MAINHAND && this.canPickUpLoot();
 diff --git a/net/minecraft/world/entity/animal/pig/Pig.java b/net/minecraft/world/entity/animal/pig/Pig.java
-index 0bb58d534d3966bbd4760f1b909e3497a7f7ac06..5b07119815ac67df24bc4bad93e0464a1283dad6 100644
+index 0bb58d534d3966bbd4760f1b909e3497a7f7ac06..cdc607098084000c4727b3d1cc67882ca4908e47 100644
 --- a/net/minecraft/world/entity/animal/pig/Pig.java
 +++ b/net/minecraft/world/entity/animal/pig/Pig.java
-@@ -122,6 +122,18 @@ public class Pig extends Animal implements ItemSteerable {
+@@ -122,6 +122,23 @@ public class Pig extends Animal implements ItemSteerable {
      }
      // Purpur end - Mobs always drop experience
  
@@ -472,8 +559,13 @@ index 0bb58d534d3966bbd4760f1b909e3497a7f7ac06..5b07119815ac67df24bc4bad93e0464a
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.pigBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.pigBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.pigBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -481,10 +573,10 @@ index 0bb58d534d3966bbd4760f1b909e3497a7f7ac06..5b07119815ac67df24bc4bad93e0464a
      protected void registerGoals() {
          this.goalSelector.addGoal(0, new FloatGoal(this));
 diff --git a/net/minecraft/world/entity/animal/rabbit/Rabbit.java b/net/minecraft/world/entity/animal/rabbit/Rabbit.java
-index e48446be1ba64a46232966efcd9e5d1e90d7938a..7477837e721f55866b7a1eb62a509fb1aa062898 100644
+index e48446be1ba64a46232966efcd9e5d1e90d7938a..cdd088d7150d253624a44a08a32bd3f8a09051aa 100644
 --- a/net/minecraft/world/entity/animal/rabbit/Rabbit.java
 +++ b/net/minecraft/world/entity/animal/rabbit/Rabbit.java
-@@ -192,6 +192,18 @@ public class Rabbit extends Animal {
+@@ -192,6 +192,23 @@ public class Rabbit extends Animal {
      }
      // Purpur end - Mobs always drop experience
  
@@ -495,8 +587,13 @@ index e48446be1ba64a46232966efcd9e5d1e90d7938a..7477837e721f55866b7a1eb62a509fb1
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.rabbitBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.rabbitBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.rabbitBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -504,10 +601,10 @@ index e48446be1ba64a46232966efcd9e5d1e90d7938a..7477837e721f55866b7a1eb62a509fb1
      protected void registerGoals() {
          this.goalSelector.addGoal(1, new FloatGoal(this));
 diff --git a/net/minecraft/world/entity/animal/sheep/Sheep.java b/net/minecraft/world/entity/animal/sheep/Sheep.java
-index 146003f7429be6668366e85955fff259b06781b3..e91dbe8aef08efc81d783256bd72f32bb9c9879e 100644
+index 146003f7429be6668366e85955fff259b06781b3..2479183f1adcaccedb106276a02a689a3b700dcd 100644
 --- a/net/minecraft/world/entity/animal/sheep/Sheep.java
 +++ b/net/minecraft/world/entity/animal/sheep/Sheep.java
-@@ -117,6 +117,18 @@ public class Sheep extends Animal implements Shearable {
+@@ -117,6 +117,23 @@ public class Sheep extends Animal implements Shearable {
      }
      // Purpur end - Mobs always drop experience
  
@@ -518,8 +615,13 @@ index 146003f7429be6668366e85955fff259b06781b3..e91dbe8aef08efc81d783256bd72f32b
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.sheepBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.sheepBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.sheepBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -527,10 +629,10 @@ index 146003f7429be6668366e85955fff259b06781b3..e91dbe8aef08efc81d783256bd72f32b
      protected void registerGoals() {
          this.eatBlockGoal = new EatBlockGoal(this);
 diff --git a/net/minecraft/world/entity/animal/wolf/Wolf.java b/net/minecraft/world/entity/animal/wolf/Wolf.java
-index af82e593ac58eaa0e7e8b4abd0d152cfb58d5c13..ff8e52ed3d9d507164c672999aaaaef8f5ddec81 100644
+index af82e593ac58eaa0e7e8b4abd0d152cfb58d5c13..d6e8178f1f007e6e7dbcfd0eb8c5552c530340d4 100644
 --- a/net/minecraft/world/entity/animal/wolf/Wolf.java
 +++ b/net/minecraft/world/entity/animal/wolf/Wolf.java
-@@ -241,6 +241,18 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+@@ -241,6 +241,23 @@ public class Wolf extends TamableAnimal implements NeutralMob {
      }
      // Purpur end - Mobs always drop experience
  
@@ -541,8 +643,13 @@ index af82e593ac58eaa0e7e8b4abd0d152cfb58d5c13..ff8e52ed3d9d507164c672999aaaaef8
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.wolfBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.wolfBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.wolfBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -550,10 +657,10 @@ index af82e593ac58eaa0e7e8b4abd0d152cfb58d5c13..ff8e52ed3d9d507164c672999aaaaef8
      protected void registerGoals() {
          this.goalSelector.addGoal(1, new FloatGoal(this));
 diff --git a/net/minecraft/world/entity/monster/Strider.java b/net/minecraft/world/entity/monster/Strider.java
-index 929bd327f01ed28462c4ce4e7d2f3e1886aa4157..54776daad149ef544a905f781349b21a9c677099 100644
+index 929bd327f01ed28462c4ce4e7d2f3e1886aa4157..fd5bbc626e8329d72561c88924ac3364e4759b67 100644
 --- a/net/minecraft/world/entity/monster/Strider.java
 +++ b/net/minecraft/world/entity/monster/Strider.java
-@@ -138,6 +138,18 @@ public class Strider extends Animal implements ItemSteerable {
+@@ -138,6 +138,23 @@ public class Strider extends Animal implements ItemSteerable {
      }
      // Purpur end - Mobs always drop experience
  
@@ -564,8 +671,13 @@ index 929bd327f01ed28462c4ce4e7d2f3e1886aa4157..54776daad149ef544a905f781349b21a
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.striderBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.striderBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.striderBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -573,10 +685,10 @@ index 929bd327f01ed28462c4ce4e7d2f3e1886aa4157..54776daad149ef544a905f781349b21a
          final EntityType<Strider> ignoredType,
          final LevelAccessor level,
 diff --git a/net/minecraft/world/entity/monster/hoglin/Hoglin.java b/net/minecraft/world/entity/monster/hoglin/Hoglin.java
-index 103d7ac2e3fdb4629d94902c0b4080a7622ae744..14442571dacf03be110c411688ea9e55d54a9b88 100644
+index 103d7ac2e3fdb4629d94902c0b4080a7622ae744..b2f048f6ac4c88b123ecdb0303b89760206525a9 100644
 --- a/net/minecraft/world/entity/monster/hoglin/Hoglin.java
 +++ b/net/minecraft/world/entity/monster/hoglin/Hoglin.java
-@@ -127,6 +127,18 @@ public class Hoglin extends Animal implements Enemy, HoglinBase {
+@@ -127,6 +127,23 @@ public class Hoglin extends Animal implements Enemy, HoglinBase {
      }
      // Purpur end - Mobs always drop experience
  
@@ -587,8 +699,13 @@ index 103d7ac2e3fdb4629d94902c0b4080a7622ae744..14442571dacf03be110c411688ea9e55
 +    }
 +
 +    @Override
-+    protected int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.hoglinBreedingMaxBabies;
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.hoglinBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.hoglinBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
@@ -596,10 +713,10 @@ index 103d7ac2e3fdb4629d94902c0b4080a7622ae744..14442571dacf03be110c411688ea9e55
      public void setTimeInOverworld(final int timeInOverworld) {
          this.timeInOverworld = timeInOverworld;
 diff --git a/net/minecraft/world/entity/npc/villager/Villager.java b/net/minecraft/world/entity/npc/villager/Villager.java
-index a1ff5e589516bb46236ef1408f0f4f2f1387e72a..64bfe745b9507c5c3706e1e116b4ba3946bd46d6 100644
+index a1ff5e589516bb46236ef1408f0f4f2f1387e72a..0be4896c4d3b7a6f7c1a61f0aa2c36dbfc3e1b3a 100644
 --- a/net/minecraft/world/entity/npc/villager/Villager.java
 +++ b/net/minecraft/world/entity/npc/villager/Villager.java
-@@ -296,6 +296,18 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
+@@ -296,6 +296,23 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
      }
      // Purpur end - Check mobGriefing Overrides
  
@@ -610,8 +727,13 @@ index a1ff5e589516bb46236ef1408f0f4f2f1387e72a..64bfe745b9507c5c3706e1e116b4ba39
 +    }
 +
 +    @Override
-+    public int getBreedingMaxBabies() {
-+        return this.level().purpurConfig.villagerBreedingMaxBabies;
++    public int getBreedingMinOffspring() {
++        return this.level().purpurConfig.villagerBreedingMinOffspring;
++    }
++
++    @Override
++    public int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.villagerBreedingMaxOffspring;
 +    }
 +    // Purpur end - Breedable mobs can have multiple babies
 +
