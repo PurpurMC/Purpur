@@ -1,0 +1,174 @@
+--- a/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
++++ b/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
+@@ -8,6 +_,7 @@
+ import java.io.IOException;
+ import java.io.OutputStream;
+ import java.nio.file.Path;
++import java.nio.file.Paths;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Optional;
+@@ -45,6 +_,7 @@
+     private static final FileToIdConverter WORLD_TEXT_STRUCTURE_LISTER = new FileToIdConverter("structure", ".snbt");
+     private static final FileToIdConverter RESOURCE_STRUCTURE_LISTER = new FileToIdConverter("structure", ".nbt");
+     public static final FileToIdConverter RESOURCE_TEXT_STRUCTURE_LISTER = new FileToIdConverter("structure", ".snbt");
++
+     public final Map<Identifier, Optional<StructureTemplate>> structureRepository = new ConcurrentHashMap<>();
+     public final ResourceManagerTemplateSource resourceManagerSource;
+     private final List<TemplateSource> sources;
+@@ -60,21 +_,87 @@
+         this.resourceManagerSource = new ResourceManagerTemplateSource(fixerUpper, blockLookup, resourceManager, RESOURCE_STRUCTURE_LISTER);
+         Path generatedDir = storage.getLevelPath(LevelResource.GENERATED_DIR).normalize();
+         this.worldTemplates = new TemplatePathFactory(generatedDir);
+-        if (StructureUtils.testStructuresTargetDir != null) {
++
++        // Standardize absolute path to handle relative root differences across run environments
++        Path defaultTestDir = Paths.get("Minecraft.Server/src/test/convertables/data").toAbsolutePath();
++
++        // Purpur start - export directory fallback
++        if (org.purpurmc.purpur.PurpurConfig.registerMinecraftExportCommands) {
++            Path testTarget = StructureUtils.testStructuresTargetDir != null ? StructureUtils.testStructuresTargetDir : defaultTestDir;
++            this.testTemplates = new TemplatePathFactory(testTarget, PackType.SERVER_DATA);
++        } else if (StructureUtils.testStructuresTargetDir != null) {
+             this.testTemplates = new TemplatePathFactory(StructureUtils.testStructuresTargetDir, PackType.SERVER_DATA);
+         } else {
+             this.testTemplates = null;
+         }
++        // Purpur end
+ 
+         Builder<TemplateSource> sources = ImmutableList.builder();
+         sources.add(new DirectoryTemplateSource(fixerUpper, blockLookup, generatedDir, WORLD_STRUCTURE_LISTER, false));
+-        if (StructureUtils.testStructuresSourceDir != null) {
+-            sources.add(
+-                new DirectoryTemplateSource(
+-                    fixerUpper, blockLookup, StructureUtils.testStructuresSourceDir, PackType.SERVER_DATA, RESOURCE_TEXT_STRUCTURE_LISTER, true
+-                )
+-            );
++
++        // Purpur start - structure source registration
++        if (org.purpurmc.purpur.PurpurConfig.registerMinecraftExportCommands || StructureUtils.testStructuresSourceDir != null) {
++            Path customSource = StructureUtils.testStructuresSourceDir != null ? StructureUtils.testStructuresSourceDir : defaultTestDir;
++
++            sources.add(new TemplateSource(fixerUpper, blockLookup) {
++                @Override
++                public java.util.Optional<StructureTemplate> load(Identifier id) {
++                    String pathString = id.getPath();
++
++                    if (pathString.startsWith("minecraft/structure/")) {
++                        pathString = pathString.substring("minecraft/structure/".length());
++                    } else if (pathString.startsWith("structure/")) {
++                        pathString = pathString.substring("structure/".length());
++                    }
++
++                    Path file = customSource.resolve(id.getNamespace()).resolve("structure").resolve(pathString + ".snbt");
++                    if (!java.nio.file.Files.exists(file)) {
++                        file = customSource.resolve(id.getNamespace()).resolve("structures").resolve(pathString + ".snbt");
++                    }
++
++                    if (!java.nio.file.Files.exists(file)) {
++                        return java.util.Optional.empty();
++                    }
++
++                    try (java.io.BufferedReader reader = java.nio.file.Files.newBufferedReader(file)) {
++                        String input = org.apache.commons.io.IOUtils.toString(reader);
++                        CompoundTag tag = NbtUtils.snbtToStructure(input);
++
++                        StructureTemplate structureTemplate = new StructureTemplate();
++                        int version = NbtUtils.getDataVersion(tag, 500);
++                        structureTemplate.load(blockLookup, net.minecraft.util.datafix.DataFixTypes.STRUCTURE.updateToCurrentVersion(fixerUpper, tag, version));
++
++                        return java.util.Optional.of(structureTemplate);
++                    } catch (Exception e) {
++                        LOGGER.error("Failed to load test template from {}", file, e);
++                        return java.util.Optional.empty();
++                    }
++                }
++
++                @Override
++                public Stream<Identifier> list() {
++                    List<Identifier> foundTemplates = new java.util.ArrayList<>();
++                    for (String dirName : List.of("structure", "structures")) {
++                        Path searchFolder = customSource.resolve("minecraft").resolve(dirName);
++                        if (!java.nio.file.Files.isDirectory(searchFolder)) continue;
++
++                        try (Stream<Path> walk = java.nio.file.Files.walk(searchFolder)) {
++                            walk.filter(java.nio.file.Files::isRegularFile)
++                                .filter(p -> p.toString().endsWith(".snbt"))
++                                .forEach(p -> {
++                                    String relative = searchFolder.relativize(p).toString().replace("\\", "/");
++                                    String cleanName = relative.substring(0, relative.length() - ".snbt".length());
++                                    foundTemplates.add(Identifier.fromNamespaceAndPath("minecraft", "minecraft/structure/" + cleanName));
++                                });
++                        } catch (IOException e) {
++                            LOGGER.error("Failed to list files in the export folder", e);
++                        }
++                    }
++                    return foundTemplates.stream();
++                }
++            });
+         }
++        // Purpur end
+ 
+         sources.add(this.resourceManagerSource);
+         this.sources = sources.build();
+@@ -92,7 +_,27 @@
+     }
+ 
+     public Optional<StructureTemplate> get(final Identifier id) {
+-        return this.structureRepository.computeIfAbsent(id, this::tryLoad);
++        Optional<StructureTemplate> cached = this.structureRepository.get(id);
++        if (cached != null && cached.isPresent()) {
++            return cached;
++        }
++
++        Optional<StructureTemplate> loaded = this.tryLoad(id);
++        if (loaded.isPresent()) {
++            this.structureRepository.put(id, loaded);
++        } else {
++            this.structureRepository.put(id, Optional.empty());
++        }
++        return loaded;
++    }
++
++    public Optional<StructureTemplate> hotReload(final Identifier id) {
++        this.structureRepository.remove(id);
++        return this.get(id);
++    }
++
++    public void clearCache() {
++        this.structureRepository.clear();
+     }
+ 
+     public Stream<Identifier> listTemplates() {
+@@ -106,7 +_,8 @@
+                 if (loaded.isPresent()) {
+                     return loaded;
+                 }
+-            } catch (Exception var5) {
++            } catch (Exception e) {
++                LOGGER.error("Failed to load structure template: {}", id, e);
+             }
+         }
+ 
+@@ -115,7 +_,7 @@
+ 
+     public void onResourceManagerReload(final ResourceManager resourceManager) {
+         this.resourceManagerSource.setResourceManager(resourceManager);
+-        this.structureRepository.clear();
++        this.clearCache();
+     }
+ 
+     public boolean save(final Identifier id) {
+@@ -135,7 +_,11 @@
+         }
+ 
+         try {
+-            return save(file, structureTemplate.get(), saveAsText);
++            boolean success = save(file, structureTemplate.get(), saveAsText);
++            if (success) {
++                this.structureRepository.remove(id);
++            }
++            return success;
+         } catch (Exception e) {
+             LOGGER.warn("Failed to save structure file {} to {}", id, file, e);
+             return false;
