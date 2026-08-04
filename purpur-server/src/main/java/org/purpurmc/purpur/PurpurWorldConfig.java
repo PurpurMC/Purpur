@@ -2275,6 +2275,7 @@ public class PurpurWorldConfig {
     public double illusionerScale = 1.0D;
     public boolean illusionerTakeDamageFromWater = false;
     public boolean illusionerAlwaysDropExp = false;
+    public boolean illusionerSpawnInRaids = false;
     private void illusionerSettings() {
         illusionerRidable = getBoolean("mobs.illusioner.ridable", illusionerRidable);
         illusionerRidableInWater = getBoolean("mobs.illusioner.ridable-in-water", illusionerRidableInWater);
@@ -2294,6 +2295,7 @@ public class PurpurWorldConfig {
         illusionerScale = Mth.clamp(getDouble("mobs.illusioner.attributes.scale", illusionerScale), 0.0625D, 16.0D);
         illusionerTakeDamageFromWater = getBoolean("mobs.illusioner.takes-damage-from-water", illusionerTakeDamageFromWater);
         illusionerAlwaysDropExp = getBoolean("mobs.illusioner.always-drop-exp", illusionerAlwaysDropExp);
+        illusionerSpawnInRaids = getBoolean("mobs.illusioner.spawn-in-raids", illusionerSpawnInRaids);
     }
 
     public boolean ironGolemRidable = false;
