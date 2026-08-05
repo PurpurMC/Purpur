@@ -164,6 +164,11 @@ public class PurpurWorldConfig {
     public boolean imposeTeleportRestrictionsOnGateways = false;
     public boolean imposeTeleportRestrictionsOnNetherPortals = false;
     public boolean imposeTeleportRestrictionsOnEndPortals = false;
+    // Disables the DonutSMP-style "flood machine": an observer + sticky piston + slime/honey
+    // block carrying a water/lava source. When enabled, any piston action that would move a
+    // slime/honey block with a fluid source directly above it is cancelled, stopping the
+    // machine from spreading water across the world.
+    public boolean fixFloodingMachines = false;
     public boolean tickFluids = true;
     public double mobsBlindnessMultiplier = 1;
     public boolean mobsIgnoreRails = false;
@@ -223,6 +228,7 @@ public class PurpurWorldConfig {
         imposeTeleportRestrictionsOnGateways = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-gateways", imposeTeleportRestrictionsOnGateways);
         imposeTeleportRestrictionsOnNetherPortals = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-nether-portals", imposeTeleportRestrictionsOnNetherPortals);
         imposeTeleportRestrictionsOnEndPortals = getBoolean("gameplay-mechanics.impose-teleport-restrictions-on-end-portals", imposeTeleportRestrictionsOnEndPortals);
+        fixFloodingMachines = getBoolean("gameplay-mechanics.fix-flooding-machines", fixFloodingMachines);
         tickFluids = getBoolean("gameplay-mechanics.tick-fluids", tickFluids);
         mobsBlindnessMultiplier = getDouble("gameplay-mechanics.entity-blindness-multiplier", mobsBlindnessMultiplier);
         mobsIgnoreRails = getBoolean("gameplay-mechanics.mobs-ignore-rails", mobsIgnoreRails);
