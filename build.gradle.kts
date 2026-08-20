@@ -22,11 +22,27 @@ paperweight {
             outputFile = file("purpur-api/build.gradle.kts")
             patchFile = file("purpur-api/build.gradle.kts.patch")
         }
+        patchFile {
+            path = "paper-checkstyle/build.gradle.kts"
+            outputFile = file("purpur-checkstyle/build.gradle.kts")
+            patchFile = file("purpur-checkstyle/build.gradle.kts.patch")
+        }
         patchDir("paperApi") {
             upstreamPath = "paper-api"
             excludes = setOf("build.gradle.kts")
             patchesDir = file("purpur-api/paper-patches")
             outputDir = file("paper-api")
+        }
+        patchDir("paperCheckstyle") {
+            upstreamPath = "paper-checkstyle"
+            excludes = setOf("build.gradle.kts")
+            patchesDir = file("purpur-checkstyle/paper-patches")
+            outputDir = file("paper-checkstyle")
+        }
+        patchDir("paperCheckstyleConfig") {
+            upstreamPath = ".checkstyle"
+            patchesDir = file("purpur-checkstyle/config-patches")
+            outputDir = file(".checkstyle")
         }
     }
 }
