@@ -486,8 +486,7 @@ public class PurpurWorldConfig {
     public boolean playerSleepNearMonsters = false;
     public boolean playersSkipNight = true;
     public double playerCriticalDamageMultiplier = 1.5D;
-    public int playerBurpDelay = 10;
-    public boolean playerBurpWhenFull = false;
+    public int playerBurpDelay = 0;
     public boolean playerRidableInWater = false;
     public boolean playerRemoveBindingWithWeakness = false;
     public int shiftRightClickRepairsMendingPoints = 0;
@@ -515,7 +514,6 @@ public class PurpurWorldConfig {
         playersSkipNight = getBoolean("gameplay-mechanics.player.can-skip-night", playersSkipNight);
         playerCriticalDamageMultiplier = getDouble("gameplay-mechanics.player.critical-damage-multiplier", playerCriticalDamageMultiplier);
         playerBurpDelay = getInt("gameplay-mechanics.player.burp-delay", playerBurpDelay);
-        playerBurpWhenFull = getBoolean("gameplay-mechanics.player.burp-when-full", playerBurpWhenFull);
         playerRidableInWater = getBoolean("gameplay-mechanics.player.ridable-in-water", playerRidableInWater);
         playerRemoveBindingWithWeakness = getBoolean("gameplay-mechanics.player.curse-of-binding.remove-with-weakness", playerRemoveBindingWithWeakness);
         shiftRightClickRepairsMendingPoints = getInt("gameplay-mechanics.player.shift-right-click-repairs-mending-points", shiftRightClickRepairsMendingPoints);
