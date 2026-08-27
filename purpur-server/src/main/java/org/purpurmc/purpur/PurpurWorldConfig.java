@@ -486,7 +486,7 @@ public class PurpurWorldConfig {
     public boolean playerSleepNearMonsters = false;
     public boolean playersSkipNight = true;
     public double playerCriticalDamageMultiplier = 1.5D;
-    public int playerBurpDelay = 10;
+    public int playerBurpDelay = 0;
     public boolean playerBurpWhenFull = false;
     public boolean playerRidableInWater = false;
     public boolean playerRemoveBindingWithWeakness = false;
