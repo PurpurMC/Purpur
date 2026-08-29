@@ -499,6 +499,10 @@ public class PurpurWorldConfig {
             set("gameplay-mechanics.player.idle-timeout.mods-target", null);
             set("gameplay-mechanics.player.idle-timeout.mobs-target", oldVal);
         }
+        if (PurpurConfig.version < 49) {
+            int oldVal = getInt("gameplay-mechanics.player.burp-delay", playerBurpDelay);
+            if (oldVal == 10) set("gameplay-mechanics.player.burp-delay", 0);
+        }
         idleTimeoutKick = System.getenv("PURPUR_FORCE_IDLE_KICK") == null ? getBoolean("gameplay-mechanics.player.idle-timeout.kick-if-idle", idleTimeoutKick) : Boolean.parseBoolean(System.getenv("PURPUR_FORCE_IDLE_KICK"));
         idleTimeoutTickNearbyEntities = getBoolean("gameplay-mechanics.player.idle-timeout.tick-nearby-entities", idleTimeoutTickNearbyEntities);
         idleTimeoutCountAsSleeping = getBoolean("gameplay-mechanics.player.idle-timeout.count-as-sleeping", idleTimeoutCountAsSleeping);
