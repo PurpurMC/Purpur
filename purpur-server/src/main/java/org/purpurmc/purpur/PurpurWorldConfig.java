@@ -2123,6 +2123,9 @@ public class PurpurWorldConfig {
     public boolean frogControllable = true;
     public float frogRidableJumpHeight = 0.65F;
     public int frogBreedingTicks = 6000;
+    public double frogBreedingChance = 1.0D;
+    public int frogBreedingMinOffspring = 2;
+    public int frogBreedingMaxOffspring = 5;
     private void frogSettings() {
         frogRidable = getBoolean("mobs.frog.ridable", frogRidable);
         frogRidableInWater = getBoolean("mobs.frog.ridable-in-water", frogRidableInWater);
@@ -2134,6 +2137,9 @@ public class PurpurWorldConfig {
             set("mobs.frog.breeding.cooldown-in-ticks", oldValue);
         }
         frogBreedingTicks = getInt("mobs.frog.breeding.cooldown-in-ticks", frogBreedingTicks);
+        frogBreedingChance = getDouble("mobs.frog.breeding.offspring.chance", frogBreedingChance);
+        frogBreedingMinOffspring = getInt("mobs.frog.breeding.offspring.min", frogBreedingMinOffspring);
+        frogBreedingMaxOffspring = getInt("mobs.frog.breeding.offspring.max", frogBreedingMaxOffspring);
     }
 
     public boolean ghastRidable = false;
@@ -2851,7 +2857,7 @@ public class PurpurWorldConfig {
             set("mobs.pig.breeding-delay-ticks", null);
             set("mobs.pig.breeding.cooldown-in-ticks", oldValue);
         }
-        snifferBreedingTicks = getInt("mobs.pig.breeding.cooldown-in-ticks", pigBreedingTicks);
+        pigBreedingTicks = getInt("mobs.pig.breeding.cooldown-in-ticks", pigBreedingTicks);
         pigTakeDamageFromWater = getBoolean("mobs.pig.takes-damage-from-water", pigTakeDamageFromWater);
         pigAlwaysDropExp = getBoolean("mobs.pig.always-drop-exp", pigAlwaysDropExp);
         pigBreedingChance = getDouble("mobs.pig.breeding.offspring.chance", pigBreedingChance);
@@ -3620,6 +3626,9 @@ public class PurpurWorldConfig {
     public int turtleBreedingTicks = 6000;
     public boolean turtleTakeDamageFromWater = false;
     public boolean turtleAlwaysDropExp = false;
+    public double turtleBreedingChance = 0.0D;
+    public int turtleBreedingMinOffspring = 1;
+    public int turtleBreedingMaxOffspring = 1;
     private void turtleSettings() {
         turtleRidable = getBoolean("mobs.turtle.ridable", turtleRidable);
         turtleRidableInWater = getBoolean("mobs.turtle.ridable-in-water", turtleRidableInWater);
@@ -3639,6 +3648,9 @@ public class PurpurWorldConfig {
         turtleBreedingTicks = getInt("mobs.turtle.breeding.cooldown-in-ticks", turtleBreedingTicks);
         turtleTakeDamageFromWater = getBoolean("mobs.turtle.takes-damage-from-water", turtleTakeDamageFromWater);
         turtleAlwaysDropExp = getBoolean("mobs.turtle.always-drop-exp", turtleAlwaysDropExp);
+        turtleBreedingChance = getDouble("mobs.turtle.breeding.offspring.chance", turtleBreedingChance);
+        turtleBreedingMinOffspring = getInt("mobs.turtle.breeding.offspring.min", turtleBreedingMinOffspring);
+        turtleBreedingMaxOffspring = getInt("mobs.turtle.breeding.offspring.max", turtleBreedingMaxOffspring);
     }
 
     public boolean vexRidable = false;
