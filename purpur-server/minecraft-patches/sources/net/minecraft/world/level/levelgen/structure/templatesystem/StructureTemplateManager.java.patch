@@ -1,24 +1,25 @@
 --- a/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
 +++ b/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
-@@ -60,21 +_,87 @@
+@@ -60,7 +_,17 @@
          this.resourceManagerSource = new ResourceManagerTemplateSource(fixerUpper, blockLookup, resourceManager, RESOURCE_STRUCTURE_LISTER);
          Path generatedDir = storage.getLevelPath(LevelResource.GENERATED_DIR).normalize();
          this.worldTemplates = new TemplatePathFactory(generatedDir);
 -        if (StructureUtils.testStructuresTargetDir != null) {
++        // Purpur start - support GameTest exports
++        // if (StructureUtils.testStructuresTargetDir != null) {
 +
 +        // Standardize absolute path to handle relative root differences across run environments
 +        Path defaultTestDir = java.nio.file.Paths.get("Minecraft.Server/src/test/convertables/data").toAbsolutePath();
 +
-+        // Purpur start - export directory fallback
 +        if (org.purpurmc.purpur.PurpurConfig.registerMinecraftExportCommands) {
 +            Path testTarget = StructureUtils.testStructuresTargetDir != null ? StructureUtils.testStructuresTargetDir : defaultTestDir;
 +            this.testTemplates = new TemplatePathFactory(testTarget, PackType.SERVER_DATA);
 +        } else if (StructureUtils.testStructuresTargetDir != null) {
++        // Purpur end - support GameTest exports
              this.testTemplates = new TemplatePathFactory(StructureUtils.testStructuresTargetDir, PackType.SERVER_DATA);
          } else {
              this.testTemplates = null;
-         }
-+        // Purpur end
+@@ -68,13 +_,76 @@
  
          Builder<TemplateSource> sources = ImmutableList.builder();
          sources.add(new DirectoryTemplateSource(fixerUpper, blockLookup, generatedDir, WORLD_STRUCTURE_LISTER, false));
@@ -28,8 +29,14 @@
 -                    fixerUpper, blockLookup, StructureUtils.testStructuresSourceDir, PackType.SERVER_DATA, RESOURCE_TEXT_STRUCTURE_LISTER, true
 -                )
 -            );
++        // Purpur start - support GameTest exports
++        // if (StructureUtils.testStructuresSourceDir != null) {
++        //     sources.add(
++        //         new DirectoryTemplateSource(
++        //             fixerUpper, blockLookup, StructureUtils.testStructuresSourceDir, PackType.SERVER_DATA, RESOURCE_TEXT_STRUCTURE_LISTER, true
++        //         )
++        //     );
 +
-+        // Purpur start - structure source registration
 +        if (org.purpurmc.purpur.PurpurConfig.registerMinecraftExportCommands || StructureUtils.testStructuresSourceDir != null) {
 +            Path customSource = StructureUtils.testStructuresSourceDir != null ? StructureUtils.testStructuresSourceDir : defaultTestDir;
 +
@@ -91,15 +98,17 @@
 +                }
 +            });
          }
-+        // Purpur end
++        // Purpur start - support GameTest exports
  
          sources.add(this.resourceManagerSource);
          this.sources = sources.build();
-@@ -92,7 +_,27 @@
+@@ -92,7 +_,30 @@
      }
  
      public Optional<StructureTemplate> get(final Identifier id) {
 -        return this.structureRepository.computeIfAbsent(id, this::tryLoad);
++        // Purpur start - support GameTest exports
++        // return this.structureRepository.computeIfAbsent(id, this::tryLoad);
 +        Optional<StructureTemplate> cached = this.structureRepository.get(id);
 +        if (cached != null && cached.isPresent()) {
 +            return cached;
@@ -121,16 +130,15 @@
 +
 +    public void clearCache() {
 +        this.structureRepository.clear();
++        // Purpur end - support GameTest exports
      }
  
      public Stream<Identifier> listTemplates() {
-@@ -106,7 +_,8 @@
-                 if (loaded.isPresent()) {
+@@ -107,6 +_,7 @@
                      return loaded;
                  }
--            } catch (Exception var5) {
-+            } catch (Exception e) {
-+                LOGGER.error("Failed to load structure template: {}", id, e);
+             } catch (Exception var5) {
++                LOGGER.error("Failed to load structure template: {}", id, var5); // Purpur - support GameTest exports
              }
          }
  
@@ -139,20 +147,22 @@
      public void onResourceManagerReload(final ResourceManager resourceManager) {
          this.resourceManagerSource.setResourceManager(resourceManager);
 -        this.structureRepository.clear();
-+        this.clearCache();
++        this.clearCache(); // Purpur - support GameTest exports
      }
  
      public boolean save(final Identifier id) {
-@@ -135,7 +_,11 @@
+@@ -135,7 +_,13 @@
          }
  
          try {
 -            return save(file, structureTemplate.get(), saveAsText);
++            // Purpur start - support GameTest exports
 +            boolean success = save(file, structureTemplate.get(), saveAsText);
 +            if (success) {
 +                this.structureRepository.remove(id);
 +            }
 +            return success;
++            // Purpur end - support GameTest exports
          } catch (Exception e) {
              LOGGER.warn("Failed to save structure file {} to {}", id, file, e);
              return false;
