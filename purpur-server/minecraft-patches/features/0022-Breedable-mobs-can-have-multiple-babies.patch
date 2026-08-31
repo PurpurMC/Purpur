@@ -1,0 +1,786 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: kacimiamine <contact@kacimiamine.com>
+Date: Thu, 30 Jul 2026 19:31:28 +0100
+Subject: [PATCH] Breedable mobs can have multiple babies
+
+
+diff --git a/net/minecraft/world/entity/Mob.java b/net/minecraft/world/entity/Mob.java
+index 963eb0e38011e37f8a3f20751bcf47c184623ed7..44e8da8b46661721acb52d44dba926f69b021e44 100644
+--- a/net/minecraft/world/entity/Mob.java
++++ b/net/minecraft/world/entity/Mob.java
+@@ -155,6 +155,7 @@ public abstract class Mob extends LivingEntity implements Targeting, EquipmentUs
+     private int homeRadius = -1;
+     public boolean aware = true; // CraftBukkit
+     public int ticksSinceLastInteraction; // Purpur - Entity lifespan
++    protected boolean willHaveAnotherBaby() { return false; } protected int getBreedingMinOffspring() { return 1; } protected int getBreedingMaxOffspring() { return 1; } // Purpur - Breedable mobs can have multiple babies
+ 
+     protected Mob(final EntityType<? extends Mob> type, final Level level) {
+         super(type, level);
+diff --git a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
+index 9aefa11fcc336c5c98c63301b7f9a51b397bdc71..350cfa051d0a12d596efd041ff36ad89270b75cf 100644
+--- a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
++++ b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
+@@ -107,6 +107,13 @@ public class VillagerMakeLove extends Behavior<Villager> {
+     }
+ 
+     private Optional<Villager> breed(final ServerLevel level, final Villager source, final Villager target) {
++        // Purpur start - Breedable mobs can have multiple babies
++        return this.breed(level, source, target, 0);
++    }
++
++    private Optional<Villager> breed(final ServerLevel level, final Villager source, final Villager target, int currentBabyCount) {
++        if ((currentBabyCount >= source.getBreedingMinOffspring()) && (!source.willHaveAnotherBaby() || currentBabyCount >= source.getBreedingMaxOffspring())) return Optional.empty();
++        // Purpur end - Breedable mobs can have multiple babies
+         Villager child = source.getBreedOffspring(level, target);
+         if (child == null) {
+             return Optional.empty();
+@@ -126,6 +133,7 @@ public class VillagerMakeLove extends Behavior<Villager> {
+         level.addFreshEntityWithPassengers(child, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.BREEDING);
+         // CraftBukkit end - call EntityBreedEvent
+         level.broadcastEntityEvent(child, EntityEvent.LOVE_HEARTS);
++        this.breed(level, source, target, currentBabyCount + 1); // Purpur - Breedable mobs can have multiple babies
+         return Optional.of(child);
+     }
+ 
+diff --git a/net/minecraft/world/entity/animal/Animal.java b/net/minecraft/world/entity/animal/Animal.java
+index 066bec0f5ed154dea08287ff6d4653a4623f956a..2f406344234508907e6bc6632b2bc70d24b4b6e3 100644
+--- a/net/minecraft/world/entity/animal/Animal.java
++++ b/net/minecraft/world/entity/animal/Animal.java
+@@ -226,6 +226,13 @@ public abstract class Animal extends AgeableMob {
+     }
+ 
+     public void spawnChildFromBreeding(final ServerLevel level, final Animal partner) {
++        // Purpur start - Breedable mobs can have multiple babies
++        this.spawnChildFromBreeding(level, partner, 0);
++    }
++
++    public void spawnChildFromBreeding(final ServerLevel level, final Animal partner, int currentBabyCount) {
++        if ((currentBabyCount >= getBreedingMinOffspring()) && (!willHaveAnotherBaby() || currentBabyCount >= getBreedingMaxOffspring())) return;
++        // Purpur end - Breedable mobs can have multiple babies
+         AgeableMob offspring = this.getBreedOffspring(level, partner);
+         if (offspring != null) {
+             //offspring.setBaby(true); // Purpur - Add adjustable breeding cooldown to config - moved down
+@@ -254,6 +261,7 @@ public abstract class Animal extends AgeableMob {
+             this.finalizeSpawnChildFromBreeding(level, partner, offspring, experience);
+             level.addFreshEntityWithPassengers(offspring, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.BREEDING);
+             // CraftBukkit end - Call EntityBreedEvent
++            this.spawnChildFromBreeding(level, partner, currentBabyCount + 1); // Purpur - Breedable mobs can have multiple babies
+         }
+     }
+ 
+diff --git a/net/minecraft/world/entity/animal/armadillo/Armadillo.java b/net/minecraft/world/entity/animal/armadillo/Armadillo.java
+index 7ff07fafcdb5d34a69f28d2c9c184bb8fc7656c2..d4f9430a9b2e960781628f32e3f746fea04d510d 100644
+--- a/net/minecraft/world/entity/animal/armadillo/Armadillo.java
++++ b/net/minecraft/world/entity/animal/armadillo/Armadillo.java
+@@ -125,6 +125,23 @@ public class Armadillo extends Animal {
+     }
+     // Purpur end - Make entity breeding times configurable
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.armadilloBreedingChance > 0.0D) && (this.level().purpurConfig.armadilloBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.armadilloBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.armadilloBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void defineSynchedData(final SynchedEntityData.Builder entityData) {
+         super.defineSynchedData(entityData);
+diff --git a/net/minecraft/world/entity/animal/axolotl/Axolotl.java b/net/minecraft/world/entity/animal/axolotl/Axolotl.java
+index 57b34d61c972123a2871da5abba851fbe656ff75..adf937ea7225a546c3f41c37a70a4274041abe80 100644
+--- a/net/minecraft/world/entity/animal/axolotl/Axolotl.java
++++ b/net/minecraft/world/entity/animal/axolotl/Axolotl.java
+@@ -168,6 +168,23 @@ public class Axolotl extends Animal implements Bucketable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.axolotlBreedingChance > 0.0D) && (this.level().purpurConfig.axolotlBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.axolotlBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.axolotlBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     public float getWalkTargetValue(final BlockPos pos, final LevelReader level) {
+         return 0.0F;
+diff --git a/net/minecraft/world/entity/animal/bee/Bee.java b/net/minecraft/world/entity/animal/bee/Bee.java
+index f4483f893c301e338595cc2e79e9fe9915b7bedd..e309f7a975602a56b3c3202c163652bebb46cc9d 100644
+--- a/net/minecraft/world/entity/animal/bee/Bee.java
++++ b/net/minecraft/world/entity/animal/bee/Bee.java
+@@ -223,6 +223,23 @@ public class Bee extends Animal implements NeutralMob {
+     }
+     // Purpur end - Ridables
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.beeBreedingChance > 0.0D) && (this.level().purpurConfig.beeBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.beeBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.beeBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void defineSynchedData(final SynchedEntityData.Builder entityData) {
+         super.defineSynchedData(entityData);
+diff --git a/net/minecraft/world/entity/animal/camel/Camel.java b/net/minecraft/world/entity/animal/camel/Camel.java
+index a683afa61a69a9ea2d372dc7a00dc76f9fabd0d4..98ec32699e9322714620f563842dabc0c2bc1e52 100644
+--- a/net/minecraft/world/entity/animal/camel/Camel.java
++++ b/net/minecraft/world/entity/animal/camel/Camel.java
+@@ -114,6 +114,23 @@ public class Camel extends AbstractHorse {
+     }
+     // Purpur end - Make entity breeding times configurable
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.camelBreedingChance > 0.0D) && (this.level().purpurConfig.camelBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.camelBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.camelBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void addAdditionalSaveData(final ValueOutput output) {
+         super.addAdditionalSaveData(output);
+diff --git a/net/minecraft/world/entity/animal/chicken/Chicken.java b/net/minecraft/world/entity/animal/chicken/Chicken.java
+index 31dda8f31967e1e02c2a9e32cc0586afa9c416e1..051be366707f34d4ec58e42e8717c97f308c0ac9 100644
+--- a/net/minecraft/world/entity/animal/chicken/Chicken.java
++++ b/net/minecraft/world/entity/animal/chicken/Chicken.java
+@@ -132,6 +132,23 @@ public class Chicken extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.chickenBreedingChance > 0.0D) && (this.level().purpurConfig.chickenBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.chickenBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.chickenBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(0, new FloatGoal(this));
+diff --git a/net/minecraft/world/entity/animal/cow/Cow.java b/net/minecraft/world/entity/animal/cow/Cow.java
+index b084e914bc473aa739be988a03b98085d0a795a7..80555a3d19dec7b793e1f5536c496a7372d1cdd1 100644
+--- a/net/minecraft/world/entity/animal/cow/Cow.java
++++ b/net/minecraft/world/entity/animal/cow/Cow.java
+@@ -91,6 +91,23 @@ public class Cow extends AbstractCow {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.cowBreedingChance > 0.0D) && (this.level().purpurConfig.cowBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.cowBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.cowBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void registerGoals() {
+         super.registerGoals();
+diff --git a/net/minecraft/world/entity/animal/cow/MushroomCow.java b/net/minecraft/world/entity/animal/cow/MushroomCow.java
+index b95e6f21b1cfaeae1ca4340c7fe0d6cb2a0804c7..cfc66658b496185c729ebf6bc16f6c38aee9aca8 100644
+--- a/net/minecraft/world/entity/animal/cow/MushroomCow.java
++++ b/net/minecraft/world/entity/animal/cow/MushroomCow.java
+@@ -114,6 +114,23 @@ public class MushroomCow extends AbstractCow implements Shearable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.mooshroomBreedingChance > 0.0D) && (this.level().purpurConfig.mooshroomBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.mooshroomBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.mooshroomBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     public float getWalkTargetValue(final BlockPos pos, final LevelReader level) {
+         return level.getBlockState(pos.below()).is(Blocks.MYCELIUM) ? 10.0F : level.getPathfindingCostFromLightLevels(pos);
+diff --git a/net/minecraft/world/entity/animal/equine/Donkey.java b/net/minecraft/world/entity/animal/equine/Donkey.java
+index 13998bb4fa18e2ed14070b4eadc003f845faa462..02c111dc3f7b9d10a288965bd72ea8a0668f1596 100644
+--- a/net/minecraft/world/entity/animal/equine/Donkey.java
++++ b/net/minecraft/world/entity/animal/equine/Donkey.java
+@@ -62,6 +62,23 @@ public class Donkey extends AbstractChestedHorse {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.donkeyBreedingChance > 0.0D) && (this.level().purpurConfig.donkeyBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.donkeyBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.donkeyBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     public SoundEvent getAmbientSound() {
+         return SoundEvents.DONKEY_AMBIENT;
+diff --git a/net/minecraft/world/entity/animal/equine/Horse.java b/net/minecraft/world/entity/animal/equine/Horse.java
+index 3350900b8b5824048d5d25ff216c86274b195ebc..55f604a9afbfbd732624d0e49a7e253339952a02 100644
+--- a/net/minecraft/world/entity/animal/equine/Horse.java
++++ b/net/minecraft/world/entity/animal/equine/Horse.java
+@@ -94,6 +94,23 @@ public class Horse extends AbstractHorse {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.horseBreedingChance > 0.0D) && (this.level().purpurConfig.horseBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.horseBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.horseBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void randomizeAttributes(final RandomSource random) {
+         this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(generateMaxHealth(random::nextInt));
+diff --git a/net/minecraft/world/entity/animal/equine/Llama.java b/net/minecraft/world/entity/animal/equine/Llama.java
+index 2e29ad25c1ca442de5e5b0dc6108682f943a2aa3..591209f54549a7ca03e669b7d7fa69bd5bf7cbc9 100644
+--- a/net/minecraft/world/entity/animal/equine/Llama.java
++++ b/net/minecraft/world/entity/animal/equine/Llama.java
+@@ -173,6 +173,23 @@ public class Llama extends AbstractChestedHorse implements RangedAttackMob {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.llamaBreedingChance > 0.0D) && (this.level().purpurConfig.llamaBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.llamaBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.llamaBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     public boolean isTraderLlama() {
+         return false;
+     }
+diff --git a/net/minecraft/world/entity/animal/equine/TraderLlama.java b/net/minecraft/world/entity/animal/equine/TraderLlama.java
+index 492d19954258ce6a18b01aaa486c6e53f0377db5..aa38cbb34cd534a31091c4c4d6518d45040e22a4 100644
+--- a/net/minecraft/world/entity/animal/equine/TraderLlama.java
++++ b/net/minecraft/world/entity/animal/equine/TraderLlama.java
+@@ -92,6 +92,23 @@ public class TraderLlama extends Llama {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.traderLlamaBreedingChance > 0.0D) && (this.level().purpurConfig.traderLlamaBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.traderLlamaBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.traderLlamaBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     public boolean isTraderLlama() {
+         return true;
+diff --git a/net/minecraft/world/entity/animal/feline/Cat.java b/net/minecraft/world/entity/animal/feline/Cat.java
+index ad93261cdbe93487ea2168ae3bd3f937cee0eb53..2f3d07eea73f7a855a77b4bc6c1e92730e670c4d 100644
+--- a/net/minecraft/world/entity/animal/feline/Cat.java
++++ b/net/minecraft/world/entity/animal/feline/Cat.java
+@@ -156,6 +156,23 @@ public class Cat extends TamableAnimal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.catBreedingChance > 0.0D) && (this.level().purpurConfig.catBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.catBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.catBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void registerGoals() {
+         this.temptGoal = new Cat.CatTemptGoal(this, 0.6, i -> i.is(ItemTags.CAT_FOOD), true);
+diff --git a/net/minecraft/world/entity/animal/feline/Ocelot.java b/net/minecraft/world/entity/animal/feline/Ocelot.java
+index c56715a81f3a65b370d85574a1b57f60284df55e..bb0acc51697cb12c3fe60d89a7fef00056b87a93 100644
+--- a/net/minecraft/world/entity/animal/feline/Ocelot.java
++++ b/net/minecraft/world/entity/animal/feline/Ocelot.java
+@@ -119,6 +119,23 @@ public class Ocelot extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.ocelotBreedingChance > 0.0D) && (this.level().purpurConfig.ocelotBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.ocelotBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.ocelotBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     public boolean isTrusting() {
+         return this.entityData.get(DATA_TRUSTING);
+     }
+diff --git a/net/minecraft/world/entity/animal/fox/Fox.java b/net/minecraft/world/entity/animal/fox/Fox.java
+index db20e27227430809704b2d6148d0ffa13c7094fe..326441e732eca4841f6f3d53333fdb678770760a 100644
+--- a/net/minecraft/world/entity/animal/fox/Fox.java
++++ b/net/minecraft/world/entity/animal/fox/Fox.java
+@@ -228,6 +228,23 @@ public class Fox extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.foxBreedingChance > 0.0D) && (this.level().purpurConfig.foxBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.foxBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.foxBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void defineSynchedData(final SynchedEntityData.Builder entityData) {
+         super.defineSynchedData(entityData);
+diff --git a/net/minecraft/world/entity/animal/goat/Goat.java b/net/minecraft/world/entity/animal/goat/Goat.java
+index 363a6f9e8d13312f93562cf3a2b1668bc53adc66..36b5b826e617072161dc07478d407b12463d12f2 100644
+--- a/net/minecraft/world/entity/animal/goat/Goat.java
++++ b/net/minecraft/world/entity/animal/goat/Goat.java
+@@ -144,6 +144,23 @@ public class Goat extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.goatBreedingChance > 0.0D) && (this.level().purpurConfig.goatBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.goatBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.goatBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected Brain<Goat> makeBrain(final Brain.Packed packedBrain) {
+         return BRAIN_PROVIDER.makeBrain(this, packedBrain);
+diff --git a/net/minecraft/world/entity/animal/nautilus/Nautilus.java b/net/minecraft/world/entity/animal/nautilus/Nautilus.java
+index 1584f5a505ecf91897ed9105acf12add21510c0d..a0c281237355b675997fc0f4445ff2bd103cc649 100644
+--- a/net/minecraft/world/entity/animal/nautilus/Nautilus.java
++++ b/net/minecraft/world/entity/animal/nautilus/Nautilus.java
+@@ -62,6 +62,23 @@ public class Nautilus extends AbstractNautilus {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.nautilusBreedingChance > 0.0D) && (this.level().purpurConfig.nautilusBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.nautilusBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.nautilusBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected Brain<Nautilus> makeBrain(final Brain.Packed packedBrain) {
+         return BRAIN_PROVIDER.makeBrain(this, packedBrain);
+diff --git a/net/minecraft/world/entity/animal/panda/Panda.java b/net/minecraft/world/entity/animal/panda/Panda.java
+index b1f680ffb815d57e717c59b0c44a2e0b27f5a94e..c84d6d8ebaa046c45b30d0bd1c22e053fb2af8ab 100644
+--- a/net/minecraft/world/entity/animal/panda/Panda.java
++++ b/net/minecraft/world/entity/animal/panda/Panda.java
+@@ -168,6 +168,23 @@ public class Panda extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.pandaBreedingChance > 0.0D) && (this.level().purpurConfig.pandaBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.pandaBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.pandaBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected boolean canDispenserEquipIntoSlot(final EquipmentSlot slot) {
+         return slot == EquipmentSlot.MAINHAND && this.canPickUpLoot();
+diff --git a/net/minecraft/world/entity/animal/pig/Pig.java b/net/minecraft/world/entity/animal/pig/Pig.java
+index 0bb58d534d3966bbd4760f1b909e3497a7f7ac06..cdc607098084000c4727b3d1cc67882ca4908e47 100644
+--- a/net/minecraft/world/entity/animal/pig/Pig.java
++++ b/net/minecraft/world/entity/animal/pig/Pig.java
+@@ -122,6 +122,23 @@ public class Pig extends Animal implements ItemSteerable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.pigBreedingChance > 0.0D) && (this.level().purpurConfig.pigBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.pigBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.pigBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(0, new FloatGoal(this));
+diff --git a/net/minecraft/world/entity/animal/rabbit/Rabbit.java b/net/minecraft/world/entity/animal/rabbit/Rabbit.java
+index e48446be1ba64a46232966efcd9e5d1e90d7938a..cdd088d7150d253624a44a08a32bd3f8a09051aa 100644
+--- a/net/minecraft/world/entity/animal/rabbit/Rabbit.java
++++ b/net/minecraft/world/entity/animal/rabbit/Rabbit.java
+@@ -192,6 +192,23 @@ public class Rabbit extends Animal {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.rabbitBreedingChance > 0.0D) && (this.level().purpurConfig.rabbitBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.rabbitBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.rabbitBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(1, new FloatGoal(this));
+diff --git a/net/minecraft/world/entity/animal/sheep/Sheep.java b/net/minecraft/world/entity/animal/sheep/Sheep.java
+index 146003f7429be6668366e85955fff259b06781b3..2479183f1adcaccedb106276a02a689a3b700dcd 100644
+--- a/net/minecraft/world/entity/animal/sheep/Sheep.java
++++ b/net/minecraft/world/entity/animal/sheep/Sheep.java
+@@ -117,6 +117,23 @@ public class Sheep extends Animal implements Shearable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.sheepBreedingChance > 0.0D) && (this.level().purpurConfig.sheepBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.sheepBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.sheepBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void registerGoals() {
+         this.eatBlockGoal = new EatBlockGoal(this);
+diff --git a/net/minecraft/world/entity/animal/wolf/Wolf.java b/net/minecraft/world/entity/animal/wolf/Wolf.java
+index af82e593ac58eaa0e7e8b4abd0d152cfb58d5c13..d6e8178f1f007e6e7dbcfd0eb8c5552c530340d4 100644
+--- a/net/minecraft/world/entity/animal/wolf/Wolf.java
++++ b/net/minecraft/world/entity/animal/wolf/Wolf.java
+@@ -241,6 +241,23 @@ public class Wolf extends TamableAnimal implements NeutralMob {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.wolfBreedingChance > 0.0D) && (this.level().purpurConfig.wolfBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.wolfBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.wolfBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     protected void registerGoals() {
+         this.goalSelector.addGoal(1, new FloatGoal(this));
+diff --git a/net/minecraft/world/entity/monster/Strider.java b/net/minecraft/world/entity/monster/Strider.java
+index 929bd327f01ed28462c4ce4e7d2f3e1886aa4157..fd5bbc626e8329d72561c88924ac3364e4759b67 100644
+--- a/net/minecraft/world/entity/monster/Strider.java
++++ b/net/minecraft/world/entity/monster/Strider.java
+@@ -138,6 +138,23 @@ public class Strider extends Animal implements ItemSteerable {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.striderBreedingChance > 0.0D) && (this.level().purpurConfig.striderBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.striderBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.striderBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     public static boolean checkStriderSpawnRules(
+         final EntityType<Strider> ignoredType,
+         final LevelAccessor level,
+diff --git a/net/minecraft/world/entity/monster/hoglin/Hoglin.java b/net/minecraft/world/entity/monster/hoglin/Hoglin.java
+index 103d7ac2e3fdb4629d94902c0b4080a7622ae744..b2f048f6ac4c88b123ecdb0303b89760206525a9 100644
+--- a/net/minecraft/world/entity/monster/hoglin/Hoglin.java
++++ b/net/minecraft/world/entity/monster/hoglin/Hoglin.java
+@@ -127,6 +127,23 @@ public class Hoglin extends Animal implements Enemy, HoglinBase {
+     }
+     // Purpur end - Mobs always drop experience
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    protected boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.hoglinBreedingChance > 0.0D) && (this.level().purpurConfig.hoglinBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    protected int getBreedingMinOffspring() {
++        return this.level().purpurConfig.hoglinBreedingMinOffspring;
++    }
++
++    @Override
++    protected int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.hoglinBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @VisibleForTesting
+     public void setTimeInOverworld(final int timeInOverworld) {
+         this.timeInOverworld = timeInOverworld;
+diff --git a/net/minecraft/world/entity/npc/villager/Villager.java b/net/minecraft/world/entity/npc/villager/Villager.java
+index 590621a7b03d48a1721e1a1eed4d3bbeed2088fa..4f48dfcc8c83aca621f926b0fea4c058a2d2241b 100644
+--- a/net/minecraft/world/entity/npc/villager/Villager.java
++++ b/net/minecraft/world/entity/npc/villager/Villager.java
+@@ -296,6 +296,23 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
+     }
+     // Purpur end - Check mobGriefing Overrides
+ 
++    // Purpur start - Breedable mobs can have multiple babies
++    @Override
++    public boolean willHaveAnotherBaby() {
++        return (this.level().purpurConfig.villagerBreedingChance > 0.0D) && (this.level().purpurConfig.villagerBreedingChance >= this.random.nextDouble());
++    }
++
++    @Override
++    public int getBreedingMinOffspring() {
++        return this.level().purpurConfig.villagerBreedingMinOffspring;
++    }
++
++    @Override
++    public int getBreedingMaxOffspring() {
++        return this.level().purpurConfig.villagerBreedingMaxOffspring;
++    }
++    // Purpur end - Breedable mobs can have multiple babies
++
+     @Override
+     public Brain<Villager> getBrain() {
+         return (Brain<Villager>)super.getBrain();
+diff --git a/net/minecraft/world/level/block/FrogspawnBlock.java b/net/minecraft/world/level/block/FrogspawnBlock.java
+index 701a1c80e91dc5c0517819f3af55c1473979b039..8d135f1ee9da8800027e098d9420c88ae6b485f5 100644
+--- a/net/minecraft/world/level/block/FrogspawnBlock.java
++++ b/net/minecraft/world/level/block/FrogspawnBlock.java
+@@ -127,9 +127,10 @@ public class FrogspawnBlock extends Block {
+     }
+ 
+     private void spawnTadpoles(final ServerLevel level, final BlockPos pos, final RandomSource random) {
+-        int tadpoleAmount = random.nextInt(2, 6);
++        int tadpoleAmount = random.nextInt(level.purpurConfig.frogBreedingMinOffspring, level.purpurConfig.frogBreedingMaxOffspring + 1); // Purpur - Breedable mobs can have multiple babies
+ 
+         for (int i = 1; i <= tadpoleAmount; i++) {
++            if ((level.purpurConfig.frogBreedingChance <= 0.0D) || (level.purpurConfig.frogBreedingChance < random.nextDouble())) return; // Purpur - Breedable mobs can have multiple babies
+             Tadpole tadpole = EntityTypes.TADPOLE.create(level, EntitySpawnReason.BREEDING);
+             if (tadpole != null) {
+                 double xPos = pos.getX() + this.getRandomTadpolePositionOffset(random);
+diff --git a/net/minecraft/world/level/block/TurtleEggBlock.java b/net/minecraft/world/level/block/TurtleEggBlock.java
+index ed57b65f0c94d56477863dfb4435d8674d3d6ce2..3e829a91b61003528258edc2ef10e29ba5627dd0 100644
+--- a/net/minecraft/world/level/block/TurtleEggBlock.java
++++ b/net/minecraft/world/level/block/TurtleEggBlock.java
+@@ -127,6 +127,12 @@ public class TurtleEggBlock extends Block {
+                 level.gameEvent(GameEvent.BLOCK_DESTROY, pos, GameEvent.Context.of(state));
+ 
+                 for (int i = 0; i < state.getValue(EGGS); i++) {
++                    // Purpur start - Breedable mobs can have multiple babies
++                    int currentBabyCount = 0;
++                    while ((currentBabyCount < level.purpurConfig.turtleBreedingMinOffspring) ||
++                        ((level.purpurConfig.turtleBreedingChance > 0.0D && level.purpurConfig.turtleBreedingChance >= random.nextDouble()) &&
++                            currentBabyCount < level.purpurConfig.turtleBreedingMaxOffspring)) {
++                    // Purpur end - Breedable mobs can have multiple babies
+                     level.levelEvent(LevelEvent.PARTICLES_DESTROY_BLOCK, pos, Block.getId(state));
+                     Turtle turtle = EntityTypes.TURTLE.create(level, EntitySpawnReason.BREEDING);
+                     if (turtle != null) {
+@@ -134,6 +140,10 @@ public class TurtleEggBlock extends Block {
+                         turtle.setHomePos(pos);
+                         turtle.snapTo(pos.getX() + 0.3 + i * 0.2, pos.getY(), pos.getZ() + 0.3, 0.0F, 0.0F);
+                         level.addFreshEntity(turtle, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.EGG); // CraftBukkit
++                        // Purpur start - Breedable mobs can have multiple babies
++                            currentBabyCount++;
++                        }
++                        // Purpur end - Breedable mobs can have multiple babies
+                     }
+                 }
+             }
