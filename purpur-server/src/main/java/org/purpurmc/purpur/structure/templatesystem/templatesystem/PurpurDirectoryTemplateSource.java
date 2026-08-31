@@ -23,14 +23,10 @@ import org.slf4j.Logger;
 public class PurpurDirectoryTemplateSource extends TemplateSource {
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    protected final DataFixer fixerUpper;
-    protected final HolderGetter<Block> blockLookup;
     protected final Path customSource;
 
     public PurpurDirectoryTemplateSource(DataFixer fixerUpper, HolderGetter<Block> blockLookup, Path customSource) {
         super(fixerUpper, blockLookup);
-        this.fixerUpper = fixerUpper;
-        this.blockLookup = blockLookup;
         this.customSource = customSource;
     }
 
@@ -59,7 +55,7 @@ public class PurpurDirectoryTemplateSource extends TemplateSource {
 
             StructureTemplate structureTemplate = new StructureTemplate();
             int version = NbtUtils.getDataVersion(tag, 500);
-            structureTemplate.load(blockLookup, DataFixTypes.STRUCTURE.updateToCurrentVersion(fixerUpper, tag, version));
+            structureTemplate.load(this.blockLookup, DataFixTypes.STRUCTURE.updateToCurrentVersion(this.fixerUpper, tag, version));
 
             return Optional.of(structureTemplate);
         } catch (Exception e) {
