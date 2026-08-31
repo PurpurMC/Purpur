@@ -18,6 +18,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FrogspawnBlock;
 import net.minecraft.world.level.block.state.properties.Tilt;
 import org.apache.commons.lang3.BooleanUtils;
 import org.bukkit.Bukkit;
@@ -2124,8 +2125,8 @@ public class PurpurWorldConfig {
     public float frogRidableJumpHeight = 0.65F;
     public int frogBreedingTicks = 6000;
     public double frogBreedingChance = 1.0D;
-    public int frogBreedingMinOffspring = 2;
-    public int frogBreedingMaxOffspring = 5;
+    public int frogBreedingMinOffspring = FrogspawnBlock.MIN_TADPOLES_SPAWN;
+    public int frogBreedingMaxOffspring = FrogspawnBlock.MAX_TADPOLES_SPAWN;
     private void frogSettings() {
         frogRidable = getBoolean("mobs.frog.ridable", frogRidable);
         frogRidableInWater = getBoolean("mobs.frog.ridable-in-water", frogRidableInWater);
