@@ -1,0 +1,156 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mickey42302 <46900084+Mickey42302@users.noreply.github.com>
+Date: Sun, 20 Apr 1997 06:37:42 -0700
+Subject: [PATCH] Add full support for GameTest Exports
+
+
+diff --git a/net/minecraft/world/level/block/entity/TestInstanceBlockEntity.java b/net/minecraft/world/level/block/entity/TestInstanceBlockEntity.java
+index 5b9fafbe1276cca32a8a120889d95b895cfbbe1b..67086423890f81331a5cbaa6837fc203eae71805 100644
+--- a/net/minecraft/world/level/block/entity/TestInstanceBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/TestInstanceBlockEntity.java
+@@ -256,17 +256,22 @@ public class TestInstanceBlockEntity extends BlockEntity implements BoundingBoxR
+     }
+ 
+     public boolean exportTest(final Consumer<Component> feedbackOutput) {
++        // Purpur start - support GameTest exports
++        if (!org.purpurmc.purpur.PurpurConfig.registerMinecraftExportCommands) {
++            feedbackOutput.accept(Component.literal("Test structure exporting is disabled").withStyle(ChatFormatting.RED));
++            return true;
++        }
++        // Purpur end - support GameTest exports
+         Optional<Identifier> saved = this.saveTest(feedbackOutput);
+         return !saved.isEmpty() && this.level instanceof ServerLevel serverLevel && export(serverLevel, saved.get(), feedbackOutput);
+     }
+ 
+     public static boolean export(final ServerLevel level, final Identifier structureId, final Consumer<Component> feedbackOutput) {
+-        StructureTemplateManager structureManager = level.getStructureManager();
+-        TemplatePathFactory testTemplatePathFactory = structureManager.testTemplates();
+-        if (testTemplatePathFactory == null) {
++        if (!org.purpurmc.purpur.PurpurConfig.registerMinecraftExportCommands) { // Purpur - support GameTest exports
+             feedbackOutput.accept(Component.literal("Test structure exporting is disabled").withStyle(ChatFormatting.RED));
+             return true;
+         }
++        StructureTemplateManager structureManager = level.getStructureManager(); // Purpur - support GameTest exports
+ 
+         Optional<StructureTemplate> structureTemplate = structureManager.get(structureId);
+         if (structureTemplate.isEmpty()) {
+@@ -274,7 +279,15 @@ public class TestInstanceBlockEntity extends BlockEntity implements BoundingBoxR
+             return true;
+         }
+ 
+-        Path outputFile = testTemplatePathFactory.createAndValidatePathToStructure(structureId, StructureTemplateManager.RESOURCE_TEXT_STRUCTURE_LISTER);
++        // Purpur start - support GameTest exports
++        Path runDir = level.getServer().getServerDirectory();
++        Path baseExportDir = runDir.resolve("Minecraft.Server/src/test/convertables/data");
++
++        Path outputFile = baseExportDir
++            .resolve(structureId.getNamespace())
++            .resolve("structures")
++            .resolve(structureId.getPath() + ".snbt");
++        // Purpur end - support GameTest exports
+ 
+         try {
+             StructureTemplateManager.save(outputFile, structureTemplate.get(), true);
+diff --git a/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java b/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
+index 36f9778cf3e7a2701f2102161327365e277eff0e..31dc0b96725fa4d8a8a610fc0289f3aaef678e60 100644
+--- a/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
++++ b/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
+@@ -60,7 +60,17 @@ public class StructureTemplateManager {
+         this.resourceManagerSource = new ResourceManagerTemplateSource(fixerUpper, blockLookup, resourceManager, RESOURCE_STRUCTURE_LISTER);
+         Path generatedDir = storage.getLevelPath(LevelResource.GENERATED_DIR).normalize();
+         this.worldTemplates = new TemplatePathFactory(generatedDir);
+-        if (StructureUtils.testStructuresTargetDir != null) {
++        // Purpur start - support GameTest exports
++        // if (StructureUtils.testStructuresTargetDir != null) {
++
++        // Standardize absolute path to handle relative root differences across run environments
++        Path defaultTestDir = java.nio.file.Paths.get("Minecraft.Server/src/test/convertables/data").toAbsolutePath();
++
++        if (org.purpurmc.purpur.PurpurConfig.registerMinecraftExportCommands) {
++            Path testTarget = StructureUtils.testStructuresTargetDir != null ? StructureUtils.testStructuresTargetDir : defaultTestDir;
++            this.testTemplates = new TemplatePathFactory(testTarget, PackType.SERVER_DATA);
++        } else if (StructureUtils.testStructuresTargetDir != null) {
++        // Purpur end - support GameTest exports
+             this.testTemplates = new TemplatePathFactory(StructureUtils.testStructuresTargetDir, PackType.SERVER_DATA);
+         } else {
+             this.testTemplates = null;
+@@ -68,10 +78,12 @@ public class StructureTemplateManager {
+ 
+         Builder<TemplateSource> sources = ImmutableList.builder();
+         sources.add(new DirectoryTemplateSource(fixerUpper, blockLookup, generatedDir, WORLD_STRUCTURE_LISTER, false));
+-        if (StructureUtils.testStructuresSourceDir != null) {
++        // Purpur start - support GameTest exports
++        if (org.purpurmc.purpur.PurpurConfig.registerMinecraftExportCommands || StructureUtils.testStructuresSourceDir != null) {
++            Path customSource = StructureUtils.testStructuresSourceDir != null ? StructureUtils.testStructuresSourceDir : defaultTestDir;
++        // Purpur end - support GameTest exports
+             sources.add(
+-                new DirectoryTemplateSource(
+-                    fixerUpper, blockLookup, StructureUtils.testStructuresSourceDir, PackType.SERVER_DATA, RESOURCE_TEXT_STRUCTURE_LISTER, true
++                new org.purpurmc.purpur.structure.templatesystem.templatesystem.PurpurDirectoryTemplateSource(fixerUpper, blockLookup, customSource // Purpur - support GameTest exports
+                 )
+             );
+         }
+@@ -92,7 +104,20 @@ public class StructureTemplateManager {
+     }
+ 
+     public Optional<StructureTemplate> get(final Identifier id) {
+-        return this.structureRepository.computeIfAbsent(id, this::tryLoad);
++        // Purpur start - support GameTest exports
++        // return this.structureRepository.computeIfAbsent(id, this::tryLoad);
++        Optional<StructureTemplate> cached = this.structureRepository.get(id);
++        if (cached != null && cached.isPresent()) {
++            return cached;
++        }
++
++        Optional<StructureTemplate> loaded = this.tryLoad(id);
++        if (loaded.isPresent()) {
++            this.structureRepository.put(id, loaded);
++        } else {
++            this.structureRepository.put(id, Optional.empty());
++        }
++        return loaded;
+     }
+ 
+     public Stream<Identifier> listTemplates() {
+@@ -107,6 +132,7 @@ public class StructureTemplateManager {
+                     return loaded;
+                 }
+             } catch (Exception var5) {
++                LOGGER.error("Failed to load structure template: {}", id, var5); // Purpur - support GameTest exports
+             }
+         }
+ 
+@@ -135,7 +161,13 @@ public class StructureTemplateManager {
+         }
+ 
+         try {
+-            return save(file, structureTemplate.get(), saveAsText);
++            // Purpur start - support GameTest exports
++            boolean success = save(file, structureTemplate.get(), saveAsText);
++            if (success) {
++                this.structureRepository.remove(id);
++            }
++            return success;
++            // Purpur end - support GameTest exports
+         } catch (Exception e) {
+             LOGGER.warn("Failed to save structure file {} to {}", id, file, e);
+             return false;
+diff --git a/net/minecraft/world/level/levelgen/structure/templatesystem/loader/TemplatePathFactory.java b/net/minecraft/world/level/levelgen/structure/templatesystem/loader/TemplatePathFactory.java
+index cd1ee7d0a0c46b02b01227bd261023822a56cff9..894383d5d356af3193a808b94c1367e664c47b93 100644
+--- a/net/minecraft/world/level/levelgen/structure/templatesystem/loader/TemplatePathFactory.java
++++ b/net/minecraft/world/level/levelgen/structure/templatesystem/loader/TemplatePathFactory.java
+@@ -20,7 +20,13 @@ public class TemplatePathFactory {
+     }
+ 
+     public Path createAndValidatePathToStructure(final Identifier id, final FileToIdConverter converter) {
+-        return this.createAndValidatePathToStructure(converter.idToFile(id));
++        // Purpur start - support GameTest exports
++        Identifier cleanId = id;
++        if (cleanId.getPath().startsWith("minecraft/")) {
++            cleanId = Identifier.fromNamespaceAndPath(cleanId.getNamespace(), cleanId.getPath().substring("minecraft/".length()));
++        }
++        return this.createAndValidatePathToStructure(converter.idToFile(cleanId));
++        // Purpur end - support GameTest exports
+     }
+ 
+     public Path createAndValidatePathToStructure(final Identifier resourceLocation) {
