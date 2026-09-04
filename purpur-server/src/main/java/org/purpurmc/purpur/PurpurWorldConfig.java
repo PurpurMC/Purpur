@@ -503,6 +503,7 @@ public class PurpurWorldConfig {
             int oldVal = getInt("gameplay-mechanics.player.burp-delay", playerBurpDelay);
             if (oldVal == 10) set("gameplay-mechanics.player.burp-delay", 0);
         }
+        if (PurpurConfig.version < 50) set("gameplay-mechanics.player.burp-when-full", null);
         idleTimeoutKick = System.getenv("PURPUR_FORCE_IDLE_KICK") == null ? getBoolean("gameplay-mechanics.player.idle-timeout.kick-if-idle", idleTimeoutKick) : Boolean.parseBoolean(System.getenv("PURPUR_FORCE_IDLE_KICK"));
         idleTimeoutTickNearbyEntities = getBoolean("gameplay-mechanics.player.idle-timeout.tick-nearby-entities", idleTimeoutTickNearbyEntities);
         idleTimeoutCountAsSleeping = getBoolean("gameplay-mechanics.player.idle-timeout.count-as-sleeping", idleTimeoutCountAsSleeping);
