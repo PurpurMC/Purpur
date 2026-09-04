@@ -1,0 +1,71 @@
+--- a/net/minecraft/world/level/block/entity/SignBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/SignBlockEntity.java
+@@ -152,6 +_,20 @@
+         }
+     }
+ 
++    // Purpur start - Signs allow color codes
++    private Component translateColors(org.bukkit.entity.Player player, String line, Style style) {
++        if (level.purpurConfig.signAllowColors) {
++            if (player.hasPermission("purpur.sign.color")) line = line.replaceAll("(?i)&([0-9a-fr])", "\u00a7$1");
++            if (player.hasPermission("purpur.sign.style")) line = line.replaceAll("(?i)&([l-or])", "\u00a7$1");
++            if (player.hasPermission("purpur.sign.magic")) line = line.replaceAll("(?i)&([kr])", "\u00a7$1");
++
++            return io.papermc.paper.adventure.PaperAdventure.asVanilla(net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().deserialize(line));
++        } else {
++            return Component.literal(line).setStyle(style);
++        }
++    }
++    // Purpur end - Signs allow color codes
++
+     private static SignText updateMessages(final List<FilteredText> newLines, final SignText originalText, final boolean shouldFilter, final Player player, final SignBlockEntity signBlockEntity, final SignTextSlot slot) { // Paper - call SignChangeEvent
+         SignText.Mutable result = originalText.asMutable();
+         List<Component> originalLines = originalText.getMessages(shouldFilter);
+@@ -159,11 +_,13 @@
+         for (int i = 0; i < newLines.size(); i++) {
+             FilteredText line = newLines.get(i);
+             Style currentTextStyle = originalLines.get(i).getStyle();
++
++            org.bukkit.entity.Player craftPlayer =  (org.bukkit.craftbukkit.entity.CraftPlayer) player.getBukkitEntity(); // Purpur - Signs allow color codes
+             if (shouldFilter) {
+-                result.setLine(i, Component.literal(net.minecraft.util.StringUtil.filterText(line.filteredOrEmpty())).setStyle(currentTextStyle)); // Paper - filter sign text to chat only
++                result.setLine(i, translateColors(craftPlayer, net.minecraft.util.StringUtil.filterText(line.filteredOrEmpty()), currentTextStyle)); // Paper - filter sign text to chat only // Purpur - Signs allow color codes
+             } else {
+                 result.setLine(
+-                    i, Component.literal(line.raw()).setStyle(currentTextStyle), Component.literal(net.minecraft.util.StringUtil.filterText(line.filteredOrEmpty())).setStyle(currentTextStyle) // Paper - filter sign text to chat only
++                    i, translateColors(craftPlayer, net.minecraft.util.StringUtil.filterText(line.raw()), currentTextStyle), translateColors(craftPlayer, net.minecraft.util.StringUtil.filterText(line.filteredOrEmpty()), currentTextStyle) // Paper - filter sign text to chat only // Purpur - Signs allow color codes
+                 );
+             }
+         }
+@@ -316,6 +_,31 @@
+                 commandSource, Vec3.atCenterOf(pos), Vec2.ZERO, level, LevelBasedPermissionSet.GAMEMASTER, Component.literal("Sign"), level.getServer()  // Paper - Fix commands from signs not firing command events
+             );
+     }
++
++    // Purpur start - Signs allow color codes
++    public ClientboundBlockEntityDataPacket getTranslatedUpdatePacket(boolean filtered, SignTextSlot textSlot) {
++        try (net.minecraft.util.ProblemReporter.ScopedCollector scopedCollector = new net.minecraft.util.ProblemReporter.ScopedCollector(this.problemPath(), LOGGER)) {
++            net.minecraft.world.level.storage.TagValueOutput tagValueOutput = net.minecraft.world.level.storage.TagValueOutput.createWithContext(scopedCollector, this.getLevel().registryAccess());
++            this.saveAdditional(tagValueOutput);
++
++            final List<Component> lines = switch (textSlot) {
++                case BACK -> backText.getMessages(filtered);
++                case FRONT -> frontText.getMessages(filtered);
++            };
++
++            final String side = textSlot == SignTextSlot.FRONT ? "front_text" : "back_text";
++            net.minecraft.world.level.storage.ValueOutput sideNbt = tagValueOutput.child(side);
++            net.minecraft.world.level.storage.ValueOutput.TypedOutputList<String> messagesNbt = sideNbt.list("messages", com.mojang.serialization.Codec.STRING);
++            for (int i = 0; i < 4; i++) {
++                final net.kyori.adventure.text.Component component = io.papermc.paper.adventure.PaperAdventure.asAdventure(lines.get(i));
++                final String line = net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().serialize(component);
++                messagesNbt.add(line);
++            }
++            tagValueOutput.putString("PurpurEditor", "true");
++            return ClientboundBlockEntityDataPacket.create(this, (blockEntity, registryAccess) -> tagValueOutput.buildResult());
++        }
++    }
++    // Purpur end - Signs allow color codes
+ 
+     @Override
+     public ClientboundBlockEntityDataPacket getUpdatePacket() {
