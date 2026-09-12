@@ -1414,7 +1414,6 @@ public class PurpurWorldConfig {
     public boolean creeperExplodeWhenKilled = false;
     public boolean creeperHealthRadius = false;
     public boolean creeperAlwaysDropExp = false;
-    public double creeperHeadVisibilityPercent = 0.5D;
     public boolean creeperEncircleTarget = false;
     private void creeperSettings() {
         creeperRidable = getBoolean("mobs.creeper.ridable", creeperRidable);
@@ -1439,7 +1438,6 @@ public class PurpurWorldConfig {
         creeperExplodeWhenKilled = getBoolean("mobs.creeper.explode-when-killed", creeperExplodeWhenKilled);
         creeperHealthRadius = getBoolean("mobs.creeper.health-impacts-explosion", creeperHealthRadius);
         creeperAlwaysDropExp = getBoolean("mobs.creeper.always-drop-exp", creeperAlwaysDropExp);
-        creeperHeadVisibilityPercent = getDouble("mobs.creeper.head-visibility-percent", creeperHeadVisibilityPercent);
         creeperEncircleTarget = getBoolean("mobs.creeper.encircle-target", creeperEncircleTarget);
     }
 
@@ -2507,7 +2505,6 @@ public class PurpurWorldConfig {
     public boolean piglinTakeDamageFromWater = false;
     public int piglinPortalSpawnModifier = 2000;
     public boolean piglinAlwaysDropExp = false;
-    public double piglinHeadVisibilityPercent = 0.5D;
     public boolean piglinIgnoresArmorWithGoldTrim = false;
     public Boolean piglinCanPickUpLoot = null;
     private void piglinSettings() {
@@ -2529,7 +2526,6 @@ public class PurpurWorldConfig {
         piglinTakeDamageFromWater = getBoolean("mobs.piglin.takes-damage-from-water", piglinTakeDamageFromWater);
         piglinPortalSpawnModifier = getInt("mobs.piglin.portal-spawn-modifier", piglinPortalSpawnModifier);
         piglinAlwaysDropExp = getBoolean("mobs.piglin.always-drop-exp", piglinAlwaysDropExp);
-        piglinHeadVisibilityPercent = getDouble("mobs.piglin.head-visibility-percent", piglinHeadVisibilityPercent);
         piglinIgnoresArmorWithGoldTrim = getBoolean("mobs.piglin.ignores-armor-with-gold-trim", piglinIgnoresArmorWithGoldTrim);
         if (PurpurConfig.version < 47) {
             boolean oldVal = getBoolean("mobs.piglin.mob-griefing-override", false);
@@ -2903,7 +2899,6 @@ public class PurpurWorldConfig {
     public double skeletonScale = 1.0D;
     public boolean skeletonTakeDamageFromWater = false;
     public boolean skeletonAlwaysDropExp = false;
-    public double skeletonHeadVisibilityPercent = 0.5D;
     public int skeletonFeedWitherRoses = 0;
     public String skeletonBowAccuracy = "14 - difficulty * 4";
     public Map<Integer, Float> skeletonBowAccuracyMap = new HashMap<>();
@@ -2921,7 +2916,6 @@ public class PurpurWorldConfig {
         skeletonScale = Mth.clamp(getDouble("mobs.skeleton.attributes.scale", skeletonScale), 0.0625D, 16.0D);
         skeletonTakeDamageFromWater = getBoolean("mobs.skeleton.takes-damage-from-water", skeletonTakeDamageFromWater);
         skeletonAlwaysDropExp = getBoolean("mobs.skeleton.always-drop-exp", skeletonAlwaysDropExp);
-        skeletonHeadVisibilityPercent = getDouble("mobs.skeleton.head-visibility-percent", skeletonHeadVisibilityPercent);
         skeletonFeedWitherRoses = getInt("mobs.skeleton.feed-wither-roses", skeletonFeedWitherRoses);
         final String defaultSkeletonBowAccuracy = skeletonBowAccuracy;
         skeletonBowAccuracy = getString("mobs.skeleton.bow-accuracy", skeletonBowAccuracy);
@@ -3636,7 +3630,6 @@ public class PurpurWorldConfig {
     public Boolean zombieMobGriefingOverride = null;
     public boolean zombieTakeDamageFromWater = false;
     public boolean zombieAlwaysDropExp = false;
-    public double zombieHeadVisibilityPercent = 0.5D;
     public Boolean zombieCanPickUpLoot = null;
     private void zombieSettings() {
         zombieRidable = getBoolean("mobs.zombie.ridable", zombieRidable);
@@ -3662,7 +3655,6 @@ public class PurpurWorldConfig {
         zombieMobGriefingOverride = getBooleanOrDefault("mobs.zombie.mob-griefing-override", zombieMobGriefingOverride);
         zombieTakeDamageFromWater = getBoolean("mobs.zombie.takes-damage-from-water", zombieTakeDamageFromWater);
         zombieAlwaysDropExp = getBoolean("mobs.zombie.always-drop-exp", zombieAlwaysDropExp);
-        zombieHeadVisibilityPercent = getDouble("mobs.zombie.head-visibility-percent", zombieHeadVisibilityPercent);
         zombieCanPickUpLoot = getBooleanOrDefault("mobs.zombie.can-pick-up-loot", zombieCanPickUpLoot);
     }
 
