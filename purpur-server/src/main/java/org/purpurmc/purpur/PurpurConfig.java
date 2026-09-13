@@ -606,6 +606,11 @@ public class PurpurConfig {
         registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDisabledCommands);
     }
 
+    public static boolean registerMinecraftExportCommands = false;
+    private static void registerMinecraftExportCommands() {
+        registerMinecraftExportCommands = getBoolean("settings.register-minecraft-export-commands", registerMinecraftExportCommands);
+    }
+
     public static List<String> startupCommands = new ArrayList<>();
     private static void startupCommands() {
         startupCommands.clear();
