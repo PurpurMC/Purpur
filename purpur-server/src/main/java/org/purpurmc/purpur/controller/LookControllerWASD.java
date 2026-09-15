@@ -2,6 +2,7 @@ package org.purpurmc.purpur.controller;
 
 
 import net.minecraft.network.protocol.game.ClientboundMoveEntityPacket;
+import net.minecraft.network.protocol.game.VecDelta;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
@@ -45,7 +46,7 @@ public class LookControllerWASD extends LookControl {
 
         ClientboundMoveEntityPacket.PosRot entityPacket = new ClientboundMoveEntityPacket.PosRot(
             entity.getId(),
-            (short) 0, (short) 0, (short) 0,
+            VecDelta.ZERO,
             (byte) Mth.floor(entity.getYRot() * 256.0F / 360.0F),
             (byte) Mth.floor(entity.getXRot() * 256.0F / 360.0F),
             entity.onGround
