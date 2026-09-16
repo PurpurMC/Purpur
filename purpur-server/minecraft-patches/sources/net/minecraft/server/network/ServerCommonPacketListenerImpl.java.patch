@@ -1,0 +1,72 @@
+--- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
+@@ -44,6 +_,7 @@
+     private long keepAliveChallenge;
+     private long closedListenerTime;
+     private boolean closed = false;
++    private it.unimi.dsi.fastutil.longs.LongList keepAlives = new it.unimi.dsi.fastutil.longs.LongArrayList(); // Purpur - Alternative Keepalive Handling
+     private int latency;
+     private volatile boolean suspendFlushingOnServerThread = false;
+     // CraftBukkit start
+@@ -52,6 +_,10 @@
+     public final java.util.Map<java.util.UUID, net.kyori.adventure.resource.ResourcePackCallback> packCallbacks = new java.util.concurrent.ConcurrentHashMap<>(); // Paper - adventure resource pack callbacks
+     private static final long KEEPALIVE_LIMIT = Long.getLong("paper.playerconnection.keepalive", 30) * 1000; // Paper - provide property to set keepalive limit
+     protected static final net.minecraft.resources.Identifier MINECRAFT_BRAND = net.minecraft.resources.Identifier.withDefaultNamespace("brand"); // Paper - Brand support
++    // Purpur start - Purpur client support
++    protected static final net.minecraft.resources.Identifier PURPUR_CLIENT = net.minecraft.resources.Identifier.fromNamespaceAndPath("purpur", "client");
++    public boolean purpurClient;
++    // Purpur end - Purpur client support
+     // Paper start - retain certain values
+     public @Nullable String clientBrand;
+     public final java.util.Set<String> pluginMessagerChannels;
+@@ -99,6 +_,16 @@
+ 
+     @Override
+     public void handleKeepAlive(final ServerboundKeepAlivePacket packet) {
++        // Purpur start - Alternative Keepalive Handling
++        if (org.purpurmc.purpur.PurpurConfig.useAlternateKeepAlive) {
++            if (this.keepAlivePending && !keepAlives.isEmpty() && keepAlives.contains(packet.getId())) {
++                int ping = (int) (Util.getMillis() - packet.getId());
++                this.latency = (this.latency * 3 + ping) / 4;
++                this.keepAlivePending = false;
++                keepAlives.clear(); // we got a valid response, lets roll with it and forget the rest
++            }
++        } else
++        // Purpur end - Alternative Keepalive Handling
+         if (this.keepAlivePending && packet.getId() == this.keepAliveChallenge) {
+             int time = (int)(Util.getMillis() - this.keepAliveTime);
+             this.latency = (this.latency * 3 + time) / 4;
+@@ -148,6 +_,12 @@
+                 return;
+             }
+ 
++            // Purpur start - Purpur client support
++            if (identifier.equals(PURPUR_CLIENT)) {
++                this.purpurClient = true;
++            }
++            // Purpur end - Purpur client support
++
+             if (identifier.equals(MINECRAFT_BRAND)) {
+                 this.clientBrand = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(data)).readUtf(256);
+             }
+@@ -235,6 +_,20 @@
+         // Paper start - give clients a longer time to respond to pings as per pre 1.12.2 timings
+         // This should effectively place the keepalive handling back to "as it was" before 1.12.2
+         final long elapsedTime = now - this.keepAliveTime;
++        // Purpur start - Alternative Keepalive Handling
++        if (org.purpurmc.purpur.PurpurConfig.useAlternateKeepAlive) {
++            if (elapsedTime >= 1000L) { // 1 second
++                if (this.keepAlivePending && keepAlives.size() * 1000L >= KEEPALIVE_LIMIT) {
++                    this.disconnect(TIMEOUT_DISCONNECTION_MESSAGE, io.papermc.paper.connection.DisconnectionReason.TIMEOUT); // Paper - kick event cause
++                } else if (this.checkIfClosed(now)) {
++                    this.keepAlivePending = true;
++                    this.keepAliveTime = now; // hijack this field for 1 second intervals
++                    this.keepAlives.add(now); // currentTime is ID
++                    this.send(new ClientboundKeepAlivePacket(now));
++                }
++            }
++        } else
++        // Purpur end - Alternative Keepalive Handling
+         if (!this.isSingleplayerOwner() && elapsedTime >= 15000L) { // use vanilla's 15000L between keep alive packets
+             if (this.keepAlivePending) {
+                 if (elapsedTime >= KEEPALIVE_LIMIT) { // check keepalive limit, don't fire if already disconnected
