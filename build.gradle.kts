@@ -124,3 +124,10 @@ tasks.register("printPurpurVersion") {
         println(project.version)
     }
 }
+
+/** Builds the Paperweight server bundler from the patched Purpur source. */
+tasks.register("buildVoxen") {
+    group = "build"
+    description = "Membangun bundler Voxen Legends dari source Purpur yang telah dipatch."
+    dependsOn(tasks.createMojmapBundlerJar)
+}
