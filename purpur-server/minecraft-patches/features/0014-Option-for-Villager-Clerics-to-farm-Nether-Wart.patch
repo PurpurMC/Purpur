@@ -1,0 +1,172 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jason Penilla <11360596+jpenilla@users.noreply.github.com>
+Date: Sat, 5 Dec 2020 01:20:16 -0800
+Subject: [PATCH] Option for Villager Clerics to farm Nether Wart
+
+Adds an option so that Villagers with the Cleric profession are able to
+farm Nether Wart. Reimplemented based on a feature of the carpet-extra
+mod.
+
+diff --git a/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java b/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
+index 5a2d006b682fd9b53d0a490828eb79b4d085db94..29c5eb7f960a95edf0e11eeba64abe4e3e7d0335 100644
+--- a/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
++++ b/net/minecraft/world/entity/ai/behavior/HarvestFarmland.java
+@@ -31,6 +31,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+     private long nextOkStartTime;
+     private int timeWorkedSoFar;
+     private final List<BlockPos> validFarmlandAroundVillager = Lists.newArrayList();
++    private boolean clericWartFarmer = false; // Purpur - Option for Villager Clerics to farm Nether Wart
+ 
+     public HarvestFarmland() {
+         super(
+@@ -51,10 +52,11 @@ public class HarvestFarmland extends Behavior<Villager> {
+             return false;
+         }
+ 
+-        if (!body.getVillagerData().profession().is(VillagerProfession.FARMER)) {
++        if (!body.getVillagerData().profession().is(VillagerProfession.FARMER) && !(level.purpurConfig.villagerClericsFarmWarts && body.getVillagerData().profession().is(VillagerProfession.CLERIC))) { // Purpur - Option for Villager Clerics to farm Nether Wart
+             return false;
+         }
+ 
++        if (!this.clericWartFarmer && body.getVillagerData().profession().is(VillagerProfession.CLERIC)) this.clericWartFarmer = true; // Purpur - Option for Villager Clerics to farm Nether Wart
+         BlockPos.MutableBlockPos mutPos = body.blockPosition().mutable();
+         this.validFarmlandAroundVillager.clear();
+ 
+@@ -83,6 +85,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+         BlockState state = level.getBlockState(blockPos);
+         Block block = state.getBlock();
+         Block blockBelow = level.getBlockState(blockPos.below()).getBlock();
++        if (this.clericWartFarmer) return block == net.minecraft.world.level.block.Blocks.NETHER_WART && state.getValue(net.minecraft.world.level.block.NetherWartBlock.AGE) == 3 || state.isAir() && block == net.minecraft.world.level.block.Blocks.SOUL_SAND; // Purpur - Option for Villager Clerics to farm Nether Wart
+         return block instanceof CropBlock cropBlock && cropBlock.isMaxAge(state) || state.isAir() && blockBelow instanceof FarmlandBlock;
+     }
+ 
+@@ -109,19 +112,19 @@ public class HarvestFarmland extends Behavior<Villager> {
+                 BlockState blockState = level.getBlockState(this.aboveFarmlandPos);
+                 Block block = blockState.getBlock();
+                 Block blockBelow = level.getBlockState(this.aboveFarmlandPos.below()).getBlock();
+-                if (block instanceof CropBlock cropBlock && cropBlock.isMaxAge(blockState)) {
++                if (block instanceof CropBlock cropBlock && cropBlock.isMaxAge(blockState) && !this.clericWartFarmer || this.clericWartFarmer && block == net.minecraft.world.level.block.Blocks.NETHER_WART && blockState.getValue(net.minecraft.world.level.block.NetherWartBlock.AGE) == 3) { // Purpur - Option for Villager Clerics to farm Nether Wart
+                     if (org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(body, this.aboveFarmlandPos, blockState.getFluidState().createLegacyBlock())) { // CraftBukkit // Paper - fix wrong block state
+                     level.destroyBlock(this.aboveFarmlandPos, true, body);
+                     } // CraftBukkit
+                 }
+ 
+-                if (blockState.isAir() && blockBelow instanceof FarmlandBlock && body.hasFarmSeeds()) {
++                if (blockState.isAir() && blockBelow instanceof FarmlandBlock &&  !this.clericWartFarmer || this.clericWartFarmer && blockBelow == net.minecraft.world.level.block.Blocks.SOUL_SAND && body.hasFarmSeeds()) { // Purpur - Option for Villager Clerics to farm Nether Wart
+                     SimpleContainer inventory = body.getInventory();
+ 
+                     for (int i = 0; i < inventory.getContainerSize(); i++) {
+                         ItemStack itemStack = inventory.getItem(i);
+                         boolean ok = false;
+-                        if (!itemStack.isEmpty() && itemStack.is(ItemTags.VILLAGER_PLANTABLE_SEEDS) && itemStack.getItem() instanceof BlockItem blockItem) {
++                        if (!itemStack.isEmpty() && (itemStack.is(ItemTags.VILLAGER_PLANTABLE_SEEDS) || this.clericWartFarmer && itemStack.getItem() == net.minecraft.world.item.Items.NETHER_WART) && itemStack.getItem() instanceof BlockItem blockItem) { // Purpur - Option for Villager Clerics to farm Nether Wart
+                             BlockState place = blockItem.getBlock().defaultBlockState();
+                             if (org.bukkit.craftbukkit.event.CraftEventFactory.callEntityChangeBlockEvent(body, this.aboveFarmlandPos, place)) { // CraftBukkit
+                             level.setBlockAndUpdate(this.aboveFarmlandPos, place);
+@@ -136,7 +139,7 @@ public class HarvestFarmland extends Behavior<Villager> {
+                                 this.aboveFarmlandPos.getX(),
+                                 this.aboveFarmlandPos.getY(),
+                                 this.aboveFarmlandPos.getZ(),
+-                                SoundEvents.CROP_PLANTED,
++                                this.clericWartFarmer ? SoundEvents.NETHER_WART_PLANTED : SoundEvents.CROP_PLANTED, // Purpur - Option for Villager Clerics to farm Nether Wart
+                                 SoundSource.BLOCKS,
+                                 1.0F,
+                                 1.0F
+diff --git a/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java b/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
+index ec104015086a37c3fdf549aaf36ef40733b14802..7d7f99d13526ff9c2fc440cdc47525f1086805eb 100644
+--- a/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
++++ b/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
+@@ -61,6 +61,12 @@ public class TradeWithVillager extends Behavior<Villager> {
+                 throwHalfStack(body, itemStack -> itemStack.is(Items.WHEAT), target);
+             }
+ 
++            // Purpur start - Option for Villager Clerics to farm Nether Wart
++            if (level.purpurConfig.villagerClericsFarmWarts && level.purpurConfig.villagerClericFarmersThrowWarts && body.getVillagerData().profession().is(VillagerProfession.CLERIC) && body.getInventory().countItem(Items.NETHER_WART) > Items.NETHER_WART.getDefaultMaxStackSize() / 2) {
++                throwHalfStack(body, itemStack -> itemStack.is(Items.NETHER_WART), target);
++            }
++            // Purpur end - Option for Villager Clerics to farm Nether Wart
++
+             if (!this.trades.isEmpty() && body.getInventory().hasAnyOf(this.trades)) {
+                 throwHalfStack(body, itemStack -> this.trades.contains(itemStack.getItem()), target);
+             }
+diff --git a/net/minecraft/world/entity/ai/behavior/VillagerGoalPackages.java b/net/minecraft/world/entity/ai/behavior/VillagerGoalPackages.java
+index 35b564506edc94d4d6dabe239082d992e22efec4..188af725791ed1a08bfdc851c6e655771658f27a 100644
+--- a/net/minecraft/world/entity/ai/behavior/VillagerGoalPackages.java
++++ b/net/minecraft/world/entity/ai/behavior/VillagerGoalPackages.java
+@@ -74,8 +74,13 @@ public class VillagerGoalPackages {
+     public static ImmutableList<Pair<Integer, ? extends BehaviorControl<? super Villager>>> getWorkPackage(
+         final Holder<VillagerProfession> profession, final float speedModifier
+     ) {
++        // Purpur start - Option for Villager Clerics to farm Nether Wart
++        return getWorkPackage(profession, speedModifier, false);
++    }
++    public static ImmutableList<Pair<Integer, ? extends BehaviorControl<? super Villager>>> getWorkPackage(Holder<VillagerProfession> profession, float speedModifier, boolean clericsFarmWarts) {
++        // Purpur end - Option for Villager Clerics to farm Nether Wart
+         WorkAtPoi workAtPoi;
+-        if (profession.is(VillagerProfession.FARMER)) {
++        if (profession.is(VillagerProfession.FARMER) || (clericsFarmWarts && profession.is(VillagerProfession.CLERIC))) { // Purpur - Option for Villager Clerics to farm Nether Wart
+             workAtPoi = new WorkAtComposter();
+         } else {
+             workAtPoi = new WorkAtPoi();
+diff --git a/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java b/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java
+index 7d3e843c2d3c5e15b7bea7302d6118419d3a4957..1da9f1cdb2ee8b1514c79fee24460f852b6a3577 100644
+--- a/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java
+@@ -22,6 +22,13 @@ public class SecondaryPoiSensor extends Sensor<Villager> {
+ 
+     @Override
+     protected void doTick(final ServerLevel level, final Villager body) {
++        // Purpur start - Option for Villager Clerics to farm Nether Wart - make sure clerics don't wander to soul sand when the option is off
++        Brain<?> brain = body.getBrain();
++        if (!level.purpurConfig.villagerClericsFarmWarts && body.getVillagerData().profession().is(net.minecraft.world.entity.npc.villager.VillagerProfession.CLERIC)) {
++            brain.eraseMemory(MemoryModuleType.SECONDARY_JOB_SITE);
++            return;
++        }
++        // Purpur end - Option for Villager Clerics to farm Nether Wart
+         ResourceKey<Level> dimensionType = level.dimension();
+         BlockPos center = body.blockPosition();
+         List<GlobalPos> jobSites = Lists.newArrayList();
+@@ -39,7 +46,7 @@ public class SecondaryPoiSensor extends Sensor<Villager> {
+             }
+         }
+ 
+-        Brain<?> brain = body.getBrain();
++        //Brain<?> brain = body.getBrain(); // Purpur - Option for Villager Clerics to farm Nether Wart - moved up
+         if (!jobSites.isEmpty()) {
+             brain.setMemory(MemoryModuleType.SECONDARY_JOB_SITE, jobSites);
+         } else {
+diff --git a/net/minecraft/world/entity/npc/villager/Villager.java b/net/minecraft/world/entity/npc/villager/Villager.java
+index c3db43b7b2c7dd9539bb86af378406cd920c0312..1cfb194a971c8089848951bb267c7c5a21d6c179 100644
+--- a/net/minecraft/world/entity/npc/villager/Villager.java
++++ b/net/minecraft/world/entity/npc/villager/Villager.java
+@@ -145,7 +145,7 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
+                 activities.add(
+                     ActivityData.create(
+                         Activity.WORK,
+-                        VillagerGoalPackages.getWorkPackage(profession, 0.5F),
++                        VillagerGoalPackages.getWorkPackage(profession, 0.5F, body.level().purpurConfig.villagerClericsFarmWarts), // Purpur - Option for Villager Clerics to farm Nether Wart
+                         ImmutableSet.of(Pair.of(MemoryModuleType.JOB_SITE, MemoryStatus.VALUE_PRESENT))
+                     )
+                 );
+@@ -941,7 +941,7 @@ public class Villager extends AbstractVillager implements VillagerDataHolder, Re
+     }
+ 
+     public boolean hasFarmSeeds() {
+-        return this.getInventory().hasAnyMatching(item -> item.is(ItemTags.VILLAGER_PLANTABLE_SEEDS));
++        return this.getInventory().hasAnyMatching(item -> this.level().purpurConfig.villagerClericsFarmWarts && this.getVillagerData().profession().is(VillagerProfession.CLERIC) ? item.is(Items.NETHER_WART) : item.is(ItemTags.VILLAGER_PLANTABLE_SEEDS));
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/entity/npc/villager/VillagerProfession.java b/net/minecraft/world/entity/npc/villager/VillagerProfession.java
+index 1d779d7a51437581fa3d8da38449916362b25ce9..9d71db9db42e38338afe10b24699dae9cc90fcfa 100644
+--- a/net/minecraft/world/entity/npc/villager/VillagerProfession.java
++++ b/net/minecraft/world/entity/npc/villager/VillagerProfession.java
+@@ -165,6 +165,8 @@ public record VillagerProfession(
+             registry,
+             CLERIC,
+             PoiTypes.CLERIC,
++            ImmutableSet.of(Items.NETHER_WART), // Purpur - Option for Villager Clerics to farm Nether Wart
++            ImmutableSet.of(Blocks.SOUL_SAND), // Purpur - Option for Villager Clerics to farm Nether Wart
+             SoundEvents.VILLAGER_WORK_CLERIC,
+             Int2ObjectMap.ofEntries(
+                 Int2ObjectMap.entry(1, TradeSets.CLERIC_LEVEL_1),

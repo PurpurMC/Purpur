@@ -1,0 +1,46 @@
+--- a/net/minecraft/server/level/ServerPlayerGameMode.java
++++ b/net/minecraft/server/level/ServerPlayerGameMode.java
+@@ -396,6 +_,7 @@
+                 }
+                 return false;
+             }
++            if (this.player.level().purpurConfig.slabHalfBreak && this.player.isShiftKeyDown() && state.getBlock() instanceof net.minecraft.world.level.block.SlabBlock && ((net.minecraft.world.level.block.SlabBlock) state.getBlock()).halfBreak(state, pos, this.player)) return true; // Purpur - Break individual slabs when sneaking
+         }
+         // CraftBukkit end
+ 
+@@ -527,6 +_,7 @@
+     public InteractionResult useItemOn(
+         final ServerPlayer player, final Level level, final ItemStack itemStack, final InteractionHand hand, final BlockHitResult hitResult
+     ) {
++        if (shiftClickMended(itemStack)) return InteractionResult.SUCCESS; // Purpur - Shift right click to use exp for mending
+         BlockPos pos = hitResult.getBlockPos();
+         BlockState state = level.getBlockState(pos);
+         boolean cancelledBlock = false;
+@@ -593,7 +_,7 @@
+             boolean haveSomethingInOurHands = !player.getMainHandItem().isEmpty() || !player.getOffhandItem().isEmpty();
+             boolean suppressUsingBlock = player.isSecondaryUseActive() && haveSomethingInOurHands;
+             ItemStack usedItemStack = itemStack.copy();
+-            if (!suppressUsingBlock) {
++            if (!suppressUsingBlock || (player.level().purpurConfig.composterBulkProcess && state.is(net.minecraft.world.level.block.Blocks.COMPOSTER))) { // Purpur - Sneak to bulk process composter
+                 InteractionResult itemUse = state.useItemOn(player.getItemInHand(hand), level, player, hand, hitResult);
+                 if (itemUse.consumesAction()) {
+                     CriteriaTriggers.ITEM_USED_ON_BLOCK.trigger(player, pos, usedItemStack);
+@@ -645,4 +_,18 @@
+     public void setLevel(final ServerLevel newLevel) {
+         this.level = newLevel;
+     }
++
++    // Purpur start - Shift right click to use exp for mending
++    public boolean shiftClickMended(ItemStack itemstack) {
++        if (this.player.level().purpurConfig.shiftRightClickRepairsMendingPoints > 0 && this.player.isShiftKeyDown() && this.player.getBukkitEntity().hasPermission("purpur.mending_shift_click")) {
++            int points = Math.min(this.player.totalExperience, this.player.level().purpurConfig.shiftRightClickRepairsMendingPoints);
++            if (points > 0 && itemstack.isDamaged() && net.minecraft.world.item.enchantment.EnchantmentHelper.getItemEnchantmentLevel(net.minecraft.world.item.enchantment.Enchantments.MENDING, itemstack) > 0) {
++                this.player.giveExperiencePoints(itemstack.getDamageValue() == 1 ? -2 : -points);
++                this.player.level().addFreshEntity(new net.minecraft.world.entity.ExperienceOrb(this.player.level(), this.player.getX(), this.player.getY(), this.player.getZ(), itemstack.getDamageValue() == 1 ? 1 : points, org.bukkit.entity.ExperienceOrb.SpawnReason.UNKNOWN, this.player, this.player));
++                return true;
++            }
++        }
++        return false;
++    }
++    // Purpur end - Shift right click to use exp for mending
+ }

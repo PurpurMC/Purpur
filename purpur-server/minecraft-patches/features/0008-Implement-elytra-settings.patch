@@ -1,0 +1,90 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: William Blake Galbreath <blake.galbreath@gmail.com>
+Date: Thu, 25 Jul 2019 18:07:37 -0500
+Subject: [PATCH] Implement elytra settings
+
+
+diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
+index ee3636bd16cd3b569922a8054e733e394ade2650..1a090a54ad2f899fd4678dc2dea9fe87f6ea72af 100644
+--- a/net/minecraft/world/entity/LivingEntity.java
++++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -3940,7 +3940,16 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+                 if (freeFallInterval % 2 == 0) {
+                     List<EquipmentSlot> slotsWithGliders = EquipmentSlot.VALUES.stream().filter(slot -> canGlideUsing(this.getItemBySlot(slot), slot)).toList();
+                     EquipmentSlot slotToDamage = Util.getRandom(slotsWithGliders, this.random);
+-                    this.getItemBySlot(slotToDamage).hurtAndBreak(1, this, slotToDamage);
++                    // Purpur start - Implement elytra settings
++                    int damage = level().purpurConfig.elytraDamagePerSecond;
++                    if (level().purpurConfig.elytraDamageMultiplyBySpeed > 0) {
++                        double speed = getDeltaMovement().lengthSqr();
++                        if (speed > level().purpurConfig.elytraDamageMultiplyBySpeed) {
++                            damage *= (int) speed;
++                        }
++                    }
++                    this.getItemBySlot(slotToDamage).hurtAndBreak(damage, this, slotToDamage);
++                    // Purpur end - Implement elytra settings
+                 }
+ 
+                 this.gameEvent(GameEvent.ELYTRA_GLIDE);
+diff --git a/net/minecraft/world/item/FireworkRocketItem.java b/net/minecraft/world/item/FireworkRocketItem.java
+index 2c3d09655a37e4f45630664eee22005b40c98fa9..96b1483edff183f37646201f6a814346afd4b44a 100644
+--- a/net/minecraft/world/item/FireworkRocketItem.java
++++ b/net/minecraft/world/item/FireworkRocketItem.java
+@@ -73,6 +73,17 @@ public class FireworkRocketItem extends Item implements ProjectileItem {
+                     if (player.dropAllLeashConnections(player, hand)) { // Paper - PlayerUnleashEntityEvent
+                         level.playSound(null, player, SoundEvents.LEAD_BREAK, SoundSource.NEUTRAL, 1.0F, 1.0F);
+                     }
++                    // Purpur start - Implement elytra settings
++                    if (level.purpurConfig.elytraDamagePerFireworkBoost > 0) {
++                        java.util.List<net.minecraft.world.entity.EquipmentSlot> list = net.minecraft.world.entity.EquipmentSlot.VALUES.stream().filter((enumitemslot) -> net.minecraft.world.entity.LivingEntity.canGlideUsing(player.getItemBySlot(enumitemslot), enumitemslot)).toList();
++                        net.minecraft.world.entity.EquipmentSlot enumitemslot = net.minecraft.util.Util.getRandom(list, player.random);
++
++                        ItemStack glideItem = player.getItemBySlot(enumitemslot);
++                        if (player.canGlide()) {
++                            glideItem.hurtAndBreak(level.purpurConfig.elytraDamagePerFireworkBoost, player, enumitemslot);
++                        }
++                    }
++                    // Purpur end - Implement elytra settings
+                     if (event.shouldConsume() && !player.hasInfiniteMaterials()) {
+                         itemStack.shrink(1); // Moved up from below
+                     } else {
+diff --git a/net/minecraft/world/item/ItemStack.java b/net/minecraft/world/item/ItemStack.java
+index 5d75550769c808dfdd6db5a6d201c3b4d508072e..9c528998e3a96323f6576d4e786faf8ba20cc3e6 100644
+--- a/net/minecraft/world/item/ItemStack.java
++++ b/net/minecraft/world/item/ItemStack.java
+@@ -672,6 +672,14 @@ public final class ItemStack implements DataComponentHolder, ItemInstance {
+                 org.bukkit.craftbukkit.event.CraftEventFactory.callPlayerItemBreakEvent(serverPlayer, this); // Paper - Add EntityDamageItemEvent
+             }
+             // CraftBukkit end
++
++            // Purpur start - Implement elytra settings
++            if (this.has(DataComponents.GLIDER)) {
++                setDamageValue(this.getMaxDamage() - 1);
++                return;
++            }
++            // Purpur end - Implement elytra settings
++
+             this.shrink(1);
+             onBreak.accept(broken);
+         }
+diff --git a/net/minecraft/world/item/TridentItem.java b/net/minecraft/world/item/TridentItem.java
+index 0eff6bb7b5e4d1d4b25a61f507a059ae5b9481cb..b3ac0498ac193cbe68adbe92abf4ffeafa2d3f32 100644
+--- a/net/minecraft/world/item/TridentItem.java
++++ b/net/minecraft/world/item/TridentItem.java
+@@ -127,6 +127,16 @@ public class TridentItem extends Item implements ProjectileItem {
+                     yd *= riptideStrength / dist;
+                     zd *= riptideStrength / dist;
+                     if (!org.bukkit.craftbukkit.event.CraftEventFactory.callPlayerRiptideEvent(player, itemStack, xd, yd, zd)) return false; // Paper - Add player riptide event
++                            // Purpur start - Implement elytra settings
++                            List<net.minecraft.world.entity.EquipmentSlot> list = net.minecraft.world.entity.EquipmentSlot.VALUES.stream().filter((enumitemslot) -> LivingEntity.canGlideUsing(entity.getItemBySlot(enumitemslot), enumitemslot)).toList();
++                            if (!list.isEmpty()) {
++                                net.minecraft.world.entity.EquipmentSlot enumitemslot = net.minecraft.util.Util.getRandom(list, entity.random);
++                                ItemStack glideItem = entity.getItemBySlot(enumitemslot);
++                                if (glideItem.has(net.minecraft.core.component.DataComponents.GLIDER) && level.purpurConfig.elytraDamagePerTridentBoost > 0) {
++                                    glideItem.hurtAndBreak(level.purpurConfig.elytraDamagePerTridentBoost, entity, enumitemslot);
++                                }
++                            }
++                            // Purpur end - Implement elytra settings
+                     player.push(xd, yd, zd);
+                     player.startAutoSpinAttack(20, 8.0F, itemStack);
+                     if (player.onGround()) {

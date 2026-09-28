@@ -1,0 +1,148 @@
+--- a/net/minecraft/world/entity/LivingEntity.java
++++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -463,6 +_,12 @@
+                 if (dist < 0.0) {
+                     double damagePerBlock = level.getWorldBorder().getDamagePerBlock();
+                     if (damagePerBlock > 0.0) {
++                        // Purpur start - Add option to teleport to spawn if outside world border
++                        if (this.level().purpurConfig.teleportIfOutsideBorder && this instanceof ServerPlayer serverPlayer) {
++                            serverPlayer.teleport(org.bukkit.craftbukkit.util.CraftLocation.toBukkit(this.level().getLevelData().getRespawnData().pos(), this.level()));
++                            return;
++                        }
++                        // Purpur end - Add option to teleport to spawn if outside world border
+                         this.hurtServer(level, this.damageSources().outOfBorder(), Math.max(1, Mth.floor(-dist * damagePerBlock)));
+                     }
+                 }
+@@ -478,7 +_,7 @@
+                     if (this.shouldTakeDrowningDamage()) {
+                         this.setAirSupply(0);
+                         level.broadcastEntityEvent(this, EntityEvent.DROWN_PARTICLES);
+-                        this.hurtServer(level, this.damageSources().drown(), 2.0F);
++                        this.hurtServer(level, this.damageSources().drown(), (float) this.level().purpurConfig.damageFromDrowning); // Purpur - Drowning Settings
+                     }
+                 } else if (this.getAirSupply() < this.getMaxAirSupply() && MobEffectUtil.shouldEffectsRefillAirsupply(this)) {
+                     this.setAirSupply(this.increaseAirSupply(this.getAirSupply()));
+@@ -536,7 +_,7 @@
+     }
+ 
+     protected boolean shouldTakeDrowningDamage() {
+-        return this.getAirSupply() <= -20;
++        return this.getAirSupply() <= -this.level().purpurConfig.drowningDamageInterval; // Purpur - Drowning Settings
+     }
+ 
+     @Override
+@@ -1055,6 +_,17 @@
+             }
+         }
+ 
++        // Purpur start - Configurable mob blindness
++        if (targetingEntity instanceof LivingEntity entityliving) {
++            if (entityliving.hasEffect(MobEffects.BLINDNESS)) {
++                int amplifier = entityliving.getEffect(MobEffects.BLINDNESS).getAmplifier();
++                for (int i = 0; i < amplifier; i++) {
++                    amplifier *= this.level().purpurConfig.mobsBlindnessMultiplier;
++                }
++            }
++        }
++        // Purpur end - Configurable mob blindness
++
+         return Mth.clamp(visibilityPercent, 0.0, 10.0);
+     }
+ 
+@@ -1103,6 +_,7 @@
+         Iterator<MobEffectInstance> iterator = this.activeEffects.values().iterator();
+         while (iterator.hasNext()) {
+             MobEffectInstance effect = iterator.next();
++            if (cause == EntityPotionEffectEvent.Cause.MILK && !this.level().purpurConfig.milkClearsBeneficialEffects && effect.getEffect().value().isBeneficial()) continue; // Purpur - Milk Keeps Beneficial Effects
+             EntityPotionEffectEvent event = CraftEventFactory.callEntityPotionEffectChangeEvent(this, effect, null, cause, EntityPotionEffectEvent.Action.CLEARED);
+             if (event.isCancelled()) {
+                 continue;
+@@ -1445,7 +_,23 @@
+             this.stopSleeping();
+         }
+ 
+-        this.noActionTime = 0;
++        // Purpur start - One Punch Man!
++        if (source.getEntity() instanceof net.minecraft.world.entity.player.Player player && source.getEntity().level().purpurConfig.creativeOnePunch && !source.is(DamageTypeTags.IS_PROJECTILE)) {
++            if (player.isCreative()) {
++                org.apache.commons.lang3.mutable.MutableDouble attackDamage = new org.apache.commons.lang3.mutable.MutableDouble();
++                player.getMainHandItem().forEachModifier(EquipmentSlot.MAINHAND, (attributeHolder, attributeModifier) -> {
++                    if (attributeModifier.operation() == AttributeModifier.Operation.ADD_VALUE) {
++                        attackDamage.addAndGet(attributeModifier.amount());
++                    }
++                });
++
++                if (attackDamage.doubleValue() == 0.0D) {
++                    // One punch!
++                    damage = Float.MAX_VALUE;
++                }
++            }
++        }
++        // Purpur end - One Punch Man!this.noActionTime = 0;
+         if (damage < 0.0F) {
+             damage = 0.0F;
+         }
+@@ -1709,10 +_,10 @@
+     protected @Nullable Player resolvePlayerResponsibleForDamage(final DamageSource source) {
+         Entity sourceEntity = source.getEntity();
+         if (sourceEntity instanceof Player playerSource) {
+-            this.setLastHurtByPlayer(playerSource, 100);
++            this.setLastHurtByPlayer(playerSource, this.level().purpurConfig.mobLastHurtByPlayerTime); // Purpur - Config for mob last hurt by player time
+         } else if (sourceEntity instanceof Wolf wolf && wolf.isTame()) {
+             if (wolf.getOwnerReference() != null) {
+-                this.setLastHurtByPlayer(wolf.getOwnerReference().getUUID(), 100);
++                this.setLastHurtByPlayer(wolf.getOwnerReference().getUUID(), this.level().purpurConfig.mobLastHurtByPlayerTime); // Purpur - Config for mob last hurt by player time
+             } else {
+                 this.lastHurtByPlayer = null;
+                 this.lastHurtByPlayerMemoryTime = 0;
+@@ -1768,6 +_,18 @@
+             }
+         }
+ 
++        // Purpur start - Totems work in inventory
++        if (level().purpurConfig.totemOfUndyingWorksInInventory && this instanceof ServerPlayer player && (itemStack == null || itemStack.getItem() != Items.TOTEM_OF_UNDYING) && player.getBukkitEntity().hasPermission("purpur.inventory_totem")) {
++            for (ItemStack item : player.getInventory().getNonEquipmentItems()) {
++                if (item.getItem() == Items.TOTEM_OF_UNDYING) {
++                    itemStack = item;
++                    protectionItem = item.copy();
++                    break;
++                }
++            }
++        }
++        // Purpur end - Totems work in inventory
++
+         final org.bukkit.inventory.EquipmentSlot handSlot = (usedHand != null) ? org.bukkit.craftbukkit.CraftEquipmentSlot.getHand(usedHand) : null;
+         final EntityResurrectEvent event = new EntityResurrectEvent(this.getBukkitEntity(), handSlot);
+         event.setCancelled(protectionItem == null);
+@@ -1920,8 +_,10 @@
+     protected void dropAllDeathLoot(final ServerLevel level, final DamageSource source) {
+         boolean playerKilled = this.lastHurtByPlayerMemoryTime > 0;
+         if (this.shouldDropLoot(level)) {
++            if (!(source.is(net.minecraft.world.damagesource.DamageTypes.CRAMMING) && level().purpurConfig.disableDropsOnCrammingDeath)) { // Purpur - Disable loot drops on death by cramming
+             this.dropFromLootTable(level, source, playerKilled);
+             this.dropCustomDeathLoot(level, source, playerKilled);
++            }
+         }
+ 
+         this.dropEquipment(level);
+@@ -3256,6 +_,7 @@
+             float dmg = (float)(diff * 10.0 - 3.0);
+             if (dmg > 0.0F) {
+                 this.playSound(this.getFallDamageSound((int)dmg), 1.0F, 1.0F);
++                if (level().purpurConfig.elytraKineticDamage) // Purpur - Toggle for kinetic damage
+                 this.hurt(this.damageSources().flyIntoWall(), dmg);
+             }
+         }
+@@ -4815,6 +_,12 @@
+             ? slot == EquipmentSlot.MAINHAND && this.canUseSlot(EquipmentSlot.MAINHAND)
+             : slot == equippable.slot() && this.canUseSlot(equippable.slot()) && equippable.canBeEquippedBy(this.typeHolder());
+     }
++
++    // Purpur start - Dispenser curse of binding protection
++    public @Nullable EquipmentSlot getEquipmentSlotForDispenserItem(ItemStack itemstack) {
++        return EnchantmentHelper.getItemEnchantmentLevel(net.minecraft.world.item.enchantment.Enchantments.BINDING_CURSE, itemstack) > 0 ? null : this.getEquipmentSlotForItem(itemstack);
++    }
++    // Purpur end - Dispenser curse of binding protection
+ 
+     private static SlotAccess createEquipmentSlotAccess(final LivingEntity entity, final EquipmentSlot equipmentSlot) {
+         return equipmentSlot != EquipmentSlot.HEAD && equipmentSlot != EquipmentSlot.MAINHAND && equipmentSlot != EquipmentSlot.OFFHAND

@@ -1,0 +1,66 @@
+--- a/net/minecraft/world/level/block/ComposterBlock.java
++++ b/net/minecraft/world/level/block/ComposterBlock.java
+@@ -126,23 +_,52 @@
+         int fillLevel = state.getValue(LEVEL);
+         Compostable compostable = itemStack.get(DataComponents.COMPOSTABLE);
+         if (fillLevel < 8 && compostable != null) {
+-            if (fillLevel < 7 && level instanceof ServerLevel serverLevel) {
+-                // Paper start - call compost events
+-                BlockState newState = addLayer(player, state, serverLevel, pos, compostable, itemStack);
+-                if (newState == null) {
+-                    return InteractionResult.PASS;
+-                }
+-                // Paper end - call compost events
+-                level.levelEvent(LevelEvent.COMPOSTER_FILL, pos, state != newState ? 1 : 0);
+-                player.awardStat(Stats.ITEM_USED.get(itemStack.getItem()));
+-                itemStack.consume(1, player);
+-            }
++            // Purpur start - sneak to bulk process composter
++            BlockState newState = process(fillLevel, player, state, level, pos, compostable, itemStack);
++            if (newState == null) {
++                return InteractionResult.PASS;
++            }
++            if (level.purpurConfig.composterBulkProcess && player.isShiftKeyDown()) {
++                BlockState oldState;
++                int oldCount, newCount, oldLevel, newLevel;
++                do {
++                    oldState = newState;
++                    oldCount = itemStack.getCount();
++                    oldLevel = oldState.getValue(ComposterBlock.LEVEL);
++                    newState = process(oldLevel, player, oldState, level, pos, compostable, itemStack);
++                    if (newState == null) {
++                        return InteractionResult.PASS;
++                    }
++                    newCount = itemStack.getCount();
++                    newLevel = newState.getValue(ComposterBlock.LEVEL);
++                } while (newCount > 0 && (newCount != oldCount || newLevel != oldLevel));
++            }
++            // Purpur end - Sneak to bulk process composter
+ 
+             return InteractionResult.SUCCESS;
+         } else {
+             return super.useItemOn(itemStack, state, level, pos, player, hand, hitResult);
+         }
+     }
++
++    // Purpur start - sneak to bulk process composter
++    private static @Nullable BlockState process(int fillLevel, Player player, BlockState state, Level level, BlockPos pos, Compostable compostable, ItemStack itemStack) {
++        if (fillLevel < 7 && level instanceof ServerLevel serverLevel) {
++            // Paper start - call compost events
++            BlockState newState = addLayer(player, state, serverLevel, pos, compostable, itemStack);
++            if (newState == null) {
++                return null;
++            }
++            // Paper end - call compost events
++
++            level.levelEvent(LevelEvent.COMPOSTER_FILL, pos, state != newState ? 1 : 0);
++            player.awardStat(Stats.ITEM_USED.get(itemStack.getItem()));
++            itemStack.consume(1, player);
++            return newState;
++        }
++        return state;
++    }
++    // Purpur end - Sneak to bulk process composter
+ 
+     @Override
+     protected InteractionResult useWithoutItem(
