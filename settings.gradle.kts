@@ -1,5 +1,12 @@
 import java.util.Locale
 
+val requiredJava = 21
+val runningJava = Runtime.version().feature()
+check(runningJava == requiredJava) {
+    "Voxen Legends membutuhkan Java $requiredJava. Java $runningJava terdeteksi; " +
+        "atur JAVA_HOME ke JDK $requiredJava sebelum menjalankan Gradle."
+}
+
 pluginManagement {
     repositories {
         gradlePluginPortal()
@@ -31,8 +38,8 @@ if (!file(".git").exists()) {
     error(errorText)
 }
 
-rootProject.name = "purpur"
-for (name in listOf("purpur-api", "purpur-server", "purpur-checkstyle")) {
+rootProject.name = "voxen-legends"
+for (name in listOf("Purpur-API", "Purpur-Server", "paper-api-generator")) {
     val projName = name.lowercase(Locale.ENGLISH)
     include(projName)
     findProject(":$projName")!!.projectDir = file(name)
