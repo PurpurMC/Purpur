@@ -74,8 +74,8 @@ public class PurpurConfig {
         commands = new HashMap<>();
         commands.put("purpur", new PurpurCommand("purpur"));
 
-        version = getInt("config-version", 49);
-        set("config-version", 49);
+        version = getInt("config-version", 50);
+        set("config-version", 50);
 
         readConfig(PurpurConfig.class, null);
 
@@ -330,7 +330,6 @@ public class PurpurConfig {
     public static boolean enderChestSixRows = false;
     public static boolean enderChestPermissionRows = false;
     public static boolean enderChestPersistHiddenRows = true;
-    public static boolean cryingObsidianValidForPortalFrame = false;
     public static int beeInsideBeeHive = 3;
     public static boolean anvilCumulativeCost = true;
     public static int smoothSnowAccumulationStep = 0;
@@ -375,7 +374,6 @@ public class PurpurConfig {
         org.bukkit.event.inventory.InventoryType.ENDER_CHEST.setDefaultSize(enderChestSixRows ? 54 : 27);
         enderChestPermissionRows = getBoolean("settings.blocks.ender_chest.use-permissions-for-rows", enderChestPermissionRows);
         enderChestPersistHiddenRows = getBoolean("settings.blocks.ender_chest.persist-hidden-rows", enderChestPersistHiddenRows);
-        cryingObsidianValidForPortalFrame = getBoolean("settings.blocks.crying_obsidian.valid-for-portal-frame", cryingObsidianValidForPortalFrame);
         beeInsideBeeHive = getInt("settings.blocks.beehive.max-bees-inside", beeInsideBeeHive);
         anvilCumulativeCost = getBoolean("settings.blocks.anvil.cumulative-cost", anvilCumulativeCost);
         smoothSnowAccumulationStep = getInt("settings.blocks.snow.smooth-accumulation-step", smoothSnowAccumulationStep);
@@ -545,6 +543,9 @@ public class PurpurConfig {
         });
     }
     private static void blockFallMultiplierSettings() {
+        if (PurpurConfig.version < 50) {
+            PurpurConfig.config.set("settings.block-fall-multipliers.minecraft:shelf_mushroom", Map.of("distance", 0.5F));
+        }
         getMap("settings.block-fall-multipliers", Map.ofEntries(
                 Map.entry("minecraft:hay_block", Map.of("damage", 0.2F)),
                 Map.entry("minecraft:white_bed", Map.of("distance", 0.5F)),
@@ -562,7 +563,8 @@ public class PurpurConfig {
                 Map.entry("minecraft:light_blue_bed", Map.of("distance", 0.5F)),
                 Map.entry("minecraft:blue_bed", Map.of("distance", 0.5F)),
                 Map.entry("minecraft:purple_bed", Map.of("distance", 0.5F)),
-                Map.entry("minecraft:magenta_bed", Map.of("distance", 0.5F))
+                Map.entry("minecraft:magenta_bed", Map.of("distance", 0.5F)),
+                Map.entry("minecraft:shelf_mushroom", Map.of("distance", 0.5F))
         )).forEach((blockId, value) -> {
             Block block = BuiltInRegistries.BLOCK.getValue(Identifier.parse(blockId));
             if (block == Blocks.AIR) {
@@ -606,6 +608,11 @@ public class PurpurConfig {
         registerMinecraftDisabledCommands = getBoolean("settings.register-minecraft-disabled-commands", registerMinecraftDisabledCommands);
     }
 
+    public static boolean registerMinecraftExportCommands = false;
+    private static void registerMinecraftExportCommands() {
+        registerMinecraftExportCommands = getBoolean("settings.register-minecraft-export-commands", registerMinecraftExportCommands);
+    }
+
     public static List<String> startupCommands = new ArrayList<>();
     private static void startupCommands() {
         startupCommands.clear();
@@ -616,5 +623,10 @@ public class PurpurConfig {
             }
             startupCommands.add(command);
         });
+    }
+
+    public static boolean generateEndVoidRings = false;
+    private static void generateEndVoidRings() {
+        generateEndVoidRings = getBoolean("settings.generate-end-void-rings", generateEndVoidRings);
     }
 }
