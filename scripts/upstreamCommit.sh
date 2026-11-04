@@ -72,6 +72,7 @@ disclaimer="Upstream has released updates that appear to apply and compile corre
 log="Updated Upstream ($updated)\n\n${disclaimer}${logsuffix}"
 
 git add gradle.properties
+git add */build.gradle.kts.patch
 
 echo -e "$log" | git commit -F -
 
