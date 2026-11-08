@@ -52,6 +52,7 @@ subprojects {
     apply {
         plugin("java-library")
         plugin("maven-publish")
+        plugin("io.papermc.paperweight.paper-checkstyle")
     }
 
     extensions.configure<JavaPluginExtension> {
@@ -60,27 +61,8 @@ subprojects {
         }
     }
 
-    val tempDisabled = setOf("purpur-server", "paper-server", "test-plugin")
-
-    if (name !in tempDisabled) {
-        apply { plugin("io.papermc.paperweight.paper-checkstyle") }
-        extensions.configure<PaperCheckstyleExt> {
-            typeUseAnnotationsFile.set(rootProject.layout.projectDirectory.file(".checkstyle/type_use_annotations.txt"))
-        }
-
-        /*tasks.withType<PaperCheckstyleTask>().configureEach {
-            configDirectory = rootProject.layout.projectDirectory.dir(".checkstyle")
-            // configFile = layout.projectDirectory.file(".checkstyle/checkstyle.xml").asFile // use the base file if not overwritten
-            maxHeapSize = "2g"
-            reports {
-                xml.required = true
-                html.required = true
-            }
-        }*/
-
-        dependencies {
-            "checkstyle"(project(":purpur-checkstyle"))
-        }
+    dependencies {
+        "checkstyle"(project(":purpur-checkstyle"))
     }
 
     tasks.withType<JavaCompile> {
