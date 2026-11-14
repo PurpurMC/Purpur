@@ -10,7 +10,7 @@ public class HasRider extends Goal {
 
     public HasRider(Mob entity) {
         this.entity = entity;
-        setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK, Flag.TARGET, Flag.UNKNOWN_BEHAVIOR));
+        setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK, Flag.TARGET));
     }
 
     @Override
