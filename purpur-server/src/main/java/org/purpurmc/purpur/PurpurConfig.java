@@ -186,6 +186,9 @@ public class PurpurConfig {
     public static String tpsbarCommandOutput = "<green>Tpsbar toggled <onoff> for <target>";
     public static String dontRunWithScissors = "<red><italic>Don't run with scissors!";
     public static String uptimeCommandOutput = "<green>Server uptime is <uptime>";
+    public static String safestopCountdown = "<red>[Server] Server is stopping in <seconds> seconds! Reason: <reason>";
+    public static String safestopKick = "<red>Server closed: <reason>";
+    public static String safestopCancelled = "<green>[Server] Safe stop countdown cancelled.";
     public static String unverifiedUsername = "default";
     public static String sleepSkippingNight = "default";
     public static String sleepingPlayersPercent = "default";
@@ -205,6 +208,9 @@ public class PurpurConfig {
         tpsbarCommandOutput = getString("settings.messages.tpsbar-command-output", tpsbarCommandOutput);
         dontRunWithScissors = getString("settings.messages.dont-run-with-scissors", dontRunWithScissors);
         uptimeCommandOutput = getString("settings.messages.uptime-command-output", uptimeCommandOutput);
+        safestopCountdown = getString("settings.messages.safestop-countdown", safestopCountdown);
+        safestopKick = getString("settings.messages.safestop-kick", safestopKick);
+        safestopCancelled = getString("settings.messages.safestop-cancelled", safestopCancelled);
         unverifiedUsername = getString("settings.messages.unverified-username", unverifiedUsername);
         sleepSkippingNight = getString("settings.messages.sleep-skipping-night", sleepSkippingNight);
         sleepingPlayersPercent = getString("settings.messages.sleeping-players-percent", sleepingPlayersPercent);
@@ -285,6 +291,8 @@ public class PurpurConfig {
     public static String uptimeMinutes = "%02d minutes, and ";
     public static String uptimeSecond = "%02d second";
     public static String uptimeSeconds = "%02d seconds";
+    public static int safestopDefaultCountdown = 10;
+    public static String safestopDefaultReason = "Server restart";
     private static void commandSettings() {
         commandRamBarTitle = getString("settings.command.rambar.title", commandRamBarTitle);
         commandRamBarProgressOverlay = BossBar.Overlay.valueOf(getString("settings.command.rambar.overlay", commandRamBarProgressOverlay.name()));
@@ -324,6 +332,8 @@ public class PurpurConfig {
         uptimeMinutes = getString("settings.command.uptime.minutes", uptimeMinutes);
         uptimeSecond = getString("settings.command.uptime.second", uptimeSecond);
         uptimeSeconds = getString("settings.command.uptime.seconds", uptimeSeconds);
+        safestopDefaultCountdown = getInt("settings.command.safestop.default-countdown", safestopDefaultCountdown);
+        safestopDefaultReason = getString("settings.command.safestop.default-reason", safestopDefaultReason);
     }
 
     public static int barrelRows = 3;
