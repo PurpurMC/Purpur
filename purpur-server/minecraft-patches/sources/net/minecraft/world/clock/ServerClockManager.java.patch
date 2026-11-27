@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/clock/ServerClockManager.java
 +++ b/net/minecraft/world/clock/ServerClockManager.java
-@@ -70,7 +_,17 @@
+@@ -70,7 +_,24 @@
      public void tick() {
          boolean advanceTime = this.advanceTime(); // Paper - per-world time
          if (advanceTime) {
@@ -13,9 +13,42 @@
 +                clockInstance.rate *= incrementTicks;
 +                clockInstance.tick();
 +                clockInstance.rate = rate;
-+                this.broadcastUpdates(worldClockHolder, clockInstance);
++                // Clients run the clock at rate * speed on their own, they only need to know when the speed changes
++                if (clockInstance.daylightCycleSpeed != incrementTicks) {
++                    clockInstance.daylightCycleSpeed = incrementTicks;
++                    this.broadcastUpdates(worldClockHolder, clockInstance);
++                } else if (incrementTicks != 1.0F && this.getGameTime() % 4 == 0 && (this.level == null || this.level.dimensionType().defaultClock().filter(worldClockHolder::equals).isPresent())) {
++                    // Pre-26.1 clients (ViaBackwards) don't get the rate and advance the day time by 1 per tick, keep the sky clock in sync for them
++                    this.broadcastUpdates(worldClockHolder, clockInstance);
++                }
 +            }));
 +            // Purpur end - Configurable daylight cycle
              this.setDirty();
          }
      }
+@@ -189,7 +_,7 @@
+     ) {
+         if (player != null && player.level().dimensionType().defaultClock().filter(clock::equals).isPresent()) {
+             final boolean paused = !player.relativeTime || instance.paused || !this.advanceTime();
+-            return new ClockNetworkState(player.getPlayerTime(), instance.partialTick, paused ? 0.0F : instance.rate);
++            return new ClockNetworkState(player.getPlayerTime(), instance.partialTick, paused ? 0.0F : instance.rate * instance.daylightCycleSpeed); // Purpur - Configurable daylight cycle
+         }
+         return instance.packNetworkState(this.advanceTime());
+     }
+@@ -221,6 +_,7 @@
+         private float partialTick;
+         private float rate = 1.0F;
+         private boolean paused;
++        private float daylightCycleSpeed = 1.0F; // Purpur - Configurable daylight cycle
+ 
+         public void loadFrom(final ClockState state) {
+             this.totalTicks = state.totalTicks();
+@@ -264,7 +_,7 @@
+ 
+         public ClockNetworkState packNetworkState(final boolean advanceTime) { // Paper - per-world time
+             boolean paused = this.paused || !advanceTime;
+-            return new ClockNetworkState(this.totalTicks, this.partialTick, paused ? 0.0F : this.rate);
++            return new ClockNetworkState(this.totalTicks, this.partialTick, paused ? 0.0F : this.rate * this.daylightCycleSpeed); // Purpur - Configurable daylight cycle
+         }
+     }
+ }
